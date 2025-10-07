@@ -80,6 +80,7 @@ PRIX_CH = {"❄️": 100, "💊": 15, "🫒": 8, "🍀": 12}
 # --- Traductions statiques ---
 TRANSLATIONS = {
     "fr": {
+        "welcome_message": "👋 Bienvenue !\n\n🛍️ Vous êtes sur notre boutique en ligne.\n\nNous proposons une sélection de produits de qualité avec livraison rapide en France 🇫🇷 et en Suisse 🇨🇭.\n\n💳 Paiement accepté : Espèces ou Crypto\n📦 Livraison : Voie postale a travers la France (Frais de 10euros) ou Express de mains à mains sur le 74 (frais de livraison en fonction de la distance)\n\n🔒 Commande sécurisée et confidentielle\n\n👇 Commencez par sélectionner votre langue :",
         "choose_language": "🌍 Choisissez votre langue :",
         "choose_country": "Choisissez votre pays :",
         "choose_product": "Choisissez votre produit :",
@@ -98,6 +99,7 @@ TRANSLATIONS = {
         "cart_title": "🛒 Votre panier :"
     },
     "en": {
+        "welcome_message": "👋 Welcome!\n\n🛍️ You are on our online store.\n\nWe offer a selection of quality products with fast delivery in France 🇫🇷 and Switzerland 🇨🇭.\n\n💳 Payment accepted: Cash or Crypto\n📦 Delivery: Postal service throughout France (10 euros fee) or Express hand-to-hand delivery in the 74 (delivery fees depending on the distance)\n\n🔒 Secure and confidential order\n\n👇 Start by selecting your language:",
         "choose_language": "🌍 Select your language:",
         "choose_country": "Choose your country:",
         "choose_product": "Choose your product:",
@@ -116,6 +118,7 @@ TRANSLATIONS = {
         "cart_title": "🛒 Your cart:"
     },
     "es": {
+        "welcome_message": "👋 ¡Bienvenido!\n\n🛍️ Estás en nuestra tienda online.\n\nOfrecemos una selección de productos de calidad con entrega rápida en Francia 🇫🇷 y Suiza 🇨🇭.\n\n💳 Pago aceptado: Efectivo o criptomonedas\n📦 Entrega: Servicio postal en toda Francia (gastos de envío de 10 euros) o entrega exprés en mano en el 74 (gastos de envío según la distancia)\n\n🔒 Pedido seguro y confidencial\n\n👇 Empieza seleccionando tu idioma:",
         "choose_language": "🌍 Seleccione su idioma:",
         "choose_country": "Elija su país:",
         "choose_product": "Elija su producto:",
@@ -134,6 +137,7 @@ TRANSLATIONS = {
         "cart_title": "🛒 Su carrito:"
     },
     "de": {
+        "welcome_message": "👋 Willkommen!\n\n🛍️ Sie befinden sich in unserem Online-Shop.\n\nWir bieten eine Auswahl an Qualitätsprodukten mit schneller Lieferung in Frankreich 🇫🇷 und der Schweiz 🇨🇭.\n\n💳 Akzeptierte Zahlungen: Bar oder Kryptowährung\n📦 Lieferung: Postdienst in ganz Frankreich (10 Euro Gebühr) oder Express-Lieferung von Hand in den 74 (Liefergebühren abhängig von der Entfernung)\n\n🔒 Sichere und vertrauliche Bestellung\n\n👇 Beginnen Sie mit der Auswahl Ihrer Sprache:",
         "choose_language": "🌍 Wählen Sie Ihre Sprache:",
         "choose_country": "Wählen Sie Ihr Land:",
         "choose_product": "Wählen Sie Ihr Produkt:",
@@ -208,6 +212,17 @@ def format_cart(cart, user_data):
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     
+    # Message de bienvenue multilingue
+    welcome_text = (
+        "👋 **Bienvenue / Welcome / Bienvenido / Willkommen !**\n\n"
+        "🛍️ Boutique en ligne avec livraison FR 🇫🇷 & CH 🇨🇭\n\n"
+        "📦 **Services:**\n"
+        "   • Livraison Standard & Express\n"
+        "   • Paiement Espèces ou Crypto ₿\n"
+        "   • Commandes sécurisées 🔒\n\n"
+        "👇 **Sélectionnez votre langue pour commencer :**"
+    )
+    
     keyboard = [
         [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
         [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
@@ -215,8 +230,10 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
+    
     if update.message:
-        await update.message.reply_text(tr({}, "choose_language"), reply_markup=reply_markup)
+        await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode='Markdown')
+    
     return LANGUE
 
 @error_handler_decorator
@@ -257,10 +274,11 @@ async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    product = query.data.replace("product_", "")
-    context.user_data['current_product'] = product
+    product_code = query.data.replace("product_", "")
+    product_emoji = PRODUCT_MAP.get(product_code, product_code)
+    context.user_data['current_product'] = product_emoji
     
-    await query.message.edit_text(f"{tr(context.user_data, 'choose_product')}\n\n✅ Produit: {product}\n\n{tr(context.user_data, 'enter_quantity')}")
+    await query.message.edit_text(f"{tr(context.user_data, 'choose_product')}\n\n✅ Produit: {product_emoji}\n\n{tr(context.user_data, 'enter_quantity')}")
     return QUANTITE
 
 @error_handler_decorator
@@ -297,10 +315,10 @@ async def cart_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data == "add_more":
         # Retour au choix de produit
         keyboard = [
-            [InlineKeyboardButton("❄️", callback_data="product_❄️")],
-            [InlineKeyboardButton("💊", callback_data="product_💊")],
-            [InlineKeyboardButton("🫒", callback_data="product_🫒")],
-            [InlineKeyboardButton("🍀", callback_data="product_🍀")],
+            [InlineKeyboardButton("❄️", callback_data="product_snow")],
+            [InlineKeyboardButton("💊", callback_data="product_pill")],
+            [InlineKeyboardButton("🫒", callback_data="product_olive")],
+            [InlineKeyboardButton("🍀", callback_data="product_clover")],
             [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
         ]
         await query.message.edit_text(tr(context.user_data, "choose_product"), reply_markup=InlineKeyboardMarkup(keyboard))
@@ -444,7 +462,7 @@ if __name__ == "__main__":
                 CallbackQueryHandler(choix_pays, pattern="^country_(FR|CH)$")
             ],
             PRODUIT: [
-                CallbackQueryHandler(choix_produit, pattern="^product_[❄️💊🫒🍀]$")
+                CallbackQueryHandler(choix_produit, pattern="^product_")
             ],
             QUANTITE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_quantite)
@@ -456,10 +474,10 @@ if __name__ == "__main__":
                 MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_adresse)
             ],
             LIVRAISON: [
-                CallbackQueryHandler(choix_livraison, pattern="^delivery_(standard|express)$")
+                CallbackQueryHandler(choix_livraison, pattern="^delivery_")
             ],
             PAIEMENT: [
-                CallbackQueryHandler(choix_paiement, pattern="^payment_(cash|crypto)$")
+                CallbackQueryHandler(choix_paiement, pattern="^payment_")
             ],
             CONFIRMATION: [
                 CallbackQueryHandler(confirmation, pattern="^confirm_order$")

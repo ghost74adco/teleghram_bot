@@ -14,9 +14,9 @@ from telegram.ext import (
 PAYS, PRODUIT, QUANTITE, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION = range(7)
 
 # --- Variables d'environnement ---
-TOKEN = os.getenv('TELEGRAM_TOKEN', '8474087335:AAGQnYnj5gTmtHphvfUHME8h84ygwQejl7Y')
-CRYPTO_WALLET = os.getenv('CRYPTO_WALLET', '3AbkDZtRVXUMdBSejXMNg6pEGMcxfCRpQL')
-ADMIN_ID = int(os.getenv('ADMIN_ID', '8450278584'))
+TOKEN = "8474087335:AAGQnYnj5gTmtHphvfUHME8h84ygwQejl7Y"
+CRYPTO_WALLET = "3AbkDZtRVXUMdBSejXMNg6pEGMcxfCRpQL"
+ADMIN_ID = 8450278584
 
 # --- Prix ---
 PRIX_FR = {"❄️": 80, "💊": 10, "🫒": 7, "🍀": 10}

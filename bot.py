@@ -83,7 +83,7 @@ from telegram.ext import (
 from telegram.error import TelegramError, NetworkError, TimedOut
 
 # --- États de la conversation ---
-PAYS, PRODUIT, QUANTITE, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION = range(7)
+LANGUE, PAYS, PRODUIT, QUANTITE, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION = range(8)
 
 # --- Prix ---
 PRIX_FR = {"❄️": 80, "💊": 10, "🫒": 7, "🍀": 10}
@@ -141,15 +141,24 @@ async def error_callback(update: object, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Impossible de notifier l'admin: {e}")
 
-# --- Commande /start ---
+# --- Étape 1 : Sélection de la langue dès l'ouverture du bot ---
 @error_handler_decorator
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [[InlineKeyboardButton("Démarrer la commande", callback_data="start_order")]]
+async def welcome_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche directement le choix de la langue au démarrage"""
+    keyboard = [
+        [InlineKeyboardButton("🇫🇷 Français", callback_data="fr")],
+        [InlineKeyboardButton("🇬🇧 English", callback_data="en")],
+        [InlineKeyboardButton("🇪🇸 Español", callback_data="es")],
+        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="de")]
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(
-        "Bienvenue ! Cliquez sur le bouton pour démarrer votre commande :",
-        reply_markup=reply_markup
-    )
+    
+    if update.message:
+        await update.message.reply_text(
+            "🌍 Choisissez votre langue / Select your language:",
+            reply_markup=reply_markup
+        )
+    return LANGUE
 
 # --- Message de bienvenue automatique ---
 @error_handler_decorator
@@ -383,8 +392,11 @@ if __name__ == "__main__":
     # Gestionnaire d'erreurs global
     application.add_error_handler(error_callback)
 
-    # Handler /start — doit toujours être déclaré avant tout le reste
-    application.add_handler(CommandHandler("start", start_command))
+    # Handler /start remplacé par la sélection de langue automatique
+    application.add_handler(CommandHandler("start", welcome_language))
+
+    # Pour que le bouton de démarrage apparaisse automatiquement à l'arrivée d'un utilisateur
+    application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_language))
 
     # ConversationHandler
     conv_handler = ConversationHandler(
@@ -403,8 +415,8 @@ if __name__ == "__main__":
     )
     application.add_handler(conv_handler)
 
-    # Bouton Démarrer (équivaut à /start)
-    application.add_handler(CallbackQueryHandler(start_command, pattern="^start_macro$"))
+    # Bouton Démarrer (équivaut à /start) — reste optionnel
+    application.add_handler(CallbackQueryHandler(welcome_language, pattern="^start_macro$"))
 
     try:
         logger.info("✅ Bot en ligne!")

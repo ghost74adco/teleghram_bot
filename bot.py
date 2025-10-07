@@ -63,6 +63,16 @@ from telegram.error import NetworkError, TimedOut
 # --- États ---
 LANGUE, PAYS, PRODUIT, QUANTITE, CART_MENU, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION = range(9)
 
+# --- Mapping produit ---
+PRODUCT_MAP = {
+    "snow": "❄️",
+    "pill": "💊",
+    "olive": "🫒",
+    "clover": "🍀"
+}
+
+PRODUCT_REVERSE_MAP = {v: k for k, v in PRODUCT_MAP.items()}
+
 # --- Prix ---
 PRIX_FR = {"❄️": 80, "💊": 10, "🫒": 7, "🍀": 10}
 PRIX_CH = {"❄️": 100, "💊": 15, "🫒": 8, "🍀": 12}
@@ -234,10 +244,10 @@ async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['cart'] = []
     
     keyboard = [
-        [InlineKeyboardButton("❄️", callback_data="product_❄️")],
-        [InlineKeyboardButton("💊", callback_data="product_💊")],
-        [InlineKeyboardButton("🫒", callback_data="product_🫒")],
-        [InlineKeyboardButton("🍀", callback_data="product_🍀")],
+        [InlineKeyboardButton("❄️", callback_data="product_snow")],
+        [InlineKeyboardButton("💊", callback_data="product_pill")],
+        [InlineKeyboardButton("🫒", callback_data="product_olive")],
+        [InlineKeyboardButton("🍀", callback_data="product_clover")],
         [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
     await query.message.edit_text(tr(context.user_data, "choose_product"), reply_markup=InlineKeyboardMarkup(keyboard))

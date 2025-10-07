@@ -61,7 +61,7 @@ from telegram.ext import (
 from telegram.error import NetworkError, TimedOut
 
 # --- États ---
-LANGUE, PAYS, PRODUIT, QUANTITE, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION = range(8)
+LANGUE, PAYS, PRODUIT, QUANTITE, CART_MENU, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION = range(9)
 
 # --- Prix ---
 PRIX_FR = {"❄️": 80, "💊": 10, "🫒": 7, "🍀": 10}
@@ -74,68 +74,72 @@ TRANSLATIONS = {
         "choose_country": "Choisissez votre pays :",
         "choose_product": "Choisissez votre produit :",
         "enter_quantity": "Entrez la quantité désirée :",
-        "enter_address": "Entrez votre adresse :",
+        "enter_address": "Entrez votre adresse complète :",
         "choose_delivery": "Choisissez le type de livraison :",
         "choose_payment": "Choisissez le mode de paiement :",
         "order_summary": "✅ Résumé de votre commande :",
         "confirm": "Confirmer",
         "cancel": "Annuler",
-        "order_confirmed": "✅ Commande confirmée ! Merci.",
+        "order_confirmed": "✅ Commande confirmée ! Merci.\nVous serez contacté prochainement.",
         "order_cancelled": "❌ Commande annulée.",
-        "add_more": "Ajouter un autre produit",
-        "proceed": "Passer à la commande",
-        "invalid_quantity": "❌ Veuillez entrer un nombre valide supérieur à 0."
+        "add_more": "➕ Ajouter un produit",
+        "proceed": "✅ Valider le panier",
+        "invalid_quantity": "❌ Veuillez entrer un nombre valide supérieur à 0.",
+        "cart_title": "🛒 Votre panier :"
     },
     "en": {
         "choose_language": "🌍 Select your language:",
         "choose_country": "Choose your country:",
         "choose_product": "Choose your product:",
         "enter_quantity": "Enter desired quantity:",
-        "enter_address": "Enter your address:",
+        "enter_address": "Enter your complete address:",
         "choose_delivery": "Choose delivery type:",
         "choose_payment": "Choose payment method:",
         "order_summary": "✅ Your order summary:",
         "confirm": "Confirm",
         "cancel": "Cancel",
-        "order_confirmed": "✅ Order confirmed! Thank you.",
+        "order_confirmed": "✅ Order confirmed! Thank you.\nYou will be contacted soon.",
         "order_cancelled": "❌ Order cancelled.",
-        "add_more": "Add another product",
-        "proceed": "Proceed to checkout",
-        "invalid_quantity": "❌ Please enter a valid number greater than 0."
+        "add_more": "➕ Add product",
+        "proceed": "✅ Checkout",
+        "invalid_quantity": "❌ Please enter a valid number greater than 0.",
+        "cart_title": "🛒 Your cart:"
     },
     "es": {
         "choose_language": "🌍 Seleccione su idioma:",
         "choose_country": "Elija su país:",
         "choose_product": "Elija su producto:",
         "enter_quantity": "Ingrese la cantidad deseada:",
-        "enter_address": "Ingrese su dirección:",
+        "enter_address": "Ingrese su dirección completa:",
         "choose_delivery": "Elija el tipo de envío:",
         "choose_payment": "Elija el método de pago:",
         "order_summary": "✅ Resumen de su pedido:",
         "confirm": "Confirmar",
         "cancel": "Cancelar",
-        "order_confirmed": "✅ Pedido confirmado! Gracias.",
+        "order_confirmed": "✅ Pedido confirmado! Gracias.\nSerá contactado pronto.",
         "order_cancelled": "❌ Pedido cancelado.",
-        "add_more": "Agregar otro producto",
-        "proceed": "Proceder al pago",
-        "invalid_quantity": "❌ Por favor ingrese un número válido mayor a 0."
+        "add_more": "➕ Agregar producto",
+        "proceed": "✅ Finalizar",
+        "invalid_quantity": "❌ Por favor ingrese un número válido mayor a 0.",
+        "cart_title": "🛒 Su carrito:"
     },
     "de": {
         "choose_language": "🌍 Wählen Sie Ihre Sprache:",
         "choose_country": "Wählen Sie Ihr Land:",
         "choose_product": "Wählen Sie Ihr Produkt:",
         "enter_quantity": "Geben Sie die gewünschte Menge ein:",
-        "enter_address": "Geben Sie Ihre Adresse ein:",
+        "enter_address": "Geben Sie Ihre vollständige Adresse ein:",
         "choose_delivery": "Wählen Sie die Versandart:",
         "choose_payment": "Wählen Sie die Zahlungsmethode:",
         "order_summary": "✅ Zusammenfassung Ihrer Bestellung:",
         "confirm": "Bestätigen",
         "cancel": "Abbrechen",
-        "order_confirmed": "✅ Bestellung bestätigt! Danke.",
+        "order_confirmed": "✅ Bestellung bestätigt! Danke.\nSie werden bald kontaktiert.",
         "order_cancelled": "❌ Bestellung abgebrochen.",
-        "add_more": "Weiteres Produkt hinzufügen",
-        "proceed": "Zur Kasse gehen",
-        "invalid_quantity": "❌ Bitte geben Sie eine gültige Zahl größer als 0 ein."
+        "add_more": "➕ Produkt hinzufügen",
+        "proceed": "✅ Zur Kasse",
+        "invalid_quantity": "❌ Bitte geben Sie eine gültige Zahl größer als 0 ein.",
+        "cart_title": "🛒 Ihr Warenkorb:"
     }
 }
 
@@ -179,10 +183,19 @@ def calculate_total(cart, country):
         total += prix_table[item["produit"]] * int(item["quantite"])
     return total
 
+def format_cart(cart, user_data):
+    """Formatte le panier pour l'affichage"""
+    if not cart:
+        return ""
+    
+    cart_text = f"\n{tr(user_data, 'cart_title')}\n"
+    for item in cart:
+        cart_text += f"• {item['produit']} x {item['quantite']}\n"
+    return cart_text
+
 # --- Commande /start ---
 @error_handler_decorator
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Réinitialiser les données utilisateur
     context.user_data.clear()
     
     keyboard = [
@@ -221,9 +234,12 @@ async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['cart'] = []
     
     keyboard = [
-        [InlineKeyboardButton(p, callback_data=f"product_{p}")] for p in ["❄️", "💊", "🫒", "🍀"]
+        [InlineKeyboardButton("❄️", callback_data="product_❄️")],
+        [InlineKeyboardButton("💊", callback_data="product_💊")],
+        [InlineKeyboardButton("🫒", callback_data="product_🫒")],
+        [InlineKeyboardButton("🍀", callback_data="product_🍀")],
+        [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
-    keyboard.append([InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")])
     await query.message.edit_text(tr(context.user_data, "choose_product"), reply_markup=InlineKeyboardMarkup(keyboard))
     return PRODUIT
 
@@ -234,7 +250,7 @@ async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     product = query.data.replace("product_", "")
     context.user_data['current_product'] = product
     
-    await query.message.edit_text(tr(context.user_data, "enter_quantity"))
+    await query.message.edit_text(f"{tr(context.user_data, 'choose_product')}\n\n✅ Produit: {product}\n\n{tr(context.user_data, 'enter_quantity')}")
     return QUANTITE
 
 @error_handler_decorator
@@ -245,10 +261,14 @@ async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(tr(context.user_data, "invalid_quantity"))
         return QUANTITE
     
+    # Ajouter au panier
     context.user_data['cart'].append({
         "produit": context.user_data['current_product'],
         "quantite": qty
     })
+    
+    # Afficher le panier
+    cart_summary = format_cart(context.user_data['cart'], context.user_data)
     
     keyboard = [
         [InlineKeyboardButton(tr(context.user_data, "add_more"), callback_data="add_more")],
@@ -256,32 +276,36 @@ async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
     
-    cart_summary = "🛒 " + tr(context.user_data, "order_summary") + "\n"
-    for item in context.user_data['cart']:
-        cart_summary += f"• {item['produit']} x {item['quantite']}\n"
-    
     await update.message.reply_text(cart_summary, reply_markup=InlineKeyboardMarkup(keyboard))
-    return PRODUIT
+    return CART_MENU
 
 @error_handler_decorator
-async def add_more_or_checkout(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cart_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
     if query.data == "add_more":
+        # Retour au choix de produit
         keyboard = [
-            [InlineKeyboardButton(p, callback_data=f"product_{p}")] for p in ["❄️", "💊", "🫒", "🍀"]
+            [InlineKeyboardButton("❄️", callback_data="product_❄️")],
+            [InlineKeyboardButton("💊", callback_data="product_💊")],
+            [InlineKeyboardButton("🫒", callback_data="product_🫒")],
+            [InlineKeyboardButton("🍀", callback_data="product_🍀")],
+            [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
         ]
-        keyboard.append([InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")])
         await query.message.edit_text(tr(context.user_data, "choose_product"), reply_markup=InlineKeyboardMarkup(keyboard))
         return PRODUIT
-    else:
+    elif query.data == "proceed_checkout":
+        # Passer à l'adresse
         await query.message.edit_text(tr(context.user_data, "enter_address"))
         return ADRESSE
+    
+    return CART_MENU
 
 @error_handler_decorator
 async def saisie_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['adresse'] = update.message.text
+    context.user_data['adresse'] = update.message.text.strip()
+    
     keyboard = [
         [InlineKeyboardButton("📦 Standard", callback_data="delivery_standard")],
         [InlineKeyboardButton("⚡ Express", callback_data="delivery_express")],
@@ -315,24 +339,25 @@ async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total = calculate_total(context.user_data['cart'], context.user_data['pays'])
     summary = f"{tr(context.user_data, 'order_summary')}\n\n"
     
+    prix_table = PRIX_FR if context.user_data['pays'] == "FR" else PRIX_CH
     for item in context.user_data['cart']:
-        prix_table = PRIX_FR if context.user_data['pays'] == "FR" else PRIX_CH
         prix_unitaire = prix_table[item['produit']]
-        summary += f"• {item['produit']} x {item['quantite']} = {prix_unitaire * int(item['quantite'])}€\n"
+        subtotal = prix_unitaire * int(item['quantite'])
+        summary += f"• {item['produit']} x {item['quantite']} = {subtotal}€\n"
     
     summary += f"\n📍 Adresse: {context.user_data['adresse']}\n"
     summary += f"📦 Livraison: {context.user_data['livraison']}\n"
     summary += f"💳 Paiement: {context.user_data['paiement']}\n"
-    summary += f"\n💰 Total: {total}€"
+    summary += f"\n💰 TOTAL: {total}€"
     
     if context.user_data['paiement'] == 'crypto':
-        summary += f"\n\n₿ Wallet: {CRYPTO_WALLET}"
+        summary += f"\n\n₿ Wallet: `{CRYPTO_WALLET}`"
     
     keyboard = [
         [InlineKeyboardButton(tr(context.user_data, "confirm"), callback_data="confirm_order")],
         [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
-    await query.message.edit_text(summary, reply_markup=InlineKeyboardMarkup(keyboard))
+    await query.message.edit_text(summary, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return CONFIRMATION
 
 @error_handler_decorator
@@ -343,31 +368,39 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data == "confirm_order":
         await query.message.edit_text(tr(context.user_data, "order_confirmed"))
         
-        # Envoi au admin avec formatage amélioré
+        # Notification admin détaillée
         total = calculate_total(context.user_data['cart'], context.user_data['pays'])
         user = query.from_user
         
-        order_details = f"🔔 NOUVELLE COMMANDE\n\n"
-        order_details += f"👤 Client:\n"
-        order_details += f"  • ID: {user.id}\n"
-        order_details += f"  • Username: @{user.username if user.username else 'N/A'}\n"
-        order_details += f"  • Nom: {user.first_name} {user.last_name if user.last_name else ''}\n\n"
+        order_details = "🔔 NOUVELLE COMMANDE\n"
+        order_details += "=" * 30 + "\n\n"
         
-        order_details += f"🛒 Produits:\n"
+        order_details += "👤 INFORMATIONS CLIENT:\n"
+        order_details += f"├─ ID: {user.id}\n"
+        order_details += f"├─ Username: @{user.username if user.username else 'N/A'}\n"
+        order_details += f"└─ Nom: {user.first_name} {user.last_name or ''}\n\n"
+        
+        order_details += "🛒 PRODUITS COMMANDÉS:\n"
         prix_table = PRIX_FR if context.user_data['pays'] == "FR" else PRIX_CH
-        for item in context.user_data['cart']:
+        for idx, item in enumerate(context.user_data['cart'], 1):
             prix_unitaire = prix_table[item['produit']]
-            order_details += f"  • {item['produit']} x {item['quantite']} = {prix_unitaire * int(item['quantite'])}€\n"
+            subtotal = prix_unitaire * int(item['quantite'])
+            order_details += f"├─ {idx}. {item['produit']} x {item['quantite']} = {subtotal}€\n"
         
-        order_details += f"\n📍 Adresse: {context.user_data['adresse']}\n"
-        order_details += f"🌍 Pays: {context.user_data['pays']}\n"
-        order_details += f"📦 Livraison: {context.user_data['livraison']}\n"
-        order_details += f"💳 Paiement: {context.user_data['paiement']}\n"
-        order_details += f"\n💰 TOTAL: {total}€"
+        order_details += f"\n📦 DÉTAILS LIVRAISON:\n"
+        order_details += f"├─ Pays: {context.user_data['pays']}\n"
+        order_details += f"├─ Adresse: {context.user_data['adresse']}\n"
+        order_details += f"└─ Type: {context.user_data['livraison']}\n\n"
         
-        await context.bot.send_message(chat_id=ADMIN_ID, text=order_details)
-    else:
-        await query.message.edit_text(tr(context.user_data, "order_cancelled"))
+        order_details += f"💳 PAIEMENT:\n"
+        order_details += f"├─ Méthode: {context.user_data['paiement']}\n"
+        order_details += f"└─ MONTANT TOTAL: {total}€\n"
+        order_details += "=" * 30
+        
+        try:
+            await context.bot.send_message(chat_id=ADMIN_ID, text=order_details)
+        except Exception as e:
+            logger.error(f"Erreur envoi notification admin: {e}")
     
     context.user_data.clear()
     return ConversationHandler.END
@@ -385,32 +418,55 @@ if __name__ == "__main__":
     application = Application.builder().token(TOKEN).build()
     application.add_error_handler(error_callback)
 
-    # Handler pour /start
+    # Handler global pour /start (accessible à tout moment)
     application.add_handler(CommandHandler("start", start_command))
     
-    # Handler pour sélection de langue
+    # Handler pour sélection de langue (en dehors du ConversationHandler)
     application.add_handler(CallbackQueryHandler(set_langue, pattern="^lang_(fr|en|es|de)$"))
 
     # ConversationHandler principal
     conv_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(choix_pays, pattern="^country_(FR|CH)$")],
+        entry_points=[
+            CallbackQueryHandler(choix_pays, pattern="^country_(FR|CH)$")
+        ],
         states={
-            PAYS: [CallbackQueryHandler(choix_pays, pattern="^country_(FR|CH)$")],
-            PRODUIT: [
-                CallbackQueryHandler(choix_produit, pattern="^product_[❄️💊🫒🍀]$"),
-                CallbackQueryHandler(add_more_or_checkout, pattern="^(add_more|proceed_checkout)$")
+            PAYS: [
+                CallbackQueryHandler(choix_pays, pattern="^country_(FR|CH)$")
             ],
-            QUANTITE: [MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_quantite)],
-            ADRESSE: [MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_adresse)],
-            LIVRAISON: [CallbackQueryHandler(choix_livraison, pattern="^delivery_(standard|express)$")],
-            PAIEMENT: [CallbackQueryHandler(choix_paiement, pattern="^payment_(cash|crypto)$")],
-            CONFIRMATION: [CallbackQueryHandler(confirmation, pattern="^confirm_order$")],
+            PRODUIT: [
+                CallbackQueryHandler(choix_produit, pattern="^product_[❄️💊🫒🍀]$")
+            ],
+            QUANTITE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_quantite)
+            ],
+            CART_MENU: [
+                CallbackQueryHandler(cart_menu_handler, pattern="^(add_more|proceed_checkout)$")
+            ],
+            ADRESSE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_adresse)
+            ],
+            LIVRAISON: [
+                CallbackQueryHandler(choix_livraison, pattern="^delivery_(standard|express)$")
+            ],
+            PAIEMENT: [
+                CallbackQueryHandler(choix_paiement, pattern="^payment_(cash|crypto)$")
+            ],
+            CONFIRMATION: [
+                CallbackQueryHandler(confirmation, pattern="^confirm_order$")
+            ],
         },
-        fallbacks=[CallbackQueryHandler(annuler, pattern="^cancel$")],
-        per_message=False
+        fallbacks=[
+            CallbackQueryHandler(annuler, pattern="^cancel$"),
+            CommandHandler("start", start_command)
+        ],
+        per_message=False,
+        allow_reentry=True
     )
 
     application.add_handler(conv_handler)
 
-    logger.info("🚀 Bot en ligne !")
+    logger.info("🚀 Bot démarré avec succès!")
+    logger.info(f"📊 États disponibles: {list(range(9))}")
+    logger.info(f"🔑 Admin ID: {ADMIN_ID}")
+    
     application.run_polling(allowed_updates=Update.ALL_TYPES)

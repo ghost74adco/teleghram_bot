@@ -2,6 +2,7 @@ import os
 import sys
 import logging
 from dotenv import load_dotenv
+from pathlib import Path
 from functools import wraps
 
 # --- Configuration du logging ---
@@ -60,7 +61,8 @@ def validate_environment():
     return True
 
 # --- Chargement des variables ---
-load_dotenv()
+dotenv_path = Path(__file__).parent / "infos.env"
+load_dotenv(dotenv_path)
 validate_environment()
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")

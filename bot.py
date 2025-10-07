@@ -383,17 +383,8 @@ if __name__ == "__main__":
     # Gestionnaire d'erreurs global
     application.add_error_handler(error_callback)
 
-    # Handler /start
+    # Handler /start — doit toujours être déclaré avant tout le reste
     application.add_handler(CommandHandler("start", start_command))
-    
-    # Bouton Démarrer automatique (équivaut à /start)
-    application.add_handler(CallbackQueryHandler(start_command, pattern="^start_macro$"))
-
-    # Nouveau : Message de bienvenue automatique pour tout nouvel utilisateur
-    application.add_handler(
-        MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, start_command)
-    )
-
 
     # ConversationHandler
     conv_handler = ConversationHandler(
@@ -410,8 +401,10 @@ if __name__ == "__main__":
         fallbacks=[CallbackQueryHandler(annuler, pattern="Annuler")],
         per_message=False
     )
-
     application.add_handler(conv_handler)
+
+    # Bouton Démarrer (équivaut à /start)
+    application.add_handler(CallbackQueryHandler(start_command, pattern="^start_macro$"))
 
     try:
         logger.info("✅ Bot en ligne!")

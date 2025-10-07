@@ -1,1 +1,0 @@
-# teleghram_bot

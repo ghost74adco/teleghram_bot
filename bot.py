@@ -1,10 +1,21 @@
 import os
+from dotenv import load_dotenv
 
-# Variables sécurisées
-TOKEN = os.getenv('TELEGRAM_TOKEN', '8474087335:AAGQnYnj5gTmtHphvfUHME8h84ygwQejl7Y')
-CRYPTO_WALLET = os.getenv('CRYPTO_WALLET', '3AbkDZtRVXUMdBSejXMNg6pEGMcxfCRpQL')
-ADMIN_ID = int(os.getenv('ADMIN_ID', '8450278584'))
+# --- Chargement des variables d'environnement ---
+# (Render les fournit automatiquement, et .env est utile pour tes tests en local)
+load_dotenv()
 
+TOKEN = os.getenv("TOKEN", "8474087335:AAGQnYnj5gTmtHphvfUHME8h84ygwQejl7Y")
+CRYPTO_WALLET = os.getenv("CRYPTO_WALLET", "3AbkDZtRVXUMdBSejXMNg6pEGMcxfCRpQL")
+ADMIN_ID = os.getenv("ADMIN_ID", "8450278584")
+
+# Vérification des variables (optionnel mais conseillé)
+if not all([TOKEN, CRYPTO_WALLET, ADMIN_ID]):
+    raise ValueError("⚠️ Variables d'environnement manquantes ! Vérifie les paramètres Render.")
+
+ADMIN_ID = int(ADMIN_ID)
+
+# --- Imports Telegram ---
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot
 from telegram.ext import (
     ApplicationBuilder,
@@ -16,18 +27,20 @@ from telegram.ext import (
     filters,
 )
 
-# --- États ---
+# --- États de la conversation ---
 PAYS, PRODUIT, QUANTITE, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION = range(7)
 
+
 # --- Variables d'environnement ---
-import os
 from dotenv import load_dotenv
+import os
 
 load_dotenv()
 
-TOKEN = os.getenv('TELEGRAM_TOKEN')
-CRYPTO_WALLET = os.getenv('CRYPTO_WALLET')
-ADMIN_ID = int(os.getenv('ADMIN_ID'))
+TOKEN = os.getenv("TOKEN")
+CRYPTO_WALLET = os.getenv("CRYPTO_WALLET")
+ADMIN_ID = int(os.getenv("ADMIN_ID"))
+
 # --- Prix ---
 PRIX_FR = {"❄️": 80, "💊": 10, "🫒": 7, "🍀": 10}
 PRIX_CH = {"❄️": 100, "💊": 15, "🫒": 8, "🍀": 12}

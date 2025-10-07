@@ -81,7 +81,10 @@ TRANSLATIONS = {
         "confirm": "Confirmer",
         "cancel": "Annuler",
         "order_confirmed": "✅ Commande confirmée ! Merci.",
-        "order_cancelled": "❌ Commande annulée."
+        "order_cancelled": "❌ Commande annulée.",
+        "add_more": "Ajouter un autre produit",
+        "proceed": "Passer à la commande",
+        "invalid_quantity": "❌ Veuillez entrer un nombre valide supérieur à 0."
     },
     "en": {
         "choose_language": "🌍 Select your language:",
@@ -95,7 +98,10 @@ TRANSLATIONS = {
         "confirm": "Confirm",
         "cancel": "Cancel",
         "order_confirmed": "✅ Order confirmed! Thank you.",
-        "order_cancelled": "❌ Order cancelled."
+        "order_cancelled": "❌ Order cancelled.",
+        "add_more": "Add another product",
+        "proceed": "Proceed to checkout",
+        "invalid_quantity": "❌ Please enter a valid number greater than 0."
     },
     "es": {
         "choose_language": "🌍 Seleccione su idioma:",
@@ -109,7 +115,10 @@ TRANSLATIONS = {
         "confirm": "Confirmar",
         "cancel": "Cancelar",
         "order_confirmed": "✅ Pedido confirmado! Gracias.",
-        "order_cancelled": "❌ Pedido cancelado."
+        "order_cancelled": "❌ Pedido cancelado.",
+        "add_more": "Agregar otro producto",
+        "proceed": "Proceder al pago",
+        "invalid_quantity": "❌ Por favor ingrese un número válido mayor a 0."
     },
     "de": {
         "choose_language": "🌍 Wählen Sie Ihre Sprache:",
@@ -123,7 +132,10 @@ TRANSLATIONS = {
         "confirm": "Bestätigen",
         "cancel": "Abbrechen",
         "order_confirmed": "✅ Bestellung bestätigt! Danke.",
-        "order_cancelled": "❌ Bestellung abgebrochen."
+        "order_cancelled": "❌ Bestellung abgebrochen.",
+        "add_more": "Weiteres Produkt hinzufügen",
+        "proceed": "Zur Kasse gehen",
+        "invalid_quantity": "❌ Bitte geben Sie eine gültige Zahl größer als 0 ein."
     }
 }
 
@@ -146,6 +158,7 @@ def error_handler_decorator(func):
             await notify_admin_error(context, error_msg)
             if update.effective_message:
                 await update.effective_message.reply_text("❌ Une erreur s'est produite. L'admin a été notifié.")
+            return ConversationHandler.END
     return wrapper
 
 async def error_callback(update: object, context: ContextTypes.DEFAULT_TYPE):
@@ -169,11 +182,14 @@ def calculate_total(cart, country):
 # --- Commande /start ---
 @error_handler_decorator
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Réinitialiser les données utilisateur
+    context.user_data.clear()
+    
     keyboard = [
-        [InlineKeyboardButton("🇫🇷 Français", callback_data="fr")],
-        [InlineKeyboardButton("🇬🇧 English", callback_data="en")],
-        [InlineKeyboardButton("🇪🇸 Español", callback_data="es")],
-        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="de")]
+        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
+        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
+        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
+        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     if update.message:
@@ -184,11 +200,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    context.user_data['langue'] = query.data
+    lang_code = query.data.replace("lang_", "")
+    context.user_data['langue'] = lang_code
+    
     keyboard = [
-        [InlineKeyboardButton("🇫🇷 France", callback_data="FR")],
-        [InlineKeyboardButton("🇨🇭 Suisse", callback_data="CH")],
-        [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="Annuler")]
+        [InlineKeyboardButton("🇫🇷 France", callback_data="country_FR")],
+        [InlineKeyboardButton("🇨🇭 Suisse", callback_data="country_CH")],
+        [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
     await query.message.edit_text(tr(context.user_data, "choose_country"), reply_markup=InlineKeyboardMarkup(keyboard))
     return PAYS
@@ -198,9 +216,14 @@ async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    context.user_data['pays'] = query.data
-    context.user_data['cart'] = []  # panier vide
-    keyboard = [[InlineKeyboardButton(p, callback_data=p)] for p in ["❄️", "💊", "🫒", "🍀"]]
+    country_code = query.data.replace("country_", "")
+    context.user_data['pays'] = country_code
+    context.user_data['cart'] = []
+    
+    keyboard = [
+        [InlineKeyboardButton(p, callback_data=f"product_{p}")] for p in ["❄️", "💊", "🫒", "🍀"]
+    ]
+    keyboard.append([InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")])
     await query.message.edit_text(tr(context.user_data, "choose_product"), reply_markup=InlineKeyboardMarkup(keyboard))
     return PRODUIT
 
@@ -208,30 +231,48 @@ async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    context.user_data['current_product'] = query.data
+    product = query.data.replace("product_", "")
+    context.user_data['current_product'] = product
+    
     await query.message.edit_text(tr(context.user_data, "enter_quantity"))
     return QUANTITE
 
 @error_handler_decorator
 async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    qty = update.message.text
+    qty = update.message.text.strip()
+    
     if not qty.isdigit() or int(qty) <= 0:
-        await update.message.reply_text(tr(context.user_data, "enter_quantity"))
+        await update.message.reply_text(tr(context.user_data, "invalid_quantity"))
         return QUANTITE
-    context.user_data['cart'].append({"produit": context.user_data['current_product'], "quantite": qty})
+    
+    context.user_data['cart'].append({
+        "produit": context.user_data['current_product'],
+        "quantite": qty
+    })
+    
     keyboard = [
-        [InlineKeyboardButton("Ajouter un autre produit", callback_data="add_more")],
-        [InlineKeyboardButton(tr(context.user_data, "confirm"), callback_data="proceed_checkout")]
+        [InlineKeyboardButton(tr(context.user_data, "add_more"), callback_data="add_more")],
+        [InlineKeyboardButton(tr(context.user_data, "proceed"), callback_data="proceed_checkout")],
+        [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
-    await update.message.reply_text(tr(context.user_data, "choose_product"), reply_markup=InlineKeyboardMarkup(keyboard))
+    
+    cart_summary = "🛒 " + tr(context.user_data, "order_summary") + "\n"
+    for item in context.user_data['cart']:
+        cart_summary += f"• {item['produit']} x {item['quantite']}\n"
+    
+    await update.message.reply_text(cart_summary, reply_markup=InlineKeyboardMarkup(keyboard))
     return PRODUIT
 
 @error_handler_decorator
 async def add_more_or_checkout(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    
     if query.data == "add_more":
-        keyboard = [[InlineKeyboardButton(p, callback_data=p)] for p in ["❄️", "💊", "🫒", "🍀"]]
+        keyboard = [
+            [InlineKeyboardButton(p, callback_data=f"product_{p}")] for p in ["❄️", "💊", "🫒", "🍀"]
+        ]
+        keyboard.append([InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")])
         await query.message.edit_text(tr(context.user_data, "choose_product"), reply_markup=InlineKeyboardMarkup(keyboard))
         return PRODUIT
     else:
@@ -242,8 +283,9 @@ async def add_more_or_checkout(update: Update, context: ContextTypes.DEFAULT_TYP
 async def saisie_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['adresse'] = update.message.text
     keyboard = [
-        [InlineKeyboardButton("Standard", callback_data="standard")],
-        [InlineKeyboardButton("Express", callback_data="express")]
+        [InlineKeyboardButton("📦 Standard", callback_data="delivery_standard")],
+        [InlineKeyboardButton("⚡ Express", callback_data="delivery_express")],
+        [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
     await update.message.reply_text(tr(context.user_data, "choose_delivery"), reply_markup=InlineKeyboardMarkup(keyboard))
     return LIVRAISON
@@ -252,10 +294,13 @@ async def saisie_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def choix_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    context.user_data['livraison'] = query.data
+    delivery_type = query.data.replace("delivery_", "")
+    context.user_data['livraison'] = delivery_type
+    
     keyboard = [
-        [InlineKeyboardButton("Espèces", callback_data="cash")],
-        [InlineKeyboardButton("Crypto", callback_data="crypto")]
+        [InlineKeyboardButton("💵 Espèces", callback_data="payment_cash")],
+        [InlineKeyboardButton("₿ Crypto", callback_data="payment_crypto")],
+        [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
     await query.message.edit_text(tr(context.user_data, "choose_payment"), reply_markup=InlineKeyboardMarkup(keyboard))
     return PAIEMENT
@@ -264,16 +309,29 @@ async def choix_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    context.user_data['paiement'] = query.data
+    payment_type = query.data.replace("payment_", "")
+    context.user_data['paiement'] = payment_type
+    
     total = calculate_total(context.user_data['cart'], context.user_data['pays'])
-    summary = f"{tr(context.user_data, 'order_summary')}\n"
+    summary = f"{tr(context.user_data, 'order_summary')}\n\n"
+    
     for item in context.user_data['cart']:
-        summary += f"{item['produit']} x {item['quantite']}\n"
-    summary += f"Livraison: {context.user_data['livraison']}\n"
-    summary += f"Paiement: {context.user_data['paiement']}\n"
-    summary += f"Montant total: {total}€"
-    keyboard = [[InlineKeyboardButton(tr(context.user_data, "confirm"), callback_data="confirm")],
-                [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="Annuler")]]
+        prix_table = PRIX_FR if context.user_data['pays'] == "FR" else PRIX_CH
+        prix_unitaire = prix_table[item['produit']]
+        summary += f"• {item['produit']} x {item['quantite']} = {prix_unitaire * int(item['quantite'])}€\n"
+    
+    summary += f"\n📍 Adresse: {context.user_data['adresse']}\n"
+    summary += f"📦 Livraison: {context.user_data['livraison']}\n"
+    summary += f"💳 Paiement: {context.user_data['paiement']}\n"
+    summary += f"\n💰 Total: {total}€"
+    
+    if context.user_data['paiement'] == 'crypto':
+        summary += f"\n\n₿ Wallet: {CRYPTO_WALLET}"
+    
+    keyboard = [
+        [InlineKeyboardButton(tr(context.user_data, "confirm"), callback_data="confirm_order")],
+        [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
+    ]
     await query.message.edit_text(summary, reply_markup=InlineKeyboardMarkup(keyboard))
     return CONFIRMATION
 
@@ -281,14 +339,37 @@ async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    if query.data == "confirm":
+    
+    if query.data == "confirm_order":
         await query.message.edit_text(tr(context.user_data, "order_confirmed"))
-        # Envoi au admin
+        
+        # Envoi au admin avec formatage amélioré
         total = calculate_total(context.user_data['cart'], context.user_data['pays'])
-        order_details = f"Nouvelle commande:\nClient: {query.from_user.id}\nProduits: {context.user_data['cart']}\nAdresse: {context.user_data['adresse']}\nLivraison: {context.user_data['livraison']}\nPaiement: {context.user_data['paiement']}\nTotal: {total}€"
+        user = query.from_user
+        
+        order_details = f"🔔 NOUVELLE COMMANDE\n\n"
+        order_details += f"👤 Client:\n"
+        order_details += f"  • ID: {user.id}\n"
+        order_details += f"  • Username: @{user.username if user.username else 'N/A'}\n"
+        order_details += f"  • Nom: {user.first_name} {user.last_name if user.last_name else ''}\n\n"
+        
+        order_details += f"🛒 Produits:\n"
+        prix_table = PRIX_FR if context.user_data['pays'] == "FR" else PRIX_CH
+        for item in context.user_data['cart']:
+            prix_unitaire = prix_table[item['produit']]
+            order_details += f"  • {item['produit']} x {item['quantite']} = {prix_unitaire * int(item['quantite'])}€\n"
+        
+        order_details += f"\n📍 Adresse: {context.user_data['adresse']}\n"
+        order_details += f"🌍 Pays: {context.user_data['pays']}\n"
+        order_details += f"📦 Livraison: {context.user_data['livraison']}\n"
+        order_details += f"💳 Paiement: {context.user_data['paiement']}\n"
+        order_details += f"\n💰 TOTAL: {total}€"
+        
         await context.bot.send_message(chat_id=ADMIN_ID, text=order_details)
     else:
         await query.message.edit_text(tr(context.user_data, "order_cancelled"))
+    
+    context.user_data.clear()
     return ConversationHandler.END
 
 @error_handler_decorator
@@ -296,40 +377,40 @@ async def annuler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     await query.message.edit_text(tr(context.user_data, "order_cancelled"))
+    context.user_data.clear()
     return ConversationHandler.END
-
-@error_handler_decorator
-async def back_to_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Pour ajouter un produit supplémentaire
-    keyboard = [[InlineKeyboardButton(p, callback_data=p)] for p in ["❄️", "💊", "🫒", "🍀"]]
-    await update.callback_query.message.edit_text(tr(context.user_data, "choose_product"), reply_markup=InlineKeyboardMarkup(keyboard))
-    return PRODUIT
 
 # --- Main ---
 if __name__ == "__main__":
     application = Application.builder().token(TOKEN).build()
     application.add_error_handler(error_callback)
 
+    # Handler pour /start
     application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(CallbackQueryHandler(set_langue, pattern="^(fr|en|es|de)$"))
-    application.add_handler(CallbackQueryHandler(add_more_or_checkout, pattern="^(add_more|proceed_checkout)$"))
+    
+    # Handler pour sélection de langue
+    application.add_handler(CallbackQueryHandler(set_langue, pattern="^lang_(fr|en|es|de)$"))
 
+    # ConversationHandler principal
     conv_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(choix_pays, pattern="^(FR|CH)$")],
+        entry_points=[CallbackQueryHandler(choix_pays, pattern="^country_(FR|CH)$")],
         states={
-            PAYS: [CallbackQueryHandler(choix_pays)],
-            PRODUIT: [CallbackQueryHandler(choix_produit)],
+            PAYS: [CallbackQueryHandler(choix_pays, pattern="^country_(FR|CH)$")],
+            PRODUIT: [
+                CallbackQueryHandler(choix_produit, pattern="^product_[❄️💊🫒🍀]$"),
+                CallbackQueryHandler(add_more_or_checkout, pattern="^(add_more|proceed_checkout)$")
+            ],
             QUANTITE: [MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_quantite)],
             ADRESSE: [MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_adresse)],
-            LIVRAISON: [CallbackQueryHandler(choix_livraison)],
-            PAIEMENT: [CallbackQueryHandler(choix_paiement)],
-            CONFIRMATION: [CallbackQueryHandler(confirmation)],
+            LIVRAISON: [CallbackQueryHandler(choix_livraison, pattern="^delivery_(standard|express)$")],
+            PAIEMENT: [CallbackQueryHandler(choix_paiement, pattern="^payment_(cash|crypto)$")],
+            CONFIRMATION: [CallbackQueryHandler(confirmation, pattern="^confirm_order$")],
         },
-        fallbacks=[CallbackQueryHandler(annuler, pattern="Annuler")],
+        fallbacks=[CallbackQueryHandler(annuler, pattern="^cancel$")],
         per_message=False
     )
 
     application.add_handler(conv_handler)
 
     logger.info("🚀 Bot en ligne !")
-    application.run_polling()
+    application.run_polling(allowed_updates=Update.ALL_TYPES)

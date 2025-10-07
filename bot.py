@@ -1,4 +1,4 @@
-import os
+from config import TOKEN, CRYPTO_WALLET, ADMIN_ID
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot
 from telegram.ext import (
     ApplicationBuilder,

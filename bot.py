@@ -14,10 +14,14 @@ from telegram.ext import (
 PAYS, PRODUIT, QUANTITE, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION = range(7)
 
 # --- Variables d'environnement ---
-TOKEN = "8474087335:AAGQnYnj5gTmtHphvfUHME8h84ygwQejl7Y"
-CRYPTO_WALLET = "3AbkDZtRVXUMdBSejXMNg6pEGMcxfCRpQL"
-ADMIN_ID = 8450278584
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
+
+TOKEN = os.getenv('TELEGRAM_TOKEN')
+CRYPTO_WALLET = os.getenv('CRYPTO_WALLET')
+ADMIN_ID = int(os.getenv('ADMIN_ID'))
 # --- Prix ---
 PRIX_FR = {"❄️": 80, "💊": 10, "🫒": 7, "🍀": 10}
 PRIX_CH = {"❄️": 100, "💊": 15, "🫒": 8, "🍀": 12}

@@ -151,6 +151,19 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
+# --- Message de bienvenue automatique ---
+@error_handler_decorator
+async def welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche un bouton Démarrer dès que l'utilisateur rejoint le bot"""
+    keyboard = [
+        [InlineKeyboardButton("🚀 Démarrer", callback_data="start_macro")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(
+        "Bienvenue 👋\nAppuyez sur le bouton ci-dessous pour commencer.",
+        reply_markup=reply_markup
+    )
+
 # --- Choix du pays ---
 @error_handler_decorator
 async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -372,6 +385,15 @@ if __name__ == "__main__":
 
     # Handler /start
     application.add_handler(CommandHandler("start", start_command))
+    
+    # Bouton Démarrer automatique (équivaut à /start)
+    application.add_handler(CallbackQueryHandler(start_command, pattern="^start_macro$"))
+
+    # Nouveau : Message de bienvenue automatique pour tout nouvel utilisateur
+    application.add_handler(
+        MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, start_command)
+    )
+
 
     # ConversationHandler
     conv_handler = ConversationHandler(

@@ -161,7 +161,6 @@ async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --- Les autres handlers restent identiques ---
 # choix_pays, set_pays, choix_produit, saisie_quantite, saisie_adresse, 
 # choix_livraison, choix_paiement, confirmation, annuler
-# (ils doivent être copiés depuis ton code actuel sans modification des commentaires)
 
 # --- Main ---
 if __name__ == "__main__":
@@ -172,13 +171,13 @@ if __name__ == "__main__":
     # Gestionnaire d'erreurs global
     application.add_error_handler(error_callback)
 
-    # Handler /start
+    # Handler /start : envoie le choix de la langue
     application.add_handler(CommandHandler("start", start_command))
-    
-    # Callback pour la sélection de la langue
+
+    # Callback après sélection de la langue
     application.add_handler(CallbackQueryHandler(set_langue, pattern="^(fr|en|es|de)$"))
 
-    # ConversationHandler (inchangé)
+    # ConversationHandler : inchangé, avec tous tes handlers existants
     conv_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(choix_pays, pattern="start_order")],
         states={
@@ -195,12 +194,16 @@ if __name__ == "__main__":
     )
     application.add_handler(conv_handler)
 
-    # Bouton Démarrer (équivaut à /start)
+    # Bouton Démarrer automatique (équivaut à /start)
     application.add_handler(CallbackQueryHandler(start_command, pattern="^start_macro$"))
 
     try:
         logger.info("✅ Bot en ligne!")
         application.run_polling(allowed_updates=Update.ALL_TYPES)
+    except Exception as e:
+        logger.critical(f"Erreur critique au démarrage: {e}", exc_info=True)
+        sys.exit(1)
+
     except Exception as e:
         logger.critical(f"Erreur critique au démarrage: {e}", exc_info=True)
         sys.exit(1)

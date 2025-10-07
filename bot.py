@@ -1,4 +1,10 @@
-from infos import TOKEN, CRYPTO_WALLET, ADMIN_ID
+import os
+
+# Variables sécurisées
+TOKEN = os.getenv('TELEGRAM_TOKEN', '8474087335:AAGQnYnj5gTmtHphvfUHME8h84ygwQejl7Y')
+CRYPTO_WALLET = os.getenv('CRYPTO_WALLET', '3AbkDZtRVXUMdBSejXMNg6pEGMcxfCRpQL')
+ADMIN_ID = int(os.getenv('ADMIN_ID', '8450278584'))
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot
 from telegram.ext import (
     ApplicationBuilder,

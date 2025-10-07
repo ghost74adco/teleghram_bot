@@ -1,24 +1,76 @@
 import os
+import sys
+import logging
 from dotenv import load_dotenv
+from functools import wraps
 
-# --- Chargement des variables d'environnement ---
-# (Render les fournit automatiquement, et .env est utile pour tes tests en local)
+# --- Configuration du logging ---
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO,
+    handlers=[
+        logging.FileHandler('bot_errors.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# --- Validation des variables d'environnement ---
+def validate_environment():
+    """Valide les variables d'environnement au démarrage"""
+    required_vars = {
+        'TELEGRAM_TOKEN': 'Token du bot Telegram',
+        'ADMIN_ID': 'ID de l\'administrateur',
+        'CRYPTO_WALLET': 'Adresse du wallet crypto'
+    }
+    
+    missing = []
+    invalid = []
+    
+    for var, description in required_vars.items():
+        value = os.getenv(var)
+        
+        if not value:
+            missing.append(f"{var} ({description})")
+        else:
+            value = value.strip()
+            
+            if var == 'TELEGRAM_TOKEN':
+                if ':' not in value or len(value) < 40:
+                    invalid.append(f"{var}: format invalide (doit être NUMBER:HASH)")
+            elif var == 'ADMIN_ID':
+                if not value.isdigit():
+                    invalid.append(f"{var}: doit être un nombre")
+            elif var == 'CRYPTO_WALLET':
+                if len(value) < 20:
+                    invalid.append(f"{var}: format invalide")
+    
+    if missing or invalid:
+        error_msg = "❌ ERREURS DE CONFIGURATION:\n"
+        if missing:
+            error_msg += "\nVariables manquantes:\n" + "\n".join(f"  - {v}" for v in missing)
+        if invalid:
+            error_msg += "\n\nVariables invalides:\n" + "\n".join(f"  - {v}" for v in invalid)
+        
+        logger.error(error_msg)
+        print(error_msg)
+        sys.exit(1)
+    
+    logger.info("✅ Toutes les variables d'environnement sont valides")
+    return True
+
+# --- Chargement des variables ---
 load_dotenv()
+validate_environment()
 
-TOKEN = os.getenv("TOKEN", "8474087335:AAGQnYnj5gTmtHphvfUHME8h84ygwQejl7Y")
-CRYPTO_WALLET = os.getenv("CRYPTO_WALLET", "3AbkDZtRVXUMdBSejXMNg6pEGMcxfCRpQL")
-ADMIN_ID = os.getenv("ADMIN_ID", "8450278584")
-
-# Vérification des variables (optionnel mais conseillé)
-if not all([TOKEN, CRYPTO_WALLET, ADMIN_ID]):
-    raise ValueError("⚠️ Variables d'environnement manquantes ! Vérifie les paramètres Render.")
-
-ADMIN_ID = int(ADMIN_ID)
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+CRYPTO_WALLET = os.getenv("CRYPTO_WALLET")
+ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
 # --- Imports Telegram ---
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    ApplicationBuilder,
+    Application,
     ContextTypes,
     CallbackQueryHandler,
     ConversationHandler,
@@ -26,26 +78,69 @@ from telegram.ext import (
     CommandHandler,
     filters,
 )
+from telegram.error import TelegramError, NetworkError, TimedOut
 
 # --- États de la conversation ---
 PAYS, PRODUIT, QUANTITE, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION = range(7)
-
-
-# --- Variables d'environnement ---
-from dotenv import load_dotenv
-import os
-
-load_dotenv()
-
-TOKEN = os.getenv("TOKEN")
-CRYPTO_WALLET = os.getenv("CRYPTO_WALLET")
-ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
 # --- Prix ---
 PRIX_FR = {"❄️": 80, "💊": 10, "🫒": 7, "🍀": 10}
 PRIX_CH = {"❄️": 100, "💊": 15, "🫒": 8, "🍀": 12}
 
+# --- Gestionnaire d'erreurs ---
+async def notify_admin_error(context: ContextTypes.DEFAULT_TYPE, error_msg: str):
+    """Envoie une notification d'erreur à l'admin"""
+    try:
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"🚨 ERREUR BOT\n\n{error_msg}"
+        )
+    except Exception as e:
+        logger.error(f"Impossible d'envoyer la notification: {e}")
+
+def error_handler_decorator(func):
+    """Décorateur pour gérer les erreurs dans les handlers"""
+    @wraps(func)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            return await func(update, context)
+        except Exception as e:
+            user_id = update.effective_user.id if update.effective_user else "Unknown"
+            error_msg = f"Erreur dans {func.__name__}\nUser: {user_id}\nErreur: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            
+            await notify_admin_error(context, error_msg)
+            
+            if update.effective_message:
+                await update.effective_message.reply_text(
+                    "❌ Une erreur s'est produite. L'administrateur a été notifié."
+                )
+    return wrapper
+
+async def error_callback(update: object, context: ContextTypes.DEFAULT_TYPE):
+    """Gestionnaire global d'erreurs"""
+    logger.error("Exception lors du traitement:", exc_info=context.error)
+    
+    error_type = type(context.error).__name__
+    error_msg = str(context.error)
+    
+    if isinstance(context.error, NetworkError):
+        logger.warning("Erreur réseau - retry automatique...")
+        return
+    
+    elif isinstance(context.error, TimedOut):
+        logger.warning("Timeout - l'opération prendra plus de temps")
+        return
+    
+    admin_msg = f"🚨 ERREUR BOT\n\nType: {error_type}\nMessage: {error_msg}"
+    
+    try:
+        await context.bot.send_message(chat_id=ADMIN_ID, text=admin_msg)
+    except Exception as e:
+        logger.error(f"Impossible de notifier l'admin: {e}")
+
 # --- Commande /start ---
+@error_handler_decorator
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [[InlineKeyboardButton("Démarrer la commande", callback_data="start_order")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -55,6 +150,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # --- Choix du pays ---
+@error_handler_decorator
 async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -69,6 +165,7 @@ async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return PAYS
 
 # --- Sélection du pays ---
+@error_handler_decorator
 async def set_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -91,6 +188,7 @@ async def set_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return PRODUIT
 
 # --- Choix produit ---
+@error_handler_decorator
 async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -105,6 +203,7 @@ async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return QUANTITE
 
 # --- Saisie quantité ---
+@error_handler_decorator
 async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texte = update.message.text
 
@@ -130,6 +229,7 @@ async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ADRESSE
 
 # --- Saisie adresse ---
+@error_handler_decorator
 async def saisie_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texte = update.message.text.strip()
 
@@ -149,6 +249,7 @@ async def saisie_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return LIVRAISON
 
 # --- Choix livraison ---
+@error_handler_decorator
 async def choix_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -169,6 +270,7 @@ async def choix_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return PAIEMENT
 
 # --- Choix paiement ---
+@error_handler_decorator
 async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -179,7 +281,6 @@ async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data['paiement'] = query.data
 
-    # Calcul total
     total = 0
     prix_dict = PRIX_FR if context.user_data['pays'] == "FR" else PRIX_CH
 
@@ -188,7 +289,6 @@ async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data['montant'] = total
 
-    # Résumé avec boutons
     resume = f"Résumé de votre commande :\nPays : {context.user_data['pays']}\nAdresse : {context.user_data['adresse']}\nLivraison : {context.user_data['livraison']}\nPaiement : {context.user_data['paiement']}\nProduits :\n"
 
     for item in context.user_data['produits']:
@@ -205,7 +305,8 @@ async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.message.reply_text(resume, reply_markup=reply_markup)
     return CONFIRMATION
 
-# --- Confirmation / Ajouter produit ---
+# --- Confirmation ---
+@error_handler_decorator
 async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -253,17 +354,24 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
 # --- Annuler ---
+@error_handler_decorator
 async def annuler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Commande annulée.")
     return ConversationHandler.END
 
 # --- Main ---
 if __name__ == "__main__":
-    application = ApplicationBuilder().token(TOKEN).build()
+    logger.info("🚀 Démarrage du bot...")
+    
+    application = Application.builder().token(TOKEN).build()
+    
+    # Gestionnaire d'erreurs global
+    application.add_error_handler(error_callback)
 
-    # Ajout du handler pour /start
+    # Handler /start
     application.add_handler(CommandHandler("start", start_command))
 
+    # ConversationHandler
     conv_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(choix_pays, pattern="start_order")],
         states={
@@ -281,5 +389,9 @@ if __name__ == "__main__":
 
     application.add_handler(conv_handler)
 
-    print("🤖 Bot en ligne...")
-    application.run_polling()
+    try:
+        logger.info("✅ Bot en ligne!")
+        application.run_polling(allowed_updates=Update.ALL_TYPES)
+    except Exception as e:
+        logger.critical(f"Erreur critique au démarrage: {e}", exc_info=True)
+        sys.exit(1)

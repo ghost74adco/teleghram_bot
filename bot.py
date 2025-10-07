@@ -67,6 +67,61 @@ LANGUE, PAYS, PRODUIT, QUANTITE, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION = ra
 PRIX_FR = {"❄️": 80, "💊": 10, "🫒": 7, "🍀": 10}
 PRIX_CH = {"❄️": 100, "💊": 15, "🫒": 8, "🍀": 12}
 
+# --- Traductions statiques ---
+TRADUCTIONS = {
+    "choix_langue": {
+        "fr": "🌍 Choisissez votre langue :",
+        "en": "🌍 Choose your language:",
+        "es": "🌍 Elija su idioma:",
+        "de": "🌍 Wählen Sie Ihre Sprache:"
+    },
+    "choix_pays": {
+        "fr": "Choisissez votre pays :",
+        "en": "Choose your country:",
+        "es": "Elija su país:",
+        "de": "Wählen Sie Ihr Land:"
+    },
+    "entrez_quantite": {
+        "fr": "Entrez la quantité désirée :",
+        "en": "Enter the desired quantity:",
+        "es": "Ingrese la cantidad deseada:",
+        "de": "Geben Sie die gewünschte Menge ein:"
+    },
+    "entrez_adresse": {
+        "fr": "Entrez votre adresse :",
+        "en": "Enter your address:",
+        "es": "Ingrese su dirección:",
+        "de": "Geben Sie Ihre Adresse ein:"
+    },
+    "choix_livraison": {
+        "fr": "Choisissez le type de livraison :",
+        "en": "Choose delivery type:",
+        "es": "Elija el tipo de entrega:",
+        "de": "Wählen Sie die Lieferart:"
+    },
+    "choix_paiement": {
+        "fr": "Choisissez le mode de paiement :",
+        "en": "Choose payment method:",
+        "es": "Elija el método de pago:",
+        "de": "Wählen Sie die Zahlungsmethode:"
+    },
+    "commande_confirmee": {
+        "fr": "✅ Commande confirmée ! Merci.",
+        "en": "✅ Order confirmed! Thank you.",
+        "es": "✅ ¡Pedido confirmado! Gracias.",
+        "de": "✅ Bestellung bestätigt! Danke."
+    },
+    "commande_annulee": {
+        "fr": "❌ Commande annulée.",
+        "en": "❌ Order cancelled.",
+        "es": "❌ Pedido cancelado.",
+        "de": "❌ Bestellung abgebrochen."
+    }
+}
+
+def t(key, langue):
+    return TRADUCTIONS.get(key, {}).get(langue, TRADUCTIONS[key]["fr"])
+
 # --- Gestionnaire d'erreurs ---
 async def notify_admin_error(context: ContextTypes.DEFAULT_TYPE, msg: str):
     try:
@@ -105,7 +160,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     if update.message:
-        await update.message.reply_text("🌍 Choisissez votre langue / Select your language:", reply_markup=reply_markup)
+        await update.message.reply_text(t("choix_langue", "fr"), reply_markup=reply_markup)
     return LANGUE
 
 @error_handler_decorator
@@ -118,10 +173,9 @@ async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🇨🇭 Suisse", callback_data="CH")],
         [InlineKeyboardButton("Annuler", callback_data="Annuler")]
     ]
-    await query.message.edit_text("Choisissez votre pays :", reply_markup=InlineKeyboardMarkup(keyboard))
+    await query.message.edit_text(t("choix_pays", query.data), reply_markup=InlineKeyboardMarkup(keyboard))
     return PAYS
 
-# --- Définition de toutes les fonctions manquantes ---
 @error_handler_decorator
 async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -136,13 +190,13 @@ async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     context.user_data['produit'] = query.data
-    await query.message.edit_text("Entrez la quantité désirée :")
+    await query.message.edit_text(t("entrez_quantite", context.user_data.get('langue', 'fr')))
     return QUANTITE
 
 @error_handler_decorator
 async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['quantite'] = update.message.text
-    await update.message.reply_text("Entrez votre adresse :")
+    await update.message.reply_text(t("entrez_adresse", context.user_data.get('langue', 'fr')))
     return ADRESSE
 
 @error_handler_decorator
@@ -152,7 +206,7 @@ async def saisie_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("Standard", callback_data="standard")],
         [InlineKeyboardButton("Express", callback_data="express")]
     ]
-    await update.message.reply_text("Choisissez le type de livraison :", reply_markup=InlineKeyboardMarkup(keyboard))
+    await update.message.reply_text(t("choix_livraison", context.user_data.get('langue', 'fr')), reply_markup=InlineKeyboardMarkup(keyboard))
     return LIVRAISON
 
 @error_handler_decorator
@@ -161,10 +215,10 @@ async def choix_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     context.user_data['livraison'] = query.data
     keyboard = [
-        [InlineKeyboardButton("Crypto", callback_data="crypto")],
-        [InlineKeyboardButton("Carte bancaire", callback_data="card")]
+        [InlineKeyboardButton("Espèces", callback_data="cash")],
+        [InlineKeyboardButton("Crypto", callback_data="crypto")]
     ]
-    await query.message.edit_text("Choisissez le mode de paiement :", reply_markup=InlineKeyboardMarkup(keyboard))
+    await query.message.edit_text(t("choix_paiement", context.user_data.get('langue', 'fr')), reply_markup=InlineKeyboardMarkup(keyboard))
     return PAIEMENT
 
 @error_handler_decorator
@@ -172,8 +226,19 @@ async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     context.user_data['paiement'] = query.data
-    summary = f"✅ Résumé de votre commande :\nProduit: {context.user_data['produit']}\nQuantité: {context.user_data['quantite']}\nAdresse: {context.user_data['adresse']}\nLivraison: {context.user_data['livraison']}\nPaiement: {context.user_data['paiement']}"
-    keyboard = [[InlineKeyboardButton("Confirmer", callback_data="confirm")], [InlineKeyboardButton("Annuler", callback_data="Annuler")]]
+    langue = context.user_data.get('langue', 'fr')
+    summary = (
+        f"✅ Résumé de votre commande :\n"
+        f"Produit: {context.user_data['produit']}\n"
+        f"Quantité: {context.user_data['quantite']}\n"
+        f"Adresse: {context.user_data['adresse']}\n"
+        f"Livraison: {context.user_data['livraison']}\n"
+        f"Paiement: {context.user_data['paiement']}"
+    )
+    keyboard = [
+        [InlineKeyboardButton("Confirmer", callback_data="confirm")],
+        [InlineKeyboardButton("Annuler", callback_data="Annuler")]
+    ]
     await query.message.edit_text(summary, reply_markup=InlineKeyboardMarkup(keyboard))
     return CONFIRMATION
 
@@ -181,17 +246,19 @@ async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    langue = context.user_data.get('langue', 'fr')
     if query.data == "confirm":
-        await query.message.edit_text("✅ Commande confirmée ! Merci.")
+        await query.message.edit_text(t("commande_confirmee", langue))
     else:
-        await query.message.edit_text("❌ Commande annulée.")
+        await query.message.edit_text(t("commande_annulee", langue))
     return ConversationHandler.END
 
 @error_handler_decorator
 async def annuler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    await query.message.edit_text("❌ Commande annulée.")
+    langue = context.user_data.get('langue', 'fr')
+    await query.message.edit_text(t("commande_annulee", langue))
     return ConversationHandler.END
 
 # --- Main ---
@@ -199,7 +266,6 @@ if __name__ == "__main__":
     application = Application.builder().token(TOKEN).build()
     application.add_error_handler(error_callback)
 
-    # /start
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CallbackQueryHandler(set_langue, pattern="^(fr|en|es|de)$"))
 
@@ -219,6 +285,5 @@ if __name__ == "__main__":
     )
     application.add_handler(conv_handler)
 
-    # Démarrage du bot
     logger.info("🚀 Bot en ligne !")
     application.run_polling()

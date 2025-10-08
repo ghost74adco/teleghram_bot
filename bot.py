@@ -1,11 +1,14 @@
 import os
 import sys
 import logging
+import re
 from dotenv import load_dotenv
 from pathlib import Path
 from functools import wraps
+from collections import defaultdict
+from datetime import datetime, timedelta
 
-# --- Logging ---
+# --- Logging sécurisé ---
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO,
@@ -18,24 +21,23 @@ dotenv_path = Path(__file__).parent / "infos.env"
 load_dotenv(dotenv_path)
 
 def validate_environment():
-    required_vars = {
-        'TELEGRAM_TOKEN': '8474087335:AAGQnYnj5gTmtHphvfUHME8h84ygwQejl7Y',
-        'ADMIN_ID': '8450278584',
-        'CRYPTO_WALLET': '3AbkDZtRVXUMdBSejXMNg6pEGMcxfCRpQL'
-    }
+    """Valide les variables d'environnement sans exposer les valeurs"""
+    required_vars = ['TELEGRAM_TOKEN', 'ADMIN_ID', 'CRYPTO_WALLET']
     missing, invalid = [], []
-    for var, desc in required_vars.items():
+    
+    for var in required_vars:
         value = os.getenv(var)
         if not value:
-            missing.append(f"{var} ({desc})")
+            missing.append(var)
         else:
             value = value.strip()
             if var == 'TELEGRAM_TOKEN' and (':' not in value or len(value) < 40):
-                invalid.append(f"{var}: format invalide (NUMBER:HASH)")
+                invalid.append(f"{var}: format invalide")
             elif var == 'ADMIN_ID' and not value.isdigit():
                 invalid.append(f"{var}: doit être un nombre")
             elif var == 'CRYPTO_WALLET' and len(value) < 20:
                 invalid.append(f"{var}: format invalide")
+    
     if missing or invalid:
         msg = "❌ ERREURS DE CONFIGURATION:\n"
         if missing:
@@ -45,7 +47,8 @@ def validate_environment():
         logger.error(msg)
         print(msg)
         sys.exit(1)
-    logger.info("✅ Toutes les variables d'environnement sont valides")
+    
+    logger.info("✅ Configuration validée")
 
 validate_environment()
 TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -60,6 +63,22 @@ from telegram.ext import (
 )
 from telegram.error import NetworkError, TimedOut, TelegramError
 import asyncio
+
+# --- Configuration de sécurité ---
+# Liste blanche d'utilisateurs (laisser vide pour accepter tous les utilisateurs)
+AUTHORIZED_USERS = []  # Ex: [123456789, 987654321]
+USE_WHITELIST = False  # Mettre True pour activer la whitelist
+
+# Rate limiting
+user_message_timestamps = defaultdict(list)
+MAX_MESSAGES_PER_MINUTE = 15
+RATE_LIMIT_WINDOW = 60
+
+# Session timeout
+SESSION_TIMEOUT_MINUTES = 30
+
+# Limites de quantité
+MAX_QUANTITY_PER_PRODUCT = 100
 
 # --- États ---
 LANGUE, PAYS, PRODUIT, QUANTITE, CART_MENU, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION = range(9)
@@ -97,7 +116,7 @@ TRANSLATIONS = {
         "order_cancelled": "❌ *Commande annulée.*",
         "add_more": "➕ Ajouter un produit",
         "proceed": "✅ Valider le panier",
-        "invalid_quantity": "❌ Veuillez entrer un nombre valide supérieur à 0.",
+        "invalid_quantity": "❌ Veuillez entrer un nombre valide entre 1 et {max}.",
         "cart_title": "🛒 *Votre panier :*",
         "info_title": "ℹ️ *INFORMATIONS*",
         "info_shop": "🛍️ *Notre boutique :*\n• Livraison France 🇫🇷 & Suisse 🇨🇭\n• Produits de qualité\n• Service client réactif",
@@ -116,7 +135,11 @@ TRANSLATIONS = {
         "standard": "📦 Standard",
         "express": "⚡ Express",
         "cash": "💵 Espèces",
-        "crypto": "₿ Crypto"
+        "crypto": "₿ Crypto",
+        "unauthorized": "❌ Accès non autorisé.",
+        "rate_limit": "⚠️ Trop de requêtes. Attendez 1 minute.",
+        "session_expired": "⏱️ Session expirée. Utilisez /start pour recommencer.",
+        "invalid_address": "❌ Adresse invalide. Elle doit contenir au moins 15 caractères."
     },
     "en": {
         "welcome": "🌿 *WELCOME* 🌿\n\n⚠️ *IMPORTANT:*\nAll conversations must be established in *SECRET EXCHANGE*.\n\n🙏 *Thank you* 💪💚",
@@ -135,7 +158,7 @@ TRANSLATIONS = {
         "order_cancelled": "❌ *Order cancelled.*",
         "add_more": "➕ Add product",
         "proceed": "✅ Checkout",
-        "invalid_quantity": "❌ Please enter a valid number greater than 0.",
+        "invalid_quantity": "❌ Please enter a valid number between 1 and {max}.",
         "cart_title": "🛒 *Your cart:*",
         "info_title": "ℹ️ *INFORMATION*",
         "info_shop": "🛍️ *Our shop:*\n• Delivery France 🇫🇷 & Switzerland 🇨🇭\n• Quality products\n• Responsive customer service",
@@ -154,7 +177,11 @@ TRANSLATIONS = {
         "standard": "📦 Standard",
         "express": "⚡ Express",
         "cash": "💵 Cash",
-        "crypto": "₿ Crypto"
+        "crypto": "₿ Crypto",
+        "unauthorized": "❌ Unauthorized access.",
+        "rate_limit": "⚠️ Too many requests. Wait 1 minute.",
+        "session_expired": "⏱️ Session expired. Use /start to restart.",
+        "invalid_address": "❌ Invalid address. Must be at least 15 characters."
     },
     "es": {
         "welcome": "🌿 *BIENVENIDO* 🌿\n\n⚠️ *IMPORTANTE:*\nTodas las conversaciones deben establecerse en *INTERCAMBIO SECRETO*.\n\n🙏 *Gracias* 💪💚",
@@ -173,7 +200,7 @@ TRANSLATIONS = {
         "order_cancelled": "❌ *Pedido cancelado.*",
         "add_more": "➕ Agregar producto",
         "proceed": "✅ Finalizar",
-        "invalid_quantity": "❌ Por favor ingrese un número válido mayor a 0.",
+        "invalid_quantity": "❌ Por favor ingrese un número válido entre 1 y {max}.",
         "cart_title": "🛒 *Su carrito:*",
         "info_title": "ℹ️ *INFORMACIÓN*",
         "info_shop": "🛍️ *Nuestra tienda:*\n• Entrega Francia 🇫🇷 & Suiza 🇨🇭\n• Productos de calidad\n• Servicio al cliente receptivo",
@@ -192,7 +219,11 @@ TRANSLATIONS = {
         "standard": "📦 Estándar",
         "express": "⚡ Express",
         "cash": "💵 Efectivo",
-        "crypto": "₿ Crypto"
+        "crypto": "₿ Crypto",
+        "unauthorized": "❌ Acceso no autorizado.",
+        "rate_limit": "⚠️ Demasiadas solicitudes. Espere 1 minuto.",
+        "session_expired": "⏱️ Sesión expirada. Use /start para reiniciar.",
+        "invalid_address": "❌ Dirección inválida. Debe tener al menos 15 caracteres."
     },
     "de": {
         "welcome": "🌿 *WILLKOMMEN* 🌿\n\n⚠️ *WICHTIG:*\nAlle Gespräche müssen im *GEHEIMEN AUSTAUSCH* geführt werden.\n\n🙏 *Danke* 💪💚",
@@ -211,7 +242,7 @@ TRANSLATIONS = {
         "order_cancelled": "❌ *Bestellung abgebrochen.*",
         "add_more": "➕ Produkt hinzufügen",
         "proceed": "✅ Zur Kasse",
-        "invalid_quantity": "❌ Bitte geben Sie eine gültige Zahl größer als 0 ein.",
+        "invalid_quantity": "❌ Bitte geben Sie eine gültige Zahl zwischen 1 und {max} ein.",
         "cart_title": "🛒 *Ihr Warenkorb:*",
         "info_title": "ℹ️ *INFORMATION*",
         "info_shop": "🛍️ *Unser Shop:*\n• Lieferung Frankreich 🇫🇷 & Schweiz 🇨🇭\n• Qualitätsprodukte\n• Reaktiver Kundenservice",
@@ -230,15 +261,130 @@ TRANSLATIONS = {
         "standard": "📦 Standard",
         "express": "⚡ Express",
         "cash": "💵 Bargeld",
-        "crypto": "₿ Krypto"
+        "crypto": "₿ Krypto",
+        "unauthorized": "❌ Unbefugter Zugriff.",
+        "rate_limit": "⚠️ Zu viele Anfragen. Warten Sie 1 Minute.",
+        "session_expired": "⏱️ Sitzung abgelaufen. Verwenden Sie /start zum Neustart.",
+        "invalid_address": "❌ Ungültige Adresse. Muss mindestens 15 Zeichen lang sein."
     }
 }
 
-# --- Gestionnaire d'erreurs et notification admin ---
+# --- Fonctions de sécurité ---
+def sanitize_input(text: str, max_length: int = 200) -> str:
+    """Nettoie et valide les entrées utilisateur"""
+    if not text:
+        return ""
+    
+    # Limiter la longueur
+    text = text.strip()[:max_length]
+    
+    # Supprimer les caractères potentiellement dangereux
+    text = re.sub(r'[<>{}[\]\\`|]', '', text)
+    
+    # Supprimer les séquences de contrôle
+    text = re.sub(r'[\x00-\x1F\x7F]', '', text)
+    
+    return text
+
+def is_authorized(user_id: int) -> bool:
+    """Vérifie si l'utilisateur est autorisé"""
+    if not USE_WHITELIST:
+        return True
+    return user_id in AUTHORIZED_USERS
+
+def check_rate_limit(user_id: int) -> bool:
+    """Vérifie si l'utilisateur dépasse la limite de requêtes"""
+    now = datetime.now()
+    
+    # Nettoyer les anciens timestamps
+    user_message_timestamps[user_id] = [
+        ts for ts in user_message_timestamps[user_id]
+        if now - ts < timedelta(seconds=RATE_LIMIT_WINDOW)
+    ]
+    
+    # Vérifier la limite
+    if len(user_message_timestamps[user_id]) >= MAX_MESSAGES_PER_MINUTE:
+        return False
+    
+    user_message_timestamps[user_id].append(now)
+    return True
+
+def check_session_timeout(user_data: dict) -> bool:
+    """Vérifie si la session a expiré"""
+    last_activity = user_data.get('last_activity')
+    if not last_activity:
+        return False
+    
+    return datetime.now() - last_activity > timedelta(minutes=SESSION_TIMEOUT_MINUTES)
+
+def update_last_activity(user_data: dict):
+    """Met à jour le timestamp de la dernière activité"""
+    user_data['last_activity'] = datetime.now()
+
+# --- Décorateurs de sécurité ---
+def security_check(func):
+    """Décorateur pour vérifier l'autorisation et le rate limit"""
+    @wraps(func)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = update.effective_user.id
+        
+        # Vérifier l'autorisation
+        if not is_authorized(user_id):
+            logger.warning(f"⚠️ Accès refusé: User {user_id}")
+            if update.message:
+                await update.message.reply_text(
+                    tr(context.user_data, "unauthorized")
+                )
+            elif update.callback_query:
+                await update.callback_query.answer(
+                    tr(context.user_data, "unauthorized")
+                )
+            return ConversationHandler.END
+        
+        # Vérifier le rate limit
+        if not check_rate_limit(user_id):
+            logger.warning(f"⚠️ Rate limit dépassé: User {user_id}")
+            if update.message:
+                await update.message.reply_text(
+                    tr(context.user_data, "rate_limit")
+                )
+            elif update.callback_query:
+                await update.callback_query.answer(
+                    tr(context.user_data, "rate_limit"),
+                    show_alert=True
+                )
+            return
+        
+        # Vérifier le timeout de session
+        if check_session_timeout(context.user_data):
+            logger.info(f"⏱️ Session expirée: User {user_id}")
+            if update.message:
+                await update.message.reply_text(
+                    tr(context.user_data, "session_expired")
+                )
+            elif update.callback_query:
+                await update.callback_query.answer(
+                    tr(context.user_data, "session_expired"),
+                    show_alert=True
+                )
+            context.user_data.clear()
+            return ConversationHandler.END
+        
+        # Mettre à jour la dernière activité
+        update_last_activity(context.user_data)
+        
+        return await func(update, context)
+    return wrapper
+
+# --- Gestionnaire d'erreurs ---
 async def notify_admin_error(context: ContextTypes.DEFAULT_TYPE, msg: str):
-    """Notifie l'admin en cas d'erreur critique"""
+    """Notifie l'admin en cas d'erreur critique (sans données sensibles)"""
     try:
-        await context.bot.send_message(chat_id=ADMIN_ID, text=f"🚨 ERREUR BOT\n\n{msg}")
+        # Ne pas inclure de données utilisateur sensibles
+        await context.bot.send_message(
+            chat_id=ADMIN_ID, 
+            text=f"🚨 ERREUR BOT\n\n{msg[:500]}"  # Limiter la taille
+        )
     except Exception as e:
         logger.error(f"Impossible d'envoyer la notification admin: {e}")
 
@@ -250,25 +396,23 @@ def error_handler_decorator(func):
             return await func(update, context)
         except Exception as e:
             user_id = update.effective_user.id if update.effective_user else "Unknown"
-            error_msg = f"Erreur dans {func.__name__}\nUser: {user_id}\nErreur: {str(e)}"
+            error_msg = f"Erreur dans {func.__name__}\nUser: {user_id}\nType: {type(e).__name__}"
             logger.error(error_msg, exc_info=True)
             await notify_admin_error(context, error_msg)
             
-            # Message utilisateur
+            # Message utilisateur générique
             try:
                 if hasattr(update, "callback_query") and update.callback_query:
                     await update.callback_query.answer("❌ Une erreur s'est produite.")
                     await update.callback_query.message.reply_text(
-                        "❌ Une erreur s'est produite. L'admin a été notifié.\n"
-                        "Utilisez /start pour recommencer."
+                        "❌ Une erreur s'est produite.\nUtilisez /start pour recommencer."
                     )
                 elif hasattr(update, "message") and update.message:
                     await update.message.reply_text(
-                        "❌ Une erreur s'est produite. L'admin a été notifié.\n"
-                        "Utilisez /start pour recommencer."
+                        "❌ Une erreur s'est produite.\nUtilisez /start pour recommencer."
                     )
-            except Exception as notify_error:
-                logger.error(f"Erreur lors de la notification utilisateur: {notify_error}")
+            except Exception:
+                pass
             
             return ConversationHandler.END
     return wrapper
@@ -282,15 +426,21 @@ async def error_callback(update: object, context: ContextTypes.DEFAULT_TYPE):
         logger.info("Erreur réseau temporaire ignorée")
         return
     
-    # Notifier l'admin pour les autres erreurs
-    error_msg = f"Type: {type(context.error).__name__}\nMessage: {str(context.error)}"
+    # Notifier l'admin (sans détails sensibles)
+    error_msg = f"Type: {type(context.error).__name__}"
     await notify_admin_error(context, error_msg)
 
 # --- Fonctions utilitaires ---
 def tr(user_data, key):
     """Récupère une traduction selon la langue de l'utilisateur"""
     lang = user_data.get("langue", "fr")
-    return TRANSLATIONS.get(lang, TRANSLATIONS["fr"]).get(key, key)
+    translation = TRANSLATIONS.get(lang, TRANSLATIONS["fr"]).get(key, key)
+    
+    # Remplacer les variables dynamiques
+    if "{max}" in translation:
+        translation = translation.replace("{max}", str(MAX_QUANTITY_PER_PRODUCT))
+    
+    return translation
 
 def calculate_total(cart, country):
     """Calcule le total du panier"""
@@ -312,32 +462,21 @@ def format_cart(cart, user_data):
 
 async def delete_conversation(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_ids: list):
     """Supprime tous les messages de la conversation après 1 minute"""
-    await asyncio.sleep(60)  # Attendre 1 minute
+    await asyncio.sleep(60)
     
     deleted_count = 0
-    failed_count = 0
     
     for msg_id in message_ids:
         try:
             await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
             deleted_count += 1
-        except TelegramError as e:
-            logger.warning(f"Impossible de supprimer le message {msg_id}: {e}")
-            failed_count += 1
+        except TelegramError:
+            pass
     
-    logger.info(f"🗑️ Conversation supprimée: {deleted_count} messages supprimés, {failed_count} échecs")
-    
-    # Notification admin (optionnelle)
-    try:
-        await context.bot.send_message(
-            chat_id=ADMIN_ID,
-            text=f"🗑️ Conversation auto-supprimée\n└─ User ID: {chat_id}\n└─ Messages: {deleted_count}/{deleted_count + failed_count}"
-        )
-    except Exception as e:
-        logger.error(f"Erreur notification suppression: {e}")
+    logger.info(f"🗑️ {deleted_count} messages supprimés pour conversation {chat_id}")
 
 async def safe_edit_message(query, text=None, caption=None, reply_markup=None, parse_mode='Markdown'):
-    """Édite un message de manière sécurisée (photo ou texte)"""
+    """Édite un message de manière sécurisée"""
     try:
         if query.message.photo:
             if caption:
@@ -355,19 +494,19 @@ async def safe_edit_message(query, text=None, caption=None, reply_markup=None, p
                 )
     except TelegramError as e:
         logger.warning(f"Erreur lors de l'édition du message: {e}")
-        # Fallback: envoyer un nouveau message
         if text:
             await query.message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
         elif caption:
             await query.message.reply_text(caption, reply_markup=reply_markup, parse_mode=parse_mode)
 
 # --- Commande /start ---
+@security_check
 @error_handler_decorator
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Point d'entrée principal du bot"""
     context.user_data.clear()
+    update_last_activity(context.user_data)
     
-    # Initialiser la liste de tracking des messages
     context.user_data['message_ids'] = []
     
     welcome_text = (
@@ -383,11 +522,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    # Envoyer l'image de bienvenue si elle existe
     image_path = Path(__file__).parent / "welcome_image.jpg"
     
     if update.message:
-        # Stocker l'ID du message de l'utilisateur
         context.user_data['message_ids'].append(update.message.message_id)
         
         if image_path.exists():
@@ -410,6 +547,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     return LANGUE
 
+@security_check
 @error_handler_decorator
 async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Définit la langue et affiche le menu principal"""
@@ -430,17 +568,16 @@ async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await safe_edit_message(query, text=welcome_text, caption=welcome_text, reply_markup=InlineKeyboardMarkup(keyboard))
     return PAYS
 
+@security_check
 @error_handler_decorator
 async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Gère la navigation dans les menus (info, contact, retour)"""
+    """Gère la navigation dans les menus"""
     query = update.callback_query
     await query.answer()
     
-    # Vérifier si la langue est définie
     if 'langue' not in context.user_data:
         context.user_data['langue'] = 'fr'
     
-    # Bouton "Commander"
     if query.data == "start_order":
         keyboard = [
             [InlineKeyboardButton(tr(context.user_data, "france"), callback_data="country_FR")],
@@ -455,7 +592,6 @@ async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return PAYS
     
-    # Bouton "Informations"
     elif query.data == "info":
         info_text = (
             f"{tr(context.user_data, 'info_title')}\n\n"
@@ -471,7 +607,6 @@ async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_edit_message(query, text=info_text, caption=info_text, reply_markup=InlineKeyboardMarkup(keyboard))
         return PAYS
     
-    # Bouton "Contact"
     elif query.data == "contact_admin":
         contact_text = f"{tr(context.user_data, 'contact_title')}\n\n{tr(context.user_data, 'contact_text')}"
         keyboard = [
@@ -482,7 +617,6 @@ async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_edit_message(query, text=contact_text, caption=contact_text, reply_markup=InlineKeyboardMarkup(keyboard))
         return PAYS
     
-    # Bouton "Retour au menu"
     elif query.data == "back_menu":
         welcome_text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
         keyboard = [
@@ -495,7 +629,7 @@ async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     return PAYS
 
-# --- Gestion du processus de commande ---
+@security_check
 @error_handler_decorator
 async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Sélection du pays et initialisation du panier"""
@@ -514,7 +648,6 @@ async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
     
-    # ✅ CORRECTION : Utilisation de safe_edit_message
     await safe_edit_message(
         query,
         text=tr(context.user_data, "choose_product"),
@@ -524,6 +657,7 @@ async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     return PRODUIT
 
+@security_check
 @error_handler_decorator
 async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Sélection du produit"""
@@ -534,7 +668,6 @@ async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     product_emoji = PRODUCT_MAP.get(product_code, product_code)
     context.user_data['current_product'] = product_emoji
     
-    # ✅ CORRECTION : utilisation de safe_edit_message au lieu de edit_text
     await safe_edit_message(
         query,
         text=f"{tr(context.user_data, 'choose_product')}\n\n✅ Produit: {product_emoji}\n\n{tr(context.user_data, 'enter_quantity')}",
@@ -543,15 +676,22 @@ async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return QUANTITE
 
+@security_check
 @error_handler_decorator
 async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Validation et ajout de la quantité au panier"""
-    qty = update.message.text.strip()
+    qty = sanitize_input(update.message.text, max_length=10)
     
-    # Stocker l'ID du message de l'utilisateur
     context.user_data['message_ids'].append(update.message.message_id)
     
-    if not qty.isdigit() or int(qty) <= 0:
+    # Validation stricte de la quantité
+    if not qty.isdigit():
+        sent_msg = await update.message.reply_text(tr(context.user_data, "invalid_quantity"))
+        context.user_data['message_ids'].append(sent_msg.message_id)
+        return QUANTITE
+    
+    qty_int = int(qty)
+    if qty_int <= 0 or qty_int > MAX_QUANTITY_PER_PRODUCT:
         sent_msg = await update.message.reply_text(tr(context.user_data, "invalid_quantity"))
         context.user_data['message_ids'].append(sent_msg.message_id)
         return QUANTITE
@@ -559,10 +699,9 @@ async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Ajouter au panier
     context.user_data['cart'].append({
         "produit": context.user_data['current_product'],
-        "quantite": qty
+        "quantite": qty_int
     })
     
-    # Afficher le panier
     cart_summary = format_cart(context.user_data['cart'], context.user_data)
     
     keyboard = [
@@ -579,14 +718,14 @@ async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['message_ids'].append(sent_msg.message_id)
     return CART_MENU
 
+@security_check
 @error_handler_decorator
 async def cart_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Gestion du menu du panier (ajouter/valider)"""
+    """Gestion du menu du panier"""
     query = update.callback_query
     await query.answer()
     
     if query.data == "add_more":
-        # Retour au choix de produit
         keyboard = [
             [InlineKeyboardButton("❄️", callback_data="product_snow")],
             [InlineKeyboardButton("💊", callback_data="product_pill")],
@@ -594,7 +733,6 @@ async def cart_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("🍀", callback_data="product_clover")],
             [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
         ]
-        # ✅ CORRECTION : safe_edit_message
         await safe_edit_message(
             query,
             text=tr(context.user_data, "choose_product"), 
@@ -605,8 +743,6 @@ async def cart_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return PRODUIT
     
     elif query.data == "proceed_checkout":
-        # Passer à l'adresse
-        # ✅ CORRECTION : safe_edit_message
         await safe_edit_message(
             query,
             text=tr(context.user_data, "enter_address"),
@@ -617,13 +753,21 @@ async def cart_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     return CART_MENU
 
+@security_check
 @error_handler_decorator
 async def saisie_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Validation de l'adresse de livraison"""
-    context.user_data['adresse'] = update.message.text.strip()
+    adresse = sanitize_input(update.message.text, max_length=300)
     
-    # Stocker l'ID du message de l'utilisateur
     context.user_data['message_ids'].append(update.message.message_id)
+    
+    # Validation de l'adresse
+    if len(adresse) < 15:
+        sent_msg = await update.message.reply_text(tr(context.user_data, "invalid_address"))
+        context.user_data['message_ids'].append(sent_msg.message_id)
+        return ADRESSE
+    
+    context.user_data['adresse'] = adresse
     
     keyboard = [
         [InlineKeyboardButton(tr(context.user_data, "standard"), callback_data="delivery_standard")],
@@ -638,6 +782,7 @@ async def saisie_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['message_ids'].append(sent_msg.message_id)
     return LIVRAISON
 
+@security_check
 @error_handler_decorator
 async def choix_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Sélection du mode de livraison"""
@@ -652,7 +797,6 @@ async def choix_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(tr(context.user_data, "crypto"), callback_data="payment_crypto")],
         [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
-    # ✅ CORRECTION : safe_edit_message
     await safe_edit_message(
         query,
         text=tr(context.user_data, "choose_payment"), 
@@ -662,6 +806,7 @@ async def choix_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return PAIEMENT
 
+@security_check
 @error_handler_decorator
 async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Sélection du mode de paiement et affichage du résumé"""
@@ -671,11 +816,9 @@ async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
     payment_type = query.data.replace("payment_", "")
     context.user_data['paiement'] = payment_type
     
-    # Calcul du total
     total = calculate_total(context.user_data['cart'], context.user_data['pays'])
     summary = f"{tr(context.user_data, 'order_summary')}\n\n"
     
-    # Détail des produits
     prix_table = PRIX_FR if context.user_data['pays'] == "FR" else PRIX_CH
     for item in context.user_data['cart']:
         prix_unitaire = prix_table[item['produit']]
@@ -687,7 +830,6 @@ async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
     summary += f"💳 Paiement: {context.user_data['paiement']}\n"
     summary += f"\n💰 TOTAL: {total}€"
     
-    # Ajout du wallet crypto si nécessaire
     if context.user_data['paiement'] == 'crypto':
         summary += f"\n\n₿ Wallet: `{CRYPTO_WALLET}`"
     
@@ -695,7 +837,6 @@ async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(tr(context.user_data, "confirm"), callback_data="confirm_order")],
         [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
-    # ✅ CORRECTION : safe_edit_message
     await safe_edit_message(
         query,
         text=summary, 
@@ -705,6 +846,7 @@ async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return CONFIRMATION
 
+@security_check
 @error_handler_decorator
 async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Confirmation finale de la commande"""
@@ -712,7 +854,6 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     if query.data == "confirm_order":
-        # ✅ CORRECTION : safe_edit_message au lieu de edit_text
         await safe_edit_message(
             query,
             text=tr(context.user_data, "order_confirmed"),
@@ -720,65 +861,56 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown'
         )
         
-        # Notification admin détaillée
+        # Notification admin (données minimales et sécurisées)
         total = calculate_total(context.user_data['cart'], context.user_data['pays'])
         user = query.from_user
         
         order_details = "🔔 NOUVELLE COMMANDE\n"
         order_details += "=" * 30 + "\n\n"
         
-        order_details += "👤 INFORMATIONS CLIENT:\n"
+        order_details += "👤 CLIENT:\n"
         order_details += f"├─ ID: {user.id}\n"
-        order_details += f"├─ Username: @{user.username if user.username else 'N/A'}\n"
-        order_details += f"└─ Nom: {user.first_name} {user.last_name or ''}\n\n"
+        order_details += f"└─ Username: @{user.username if user.username else 'N/A'}\n\n"
         
-        order_details += "🛒 PRODUITS COMMANDÉS:\n"
+        order_details += "🛒 PRODUITS:\n"
         prix_table = PRIX_FR if context.user_data['pays'] == "FR" else PRIX_CH
         for idx, item in enumerate(context.user_data['cart'], 1):
             prix_unitaire = prix_table[item['produit']]
             subtotal = prix_unitaire * int(item['quantite'])
             order_details += f"├─ {idx}. {item['produit']} x {item['quantite']} = {subtotal}€\n"
         
-        order_details += f"\n📦 DÉTAILS LIVRAISON:\n"
+        order_details += f"\n📦 LIVRAISON:\n"
         order_details += f"├─ Pays: {context.user_data['pays']}\n"
-        order_details += f"├─ Adresse: {context.user_data['adresse']}\n"
+        order_details += f"├─ Adresse: {context.user_data['adresse'][:50]}...\n"
         order_details += f"└─ Type: {context.user_data['livraison']}\n\n"
         
-        order_details += f"💳 PAIEMENT:\n"
-        order_details += f"├─ Méthode: {context.user_data['paiement']}\n"
-        order_details += f"└─ MONTANT TOTAL: {total}€\n"
+        order_details += f"💳 PAIEMENT: {context.user_data['paiement']}\n"
+        order_details += f"💰 TOTAL: {total}€\n"
         order_details += "=" * 30
         
         try:
             await context.bot.send_message(chat_id=ADMIN_ID, text=order_details)
-            logger.info(f"✅ Commande confirmée pour l'utilisateur {user.id}")
+            logger.info(f"✅ Commande confirmée - User: {user.id}")
             
-            # Récupérer tous les IDs de messages pour suppression
             message_ids = context.user_data.get('message_ids', [])
-            
-            # Ajouter l'ID du message de confirmation
             message_ids.append(query.message.message_id)
             
-            # Lancer la suppression automatique après 1 minute
             chat_id = query.message.chat_id
-            logger.info(f"⏰ Suppression auto programmée pour {len(message_ids)} messages (User: {user.id})")
-            
-            # Créer une tâche asynchrone pour la suppression
             asyncio.create_task(delete_conversation(context, chat_id, message_ids))
             
         except Exception as e:
-            logger.error(f"Erreur envoi notification admin: {e}")
+            logger.error(f"Erreur notification admin: {type(e).__name__}")
     
     context.user_data.clear()
     return ConversationHandler.END
 
+@security_check
 @error_handler_decorator
 async def annuler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Annulation de la commande"""
     query = update.callback_query
     await query.answer()
     
-    # ✅ CORRECTION : safe_edit_message
     await safe_edit_message(
         query,
         text=tr(context.user_data, "order_cancelled"),
@@ -790,13 +922,10 @@ async def annuler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- Main ---
 if __name__ == "__main__":
-    # Création de l'application
     application = Application.builder().token(TOKEN).build()
     
-    # Ajout du gestionnaire d'erreurs global
     application.add_error_handler(error_callback)
 
-    # ConversationHandler principal avec CORRECTION
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler("start", start_command)
@@ -806,7 +935,6 @@ if __name__ == "__main__":
                 CallbackQueryHandler(set_langue, pattern="^lang_(fr|en|es|de)$")
             ],
             PAYS: [
-                # ✅ CORRECTION CRITIQUE : choix_pays AVANT menu_navigation
                 CallbackQueryHandler(choix_pays, pattern="^country_(FR|CH)$"),
                 CallbackQueryHandler(menu_navigation, pattern="^(start_order|info|contact_admin|back_menu)$")
             ],
@@ -843,10 +971,11 @@ if __name__ == "__main__":
     application.add_handler(conv_handler)
 
     logger.info("=" * 50)
-    logger.info("🚀 Bot démarré avec succès!")
-    logger.info(f"📊 États disponibles: LANGUE, PAYS, PRODUIT, QUANTITE, CART_MENU, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION")
-    logger.info(f"🔑 Admin ID: {ADMIN_ID}")
-    logger.info(f"💬 Langues disponibles: FR, EN, ES, DE")
+    logger.info("🚀 Bot sécurisé démarré!")
+    logger.info(f"🔒 Whitelist: {'Activée' if USE_WHITELIST else 'Désactivée'}")
+    logger.info(f"⏱️ Rate limit: {MAX_MESSAGES_PER_MINUTE} msg/min")
+    logger.info(f"⏳ Session timeout: {SESSION_TIMEOUT_MINUTES} min")
+    logger.info(f"📊 Max quantité: {MAX_QUANTITY_PER_PRODUCT}")
     logger.info("=" * 50)
     
     application.run_polling(allowed_updates=Update.ALL_TYPES)

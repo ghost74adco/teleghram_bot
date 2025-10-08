@@ -753,8 +753,14 @@ if __name__ == "__main__":
 
     application.add_handler(conv_handler)
 
+    # === Handlers globaux ===
+    application.add_handler(CallbackQueryHandler(set_langue, pattern="^lang_(fr|en|es|de)$"))
+    application.add_handler(CallbackQueryHandler(menu_navigation, pattern="^(start_order|info|contact_admin|back_menu)$"))
+    application.add_handler(CallbackQueryHandler(set_country, pattern="^country_(FR|CH)$"))
+
     logger.info("🚀 Bot démarré avec succès!")
     logger.info(f"📊 États disponibles: {list(range(9))}")
     logger.info(f"🔑 Admin ID: {ADMIN_ID}")
     
     application.run_polling(allowed_updates=Update.ALL_TYPES)
+

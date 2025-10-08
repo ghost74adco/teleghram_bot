@@ -100,8 +100,8 @@ TRANSLATIONS = {
         "cart_title": "🛒 *Votre panier :*",
         "info_title": "ℹ️ *INFORMATIONS*",
         "info_shop": "🛍️ *Notre boutique :*\n• Livraison France 🇫🇷 & Suisse 🇨🇭\n• Produits de qualité\n• Service client réactif",
-        "info_delivery": "📦 *Livraison :*\n• Standard : 1-3 jours\n• Express",
-        "info_payment": "💳 *Paiement :*\n• Espèces à la livraison\n• Crypto (Bitcoin)",
+        "info_delivery": "📦 *Livraison :*\n• Standard : 3-5 jours\n• Express : 24-48h",
+        "info_payment": "💳 *Paiement :*\n• Espèces à la livraison\n• Crypto (Bitcoin, USDT)",
         "info_security": "🔒 *Sécurité :*\nTous les échanges sont cryptés et confidentiels.",
         "contact_title": "📞 *CONTACT*",
         "contact_text": "Pour toute question ou besoin d'assistance, vous pouvez :\n\n• Continuer avec la commande\n• Contacter l'administrateur\n\nNotre équipe est disponible 24/7 pour vous aider ! 💬",
@@ -138,8 +138,8 @@ TRANSLATIONS = {
         "cart_title": "🛒 *Your cart:*",
         "info_title": "ℹ️ *INFORMATION*",
         "info_shop": "🛍️ *Our shop:*\n• Delivery France 🇫🇷 & Switzerland 🇨🇭\n• Quality products\n• Responsive customer service",
-        "info_delivery": "📦 *Delivery:*\n• Standard: 1-3 days\n• Express",
-        "info_payment": "💳 *Payment:*\n• Cash on delivery\n• Crypto (Bitcoin)",
+        "info_delivery": "📦 *Delivery:*\n• Standard: 3-5 days\n• Express: 24-48h",
+        "info_payment": "💳 *Payment:*\n• Cash on delivery\n• Crypto (Bitcoin, USDT)",
         "info_security": "🔒 *Security:*\nAll exchanges are encrypted and confidential.",
         "contact_title": "📞 *CONTACT*",
         "contact_text": "For any questions or assistance, you can:\n\n• Continue with the order\n• Contact the administrator\n\nOur team is available 24/7 to help you! 💬",
@@ -176,8 +176,8 @@ TRANSLATIONS = {
         "cart_title": "🛒 *Su carrito:*",
         "info_title": "ℹ️ *INFORMACIÓN*",
         "info_shop": "🛍️ *Nuestra tienda:*\n• Entrega Francia 🇫🇷 & Suiza 🇨🇭\n• Productos de calidad\n• Servicio al cliente receptivo",
-        "info_delivery": "📦 *Entrega:*\n• Estándar: 1-3 días\n• Express",
-        "info_payment": "💳 *Pago:*\n• Efectivo contra entrega\n• Crypto (Bitcoin)",
+        "info_delivery": "📦 *Entrega:*\n• Estándar: 3-5 días\n• Express: 24-48h",
+        "info_payment": "💳 *Pago:*\n• Efectivo contra entrega\n• Crypto (Bitcoin, USDT)",
         "info_security": "🔒 *Seguridad:*\nTodos los intercambios están encriptados y son confidenciales.",
         "contact_title": "📞 *CONTACTO*",
         "contact_text": "Para cualquier pregunta o asistencia, puede:\n\n• Continuar con el pedido\n• Contactar al administrador\n\n¡Nuestro equipo está disponible 24/7 para ayudarle! 💬",
@@ -214,8 +214,8 @@ TRANSLATIONS = {
         "cart_title": "🛒 *Ihr Warenkorb:*",
         "info_title": "ℹ️ *INFORMATION*",
         "info_shop": "🛍️ *Unser Shop:*\n• Lieferung Frankreich 🇫🇷 & Schweiz 🇨🇭\n• Qualitätsprodukte\n• Reaktiver Kundenservice",
-        "info_delivery": "📦 *Lieferung:*\n• Standard: 1-3 Tage\n• Express",
-        "info_payment": "💳 *Zahlung:*\n• Barzahlung bei Lieferung\n• Krypto (Bitcoin)",
+        "info_delivery": "📦 *Lieferung:*\n• Standard: 3-5 Tage\n• Express: 24-48h",
+        "info_payment": "💳 *Zahlung:*\n• Barzahlung bei Lieferung\n• Krypto (Bitcoin, USDT)",
         "info_security": "🔒 *Sicherheit:*\nAlle Austausche sind verschlüsselt und vertraulich.",
         "contact_title": "📞 *KONTAKT*",
         "contact_text": "Für Fragen oder Unterstützung können Sie:\n\n• Mit der Bestellung fortfahren\n• Den Administrator kontaktieren\n\nUnser Team ist 24/7 verfügbar, um Ihnen zu helfen! 💬",
@@ -288,33 +288,21 @@ def format_cart(cart, user_data):
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     
-    # Message de bienvenue avec design
-    welcome_text = (
-        "🌿 *BIENVENUE, WELCOME* 🌿\n\n"
-        "⚠️ *IMPORTANT :*\n"
-        "Toutes les conversations doivent être établies en *ÉCHANGE SECRET*.\n\n"
-        "🙏 *Merci* 💪💚\n\n"
-        "📞 Pour me joindre : utilisez le bouton *Contact*\n"
-        "ℹ️ Infos : consultez la rubrique *Informations*\n"
-        "📱 Menu : accédez à la *Mini App*\n\n"
-        "👇 *Sélectionnez votre langue pour commencer :*"
-    )
+    # Message de sélection de langue UNIQUEMENT
+    welcome_text = "🌍 *Choisissez votre langue / Select your language*\n🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
     
     keyboard = [
         [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
         [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
         [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
-        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")],
-        [InlineKeyboardButton("ℹ️ Informations", callback_data="info")],
-        [InlineKeyboardButton("📞 Contact", callback_data="contact_admin")]
+        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    # Envoyer l'image de bienvenue (vous devez mettre votre image dans le dossier du bot)
+    # Envoyer l'image de bienvenue si elle existe
     image_path = Path(__file__).parent / "welcome_image.jpg"
     
     if update.message:
-        # Si l'image existe, l'envoyer
         if image_path.exists():
             with open(image_path, 'rb') as photo:
                 await update.message.reply_photo(
@@ -324,7 +312,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode='Markdown'
                 )
         else:
-            # Sinon, envoyer juste le texte
             await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode='Markdown')
     
     return LANGUE
@@ -334,7 +321,95 @@ async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    # Gestion des boutons spéciaux
+    # Sélection de langue
+    lang_code = query.data.replace("lang_", "")
+    context.user_data['langue'] = lang_code
+    
+    # Afficher le menu principal dans la langue choisie
+    welcome_text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
+    
+    keyboard = [
+        [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
+        [InlineKeyboardButton(tr(context.user_data, "informations"), callback_data="info")],
+        [InlineKeyboardButton(tr(context.user_data, "contact"), callback_data="contact_admin")]
+    ]
+    
+    if query.message.photo:
+        await query.message.edit_caption(caption=welcome_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    else:
+        await query.message.edit_text(text=welcome_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    return PAYS
+
+@error_handler_decorator
+async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    # Vérifier si la langue est définie
+    if 'langue' not in context.user_data:
+        context.user_data['langue'] = 'fr'
+    
+    # Bouton "Commander"
+    if query.data == "start_order":
+        keyboard = [
+            [InlineKeyboardButton(tr(context.user_data, "france"), callback_data="country_FR")],
+            [InlineKeyboardButton(tr(context.user_data, "switzerland"), callback_data="country_CH")],
+            [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_menu")]
+        ]
+        if query.message.photo:
+            await query.message.edit_caption(caption=tr(context.user_data, "choose_country"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        else:
+            await query.message.edit_text(text=tr(context.user_data, "choose_country"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        return PAYS
+    
+    # Bouton "Informations"
+    if query.data == "info":
+        info_text = (
+            f"{tr(context.user_data, 'info_title')}\n\n"
+            f"{tr(context.user_data, 'info_shop')}\n\n"
+            f"{tr(context.user_data, 'info_delivery')}\n\n"
+            f"{tr(context.user_data, 'info_payment')}\n\n"
+            f"{tr(context.user_data, 'info_security')}"
+        )
+        keyboard = [
+            [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
+            [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_menu")]
+        ]
+        if query.message.photo:
+            await query.message.edit_caption(caption=info_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        else:
+            await query.message.edit_text(text=info_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        return PAYS
+    
+    # Bouton "Contact"
+    if query.data == "contact_admin":
+        contact_text = f"{tr(context.user_data, 'contact_title')}\n\n{tr(context.user_data, 'contact_text')}"
+        keyboard = [
+            [InlineKeyboardButton(tr(context.user_data, "contact_admin"), url=f"tg://user?id={ADMIN_ID}")],
+            [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
+            [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_menu")]
+        ]
+        if query.message.photo:
+            await query.message.edit_caption(caption=contact_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        else:
+            await query.message.edit_text(text=contact_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        return PAYS
+    
+    # Bouton "Retour au menu"
+    if query.data == "back_menu":
+        welcome_text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
+        keyboard = [
+            [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
+            [InlineKeyboardButton(tr(context.user_data, "informations"), callback_data="info")],
+            [InlineKeyboardButton(tr(context.user_data, "contact"), callback_data="contact_admin")]
+        ]
+        if query.message.photo:
+            await query.message.edit_caption(caption=welcome_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        else:
+            await query.message.edit_text(text=welcome_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        return PAYS
+    
+    return PAYS
     if query.data == "info":
         info_text = (
             "ℹ️ *INFORMATIONS*\n\n"
@@ -343,11 +418,11 @@ async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "• Produits de qualité\n"
             "• Service client réactif\n\n"
             "📦 *Livraison :*\n"
-            "• Standard : 1-3 jours\n"
-            "• Express\n\n"
+            "• Standard : 3-5 jours\n"
+            "• Express : 24-48h\n\n"
             "💳 *Paiement :*\n"
             "• Espèces à la livraison\n"
-            "• Crypto (Bitcoin\n\n"
+            "• Crypto (Bitcoin, USDT)\n\n"
             "🔒 *Sécurité :*\n"
             "Tous les échanges sont cryptés et confidentiels.\n\n"
             "👇 Choisissez votre langue pour commander :"

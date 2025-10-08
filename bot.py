@@ -71,7 +71,7 @@ import asyncio
 # --- Configuration de sécurité ---
 # Liste blanche d'utilisateurs (laisser vide pour accepter tous les utilisateurs)
 AUTHORIZED_USERS = []  # Ex: [123456789, 987654321]
-USE_WHITELIST = True  # Mettre True pour activer la whitelist
+USE_WHITELIST = False  # Mettre True pour activer la whitelist
 
 # Rate limiting
 user_message_timestamps = defaultdict(list)
@@ -134,6 +134,10 @@ TRANSLATIONS = {
         "contact": "📞 Contact",
         "back": "🔙 Retour",
         "contact_admin": "💬 Contacter Admin",
+        "price_menu": "🏴‍☠️ Carte du Pirate",
+        "price_menu_title": "🏴‍☠️ *CARTE DU PIRATE*",
+        "price_menu_fr": "\n\n🇫🇷 *FRANCE:*\n• ❄️ Snow: 80€\n• 💊 Pill: 10€\n• 🫒 Olive: 7€\n• 🍀 Clover: 10€",
+        "price_menu_ch": "\n\n🇨🇭 *SUISSE:*\n• ❄️ Snow: 100€\n• 💊 Pill: 15€\n• 🫒 Olive: 8€\n• 🍀 Clover: 12€",
         "france": "🇫🇷 France",
         "switzerland": "🇨🇭 Suisse",
         "standard": "📦 Standard",
@@ -176,6 +180,10 @@ TRANSLATIONS = {
         "contact": "📞 Contact",
         "back": "🔙 Back",
         "contact_admin": "💬 Contact Admin",
+        "price_menu": "🏴‍☠️ Pirate's Menu",
+        "price_menu_title": "🏴‍☠️ *PIRATE'S MENU*",
+        "price_menu_fr": "\n\n🇫🇷 *FRANCE:*\n• ❄️ Snow: €80\n• 💊 Pill: €10\n• 🫒 Olive: €7\n• 🍀 Clover: €10",
+        "price_menu_ch": "\n\n🇨🇭 *SWITZERLAND:*\n• ❄️ Snow: €100\n• 💊 Pill: €15\n• 🫒 Olive: €8\n• 🍀 Clover: €12",
         "france": "🇫🇷 France",
         "switzerland": "🇨🇭 Switzerland",
         "standard": "📦 Standard",
@@ -218,6 +226,10 @@ TRANSLATIONS = {
         "contact": "📞 Contacto",
         "back": "🔙 Volver",
         "contact_admin": "💬 Contactar Admin",
+        "price_menu": "🏴‍☠️ Carta del Pirata",
+        "price_menu_title": "🏴‍☠️ *CARTA DEL PIRATA*",
+        "price_menu_fr": "\n\n🇫🇷 *FRANCIA:*\n• ❄️ Snow: 80€\n• 💊 Pill: 10€\n• 🫒 Olive: 7€\n• 🍀 Clover: 10€",
+        "price_menu_ch": "\n\n🇨🇭 *SUIZA:*\n• ❄️ Snow: 100€\n• 💊 Pill: 15€\n• 🫒 Olive: 8€\n• 🍀 Clover: 12€",
         "france": "🇫🇷 Francia",
         "switzerland": "🇨🇭 Suiza",
         "standard": "📦 Estándar",
@@ -260,6 +272,10 @@ TRANSLATIONS = {
         "contact": "📞 Kontakt",
         "back": "🔙 Zurück",
         "contact_admin": "💬 Admin Kontaktieren",
+        "price_menu": "🏴‍☠️ Piratenkarte",
+        "price_menu_title": "🏴‍☠️ *PIRATENKARTE*",
+        "price_menu_fr": "\n\n🇫🇷 *FRANKREICH:*\n• ❄️ Snow: 80€\n• 💊 Pill: 10€\n• 🫒 Olive: 7€\n• 🍀 Clover: 10€",
+        "price_menu_ch": "\n\n🇨🇭 *SCHWEIZ:*\n• ❄️ Snow: 100€\n• 💊 Pill: 15€\n• 🫒 Olive: 8€\n• 🍀 Clover: 12€",
         "france": "🇫🇷 Frankreich",
         "switzerland": "🇨🇭 Schweiz",
         "standard": "📦 Standard",
@@ -565,6 +581,7 @@ async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     keyboard = [
         [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
+        [InlineKeyboardButton(tr(context.user_data, "price_menu"), callback_data="price_menu")],
         [InlineKeyboardButton(tr(context.user_data, "informations"), callback_data="info")],
         [InlineKeyboardButton(tr(context.user_data, "contact"), callback_data="contact_admin")]
     ]
@@ -625,6 +642,7 @@ async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         welcome_text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
         keyboard = [
             [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
+            [InlineKeyboardButton(tr(context.user_data, "price_menu"), callback_data="price_menu")],
             [InlineKeyboardButton(tr(context.user_data, "informations"), callback_data="info")],
             [InlineKeyboardButton(tr(context.user_data, "contact"), callback_data="contact_admin")]
         ]
@@ -940,7 +958,7 @@ if __name__ == "__main__":
             ],
             PAYS: [
                 CallbackQueryHandler(choix_pays, pattern="^country_(FR|CH)$"),
-                CallbackQueryHandler(menu_navigation, pattern="^(start_order|info|contact_admin|back_menu)$")
+                CallbackQueryHandler(menu_navigation, pattern="^(start_order|info|price_menu|contact_admin|back_menu)$")
             ],
             PRODUIT: [
                 CallbackQueryHandler(choix_produit, pattern="^product_(snow|pill|olive|clover)$")

@@ -16,8 +16,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Désactiver les logs HTTP détaillés (masquer le token)
+# Masquer les logs HTTP qui exposent le token
 logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("telegram.ext.Application").setLevel(logging.WARNING)
 
 # --- Chargement des variables d'environnement ---
 dotenv_path = Path(__file__).parent / "infos.env"

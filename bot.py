@@ -708,7 +708,9 @@ if __name__ == "__main__":
     application.add_handler(CommandHandler("start", start_command))
     
     # Handler pour sélection de langue et menus spéciaux (en dehors du ConversationHandler)
-    application.add_handler(CallbackQueryHandler(set_langue, pattern="^(lang_(fr|en|es|de)|info|contact_admin|back_start)$"))
+    application.add_handler(CallbackQueryHandler(set_langue, pattern="^lang_(fr|en|es|de)$"))
+    application.add_handler(CallbackQueryHandler(menu_navigation, pattern="^(start_order|info|contact_admin|back_menu)$"))
+
 
     # ConversationHandler principal
     conv_handler = ConversationHandler(

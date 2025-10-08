@@ -513,11 +513,15 @@ async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🍀", callback_data="product_clover")],
         [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
-    await query.message.edit_text(
-        tr(context.user_data, "choose_product"), 
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+    
+    # ✅ CORRECTION : Utilisation de safe_edit_message
+    await safe_edit_message(
+        query,
+        text=tr(context.user_data, "choose_product"),
+        caption=tr(context.user_data, "choose_product"),
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
+    
     return PRODUIT
 
 @error_handler_decorator
@@ -771,7 +775,7 @@ if __name__ == "__main__":
     # Ajout du gestionnaire d'erreurs global
     application.add_error_handler(error_callback)
 
-    # ConversationHandler principal
+    # ConversationHandler principal avec CORRECTION
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler("start", start_command)
@@ -781,8 +785,9 @@ if __name__ == "__main__":
                 CallbackQueryHandler(set_langue, pattern="^lang_(fr|en|es|de)$")
             ],
             PAYS: [
-                CallbackQueryHandler(menu_navigation, pattern="^(start_order|info|contact_admin|back_menu)$"),
-                CallbackQueryHandler(choix_pays, pattern="^country_(FR|CH)$")
+                # ✅ CORRECTION CRITIQUE : choix_pays AVANT menu_navigation
+                CallbackQueryHandler(choix_pays, pattern="^country_(FR|CH)$"),
+                CallbackQueryHandler(menu_navigation, pattern="^(start_order|info|contact_admin|back_menu)$")
             ],
             PRODUIT: [
                 CallbackQueryHandler(choix_produit, pattern="^product_(snow|pill|olive|clover)$")

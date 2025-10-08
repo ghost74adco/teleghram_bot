@@ -80,80 +80,156 @@ PRIX_CH = {"❄️": 100, "💊": 15, "🫒": 8, "🍀": 12}
 # --- Traductions statiques ---
 TRANSLATIONS = {
     "fr": {
-        "welcome_message": "👋 Bienvenue !\n\n🛍️ Vous êtes sur notre boutique en ligne.\n\nNous proposons une sélection de produits de qualité avec livraison rapide en France 🇫🇷 et en Suisse 🇨🇭.\n\n💳 Paiement accepté : Espèces ou Crypto\n📦 Livraison : Standard ou Express\n\n🔒 Commande sécurisée et confidentielle\n\n👇 Commencez par sélectionner votre langue :",
-        "choose_language": "🌍 Choisissez votre langue :",
-        "choose_country": "Choisissez votre pays :",
-        "choose_product": "Choisissez votre produit :",
-        "enter_quantity": "Entrez la quantité désirée :",
-        "enter_address": "Entrez votre adresse complète :",
-        "choose_delivery": "Choisissez le type de livraison :",
-        "choose_payment": "Choisissez le mode de paiement :",
-        "order_summary": "✅ Résumé de votre commande :",
-        "confirm": "Confirmer",
-        "cancel": "Annuler",
-        "order_confirmed": "✅ Commande confirmée ! Merci.\nVous serez contacté prochainement.",
-        "order_cancelled": "❌ Commande annulée.",
+        "welcome": "🌿 *BIENVENUE* 🌿\n\n⚠️ *IMPORTANT :*\nToutes les conversations doivent être établies en *ÉCHANGE SECRET*.\n\n🙏 *Merci* 💪💚",
+        "choose_language": "🌍 *Choisissez votre langue :*",
+        "main_menu": "\n\n📱 *MENU PRINCIPAL :*\n\n👇 Choisissez une option :",
+        "choose_country": "🌍 *Choisissez votre pays :*",
+        "choose_product": "🛍️ *Choisissez votre produit :*",
+        "enter_quantity": "📝 *Entrez la quantité désirée :*",
+        "enter_address": "📍 *Entrez votre adresse complète :*",
+        "choose_delivery": "📦 *Choisissez le type de livraison :*",
+        "choose_payment": "💳 *Choisissez le mode de paiement :*",
+        "order_summary": "✅ *Résumé de votre commande :*",
+        "confirm": "✅ Confirmer",
+        "cancel": "❌ Annuler",
+        "order_confirmed": "✅ *Commande confirmée !*\n\nMerci pour votre commande.\nVous serez contacté prochainement. 📞",
+        "order_cancelled": "❌ *Commande annulée.*",
         "add_more": "➕ Ajouter un produit",
         "proceed": "✅ Valider le panier",
         "invalid_quantity": "❌ Veuillez entrer un nombre valide supérieur à 0.",
-        "cart_title": "🛒 Votre panier :"
+        "cart_title": "🛒 *Votre panier :*",
+        "info_title": "ℹ️ *INFORMATIONS*",
+        "info_shop": "🛍️ *Notre boutique :*\n• Livraison France 🇫🇷 & Suisse 🇨🇭\n• Produits de qualité\n• Service client réactif",
+        "info_delivery": "📦 *Livraison :*\n• Standard : 1-3 jours\n• Express",
+        "info_payment": "💳 *Paiement :*\n• Espèces à la livraison\n• Crypto (Bitcoin)",
+        "info_security": "🔒 *Sécurité :*\nTous les échanges sont cryptés et confidentiels.",
+        "contact_title": "📞 *CONTACT*",
+        "contact_text": "Pour toute question ou besoin d'assistance, vous pouvez :\n\n• Continuer avec la commande\n• Contacter l'administrateur\n\nNotre équipe est disponible 24/7 pour vous aider ! 💬",
+        "start_order": "🛍️ Commander",
+        "informations": "ℹ️ Informations",
+        "contact": "📞 Contact",
+        "back": "🔙 Retour",
+        "contact_admin": "💬 Contacter Admin",
+        "france": "🇫🇷 France",
+        "switzerland": "🇨🇭 Suisse",
+        "standard": "📦 Standard",
+        "express": "⚡ Express",
+        "cash": "💵 Espèces",
+        "crypto": "₿ Crypto"
     },
     "en": {
-        "welcome_message": "👋 Welcome!\n\n🛍️ You are on our online shop.\n\nWe offer a selection of quality products with fast delivery in France 🇫🇷 and Switzerland 🇨🇭.\n\n💳 Payment accepted: Cash or Crypto\n📦 Delivery: Standard or Express\n\n🔒 Secure and confidential order\n\n👇 Start by selecting your language:",
-        "choose_language": "🌍 Select your language:",
-        "choose_country": "Choose your country:",
-        "choose_product": "Choose your product:",
-        "enter_quantity": "Enter desired quantity:",
-        "enter_address": "Enter your complete address:",
-        "choose_delivery": "Choose delivery type:",
-        "choose_payment": "Choose payment method:",
-        "order_summary": "✅ Your order summary:",
-        "confirm": "Confirm",
-        "cancel": "Cancel",
-        "order_confirmed": "✅ Order confirmed! Thank you.\nYou will be contacted soon.",
-        "order_cancelled": "❌ Order cancelled.",
+        "welcome": "🌿 *WELCOME* 🌿\n\n⚠️ *IMPORTANT:*\nAll conversations must be established in *SECRET EXCHANGE*.\n\n🙏 *Thank you* 💪💚",
+        "choose_language": "🌍 *Select your language:*",
+        "main_menu": "\n\n📱 *MAIN MENU:*\n\n👇 Choose an option:",
+        "choose_country": "🌍 *Choose your country:*",
+        "choose_product": "🛍️ *Choose your product:*",
+        "enter_quantity": "📝 *Enter desired quantity:*",
+        "enter_address": "📍 *Enter your complete address:*",
+        "choose_delivery": "📦 *Choose delivery type:*",
+        "choose_payment": "💳 *Choose payment method:*",
+        "order_summary": "✅ *Your order summary:*",
+        "confirm": "✅ Confirm",
+        "cancel": "❌ Cancel",
+        "order_confirmed": "✅ *Order confirmed!*\n\nThank you for your order.\nYou will be contacted soon. 📞",
+        "order_cancelled": "❌ *Order cancelled.*",
         "add_more": "➕ Add product",
         "proceed": "✅ Checkout",
         "invalid_quantity": "❌ Please enter a valid number greater than 0.",
-        "cart_title": "🛒 Your cart:"
+        "cart_title": "🛒 *Your cart:*",
+        "info_title": "ℹ️ *INFORMATION*",
+        "info_shop": "🛍️ *Our shop:*\n• Delivery France 🇫🇷 & Switzerland 🇨🇭\n• Quality products\n• Responsive customer service",
+        "info_delivery": "📦 *Delivery:*\n• Standard: 1-3 days\n• Express",
+        "info_payment": "💳 *Payment:*\n• Cash on delivery\n• Crypto (Bitcoin)",
+        "info_security": "🔒 *Security:*\nAll exchanges are encrypted and confidential.",
+        "contact_title": "📞 *CONTACT*",
+        "contact_text": "For any questions or assistance, you can:\n\n• Continue with the order\n• Contact the administrator\n\nOur team is available 24/7 to help you! 💬",
+        "start_order": "🛍️ Order Now",
+        "informations": "ℹ️ Information",
+        "contact": "📞 Contact",
+        "back": "🔙 Back",
+        "contact_admin": "💬 Contact Admin",
+        "france": "🇫🇷 France",
+        "switzerland": "🇨🇭 Switzerland",
+        "standard": "📦 Standard",
+        "express": "⚡ Express",
+        "cash": "💵 Cash",
+        "crypto": "₿ Crypto"
     },
     "es": {
-        "welcome_message": "👋 ¡Bienvenido!\n\n🛍️ Estás en nuestra tienda en línea.\n\nOfrecemos una selección de productos de calidad con entrega rápida en Francia 🇫🇷 y Suiza 🇨🇭.\n\n💳 Pago aceptado: Efectivo o Crypto\n📦 Envío: Estándar o Express\n\n🔒 Pedido seguro y confidencial\n\n👇 Comience seleccionando su idioma:",
-        "choose_language": "🌍 Seleccione su idioma:",
-        "choose_country": "Elija su país:",
-        "choose_product": "Elija su producto:",
-        "enter_quantity": "Ingrese la cantidad deseada:",
-        "enter_address": "Ingrese su dirección completa:",
-        "choose_delivery": "Elija el tipo de envío:",
-        "choose_payment": "Elija el método de pago:",
-        "order_summary": "✅ Resumen de su pedido:",
-        "confirm": "Confirmar",
-        "cancel": "Cancelar",
-        "order_confirmed": "✅ Pedido confirmado! Gracias.\nSerá contactado pronto.",
-        "order_cancelled": "❌ Pedido cancelado.",
+        "welcome": "🌿 *BIENVENIDO* 🌿\n\n⚠️ *IMPORTANTE:*\nTodas las conversaciones deben establecerse en *INTERCAMBIO SECRETO*.\n\n🙏 *Gracias* 💪💚",
+        "choose_language": "🌍 *Seleccione su idioma:*",
+        "main_menu": "\n\n📱 *MENÚ PRINCIPAL:*\n\n👇 Elija una opción:",
+        "choose_country": "🌍 *Elija su país:*",
+        "choose_product": "🛍️ *Elija su producto:*",
+        "enter_quantity": "📝 *Ingrese la cantidad deseada:*",
+        "enter_address": "📍 *Ingrese su dirección completa:*",
+        "choose_delivery": "📦 *Elija el tipo de envío:*",
+        "choose_payment": "💳 *Elija el método de pago:*",
+        "order_summary": "✅ *Resumen de su pedido:*",
+        "confirm": "✅ Confirmar",
+        "cancel": "❌ Cancelar",
+        "order_confirmed": "✅ *¡Pedido confirmado!*\n\nGracias por su pedido.\nSerá contactado pronto. 📞",
+        "order_cancelled": "❌ *Pedido cancelado.*",
         "add_more": "➕ Agregar producto",
         "proceed": "✅ Finalizar",
         "invalid_quantity": "❌ Por favor ingrese un número válido mayor a 0.",
-        "cart_title": "🛒 Su carrito:"
+        "cart_title": "🛒 *Su carrito:*",
+        "info_title": "ℹ️ *INFORMACIÓN*",
+        "info_shop": "🛍️ *Nuestra tienda:*\n• Entrega Francia 🇫🇷 & Suiza 🇨🇭\n• Productos de calidad\n• Servicio al cliente receptivo",
+        "info_delivery": "📦 *Entrega:*\n• Estándar: 1-3 días\n• Express",
+        "info_payment": "💳 *Pago:*\n• Efectivo contra entrega\n• Crypto (Bitcoin)",
+        "info_security": "🔒 *Seguridad:*\nTodos los intercambios están encriptados y son confidenciales.",
+        "contact_title": "📞 *CONTACTO*",
+        "contact_text": "Para cualquier pregunta o asistencia, puede:\n\n• Continuar con el pedido\n• Contactar al administrador\n\n¡Nuestro equipo está disponible 24/7 para ayudarle! 💬",
+        "start_order": "🛍️ Ordenar",
+        "informations": "ℹ️ Información",
+        "contact": "📞 Contacto",
+        "back": "🔙 Volver",
+        "contact_admin": "💬 Contactar Admin",
+        "france": "🇫🇷 Francia",
+        "switzerland": "🇨🇭 Suiza",
+        "standard": "📦 Estándar",
+        "express": "⚡ Express",
+        "cash": "💵 Efectivo",
+        "crypto": "₿ Crypto"
     },
     "de": {
-        "welcome_message": "👋 Willkommen!\n\n🛍️ Sie sind in unserem Online-Shop.\n\nWir bieten eine Auswahl hochwertiger Produkte mit schneller Lieferung in Frankreich 🇫🇷 und der Schweiz 🇨🇭.\n\n💳 Akzeptierte Zahlung: Bargeld oder Krypto\n📦 Lieferung: Standard oder Express\n\n🔒 Sichere und vertrauliche Bestellung\n\n👇 Beginnen Sie mit der Auswahl Ihrer Sprache:",
-        "choose_language": "🌍 Wählen Sie Ihre Sprache:",
-        "choose_country": "Wählen Sie Ihr Land:",
-        "choose_product": "Wählen Sie Ihr Produkt:",
-        "enter_quantity": "Geben Sie die gewünschte Menge ein:",
-        "enter_address": "Geben Sie Ihre vollständige Adresse ein:",
-        "choose_delivery": "Wählen Sie die Versandart:",
-        "choose_payment": "Wählen Sie die Zahlungsmethode:",
-        "order_summary": "✅ Zusammenfassung Ihrer Bestellung:",
-        "confirm": "Bestätigen",
-        "cancel": "Abbrechen",
-        "order_confirmed": "✅ Bestellung bestätigt! Danke.\nSie werden bald kontaktiert.",
-        "order_cancelled": "❌ Bestellung abgebrochen.",
+        "welcome": "🌿 *WILLKOMMEN* 🌿\n\n⚠️ *WICHTIG:*\nAlle Gespräche müssen im *GEHEIMEN AUSTAUSCH* geführt werden.\n\n🙏 *Danke* 💪💚",
+        "choose_language": "🌍 *Wählen Sie Ihre Sprache:*",
+        "main_menu": "\n\n📱 *HAUPTMENÜ:*\n\n👇 Wählen Sie eine Option:",
+        "choose_country": "🌍 *Wählen Sie Ihr Land:*",
+        "choose_product": "🛍️ *Wählen Sie Ihr Produkt:*",
+        "enter_quantity": "📝 *Geben Sie die gewünschte Menge ein:*",
+        "enter_address": "📍 *Geben Sie Ihre vollständige Adresse ein:*",
+        "choose_delivery": "📦 *Wählen Sie die Versandart:*",
+        "choose_payment": "💳 *Wählen Sie die Zahlungsmethode:*",
+        "order_summary": "✅ *Zusammenfassung Ihrer Bestellung:*",
+        "confirm": "✅ Bestätigen",
+        "cancel": "❌ Abbrechen",
+        "order_confirmed": "✅ *Bestellung bestätigt!*\n\nVielen Dank für Ihre Bestellung.\nSie werden bald kontaktiert. 📞",
+        "order_cancelled": "❌ *Bestellung abgebrochen.*",
         "add_more": "➕ Produkt hinzufügen",
         "proceed": "✅ Zur Kasse",
         "invalid_quantity": "❌ Bitte geben Sie eine gültige Zahl größer als 0 ein.",
-        "cart_title": "🛒 Ihr Warenkorb:"
+        "cart_title": "🛒 *Ihr Warenkorb:*",
+        "info_title": "ℹ️ *INFORMATION*",
+        "info_shop": "🛍️ *Unser Shop:*\n• Lieferung Frankreich 🇫🇷 & Schweiz 🇨🇭\n• Qualitätsprodukte\n• Reaktiver Kundenservice",
+        "info_delivery": "📦 *Lieferung:*\n• Standard: 1-3 Tage\n• Express",
+        "info_payment": "💳 *Zahlung:*\n• Barzahlung bei Lieferung\n• Krypto (Bitcoin)",
+        "info_security": "🔒 *Sicherheit:*\nAlle Austausche sind verschlüsselt und vertraulich.",
+        "contact_title": "📞 *KONTAKT*",
+        "contact_text": "Für Fragen oder Unterstützung können Sie:\n\n• Mit der Bestellung fortfahren\n• Den Administrator kontaktieren\n\nUnser Team ist 24/7 verfügbar, um Ihnen zu helfen! 💬",
+        "start_order": "🛍️ Bestellen",
+        "informations": "ℹ️ Information",
+        "contact": "📞 Kontakt",
+        "back": "🔙 Zurück",
+        "contact_admin": "💬 Admin Kontaktieren",
+        "france": "🇫🇷 Frankreich",
+        "switzerland": "🇨🇭 Schweiz",
+        "standard": "📦 Standard",
+        "express": "⚡ Express",
+        "cash": "💵 Bargeld",
+        "crypto": "₿ Krypto"
     }
 }
 
@@ -257,6 +333,91 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    
+    # Gestion des boutons spéciaux
+    if query.data == "info":
+        info_text = (
+            "ℹ️ *INFORMATIONS*\n\n"
+            "🛍️ *Notre boutique :*\n"
+            "• Livraison France 🇫🇷 & Suisse 🇨🇭\n"
+            "• Produits de qualité\n"
+            "• Service client réactif\n\n"
+            "📦 *Livraison :*\n"
+            "• Standard : 1-3 jours\n"
+            "• Express\n\n"
+            "💳 *Paiement :*\n"
+            "• Espèces à la livraison\n"
+            "• Crypto (Bitcoin\n\n"
+            "🔒 *Sécurité :*\n"
+            "Tous les échanges sont cryptés et confidentiels.\n\n"
+            "👇 Choisissez votre langue pour commander :"
+        )
+        keyboard = [
+            [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
+            [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
+            [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
+            [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")],
+            [InlineKeyboardButton("🔙 Retour", callback_data="back_start")]
+        ]
+        # Vérifier si c'est une photo ou du texte
+        if query.message.photo:
+            await query.message.edit_caption(caption=info_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        else:
+            await query.message.edit_text(text=info_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        return LANGUE
+    
+    if query.data == "contact_admin":
+        contact_text = (
+            "📞 *CONTACT*\n\n"
+            "Pour toute question ou besoin d'assistance, vous pouvez :\n\n"
+            "• Continuer avec la commande\n"
+            "• Contacter l'administrateur\n\n"
+            "Notre équipe est disponible 24/7 pour vous aider ! 💬\n\n"
+            "👇 Choisissez votre langue pour commencer :"
+        )
+        keyboard = [
+            [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
+            [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
+            [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
+            [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")],
+            [InlineKeyboardButton("💬 Contacter Admin", url=f"tg://user?id={ADMIN_ID}")],
+            [InlineKeyboardButton("🔙 Retour", callback_data="back_start")]
+        ]
+        # Vérifier si c'est une photo ou du texte
+        if query.message.photo:
+            await query.message.edit_caption(caption=contact_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        else:
+            await query.message.edit_text(text=contact_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        return LANGUE
+    
+    if query.data == "back_start":
+        # Retourner au message de bienvenue
+        welcome_text = (
+            "🌿 *BIENVENUE, WELCOME* 🌿\n\n"
+            "⚠️ *IMPORTANT :*\n"
+            "Toutes les conversations doivent être établies en *ÉCHANGE SECRET*.\n\n"
+            "🙏 *Merci* 💪💚\n\n"
+            "📞 Pour me joindre : utilisez le bouton *Contact*\n"
+            "ℹ️ Infos : consultez la rubrique *Informations*\n"
+            "📱 Menu : accédez à la *Mini App*\n\n"
+            "👇 *Sélectionnez votre langue pour commencer :*"
+        )
+        keyboard = [
+            [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
+            [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
+            [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
+            [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")],
+            [InlineKeyboardButton("ℹ️ Informations", callback_data="info")],
+            [InlineKeyboardButton("📞 Contact", callback_data="contact_admin")]
+        ]
+        # Vérifier si c'est une photo ou du texte
+        if query.message.photo:
+            await query.message.edit_caption(caption=welcome_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        else:
+            await query.message.edit_text(text=welcome_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        return LANGUE
+    
+    # Sélection de langue normale
     lang_code = query.data.replace("lang_", "")
     context.user_data['langue'] = lang_code
     
@@ -265,7 +426,12 @@ async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🇨🇭 Suisse", callback_data="country_CH")],
         [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
-    await query.message.edit_text(tr(context.user_data, "choose_country"), reply_markup=InlineKeyboardMarkup(keyboard))
+    
+    # Vérifier si c'est une photo ou du texte
+    if query.message.photo:
+        await query.message.edit_caption(caption=tr(context.user_data, "choose_country"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    else:
+        await query.message.edit_text(text=tr(context.user_data, "choose_country"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return PAYS
 
 # --- Gestion du panier multi-produits ---
@@ -466,8 +632,8 @@ if __name__ == "__main__":
     # Handler global pour /start (accessible à tout moment)
     application.add_handler(CommandHandler("start", start_command))
     
-    # Handler pour sélection de langue (en dehors du ConversationHandler)
-    application.add_handler(CallbackQueryHandler(set_langue, pattern="^lang_(fr|en|es|de)$"))
+    # Handler pour sélection de langue et menus spéciaux (en dehors du ConversationHandler)
+    application.add_handler(CallbackQueryHandler(set_langue, pattern="^(lang_(fr|en|es|de)|info|contact_admin|back_start)$"))
 
     # ConversationHandler principal
     conv_handler = ConversationHandler(

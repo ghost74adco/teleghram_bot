@@ -71,7 +71,7 @@ import asyncio
 # --- Configuration de sécurité ---
 # Liste blanche d'utilisateurs (laisser vide pour accepter tous les utilisateurs)
 AUTHORIZED_USERS = []  # Ex: [123456789, 987654321]
-USE_WHITELIST = False  # Mettre True pour activer la whitelist
+USE_WHITELIST = True  # Mettre True pour activer la whitelist
 
 # Rate limiting
 user_message_timestamps = defaultdict(list)

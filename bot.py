@@ -1,3 +1,4 @@
+```python
 import os
 import sys
 import logging
@@ -256,13 +257,13 @@ def error_handler_decorator(func):
             
             # Message utilisateur
             try:
-                if update.callback_query:
+                if hasattr(update, "callback_query") and update.callback_query:
                     await update.callback_query.answer("❌ Une erreur s'est produite.")
                     await update.callback_query.message.reply_text(
                         "❌ Une erreur s'est produite. L'admin a été notifié.\n"
                         "Utilisez /start pour recommencer."
                     )
-                elif update.message:
+                elif hasattr(update, "message") and update.message:
                     await update.message.reply_text(
                         "❌ Une erreur s'est produite. L'admin a été notifié.\n"
                         "Utilisez /start pour recommencer."
@@ -526,20 +527,21 @@ async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @error_handler_decorator
 async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sélection du produit"""
     query = update.callback_query
     await query.answer()
-
+    
     product_code = query.data.replace("product_", "")
     product_emoji = PRODUCT_MAP.get(product_code, product_code)
     context.user_data['current_product'] = product_emoji
-
+    
+    # ✅ CORRECTION : utilisation de safe_edit_message au lieu de edit_text
     await safe_edit_message(
         query,
         text=f"{tr(context.user_data, 'choose_product')}\n\n✅ Produit: {product_emoji}\n\n{tr(context.user_data, 'enter_quantity')}",
         caption=f"{tr(context.user_data, 'choose_product')}\n\n✅ Produit: {product_emoji}\n\n{tr(context.user_data, 'enter_quantity')}",
         parse_mode='Markdown'
     )
-
     return QUANTITE
 
 @error_handler_decorator
@@ -593,8 +595,11 @@ async def cart_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("🍀", callback_data="product_clover")],
             [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
         ]
-        await query.message.edit_text(
-            tr(context.user_data, "choose_product"), 
+        # ✅ CORRECTION : safe_edit_message
+        await safe_edit_message(
+            query,
+            text=tr(context.user_data, "choose_product"), 
+            caption=tr(context.user_data, "choose_product"),
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode='Markdown'
         )
@@ -602,8 +607,11 @@ async def cart_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     elif query.data == "proceed_checkout":
         # Passer à l'adresse
-        await query.message.edit_text(
-            tr(context.user_data, "enter_address"),
+        # ✅ CORRECTION : safe_edit_message
+        await safe_edit_message(
+            query,
+            text=tr(context.user_data, "enter_address"),
+            caption=tr(context.user_data, "enter_address"),
             parse_mode='Markdown'
         )
         return ADRESSE
@@ -645,8 +653,11 @@ async def choix_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(tr(context.user_data, "crypto"), callback_data="payment_crypto")],
         [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
-    await query.message.edit_text(
-        tr(context.user_data, "choose_payment"), 
+    # ✅ CORRECTION : safe_edit_message
+    await safe_edit_message(
+        query,
+        text=tr(context.user_data, "choose_payment"), 
+        caption=tr(context.user_data, "choose_payment"),
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
@@ -685,8 +696,11 @@ async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(tr(context.user_data, "confirm"), callback_data="confirm_order")],
         [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
-    await query.message.edit_text(
-        summary, 
+    # ✅ CORRECTION : safe_edit_message
+    await safe_edit_message(
+        query,
+        text=summary, 
+        caption=summary,
         reply_markup=InlineKeyboardMarkup(keyboard), 
         parse_mode='Markdown'
     )
@@ -699,8 +713,11 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     if query.data == "confirm_order":
-        await query.message.edit_text(
-            tr(context.user_data, "order_confirmed"),
+        # ✅ CORRECTION : safe_edit_message au lieu de edit_text
+        await safe_edit_message(
+            query,
+            text=tr(context.user_data, "order_confirmed"),
+            caption=tr(context.user_data, "order_confirmed"),
             parse_mode='Markdown'
         )
         
@@ -762,8 +779,11 @@ async def annuler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    await query.message.edit_text(
-        tr(context.user_data, "order_cancelled"),
+    # ✅ CORRECTION : safe_edit_message
+    await safe_edit_message(
+        query,
+        text=tr(context.user_data, "order_cancelled"),
+        caption=tr(context.user_data, "order_cancelled"),
         parse_mode='Markdown'
     )
     context.user_data.clear()
@@ -831,3 +851,4 @@ if __name__ == "__main__":
     logger.info("=" * 50)
     
     application.run_polling(allowed_updates=Update.ALL_TYPES)
+```

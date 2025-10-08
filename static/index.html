@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Carte du Pirate 🏴‍☠️</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+            padding: 0;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #0f3460 0%, #16213e 100%);
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .language-selector {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        .lang-btn {
+            background: rgba(255,255,255,0.1);
+            border: 2px solid rgba(255,255,255,0.2);
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+
+        .lang-btn:hover, .lang-btn.active {
+            background: #e94560;
+            border-color: #e94560;
+            transform: scale(1.05);
+        }
+
+        .country-tabs {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            padding: 20px;
+            background: rgba(255,255,255,0.05);
+        }
+
+        .country-tab {
+            background: rgba(255,255,255,0.1);
+            border: 2px solid rgba(255,255,255,0.2);
+            color: #fff;
+            padding: 12px 30px;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .country-tab:hover, .country-tab.active {
+            background: #e94560;
+            border-color: #e94560;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(233, 69, 96, 0.4);
+        }
+
+        .products-container {
+            padding: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .product-card {
+            background: rgba(255,255,255,0.08);
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+            transition: all 0.3s;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .product-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(233, 69, 96, 0.3);
+        }
+
+        .product-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 80px;
+            position: relative;
+        }
+
+        .product-video {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+
+        .product-info {
+            padding: 20px;
+        }
+
+        .product-name {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .product-price {
+            font-size: 28px;
+            color: #e94560;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .product-origin {
+            font-size: 14px;
+            color: #aaa;
+            margin: 10px 0;
+            padding: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            border-left: 3px solid #e94560;
+        }
+
+        .product-description {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #ddd;
+            margin-top: 10px;
+        }
+
+        .quality-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 1000;
+            overflow-y: auto;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal-content {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            margin: 20px auto;
+            padding: 30px;
+            max-width: 600px;
+            border-radius: 20px;
+            position: relative;
+            animation: slideUp 0.3s;
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .close-modal {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            font-size: 30px;
+            cursor: pointer;
+            color: #fff;
+            z-index: 10;
+        }
+
+        .modal-image {
+            width: 100%;
+            height: 300px;
+            object-fit: cover;
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+
+        .modal-video {
+            width: 100%;
+            height: 300px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+
+        .order-button {
+            background: linear-gradient(135deg, #e94560 0%, #c62368 100%);
+            color: #fff;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 20px;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(233, 69, 96, 0.4);
+        }
+
+        .order-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(233, 69, 96, 0.6);
+        }
+
+        .footer {
+            text-align: center;
+            padding: 30px;
+            color: #aaa;
+            font-size: 14px;
+            background: rgba(0,0,0,0.2);
+            margin-top: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🏴‍☠️ <span id="header-title">Carte du Pirate</span></h1>
+        <div class="language-selector">
+            <button class="lang-btn active" onclick="changeLanguage('fr')">🇫🇷 Français</button>
+            <button class="lang-btn" onclick="changeLanguage('en')">🇬🇧 English</button>
+            <button class="lang-btn" onclick="changeLanguage('es')">🇪🇸 Español</button>
+            <button class="lang-btn" onclick="changeLanguage('de')">🇩🇪 Deutsch</button>
+        </div>
+    </div>
+
+    <div class="country-tabs">
+        <button class="country-tab active" onclick="changeCountry('FR')" id="tab-fr">
+            🇫🇷 <span class="tab-label">France</span>
+        </button>
+        <button class="country-tab" onclick="changeCountry('CH')" id="tab-ch">
+            🇨🇭 <span class="tab-label">Suisse</span>
+        </button>
+    </div>
+
+    <div class="products-container" id="products">
+        <!-- Products will be dynamically inserted here -->
+    </div>
+
+    <div class="modal" id="productModal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal()">&times;</span>
+            <div id="modalContent"></div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p id="footer-text">🔒 Livraison sécurisée et discrète</p>
+        <p style="margin-top: 10px; font-size: 12px;">© 2025 Carte du Pirate</p>
+    </div>
+
+    <script>
+        let currentLang = 'fr';
+        let currentCountry = 'FR';
+        let tg = window.Telegram.WebApp;
+        
+        // Initialiser l'app Telegram
+        tg.expand();
+        tg.ready();
+
+        const translations = {
+            fr: {
+                headerTitle: "Carte du Pirate",
+                france: "France",
+                switzerland: "Suisse",
+                origin: "Origine",
+                quality: "Qualité Premium",
+                orderButton: "Commander maintenant",
+                footer: "🔒 Livraison sécurisée et discrète",
+                products: {
+                    snow: {
+                        name: "Snow",
+                        origin: "🌍 Origine: Amérique du Sud (Colombie)",
+                        description: "Produit de la plus haute qualité, provenant des hautes montagnes colombiennes. Pureté exceptionnelle garantie à 95%+. Processus de raffinement artisanal pour une qualité optimale.",
+                        details: "Notre Snow est récolté dans les plantations d'altitude de la région andine. Chaque lot est testé et certifié pour sa pureté. Transport sécurisé et discret garanti."
+                    },
+                    pill: {
+                        name: "Pill",
+                        origin: "🌍 Origine: Pays-Bas (Amsterdam)",
+                        description: "Pilules de haute qualité produites dans des laboratoires certifiés néerlandais. Dosage précis et composition contrôlée. Effets garantis et durée optimale.",
+                        details: "Fabriqué selon les normes les plus strictes avec des précurseurs de qualité pharmaceutique. Tests en laboratoire indépendant pour chaque batch. Emballage hermétique pour une conservation optimale."
+                    },
+                    olive: {
+                        name: "Olive",
+                        origin: "🌍 Origine: Maroc (Ketama)",
+                        description: "Résine premium issue des montagnes du Rif marocain. Produit artisanal de première extraction. Arôme authentique et puissance garantie.",
+                        details: "Récolté à la main par des agriculteurs traditionnels de la région de Ketama. Pressage à froid pour préserver tous les terpènes. Vieillissement contrôlé pour un goût exceptionnel."
+                    },
+                    clover: {
+                        name: "Clover",
+                        origin: "🌍 Origine: Espagne (Catalogne)",
+                        description: "Fleurs sélectionnées issues de cultures biologiques catalanes. Variétés hybrides exclusives. Séchage et curing selon méthodes traditionnelles.",
+                        details: "Cultivé en indoor sous contrôle strict de température et humidité. Génétiques premium importées. Taux de THC vérifié en laboratoire. Trimming manuel pour préserver les trichomes."
+                    }
+                }
+            },
+            en: {
+                headerTitle: "Pirate's Menu",
+                france: "France",
+                switzerland: "Switzerland",
+                origin: "Origin",
+                quality: "Premium Quality",
+                orderButton: "Order now",
+                footer: "🔒 Secure and discreet delivery",
+                products: {
+                    snow: {
+                        name: "Snow",
+                        origin: "🌍 Origin: South America (Colombia)",
+                        description: "Highest quality product from the Colombian high mountains. Exceptional purity guaranteed at 95%+. Artisanal refining process for optimal quality.",
+                        details: "Our Snow is harvested from high-altitude plantations in the Andean region. Each batch is tested and certified for purity. Secure and discreet transport guaranteed."
+                    },
+                    pill: {
+                        name: "Pill",
+                        origin: "🌍 Origin: Netherlands (Amsterdam)",
+                        description: "High-quality pills produced in certified Dutch laboratories. Precise dosage and controlled composition. Guaranteed effects and optimal duration.",
+                        details: "Manufactured to the strictest standards with pharmaceutical-grade precursors. Independent lab testing for each batch. Hermetic packaging for optimal preservation."
+                    },
+                    olive: {
+                        name: "Olive",
+                        origin: "🌍 Origin: Morocco (Ketama)",
+                        description: "Premium resin from the Moroccan Rif mountains. First extraction artisanal product. Authentic aroma and guaranteed potency.",
+                        details: "Hand-harvested by traditional farmers from the Ketama region. Cold pressing to preserve all terpenes. Controlled aging for exceptional taste."
+                    },
+                    clover: {
+                        name: "Clover",
+                        origin: "🌍 Origin: Spain (Catalonia)",
+                        description: "Selected flowers from organic Catalan farms. Exclusive hybrid varieties. Drying and curing according to traditional methods.",
+                        details: "Indoor cultivation under strict temperature and humidity control. Premium imported genetics. Lab-verified THC levels. Manual trimming to preserve trichomes."
+                    }
+                }
+            },
+            es: {
+                headerTitle: "Carta del Pirata",
+                france: "Francia",
+                switzerland: "Suiza",
+                origin: "Origen",
+                quality: "Calidad Premium",
+                orderButton: "Ordenar ahora",
+                footer: "🔒 Entrega segura y discreta",
+                products: {
+                    snow: {
+                        name: "Snow",
+                        origin: "🌍 Origen: América del Sur (Colombia)",
+                        description: "Producto de la más alta calidad de las altas montañas colombianas. Pureza excepcional garantizada al 95%+. Proceso de refinamiento artesanal para calidad óptima.",
+                        details: "Nuestro Snow se cosecha en plantaciones de altura en la región andina. Cada lote se prueba y certifica por pureza. Transporte seguro y discreto garantizado."
+                    },
+                    pill: {
+                        name: "Pill",
+                        origin: "🌍 Origen: Países Bajos (Ámsterdam)",
+                        description: "Píldoras de alta calidad producidas en laboratorios certificados holandeses. Dosificación precisa y composición controlada. Efectos garantizados y duración óptima.",
+                        details: "Fabricado según los estándares más estrictos con precursores de grado farmacéutico. Pruebas de laboratorio independientes para cada lote. Embalaje hermético para conservación óptima."
+                    },
+                    olive: {
+                        name: "Olive",
+                        origin: "🌍 Origen: Marruecos (Ketama)",
+                        description: "Resina premium de las montañas del Rif marroquí. Producto artesanal de primera extracción. Aroma auténtico y potencia garantizada.",
+                        details: "Cosechado a mano por agricultores tradicionales de la región de Ketama. Prensado en frío para preservar todos los terpenos. Envejecimiento controlado para sabor excepcional."
+                    },
+                    clover: {
+                        name: "Clover",
+                        origin: "🌍 Origen: España (Cataluña)",
+                        description: "Flores seleccionadas de cultivos orgánicos catalanes. Variedades híbridas exclusivas. Secado y curado según métodos tradicionales.",
+                        details: "Cultivado en interior bajo control estricto de temperatura y humedad. Genéticas premium importadas. Niveles de THC verificados en laboratorio. Recorte manual para preservar tricomas."
+                    }
+                }
+            },
+            de: {
+                headerTitle: "Piratenkarte",
+                france: "Frankreich",
+                switzerland: "Schweiz",
+                origin: "Herkunft",
+                quality: "Premium-Qualität",
+                orderButton: "Jetzt bestellen",
+                footer: "🔒 Sichere und diskrete Lieferung",
+                products: {
+                    snow: {
+                        name: "Snow",
+                        origin: "🌍 Herkunft: Südamerika (Kolumbien)",
+                        description: "Produkt höchster Qualität aus den kolumbianischen Hochgebirgen. Außergewöhnliche Reinheit garantiert bei 95%+. Handwerkliches Veredelungsverfahren für optimale Qualität.",
+                        details: "Unser Snow wird aus Hochgebirgsplantagen in der Andenregion geerntet. Jede Charge wird auf Reinheit getestet und zertifiziert. Sicherer und diskreter Transport garantiert."
+                    },
+                    pill: {
+                        name: "Pill",
+                        origin: "🌍 Herkunft: Niederlande (Amsterdam)",
+                        description: "Hochwertige Pillen aus zertifizierten niederländischen Laboren. Präzise Dosierung und kontrollierte Zusammensetzung. Garantierte Wirkung und optimale Dauer.",
+                        details: "Hergestellt nach strengsten Standards mit pharmazeutischen Vorläufern. Unabhängige Labortests für jede Charge. Hermetische Verpackung für optimale Konservierung."
+                    },
+                    olive: {
+                        name: "Olive",
+                        origin: "🌍 Herkunft: Marokko (Ketama)",
+                        description: "Premium-Harz aus dem marokkanischen Rif-Gebirge. Handwerkliches Produkt aus erster Extraktion. Authentisches Aroma und garantierte Potenz.",
+                        details: "Von Hand geerntet von traditionellen Bauern aus der Ketama-Region. Kaltpressung zur Erhaltung aller Terpene. Kontrollierte Reifung für außergewöhnlichen Geschmack."
+                    },
+                    clover: {
+                        name: "Clover",
+                        origin: "🌍 Herkunft: Spanien (Katalonien)",
+                        description: "Ausgewählte Blüten aus biologischem katalanischem Anbau. Exklusive Hybridvarietäten. Trocknung und Curing nach traditionellen Methoden.",
+                        details: "Indoor-Anbau unter strikter Temperatur- und Feuchtigkeitskontrolle. Premium importierte Genetik. Im Labor verifizierte THC-Werte. Manuelle Beschneidung zur Erhaltung der Trichome."
+                    }
+                }
+            }
+        };
+
+        const prices = {
+            FR: { snow: 80, pill: 10, olive: 7, clover: 10 },
+            CH: { snow: 100, pill: 15, olive: 8, clover: 12 }
+        };
+
+        const products = [
+            { id: 'snow', emoji: '❄️', image: 'https://images.unsplash.com/photo-1518709594023-6eab9bab7b23?w=400', video: null },
+            { id: 'pill', emoji: '💊', image: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=400', video: null },
+            { id: 'olive', emoji: '🫒', image: 'https://images.unsplash.com/photo-1606942896192-70d10e83e0b4?w=400', video: null },
+            { id: 'clover', emoji: '🍀', image: 'https://images.unsplash.com/photo-1464305795204-6f5bbfc7fb81?w=400', video: null }
+        ];
+
+        function changeLanguage(lang) {
+            currentLang = lang;
+            document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            updateUI();
+        }
+
+        function changeCountry(country) {
+            currentCountry = country;
+            document.querySelectorAll('.country-tab').forEach(tab => tab.classList.remove('active'));
+            document.getElementById(`tab-${country.toLowerCase()}`).classList.add('active');
+            renderProducts();
+        }
+
+        function updateUI() {
+            const t = translations[currentLang];
+            document.getElementById('header-title').textContent = t.headerTitle;
+            document.getElementById('footer-text').textContent = t.footer;
+            document.querySelector('#tab-fr .tab-label').textContent = t.france;
+            document.querySelector('#tab-ch .tab-label').textContent = t.switzerland;
+            renderProducts();
+        }
+
+        function renderProducts() {
+            const container = document.getElementById('products');
+            const t = translations[currentLang];
+            
+            container.innerHTML = products.map(product => {
+                const price = prices[currentCountry][product.id];
+                const info = t.products[product.id];
+                
+                return `
+                    <div class="product-card" onclick="openModal('${product.id}')">
+                        <div class="product-image">
+                            ${product.emoji}
+                        </div>
+                        <div class="product-info">
+                            <div class="product-name">${product.emoji} ${info.name}</div>
+                            <div class="product-price">${price}€</div>
+                            <div class="product-origin">${info.origin}</div>
+                            <div class="product-description">${info.description}</div>
+                            <span class="quality-badge">✨ ${t.quality}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function openModal(productId) {
+            const product = products.find(p => p.id === productId);
+            const t = translations[currentLang];
+            const info = t.products[productId];
+            const price = prices[currentCountry][productId];
+            
+            const modalContent = `
+                <div class="product-image modal-image">${product.emoji}</div>
+                <h2 style="font-size: 32px; margin-bottom: 15px;">${product.emoji} ${info.name}</h2>
+                <div class="product-price" style="font-size: 36px;">${price}€</div>
+                <div class="product-origin" style="font-size: 16px;">${info.origin}</div>
+                <div class="product-description" style="margin-top: 20px; font-size: 16px; line-height: 1.8;">
+                    ${info.description}
+                </div>
+                <div style="margin-top: 20px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 10px; border-left: 3px solid #667eea;">
+                    <strong style="color: #667eea;">ℹ️ Détails:</strong><br>
+                    ${info.details}
+                </div>
+                <button class="order-button" onclick="orderProduct('${productId}')">
+                    🛒 ${t.orderButton}
+                </button>
+            `;
+            
+            document.getElementById('modalContent').innerHTML = modalContent;
+            document.getElementById('productModal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('productModal').style.display = 'none';
+        }
+
+        function orderProduct(productId) {
+            // Envoyer les données au bot Telegram
+            const product = products.find(p => p.id === productId);
+            const price = prices[currentCountry][productId];
+            
+            tg.sendData(JSON.stringify({
+                action: 'order',
+                product: productId,
+                emoji: product.emoji,
+                country: currentCountry,
+                price: price,
+                language: currentLang
+            }));
+            
+            tg.close();
+        }
+
+        // Initialiser l'affichage
+        renderProducts();
+
+        // Fermer le modal en cliquant en dehors
+        window.onclick = function(event) {
+            const modal = document.getElementById('productModal');
+            if (event.target == modal) {
+                closeModal();
+            }
+        }
+    </script>
+</body>
+</html>

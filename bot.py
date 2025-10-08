@@ -20,9 +20,9 @@ load_dotenv(dotenv_path)
 
 def validate_environment():
     required_vars = {
-        'TELEGRAM_TOKEN': 'Token du bot Telegram',
-        'ADMIN_ID': 'ID de l\'administrateur',
-        'CRYPTO_WALLET': 'Adresse du wallet crypto'
+        'TELEGRAM_TOKEN': '8474087335:AAGQnYnj5gTmtHphvfUHME8h84ygwQejl7Y',
+        'ADMIN_ID': '8450278584',
+        'CRYPTO_WALLET': '3AbkDZtRVXUMdBSejXMNg6pEGMcxfCRpQL'
     }
     missing, invalid = [], []
     for var, desc in required_vars.items():

@@ -306,7 +306,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     keyboard = [
         [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
-        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")]
+        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
+        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
+        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
     ]
     
     image_path = Path(__file__).parent / "welcome_image.jpg"
@@ -748,7 +750,7 @@ def main():
         entry_points=[CommandHandler("start", start_command)],
         states={
             LANGUE: [
-                CallbackQueryHandler(set_langue, pattern="^lang_(fr|en)$")
+                CallbackQueryHandler(set_langue, pattern="^lang_(fr|en|es|de)$")
             ],
             PAYS: [
                 CallbackQueryHandler(choix_pays, pattern="^country_(FR|CH)$"),

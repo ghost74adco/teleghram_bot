@@ -986,7 +986,7 @@ if __name__ == "__main__":
             CallbackQueryHandler(annuler, pattern="^cancel$"),
             CommandHandler("start", start_command)
         ],
-        per_message=False,
+        per_message=True,
         allow_reentry=True
     )
 

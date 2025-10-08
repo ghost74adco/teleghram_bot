@@ -850,4 +850,3 @@ if __name__ == "__main__":
     logger.info("=" * 50)
     
     application.run_polling(allowed_updates=Update.ALL_TYPES)
-```

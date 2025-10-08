@@ -69,9 +69,8 @@ from telegram.error import NetworkError, TimedOut, TelegramError
 import asyncio
 
 # --- Configuration de sécurité ---
-# Liste blanche d'utilisateurs (laisser vide pour accepter tous les utilisateurs)
-AUTHORIZED_USERS = []  # Ex: [123456789, 987654321]
-USE_WHITELIST = False  # Mettre True pour activer la whitelist
+AUTHORIZED_USERS = []
+USE_WHITELIST = False
 
 # Rate limiting
 user_message_timestamps = defaultdict(list)
@@ -101,7 +100,7 @@ PRODUCT_REVERSE_MAP = {v: k for k, v in PRODUCT_MAP.items()}
 PRIX_FR = {"❄️": 80, "💊": 10, "🫒": 7, "🍀": 10}
 PRIX_CH = {"❄️": 100, "💊": 15, "🫒": 8, "🍀": 12}
 
-# --- Traductions statiques ---
+# --- Traductions ---
 TRANSLATIONS = {
     "fr": {
         "welcome": "🌿 *BIENVENUE* 🌿\n\n⚠️ *IMPORTANT :*\nToutes les conversations doivent être établies en *ÉCHANGE SECRET*.\n\n🙏 *Merci* 💪💚",
@@ -294,16 +293,9 @@ def sanitize_input(text: str, max_length: int = 200) -> str:
     """Nettoie et valide les entrées utilisateur"""
     if not text:
         return ""
-    
-    # Limiter la longueur
     text = text.strip()[:max_length]
-    
-    # Supprimer les caractères potentiellement dangereux
     text = re.sub(r'[<>{}[\]\\`|]', '', text)
-    
-    # Supprimer les séquences de contrôle
     text = re.sub(r'[\x00-\x1F\x7F]', '', text)
-    
     return text
 
 def is_authorized(user_id: int) -> bool:
@@ -315,17 +307,12 @@ def is_authorized(user_id: int) -> bool:
 def check_rate_limit(user_id: int) -> bool:
     """Vérifie si l'utilisateur dépasse la limite de requêtes"""
     now = datetime.now()
-    
-    # Nettoyer les anciens timestamps
     user_message_timestamps[user_id] = [
         ts for ts in user_message_timestamps[user_id]
         if now - ts < timedelta(seconds=RATE_LIMIT_WINDOW)
     ]
-    
-    # Vérifier la limite
     if len(user_message_timestamps[user_id]) >= MAX_MESSAGES_PER_MINUTE:
         return False
-    
     user_message_timestamps[user_id].append(now)
     return True
 
@@ -334,77 +321,51 @@ def check_session_timeout(user_data: dict) -> bool:
     last_activity = user_data.get('last_activity')
     if not last_activity:
         return False
-    
     return datetime.now() - last_activity > timedelta(minutes=SESSION_TIMEOUT_MINUTES)
 
 def update_last_activity(user_data: dict):
     """Met à jour le timestamp de la dernière activité"""
     user_data['last_activity'] = datetime.now()
 
-# --- Décorateurs de sécurité ---
 def security_check(func):
     """Décorateur pour vérifier l'autorisation et le rate limit"""
     @wraps(func)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
         
-        # Vérifier l'autorisation
         if not is_authorized(user_id):
             logger.warning(f"⚠️ Accès refusé: User {user_id}")
             if update.message:
-                await update.message.reply_text(
-                    tr(context.user_data, "unauthorized")
-                )
+                await update.message.reply_text(tr(context.user_data, "unauthorized"))
             elif update.callback_query:
-                await update.callback_query.answer(
-                    tr(context.user_data, "unauthorized")
-                )
+                await update.callback_query.answer(tr(context.user_data, "unauthorized"))
             return ConversationHandler.END
         
-        # Vérifier le rate limit
         if not check_rate_limit(user_id):
             logger.warning(f"⚠️ Rate limit dépassé: User {user_id}")
             if update.message:
-                await update.message.reply_text(
-                    tr(context.user_data, "rate_limit")
-                )
+                await update.message.reply_text(tr(context.user_data, "rate_limit"))
             elif update.callback_query:
-                await update.callback_query.answer(
-                    tr(context.user_data, "rate_limit"),
-                    show_alert=True
-                )
+                await update.callback_query.answer(tr(context.user_data, "rate_limit"), show_alert=True)
             return
         
-        # Vérifier le timeout de session
         if check_session_timeout(context.user_data):
             logger.info(f"⏱️ Session expirée: User {user_id}")
             if update.message:
-                await update.message.reply_text(
-                    tr(context.user_data, "session_expired")
-                )
+                await update.message.reply_text(tr(context.user_data, "session_expired"))
             elif update.callback_query:
-                await update.callback_query.answer(
-                    tr(context.user_data, "session_expired"),
-                    show_alert=True
-                )
+                await update.callback_query.answer(tr(context.user_data, "session_expired"), show_alert=True)
             context.user_data.clear()
             return ConversationHandler.END
         
-        # Mettre à jour la dernière activité
         update_last_activity(context.user_data)
-        
         return await func(update, context)
     return wrapper
 
-# --- Gestionnaire d'erreurs ---
 async def notify_admin_error(context: ContextTypes.DEFAULT_TYPE, msg: str):
-    """Notifie l'admin en cas d'erreur critique (sans données sensibles)"""
+    """Notifie l'admin en cas d'erreur critique"""
     try:
-        # Ne pas inclure de données utilisateur sensibles
-        await context.bot.send_message(
-            chat_id=ADMIN_ID, 
-            text=f"🚨 ERREUR BOT\n\n{msg[:500]}"  # Limiter la taille
-        )
+        await context.bot.send_message(chat_id=ADMIN_ID, text=f"🚨 ERREUR BOT\n\n{msg[:500]}")
     except Exception as e:
         logger.error(f"Impossible d'envoyer la notification admin: {e}")
 
@@ -420,17 +381,12 @@ def error_handler_decorator(func):
             logger.error(error_msg, exc_info=True)
             await notify_admin_error(context, error_msg)
             
-            # Message utilisateur générique
             try:
                 if hasattr(update, "callback_query") and update.callback_query:
                     await update.callback_query.answer("❌ Une erreur s'est produite.")
-                    await update.callback_query.message.reply_text(
-                        "❌ Une erreur s'est produite.\nUtilisez /start pour recommencer."
-                    )
+                    await update.callback_query.message.reply_text("❌ Une erreur s'est produite.\nUtilisez /start pour recommencer.")
                 elif hasattr(update, "message") and update.message:
-                    await update.message.reply_text(
-                        "❌ Une erreur s'est produite.\nUtilisez /start pour recommencer."
-                    )
+                    await update.message.reply_text("❌ Une erreur s'est produite.\nUtilisez /start pour recommencer.")
             except Exception:
                 pass
             
@@ -441,22 +397,18 @@ async def error_callback(update: object, context: ContextTypes.DEFAULT_TYPE):
     """Callback global pour les erreurs non gérées"""
     logger.error("Exception non gérée:", exc_info=context.error)
     
-    # Ignorer les erreurs réseau temporaires
     if isinstance(context.error, (NetworkError, TimedOut)):
         logger.info("Erreur réseau temporaire ignorée")
         return
     
-    # Notifier l'admin (sans détails sensibles)
     error_msg = f"Type: {type(context.error).__name__}"
     await notify_admin_error(context, error_msg)
 
-# --- Fonctions utilitaires ---
 def tr(user_data, key):
     """Récupère une traduction selon la langue de l'utilisateur"""
     lang = user_data.get("langue", "fr")
     translation = TRANSLATIONS.get(lang, TRANSLATIONS["fr"]).get(key, key)
     
-    # Remplacer les variables dynamiques
     if "{max}" in translation:
         translation = translation.replace("{max}", str(MAX_QUANTITY_PER_PRODUCT))
     
@@ -485,7 +437,6 @@ async def delete_conversation(context: ContextTypes.DEFAULT_TYPE, chat_id: int, 
     await asyncio.sleep(60)
     
     deleted_count = 0
-    
     for msg_id in message_ids:
         try:
             await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
@@ -500,18 +451,10 @@ async def safe_edit_message(query, text=None, caption=None, reply_markup=None, p
     try:
         if query.message.photo:
             if caption:
-                await query.message.edit_caption(
-                    caption=caption, 
-                    reply_markup=reply_markup, 
-                    parse_mode=parse_mode
-                )
+                await query.message.edit_caption(caption=caption, reply_markup=reply_markup, parse_mode=parse_mode)
         else:
             if text:
-                await query.message.edit_text(
-                    text=text, 
-                    reply_markup=reply_markup, 
-                    parse_mode=parse_mode
-                )
+                await query.message.edit_text(text=text, reply_markup=reply_markup, parse_mode=parse_mode)
     except TelegramError as e:
         logger.warning(f"Erreur lors de l'édition du message: {e}")
         if text:
@@ -526,7 +469,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Point d'entrée principal du bot"""
     context.user_data.clear()
     update_last_activity(context.user_data)
-    
     context.user_data['message_ids'] = []
     
     welcome_text = (
@@ -605,12 +547,20 @@ async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton(tr(context.user_data, "switzerland"), callback_data="country_CH")],
             [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_menu")]
         ]
-        await safe_edit_message(
-            query, 
-            text=tr(context.user_data, "choose_country"),
-            caption=tr(context.user_data, "choose_country"),
-            reply_markup=InlineKeyboardMarkup(keyboard)
+        await safe_edit_message(query, text=tr(context.user_data, "choose_country"), caption=tr(context.user_data, "choose_country"), reply_markup=InlineKeyboardMarkup(keyboard))
+        return PAYS
+    
+    elif query.data == "price_menu":
+        price_text = (
+            f"{tr(context.user_data, 'price_menu_title')}"
+            f"{tr(context.user_data, 'price_menu_fr')}"
+            f"{tr(context.user_data, 'price_menu_ch')}"
         )
+        keyboard = [
+            [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
+            [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_menu")]
+        ]
+        await safe_edit_message(query, text=price_text, caption=price_text, reply_markup=InlineKeyboardMarkup(keyboard))
         return PAYS
     
     elif query.data == "info":
@@ -670,13 +620,7 @@ async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
     
-    await safe_edit_message(
-        query,
-        text=tr(context.user_data, "choose_product"),
-        caption=tr(context.user_data, "choose_product"),
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-    
+    await safe_edit_message(query, text=tr(context.user_data, "choose_product"), caption=tr(context.user_data, "choose_product"), reply_markup=InlineKeyboardMarkup(keyboard))
     return PRODUIT
 
 @security_check
@@ -703,10 +647,8 @@ async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Validation et ajout de la quantité au panier"""
     qty = sanitize_input(update.message.text, max_length=10)
-    
     context.user_data['message_ids'].append(update.message.message_id)
     
-    # Validation stricte de la quantité
     if not qty.isdigit():
         sent_msg = await update.message.reply_text(tr(context.user_data, "invalid_quantity"))
         context.user_data['message_ids'].append(sent_msg.message_id)
@@ -718,7 +660,6 @@ async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['message_ids'].append(sent_msg.message_id)
         return QUANTITE
     
-    # Ajouter au panier
     context.user_data['cart'].append({
         "produit": context.user_data['current_product'],
         "quantite": qty_int
@@ -732,11 +673,7 @@ async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
     
-    sent_msg = await update.message.reply_text(
-        cart_summary, 
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
+    sent_msg = await update.message.reply_text(cart_summary, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     context.user_data['message_ids'].append(sent_msg.message_id)
     return CART_MENU
 
@@ -755,22 +692,11 @@ async def cart_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("🍀", callback_data="product_clover")],
             [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
         ]
-        await safe_edit_message(
-            query,
-            text=tr(context.user_data, "choose_product"), 
-            caption=tr(context.user_data, "choose_product"),
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
-        )
+        await safe_edit_message(query, text=tr(context.user_data, "choose_product"), caption=tr(context.user_data, "choose_product"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return PRODUIT
     
     elif query.data == "proceed_checkout":
-        await safe_edit_message(
-            query,
-            text=tr(context.user_data, "enter_address"),
-            caption=tr(context.user_data, "enter_address"),
-            parse_mode='Markdown'
-        )
+        await safe_edit_message(query, text=tr(context.user_data, "enter_address"), caption=tr(context.user_data, "enter_address"), parse_mode='Markdown')
         return ADRESSE
     
     return CART_MENU
@@ -780,10 +706,8 @@ async def cart_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def saisie_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Validation de l'adresse de livraison"""
     adresse = sanitize_input(update.message.text, max_length=300)
-    
     context.user_data['message_ids'].append(update.message.message_id)
     
-    # Validation de l'adresse
     if len(adresse) < 15:
         sent_msg = await update.message.reply_text(tr(context.user_data, "invalid_address"))
         context.user_data['message_ids'].append(sent_msg.message_id)
@@ -796,11 +720,7 @@ async def saisie_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(tr(context.user_data, "express"), callback_data="delivery_express")],
         [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
-    sent_msg = await update.message.reply_text(
-        tr(context.user_data, "choose_delivery"), 
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
+    sent_msg = await update.message.reply_text(tr(context.user_data, "choose_delivery"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     context.user_data['message_ids'].append(sent_msg.message_id)
     return LIVRAISON
 
@@ -819,13 +739,7 @@ async def choix_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(tr(context.user_data, "crypto"), callback_data="payment_crypto")],
         [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
-    await safe_edit_message(
-        query,
-        text=tr(context.user_data, "choose_payment"), 
-        caption=tr(context.user_data, "choose_payment"),
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
+    await safe_edit_message(query, text=tr(context.user_data, "choose_payment"), caption=tr(context.user_data, "choose_payment"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return PAIEMENT
 
 @security_check
@@ -859,13 +773,7 @@ async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(tr(context.user_data, "confirm"), callback_data="confirm_order")],
         [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
-    await safe_edit_message(
-        query,
-        text=summary, 
-        caption=summary,
-        reply_markup=InlineKeyboardMarkup(keyboard), 
-        parse_mode='Markdown'
-    )
+    await safe_edit_message(query, text=summary, caption=summary, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return CONFIRMATION
 
 @security_check
@@ -876,25 +784,18 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     if query.data == "confirm_order":
-        await safe_edit_message(
-            query,
-            text=tr(context.user_data, "order_confirmed"),
-            caption=tr(context.user_data, "order_confirmed"),
-            parse_mode='Markdown'
-        )
+        await safe_edit_message(query, text=tr(context.user_data, "order_confirmed"), caption=tr(context.user_data, "order_confirmed"), parse_mode='Markdown')
         
-        # Notification admin (données minimales et sécurisées)
         total = calculate_total(context.user_data['cart'], context.user_data['pays'])
         user = query.from_user
         
         order_details = "🔔 NOUVELLE COMMANDE\n"
         order_details += "=" * 30 + "\n\n"
-        
         order_details += "👤 CLIENT:\n"
         order_details += f"├─ ID: {user.id}\n"
         order_details += f"└─ Username: @{user.username if user.username else 'N/A'}\n\n"
-        
         order_details += "🛒 PRODUITS:\n"
+        
         prix_table = PRIX_FR if context.user_data['pays'] == "FR" else PRIX_CH
         for idx, item in enumerate(context.user_data['cart'], 1):
             prix_unitaire = prix_table[item['produit']]
@@ -905,7 +806,6 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         order_details += f"├─ Pays: {context.user_data['pays']}\n"
         order_details += f"├─ Adresse: {context.user_data['adresse'][:50]}...\n"
         order_details += f"└─ Type: {context.user_data['livraison']}\n\n"
-        
         order_details += f"💳 PAIEMENT: {context.user_data['paiement']}\n"
         order_details += f"💰 TOTAL: {total}€\n"
         order_details += "=" * 30
@@ -916,10 +816,8 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             message_ids = context.user_data.get('message_ids', [])
             message_ids.append(query.message.message_id)
-            
             chat_id = query.message.chat_id
             asyncio.create_task(delete_conversation(context, chat_id, message_ids))
-            
         except Exception as e:
             logger.error(f"Erreur notification admin: {type(e).__name__}")
     
@@ -933,60 +831,36 @@ async def annuler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    await safe_edit_message(
-        query,
-        text=tr(context.user_data, "order_cancelled"),
-        caption=tr(context.user_data, "order_cancelled"),
-        parse_mode='Markdown'
-    )
+    await safe_edit_message(query, text=tr(context.user_data, "order_cancelled"), caption=tr(context.user_data, "order_cancelled"), parse_mode='Markdown')
     context.user_data.clear()
     return ConversationHandler.END
 
 # --- Main ---
 if __name__ == "__main__":
     application = Application.builder().token(TOKEN).build()
-    
     application.add_error_handler(error_callback)
 
     conv_handler = ConversationHandler(
-        entry_points=[
-            CommandHandler("start", start_command)
-        ],
+        entry_points=[CommandHandler("start", start_command)],
         states={
-            LANGUE: [
-                CallbackQueryHandler(set_langue, pattern="^lang_(fr|en|es|de)$")
-            ],
+            LANGUE: [CallbackQueryHandler(set_langue, pattern="^lang_(fr|en|es|de)$")],
             PAYS: [
                 CallbackQueryHandler(choix_pays, pattern="^country_(FR|CH)$"),
                 CallbackQueryHandler(menu_navigation, pattern="^(start_order|info|price_menu|contact_admin|back_menu)$")
             ],
-            PRODUIT: [
-                CallbackQueryHandler(choix_produit, pattern="^product_(snow|pill|olive|clover)$")
-            ],
-            QUANTITE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_quantite)
-            ],
-            CART_MENU: [
-                CallbackQueryHandler(cart_menu_handler, pattern="^(add_more|proceed_checkout)$")
-            ],
-            ADRESSE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_adresse)
-            ],
-            LIVRAISON: [
-                CallbackQueryHandler(choix_livraison, pattern="^delivery_(standard|express)$")
-            ],
-            PAIEMENT: [
-                CallbackQueryHandler(choix_paiement, pattern="^payment_(cash|crypto)$")
-            ],
-            CONFIRMATION: [
-                CallbackQueryHandler(confirmation, pattern="^confirm_order$")
-            ]
+            PRODUIT: [CallbackQueryHandler(choix_produit, pattern="^product_(snow|pill|olive|clover)$")],
+            QUANTITE: [MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_quantite)],
+            CART_MENU: [CallbackQueryHandler(cart_menu_handler, pattern="^(add_more|proceed_checkout)$")],
+            ADRESSE: [MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_adresse)],
+            LIVRAISON: [CallbackQueryHandler(choix_livraison, pattern="^delivery_(standard|express)$")],
+            PAIEMENT: [CallbackQueryHandler(choix_paiement, pattern="^payment_(cash|crypto)$")],
+            CONFIRMATION: [CallbackQueryHandler(confirmation, pattern="^confirm_order$")]
         },
         fallbacks=[
             CallbackQueryHandler(annuler, pattern="^cancel$"),
             CommandHandler("start", start_command)
         ],
-        per_message=True,
+        per_message=False,
         allow_reentry=True
     )
 

@@ -526,18 +526,20 @@ async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @error_handler_decorator
 async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Sélection du produit"""
     query = update.callback_query
     await query.answer()
-    
+
     product_code = query.data.replace("product_", "")
     product_emoji = PRODUCT_MAP.get(product_code, product_code)
     context.user_data['current_product'] = product_emoji
-    
-    await query.message.edit_text(
-        f"{tr(context.user_data, 'choose_product')}\n\n✅ Produit: {product_emoji}\n\n{tr(context.user_data, 'enter_quantity')}",
+
+    await safe_edit_message(
+        query,
+        text=f"{tr(context.user_data, 'choose_product')}\n\n✅ Produit: {product_emoji}\n\n{tr(context.user_data, 'enter_quantity')}",
+        caption=f"{tr(context.user_data, 'choose_product')}\n\n✅ Produit: {product_emoji}\n\n{tr(context.user_data, 'enter_quantity')}",
         parse_mode='Markdown'
     )
+
     return QUANTITE
 
 @error_handler_decorator

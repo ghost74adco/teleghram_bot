@@ -58,7 +58,7 @@ from telegram.ext import (
     Application, ContextTypes, CallbackQueryHandler,
     ConversationHandler, MessageHandler, CommandHandler, filters
 )
-from telegram.error import NetworkError, TimedOut
+from telegram.error import NetworkError, TimedOut, TelegramError
 
 # --- États ---
 LANGUE, PAYS, PRODUIT, QUANTITE, CART_MENU, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION = range(9)
@@ -235,38 +235,64 @@ TRANSLATIONS = {
 
 # --- Gestionnaire d'erreurs et notification admin ---
 async def notify_admin_error(context: ContextTypes.DEFAULT_TYPE, msg: str):
+    """Notifie l'admin en cas d'erreur critique"""
     try:
         await context.bot.send_message(chat_id=ADMIN_ID, text=f"🚨 ERREUR BOT\n\n{msg}")
     except Exception as e:
-        logger.error(f"Impossible d'envoyer la notification: {e}")
+        logger.error(f"Impossible d'envoyer la notification admin: {e}")
 
 def error_handler_decorator(func):
+    """Décorateur pour gérer les erreurs dans les handlers"""
     @wraps(func)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             return await func(update, context)
         except Exception as e:
             user_id = update.effective_user.id if update.effective_user else "Unknown"
-            error_msg = f"Erreur dans {func.__name__} | User: {user_id}\n{e}"
+            error_msg = f"Erreur dans {func.__name__}\nUser: {user_id}\nErreur: {str(e)}"
             logger.error(error_msg, exc_info=True)
             await notify_admin_error(context, error_msg)
-            if update.effective_message:
-                await update.effective_message.reply_text("❌ Une erreur s'est produite. L'admin a été notifié.")
+            
+            # Message utilisateur
+            try:
+                if update.callback_query:
+                    await update.callback_query.answer("❌ Une erreur s'est produite.")
+                    await update.callback_query.message.reply_text(
+                        "❌ Une erreur s'est produite. L'admin a été notifié.\n"
+                        "Utilisez /start pour recommencer."
+                    )
+                elif update.message:
+                    await update.message.reply_text(
+                        "❌ Une erreur s'est produite. L'admin a été notifié.\n"
+                        "Utilisez /start pour recommencer."
+                    )
+            except Exception as notify_error:
+                logger.error(f"Erreur lors de la notification utilisateur: {notify_error}")
+            
             return ConversationHandler.END
     return wrapper
 
 async def error_callback(update: object, context: ContextTypes.DEFAULT_TYPE):
-    logger.error("Exception:", exc_info=context.error)
+    """Callback global pour les erreurs non gérées"""
+    logger.error("Exception non gérée:", exc_info=context.error)
+    
+    # Ignorer les erreurs réseau temporaires
     if isinstance(context.error, (NetworkError, TimedOut)):
+        logger.info("Erreur réseau temporaire ignorée")
         return
-    await notify_admin_error(context, f"Type: {type(context.error).__name__}\nMessage: {context.error}")
+    
+    # Notifier l'admin pour les autres erreurs
+    error_msg = f"Type: {type(context.error).__name__}\nMessage: {str(context.error)}"
+    await notify_admin_error(context, error_msg)
 
 # --- Fonctions utilitaires ---
 def tr(user_data, key):
+    """Récupère une traduction selon la langue de l'utilisateur"""
     lang = user_data.get("langue", "fr")
     return TRANSLATIONS.get(lang, TRANSLATIONS["fr"]).get(key, key)
 
 def calculate_total(cart, country):
+    """Calcule le total du panier"""
     prix_table = PRIX_FR if country == "FR" else PRIX_CH
     total = 0
     for item in cart:
@@ -274,7 +300,7 @@ def calculate_total(cart, country):
     return total
 
 def format_cart(cart, user_data):
-    """Formatte le panier pour l'affichage"""
+    """Formate le panier pour l'affichage"""
     if not cart:
         return ""
     
@@ -283,13 +309,41 @@ def format_cart(cart, user_data):
         cart_text += f"• {item['produit']} x {item['quantite']}\n"
     return cart_text
 
+async def safe_edit_message(query, text=None, caption=None, reply_markup=None, parse_mode='Markdown'):
+    """Édite un message de manière sécurisée (photo ou texte)"""
+    try:
+        if query.message.photo:
+            if caption:
+                await query.message.edit_caption(
+                    caption=caption, 
+                    reply_markup=reply_markup, 
+                    parse_mode=parse_mode
+                )
+        else:
+            if text:
+                await query.message.edit_text(
+                    text=text, 
+                    reply_markup=reply_markup, 
+                    parse_mode=parse_mode
+                )
+    except TelegramError as e:
+        logger.warning(f"Erreur lors de l'édition du message: {e}")
+        # Fallback: envoyer un nouveau message
+        if text:
+            await query.message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
+        elif caption:
+            await query.message.reply_text(caption, reply_markup=reply_markup, parse_mode=parse_mode)
+
 # --- Commande /start ---
 @error_handler_decorator
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Point d'entrée principal du bot"""
     context.user_data.clear()
     
-    # Message de sélection de langue UNIQUEMENT
-    welcome_text = "🌍 *Choisissez votre langue / Select your language*\n🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
+    welcome_text = (
+        "🌍 *Choisissez votre langue / Select your language*\n"
+        "🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
+    )
     
     keyboard = [
         [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
@@ -304,13 +358,17 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if update.message:
         if image_path.exists():
-            with open(image_path, 'rb') as photo:
-                await update.message.reply_photo(
-                    photo=photo,
-                    caption=welcome_text,
-                    reply_markup=reply_markup,
-                    parse_mode='Markdown'
-                )
+            try:
+                with open(image_path, 'rb') as photo:
+                    await update.message.reply_photo(
+                        photo=photo,
+                        caption=welcome_text,
+                        reply_markup=reply_markup,
+                        parse_mode='Markdown'
+                    )
+            except Exception as e:
+                logger.warning(f"Impossible de charger l'image: {e}")
+                await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode='Markdown')
         else:
             await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode='Markdown')
     
@@ -318,14 +376,13 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @error_handler_decorator
 async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Définit la langue et affiche le menu principal"""
     query = update.callback_query
     await query.answer()
     
-    # Sélection de langue
     lang_code = query.data.replace("lang_", "")
     context.user_data['langue'] = lang_code
     
-    # Afficher le menu principal dans la langue choisie
     welcome_text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
     
     keyboard = [
@@ -334,14 +391,12 @@ async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(tr(context.user_data, "contact"), callback_data="contact_admin")]
     ]
     
-    if query.message.photo:
-        await query.message.edit_caption(caption=welcome_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    else:
-        await query.message.edit_text(text=welcome_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    await safe_edit_message(query, text=welcome_text, caption=welcome_text, reply_markup=InlineKeyboardMarkup(keyboard))
     return PAYS
 
 @error_handler_decorator
 async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gère la navigation dans les menus (info, contact, retour)"""
     query = update.callback_query
     await query.answer()
     
@@ -356,14 +411,16 @@ async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton(tr(context.user_data, "switzerland"), callback_data="country_CH")],
             [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_menu")]
         ]
-        if query.message.photo:
-            await query.message.edit_caption(caption=tr(context.user_data, "choose_country"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-        else:
-            await query.message.edit_text(text=tr(context.user_data, "choose_country"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        await safe_edit_message(
+            query, 
+            text=tr(context.user_data, "choose_country"),
+            caption=tr(context.user_data, "choose_country"),
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
         return PAYS
     
     # Bouton "Informations"
-    if query.data == "info":
+    elif query.data == "info":
         info_text = (
             f"{tr(context.user_data, 'info_title')}\n\n"
             f"{tr(context.user_data, 'info_shop')}\n\n"
@@ -375,145 +432,40 @@ async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
             [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_menu")]
         ]
-        if query.message.photo:
-            await query.message.edit_caption(caption=info_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-        else:
-            await query.message.edit_text(text=info_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        await safe_edit_message(query, text=info_text, caption=info_text, reply_markup=InlineKeyboardMarkup(keyboard))
         return PAYS
     
     # Bouton "Contact"
-    if query.data == "contact_admin":
+    elif query.data == "contact_admin":
         contact_text = f"{tr(context.user_data, 'contact_title')}\n\n{tr(context.user_data, 'contact_text')}"
         keyboard = [
             [InlineKeyboardButton(tr(context.user_data, "contact_admin"), url=f"tg://user?id={ADMIN_ID}")],
             [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
             [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_menu")]
         ]
-        if query.message.photo:
-            await query.message.edit_caption(caption=contact_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-        else:
-            await query.message.edit_text(text=contact_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        await safe_edit_message(query, text=contact_text, caption=contact_text, reply_markup=InlineKeyboardMarkup(keyboard))
         return PAYS
     
     # Bouton "Retour au menu"
-    if query.data == "back_menu":
+    elif query.data == "back_menu":
         welcome_text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
         keyboard = [
             [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
             [InlineKeyboardButton(tr(context.user_data, "informations"), callback_data="info")],
             [InlineKeyboardButton(tr(context.user_data, "contact"), callback_data="contact_admin")]
         ]
-        if query.message.photo:
-            await query.message.edit_caption(caption=welcome_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-        else:
-            await query.message.edit_text(text=welcome_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        await safe_edit_message(query, text=welcome_text, caption=welcome_text, reply_markup=InlineKeyboardMarkup(keyboard))
         return PAYS
     
     return PAYS
-    if query.data == "info":
-        info_text = (
-            "ℹ️ *INFORMATIONS*\n\n"
-            "🛍️ *Notre boutique :*\n"
-            "• Livraison France 🇫🇷 & Suisse 🇨🇭\n"
-            "• Produits de qualité\n"
-            "• Service client réactif\n\n"
-            "📦 *Livraison :*\n"
-            "• Standard : 3-5 jours\n"
-            "• Express : 24-48h\n\n"
-            "💳 *Paiement :*\n"
-            "• Espèces à la livraison\n"
-            "• Crypto (Bitcoin, USDT)\n\n"
-            "🔒 *Sécurité :*\n"
-            "Tous les échanges sont cryptés et confidentiels.\n\n"
-            "👇 Choisissez votre langue pour commander :"
-        )
-        keyboard = [
-            [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
-            [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
-            [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
-            [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")],
-            [InlineKeyboardButton("🔙 Retour", callback_data="back_start")]
-        ]
-        # Vérifier si c'est une photo ou du texte
-        if query.message.photo:
-            await query.message.edit_caption(caption=info_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-        else:
-            await query.message.edit_text(text=info_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-        return LANGUE
-    
-    if query.data == "contact_admin":
-        contact_text = (
-            "📞 *CONTACT*\n\n"
-            "Pour toute question ou besoin d'assistance, vous pouvez :\n\n"
-            "• Continuer avec la commande\n"
-            "• Contacter l'administrateur\n\n"
-            "Notre équipe est disponible 24/7 pour vous aider ! 💬\n\n"
-            "👇 Choisissez votre langue pour commencer :"
-        )
-        keyboard = [
-            [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
-            [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
-            [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
-            [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")],
-            [InlineKeyboardButton("💬 Contacter Admin", url=f"tg://user?id={ADMIN_ID}")],
-            [InlineKeyboardButton("🔙 Retour", callback_data="back_start")]
-        ]
-        # Vérifier si c'est une photo ou du texte
-        if query.message.photo:
-            await query.message.edit_caption(caption=contact_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-        else:
-            await query.message.edit_text(text=contact_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-        return LANGUE
-    
-    if query.data == "back_start":
-        # Retourner au message de bienvenue
-        welcome_text = (
-            "🌿 *BIENVENUE, WELCOME* 🌿\n\n"
-            "⚠️ *IMPORTANT :*\n"
-            "Toutes les conversations doivent être établies en *ÉCHANGE SECRET*.\n\n"
-            "🙏 *Merci* 💪💚\n\n"
-            "📞 Pour me joindre : utilisez le bouton *Contact*\n"
-            "ℹ️ Infos : consultez la rubrique *Informations*\n"
-            "📱 Menu : accédez à la *Mini App*\n\n"
-            "👇 *Sélectionnez votre langue pour commencer :*"
-        )
-        keyboard = [
-            [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
-            [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
-            [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
-            [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")],
-            [InlineKeyboardButton("ℹ️ Informations", callback_data="info")],
-            [InlineKeyboardButton("📞 Contact", callback_data="contact_admin")]
-        ]
-        # Vérifier si c'est une photo ou du texte
-        if query.message.photo:
-            await query.message.edit_caption(caption=welcome_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-        else:
-            await query.message.edit_text(text=welcome_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-        return LANGUE
-    
-    # Sélection de langue normale
-    lang_code = query.data.replace("lang_", "")
-    context.user_data['langue'] = lang_code
-    
-    keyboard = [
-        [InlineKeyboardButton("🇫🇷 France", callback_data="country_FR")],
-        [InlineKeyboardButton("🇨🇭 Suisse", callback_data="country_CH")],
-        [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
-    ]
-    
-    # Vérifier si c'est une photo ou du texte
-    if query.message.photo:
-        await query.message.edit_caption(caption=tr(context.user_data, "choose_country"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    else:
-        await query.message.edit_text(text=tr(context.user_data, "choose_country"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return PAYS
 
-# --- Gestion du panier multi-produits ---
+# --- Gestion du processus de commande ---
 @error_handler_decorator
 async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sélection du pays et initialisation du panier"""
     query = update.callback_query
     await query.answer()
+    
     country_code = query.data.replace("country_", "")
     context.user_data['pays'] = country_code
     context.user_data['cart'] = []
@@ -525,22 +477,32 @@ async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🍀", callback_data="product_clover")],
         [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
-    await query.message.edit_text(tr(context.user_data, "choose_product"), reply_markup=InlineKeyboardMarkup(keyboard))
+    await query.message.edit_text(
+        tr(context.user_data, "choose_product"), 
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
     return PRODUIT
 
 @error_handler_decorator
 async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sélection du produit"""
     query = update.callback_query
     await query.answer()
+    
     product_code = query.data.replace("product_", "")
     product_emoji = PRODUCT_MAP.get(product_code, product_code)
     context.user_data['current_product'] = product_emoji
     
-    await query.message.edit_text(f"{tr(context.user_data, 'choose_product')}\n\n✅ Produit: {product_emoji}\n\n{tr(context.user_data, 'enter_quantity')}")
+    await query.message.edit_text(
+        f"{tr(context.user_data, 'choose_product')}\n\n✅ Produit: {product_emoji}\n\n{tr(context.user_data, 'enter_quantity')}",
+        parse_mode='Markdown'
+    )
     return QUANTITE
 
 @error_handler_decorator
 async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Validation et ajout de la quantité au panier"""
     qty = update.message.text.strip()
     
     if not qty.isdigit() or int(qty) <= 0:
@@ -562,11 +524,16 @@ async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
     
-    await update.message.reply_text(cart_summary, reply_markup=InlineKeyboardMarkup(keyboard))
+    await update.message.reply_text(
+        cart_summary, 
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
     return CART_MENU
 
 @error_handler_decorator
 async def cart_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gestion du menu du panier (ajouter/valider)"""
     query = update.callback_query
     await query.answer()
     
@@ -579,52 +546,75 @@ async def cart_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("🍀", callback_data="product_clover")],
             [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
         ]
-        await query.message.edit_text(tr(context.user_data, "choose_product"), reply_markup=InlineKeyboardMarkup(keyboard))
+        await query.message.edit_text(
+            tr(context.user_data, "choose_product"), 
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
         return PRODUIT
+    
     elif query.data == "proceed_checkout":
         # Passer à l'adresse
-        await query.message.edit_text(tr(context.user_data, "enter_address"))
+        await query.message.edit_text(
+            tr(context.user_data, "enter_address"),
+            parse_mode='Markdown'
+        )
         return ADRESSE
     
     return CART_MENU
 
 @error_handler_decorator
 async def saisie_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Validation de l'adresse de livraison"""
     context.user_data['adresse'] = update.message.text.strip()
     
     keyboard = [
-        [InlineKeyboardButton("📦 Standard", callback_data="delivery_standard")],
-        [InlineKeyboardButton("⚡ Express", callback_data="delivery_express")],
+        [InlineKeyboardButton(tr(context.user_data, "standard"), callback_data="delivery_standard")],
+        [InlineKeyboardButton(tr(context.user_data, "express"), callback_data="delivery_express")],
         [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
-    await update.message.reply_text(tr(context.user_data, "choose_delivery"), reply_markup=InlineKeyboardMarkup(keyboard))
+    await update.message.reply_text(
+        tr(context.user_data, "choose_delivery"), 
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
     return LIVRAISON
 
 @error_handler_decorator
 async def choix_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sélection du mode de livraison"""
     query = update.callback_query
     await query.answer()
+    
     delivery_type = query.data.replace("delivery_", "")
     context.user_data['livraison'] = delivery_type
     
     keyboard = [
-        [InlineKeyboardButton("💵 Espèces", callback_data="payment_cash")],
-        [InlineKeyboardButton("₿ Crypto", callback_data="payment_crypto")],
+        [InlineKeyboardButton(tr(context.user_data, "cash"), callback_data="payment_cash")],
+        [InlineKeyboardButton(tr(context.user_data, "crypto"), callback_data="payment_crypto")],
         [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
-    await query.message.edit_text(tr(context.user_data, "choose_payment"), reply_markup=InlineKeyboardMarkup(keyboard))
+    await query.message.edit_text(
+        tr(context.user_data, "choose_payment"), 
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
     return PAIEMENT
 
 @error_handler_decorator
 async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sélection du mode de paiement et affichage du résumé"""
     query = update.callback_query
     await query.answer()
+    
     payment_type = query.data.replace("payment_", "")
     context.user_data['paiement'] = payment_type
     
+    # Calcul du total
     total = calculate_total(context.user_data['cart'], context.user_data['pays'])
     summary = f"{tr(context.user_data, 'order_summary')}\n\n"
     
+    # Détail des produits
     prix_table = PRIX_FR if context.user_data['pays'] == "FR" else PRIX_CH
     for item in context.user_data['cart']:
         prix_unitaire = prix_table[item['produit']]
@@ -636,6 +626,7 @@ async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
     summary += f"💳 Paiement: {context.user_data['paiement']}\n"
     summary += f"\n💰 TOTAL: {total}€"
     
+    # Ajout du wallet crypto si nécessaire
     if context.user_data['paiement'] == 'crypto':
         summary += f"\n\n₿ Wallet: `{CRYPTO_WALLET}`"
     
@@ -643,16 +634,24 @@ async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(tr(context.user_data, "confirm"), callback_data="confirm_order")],
         [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
-    await query.message.edit_text(summary, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    await query.message.edit_text(
+        summary, 
+        reply_markup=InlineKeyboardMarkup(keyboard), 
+        parse_mode='Markdown'
+    )
     return CONFIRMATION
 
 @error_handler_decorator
 async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Confirmation finale de la commande"""
     query = update.callback_query
     await query.answer()
     
     if query.data == "confirm_order":
-        await query.message.edit_text(tr(context.user_data, "order_confirmed"))
+        await query.message.edit_text(
+            tr(context.user_data, "order_confirmed"),
+            parse_mode='Markdown'
+        )
         
         # Notification admin détaillée
         total = calculate_total(context.user_data['cart'], context.user_data['pays'])
@@ -685,6 +684,7 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         try:
             await context.bot.send_message(chat_id=ADMIN_ID, text=order_details)
+            logger.info(f"Commande confirmée pour l'utilisateur {user.id}")
         except Exception as e:
             logger.error(f"Erreur envoi notification admin: {e}")
     
@@ -693,36 +693,40 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @error_handler_decorator
 async def annuler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Annulation de la commande"""
     query = update.callback_query
     await query.answer()
-    await query.message.edit_text(tr(context.user_data, "order_cancelled"))
+    
+    await query.message.edit_text(
+        tr(context.user_data, "order_cancelled"),
+        parse_mode='Markdown'
+    )
     context.user_data.clear()
     return ConversationHandler.END
 
 # --- Main ---
 if __name__ == "__main__":
+    # Création de l'application
     application = Application.builder().token(TOKEN).build()
-    application.add_error_handler(error_callback)
-
-    # Handler global pour /start (accessible à tout moment)
-    application.add_handler(CommandHandler("start", start_command))
     
-    # Handler pour sélection de langue et menus spéciaux (en dehors du ConversationHandler)
-    application.add_handler(CallbackQueryHandler(set_langue, pattern="^lang_(fr|en|es|de)$"))
-    application.add_handler(CallbackQueryHandler(menu_navigation, pattern="^(start_order|info|contact_admin|back_menu)$"))
-
+    # Ajout du gestionnaire d'erreurs global
+    application.add_error_handler(error_callback)
 
     # ConversationHandler principal
     conv_handler = ConversationHandler(
         entry_points=[
-            CallbackQueryHandler(choix_pays, pattern="^country_(FR|CH)$")
+            CommandHandler("start", start_command)
         ],
         states={
+            LANGUE: [
+                CallbackQueryHandler(set_langue, pattern="^lang_(fr|en|es|de)$")
+            ],
             PAYS: [
+                CallbackQueryHandler(menu_navigation, pattern="^(start_order|info|contact_admin|back_menu)$"),
                 CallbackQueryHandler(choix_pays, pattern="^country_(FR|CH)$")
             ],
             PRODUIT: [
-                CallbackQueryHandler(choix_produit, pattern="^product_")
+                CallbackQueryHandler(choix_produit, pattern="^product_(snow|pill|olive|clover)$")
             ],
             QUANTITE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_quantite)
@@ -734,14 +738,14 @@ if __name__ == "__main__":
                 MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_adresse)
             ],
             LIVRAISON: [
-                CallbackQueryHandler(choix_livraison, pattern="^delivery_")
+                CallbackQueryHandler(choix_livraison, pattern="^delivery_(standard|express)$")
             ],
             PAIEMENT: [
-                CallbackQueryHandler(choix_paiement, pattern="^payment_")
+                CallbackQueryHandler(choix_paiement, pattern="^payment_(cash|crypto)$")
             ],
             CONFIRMATION: [
                 CallbackQueryHandler(confirmation, pattern="^confirm_order$")
-            ],
+            ]
         },
         fallbacks=[
             CallbackQueryHandler(annuler, pattern="^cancel$"),
@@ -753,14 +757,11 @@ if __name__ == "__main__":
 
     application.add_handler(conv_handler)
 
-    # === Handlers globaux ===
-    application.add_handler(CallbackQueryHandler(set_langue, pattern="^lang_(fr|en|es|de)$"))
-    application.add_handler(CallbackQueryHandler(menu_navigation, pattern="^(start_order|info|contact_admin|back_menu)$"))
-    application.add_handler(CallbackQueryHandler(set_country, pattern="^country_(FR|CH)$"))
-
+    logger.info("=" * 50)
     logger.info("🚀 Bot démarré avec succès!")
-    logger.info(f"📊 États disponibles: {list(range(9))}")
+    logger.info(f"📊 États disponibles: LANGUE, PAYS, PRODUIT, QUANTITE, CART_MENU, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION")
     logger.info(f"🔑 Admin ID: {ADMIN_ID}")
+    logger.info(f"💬 Langues disponibles: FR, EN, ES, DE")
+    logger.info("=" * 50)
     
     application.run_polling(allowed_updates=Update.ALL_TYPES)
-

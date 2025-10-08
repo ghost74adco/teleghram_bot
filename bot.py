@@ -59,6 +59,7 @@ from telegram.ext import (
     ConversationHandler, MessageHandler, CommandHandler, filters
 )
 from telegram.error import NetworkError, TimedOut, TelegramError
+import asyncio
 
 # --- États ---
 LANGUE, PAYS, PRODUIT, QUANTITE, CART_MENU, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION = range(9)
@@ -309,6 +310,32 @@ def format_cart(cart, user_data):
         cart_text += f"• {item['produit']} x {item['quantite']}\n"
     return cart_text
 
+async def delete_conversation(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_ids: list):
+    """Supprime tous les messages de la conversation après 1 minute"""
+    await asyncio.sleep(60)  # Attendre 1 minute
+    
+    deleted_count = 0
+    failed_count = 0
+    
+    for msg_id in message_ids:
+        try:
+            await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
+            deleted_count += 1
+        except TelegramError as e:
+            logger.warning(f"Impossible de supprimer le message {msg_id}: {e}")
+            failed_count += 1
+    
+    logger.info(f"🗑️ Conversation supprimée: {deleted_count} messages supprimés, {failed_count} échecs")
+    
+    # Notification admin (optionnelle)
+    try:
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"🗑️ Conversation auto-supprimée\n└─ User ID: {chat_id}\n└─ Messages: {deleted_count}/{deleted_count + failed_count}"
+        )
+    except Exception as e:
+        logger.error(f"Erreur notification suppression: {e}")
+
 async def safe_edit_message(query, text=None, caption=None, reply_markup=None, parse_mode='Markdown'):
     """Édite un message de manière sécurisée (photo ou texte)"""
     try:
@@ -340,6 +367,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Point d'entrée principal du bot"""
     context.user_data.clear()
     
+    # Initialiser la liste de tracking des messages
+    context.user_data['message_ids'] = []
+    
     welcome_text = (
         "🌍 *Choisissez votre langue / Select your language*\n"
         "🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
@@ -357,20 +387,26 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     image_path = Path(__file__).parent / "welcome_image.jpg"
     
     if update.message:
+        # Stocker l'ID du message de l'utilisateur
+        context.user_data['message_ids'].append(update.message.message_id)
+        
         if image_path.exists():
             try:
                 with open(image_path, 'rb') as photo:
-                    await update.message.reply_photo(
+                    sent_msg = await update.message.reply_photo(
                         photo=photo,
                         caption=welcome_text,
                         reply_markup=reply_markup,
                         parse_mode='Markdown'
                     )
+                    context.user_data['message_ids'].append(sent_msg.message_id)
             except Exception as e:
                 logger.warning(f"Impossible de charger l'image: {e}")
-                await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode='Markdown')
+                sent_msg = await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode='Markdown')
+                context.user_data['message_ids'].append(sent_msg.message_id)
         else:
-            await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode='Markdown')
+            sent_msg = await update.message.reply_text(welcome_text, reply_markup=reply_markup, parse_mode='Markdown')
+            context.user_data['message_ids'].append(sent_msg.message_id)
     
     return LANGUE
 
@@ -505,8 +541,12 @@ async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Validation et ajout de la quantité au panier"""
     qty = update.message.text.strip()
     
+    # Stocker l'ID du message de l'utilisateur
+    context.user_data['message_ids'].append(update.message.message_id)
+    
     if not qty.isdigit() or int(qty) <= 0:
-        await update.message.reply_text(tr(context.user_data, "invalid_quantity"))
+        sent_msg = await update.message.reply_text(tr(context.user_data, "invalid_quantity"))
+        context.user_data['message_ids'].append(sent_msg.message_id)
         return QUANTITE
     
     # Ajouter au panier
@@ -524,11 +564,12 @@ async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
     
-    await update.message.reply_text(
+    sent_msg = await update.message.reply_text(
         cart_summary, 
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
+    context.user_data['message_ids'].append(sent_msg.message_id)
     return CART_MENU
 
 @error_handler_decorator
@@ -568,16 +609,20 @@ async def saisie_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Validation de l'adresse de livraison"""
     context.user_data['adresse'] = update.message.text.strip()
     
+    # Stocker l'ID du message de l'utilisateur
+    context.user_data['message_ids'].append(update.message.message_id)
+    
     keyboard = [
         [InlineKeyboardButton(tr(context.user_data, "standard"), callback_data="delivery_standard")],
         [InlineKeyboardButton(tr(context.user_data, "express"), callback_data="delivery_express")],
         [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
-    await update.message.reply_text(
+    sent_msg = await update.message.reply_text(
         tr(context.user_data, "choose_delivery"), 
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
+    context.user_data['message_ids'].append(sent_msg.message_id)
     return LIVRAISON
 
 @error_handler_decorator
@@ -684,7 +729,21 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         try:
             await context.bot.send_message(chat_id=ADMIN_ID, text=order_details)
-            logger.info(f"Commande confirmée pour l'utilisateur {user.id}")
+            logger.info(f"✅ Commande confirmée pour l'utilisateur {user.id}")
+            
+            # Récupérer tous les IDs de messages pour suppression
+            message_ids = context.user_data.get('message_ids', [])
+            
+            # Ajouter l'ID du message de confirmation
+            message_ids.append(query.message.message_id)
+            
+            # Lancer la suppression automatique après 1 minute
+            chat_id = query.message.chat_id
+            logger.info(f"⏰ Suppression auto programmée pour {len(message_ids)} messages (User: {user.id})")
+            
+            # Créer une tâche asynchrone pour la suppression
+            asyncio.create_task(delete_conversation(context, chat_id, message_ids))
+            
         except Exception as e:
             logger.error(f"Erreur envoi notification admin: {e}")
     

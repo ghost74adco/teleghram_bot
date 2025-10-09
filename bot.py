@@ -1,4 +1,3 @@
-```python
 import os
 import sys
 import logging
@@ -968,4 +967,3 @@ if __name__ == '__main__':
     except Exception as e:
         logger.error(f"❌ Erreur fatale: {e}", exc_info=True)
         sys.exit(1)
-```

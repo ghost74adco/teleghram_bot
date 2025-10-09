@@ -913,43 +913,53 @@ def main():
                 CallbackQueryHandler(set_langue, pattern='^lang_')
             ],
             PAYS: [
-                CallbackQueryHandler(menu_navigation, pattern='^(start_order|price_menu|info|contact_admin|back_menu)),
+                CallbackQueryHandler(menu_navigation, pattern='^(start_order|price_menu|info|contact_admin|back_menu)
+    ),
                 CallbackQueryHandler(choix_pays, pattern='^country_')
             ],
             PRODUIT: [
                 CallbackQueryHandler(choix_produit, pattern='^product_'),
-                CallbackQueryHandler(cancel, pattern='^cancel)
+                CallbackQueryHandler(cancel, pattern='^cancel
+    )
             ],
             PILL_SUBCATEGORY: [
                 CallbackQueryHandler(choix_pill_subcategory, pattern='^(pill_|back_to_products)'),
-                CallbackQueryHandler(cancel, pattern='^cancel)
+                CallbackQueryHandler(cancel, pattern='^cancel
+    )
             ],
             QUANTITE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_quantite)
             ],
             CART_MENU: [
-                CallbackQueryHandler(cart_menu, pattern='^(add_more|proceed_checkout)),
-                CallbackQueryHandler(cancel, pattern='^cancel)
+                CallbackQueryHandler(cart_menu, pattern='^(add_more|proceed_checkout)
+    ),
+                CallbackQueryHandler(cancel, pattern='^cancel
+    )
             ],
             ADRESSE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_adresse)
             ],
             LIVRAISON: [
                 CallbackQueryHandler(choix_livraison, pattern='^delivery_'),
-                CallbackQueryHandler(cancel, pattern='^cancel)
+                CallbackQueryHandler(cancel, pattern='^cancel
+    )
             ],
             PAIEMENT: [
                 CallbackQueryHandler(choix_paiement, pattern='^payment_'),
-                CallbackQueryHandler(cancel, pattern='^cancel)
+                CallbackQueryHandler(cancel, pattern='^cancel
+    )
             ],
             CONFIRMATION: [
-                CallbackQueryHandler(confirmation, pattern='^confirm_order),
-                CallbackQueryHandler(cancel, pattern='^cancel)
+                CallbackQueryHandler(confirmation, pattern='^confirm_order
+    ),
+                CallbackQueryHandler(cancel, pattern='^cancel
+    )
             ]
         },
         fallbacks=[
             CommandHandler('start', start_command),
-            CallbackQueryHandler(cancel, pattern='^cancel)
+            CallbackQueryHandler(cancel, pattern='^cancel
+    )
         ]
     )
     

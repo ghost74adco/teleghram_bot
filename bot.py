@@ -76,14 +76,15 @@ SESSION_TIMEOUT_MINUTES = 30
 MAX_QUANTITY_PER_PRODUCT = 100
 
 # États de conversation
-LANGUE, PAYS, PRODUIT, PILL_SUBCATEGORY, QUANTITE, CART_MENU, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION = range(10)
+LANGUE, PAYS, PRODUIT, PILL_SUBCATEGORY, ROCK_SUBCATEGORY, QUANTITE, CART_MENU, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION = range(11)
 
 # Produits
 PRODUCT_MAP = {
     "snow": "❄️ Coco",
     "pill": "💊 Exta",
     "olive": "🍫 Résine",
-    "clover": "🍀 Weed"
+    "clover": "🍀 Weed",
+    "rock": "🪨 Crystal"
 }
 
 # Sous-catégories pour Pills
@@ -92,13 +93,21 @@ PILL_SUBCATEGORIES = {
     "punisher": "💊 Punisher"
 }
 
-# Prix (avec sous-catégories pour pills)
+# Sous-catégories pour Rock (MDMA et 4MMC)
+ROCK_SUBCATEGORIES = {
+    "mdma": "🪨 MDMA",
+    "fourmmc": "🪨 4MMC"
+}
+
+# Prix (avec sous-catégories pour pills et rocks)
 PRIX_FR = {
-    "❄️": 80 le grammes,
-    "💊 Squid Game": 10
-    "💊 Punisher": 10
-    "🫒": 7
-    "🍀": 10
+    "❄️": 80,
+    "💊 Squid Game": 10,
+    "💊 Punisher": 10,
+    "🫒": 7,
+    "🍀": 10,
+    "🪨 MDMA": 50,
+    "🪨 4MMC": 50
 }
 
 PRIX_CH = {
@@ -106,7 +115,9 @@ PRIX_CH = {
     "💊 Squid Game": 15,
     "💊 Punisher": 15,
     "🫒": 8,
-    "🍀": 12
+    "🍀": 12,
+    "🪨 MDMA": 70,
+    "🪨 4MMC": 70
 }
 
 # --- Traductions Complètes ---
@@ -118,6 +129,7 @@ TRANSLATIONS = {
         "choose_country": "🌍 *Choisissez votre pays de livraisons :*",
         "choose_product": "🛍️ *Choisissez votre produit :*",
         "choose_pill_type": "💊 *Choisissez le type de pilule :*",
+        "choose_rock_type": "🪨 *Choisissez le type de crystal :*",
         "enter_quantity": "📝 *Entrez la quantité désirée :*",
         "enter_address": "📍 *Entrez votre adresse complète :*",
         "choose_delivery": "📦 *Choisissez le type de livraison :*",
@@ -145,8 +157,8 @@ TRANSLATIONS = {
         "contact_admin": "💬 Contacter Admin",
         "price_menu": "🏴‍☠️ Carte du Pirate",
         "price_menu_title": "🏴‍☠️ *CARTE DU PIRATE*",
-        "price_menu_fr": "\n\n🇫🇷 *FRANCE:*\n• ❄️ Snow: 80€\n• 💊 Squid Game: 10€\n• 💊 Punisher: 12€\n• 🫒 Olive: 7€\n• 🍀 Clover: 10€",
-        "price_menu_ch": "\n\n🇨🇭 *SUISSE:*\n• ❄️ Snow: 100€\n• 💊 Squid Game: 15€\n• 💊 Punisher: 18€\n• 🫒 Olive: 8€\n• 🍀 Clover: 12€",
+        "price_menu_fr": "\n\n🇫🇷 *FRANCE:*\n• ❄️ Snow: 80€\n• 💊 Squid Game: 10€\n• 💊 Punisher: 10€\n• 🫒 Olive: 7€\n• 🍀 Clover: 10€\n• 🪨 MDMA: 50€\n• 🪨 4MMC: 50€",
+        "price_menu_ch": "\n\n🇨🇭 *SUISSE:*\n• ❄️ Snow: 100€\n• 💊 Squid Game: 15€\n• 💊 Punisher: 15€\n• 🫒 Olive: 8€\n• 🍀 Clover: 12€\n• 🪨 MDMA: 70€\n• 🪨 4MMC: 70€",
         "france": "🇫🇷 France",
         "switzerland": "🇨🇭 Suisse",
         "standard": "📦 Standard",
@@ -167,6 +179,7 @@ TRANSLATIONS = {
         "choose_country": "🌍 *Choose your country for the delivery:*",
         "choose_product": "🛍️ *Choose your product:*",
         "choose_pill_type": "💊 *Choose pill type:*",
+        "choose_rock_type": "🪨 *Choose crystal type:*",
         "enter_quantity": "📝 *Enter desired quantity:*",
         "enter_address": "📍 *Enter your complete address:*",
         "choose_delivery": "📦 *Choose delivery type:*",
@@ -194,8 +207,8 @@ TRANSLATIONS = {
         "contact_admin": "💬 Contact Admin",
         "price_menu": "🏴‍☠️ Pirate's Menu",
         "price_menu_title": "🏴‍☠️ *PIRATE'S MENU*",
-        "price_menu_fr": "\n\n🇫🇷 *FRANCE:*\n• ❄️ Snow: €80\n• 💊 Squid Game: €10\n• 💊 Punisher: €12\n• 🫒 Olive: €7\n• 🍀 Clover: €10",
-        "price_menu_ch": "\n\n🇨🇭 *SWITZERLAND:*\n• ❄️ Snow: €100\n• 💊 Squid Game: €15\n• 💊 Punisher: €18\n• 🫒 Olive: €8\n• 🍀 Clover: €12",
+        "price_menu_fr": "\n\n🇫🇷 *FRANCE:*\n• ❄️ Snow: €80\n• 💊 Squid Game: €10\n• 💊 Punisher: €10\n• 🫒 Olive: €7\n• 🍀 Clover: €10\n• 🪨 MDMA: €50\n• 🪨 4MMC: €50",
+        "price_menu_ch": "\n\n🇨🇭 *SWITZERLAND:*\n• ❄️ Snow: €100\n• 💊 Squid Game: €15\n• 💊 Punisher: €15\n• 🫒 Olive: €8\n• 🍀 Clover: €12\n• 🪨 MDMA: €70\n• 🪨 4MMC: €70",
         "france": "🇫🇷 France",
         "switzerland": "🇨🇭 Switzerland",
         "standard": "📦 Standard",
@@ -216,6 +229,7 @@ TRANSLATIONS = {
         "choose_country": "🌍 *Elige tu país de entrega:*",
         "choose_product": "🛍️ *Elija su producto:*",
         "choose_pill_type": "💊 *Elija el tipo de píldora:*",
+        "choose_rock_type": "🪨 *Elija el tipo de cristal:*",
         "enter_quantity": "📝 *Ingrese la cantidad deseada:*",
         "enter_address": "📍 *Ingrese su dirección completa:*",
         "choose_delivery": "📦 *Elija el tipo de entrega:*",
@@ -243,8 +257,8 @@ TRANSLATIONS = {
         "contact_admin": "💬 Contactar Admin",
         "price_menu": "🏴‍☠️ Menú del Pirata",
         "price_menu_title": "🏴‍☠️ *MENÚ DEL PIRATA*",
-        "price_menu_fr": "\n\n🇫🇷 *FRANCIA:*\n• ❄️ Snow: 80€\n• 💊 Squid Game: 10€\n• 💊 Punisher: 12€\n• 🫒 Olive: 7€\n• 🍀 Clover: 10€",
-        "price_menu_ch": "\n\n🇨🇭 *SUIZA:*\n• ❄️ Snow: 100€\n• 💊 Squid Game: 15€\n• 💊 Punisher: 18€\n• 🫒 Olive: 8€\n• 🍀 Clover: 12€",
+        "price_menu_fr": "\n\n🇫🇷 *FRANCIA:*\n• ❄️ Snow: 80€\n• 💊 Squid Game: 10€\n• 💊 Punisher: 10€\n• 🫒 Olive: 7€\n• 🍀 Clover: 10€\n• 🪨 MDMA: 50€\n• 🪨 4MMC: 50€",
+        "price_menu_ch": "\n\n🇨🇭 *SUIZA:*\n• ❄️ Snow: 100€\n• 💊 Squid Game: 15€\n• 💊 Punisher: 15€\n• 🫒 Olive: 8€\n• 🍀 Clover: 12€\n• 🪨 MDMA: 70€\n• 🪨 4MMC: 70€",
         "france": "🇫🇷 Francia",
         "switzerland": "🇨🇭 Suiza",
         "standard": "📦 Estándar",
@@ -265,6 +279,7 @@ TRANSLATIONS = {
         "choose_country": "🌍 *Wählen Sie Ihr Lieferland:*",
         "choose_product": "🛍️ *Wählen Sie Ihr Produkt:*",
         "choose_pill_type": "💊 *Wählen Sie den Pillentyp:*",
+        "choose_rock_type": "🪨 *Wählen Sie den Kristalltyp:*",
         "enter_quantity": "📝 *Geben Sie die gewünschte Menge ein:*",
         "enter_address": "📍 *Geben Sie Ihre vollständige Adresse ein:*",
         "choose_delivery": "📦 *Wählen Sie die Lieferart:*",
@@ -292,8 +307,8 @@ TRANSLATIONS = {
         "contact_admin": "💬 Admin kontaktieren",
         "price_menu": "🏴‍☠️ Piraten-Menü",
         "price_menu_title": "🏴‍☠️ *PIRATEN-MENÜ*",
-        "price_menu_fr": "\n\n🇫🇷 *FRANKREICH:*\n• ❄️ Snow: 80€\n• 💊 Squid Game: 10€\n• 💊 Punisher: 12€\n• 🫒 Olive: 7€\n• 🍀 Clover: 10€",
-        "price_menu_ch": "\n\n🇨🇭 *SCHWEIZ:*\n• ❄️ Snow: 100€\n• 💊 Squid Game: 15€\n• 💊 Punisher: 18€\n• 🫒 Olive: 8€\n• 🍀 Clover: 12€",
+        "price_menu_fr": "\n\n🇫🇷 *FRANKREICH:*\n• ❄️ Snow: 80€\n• 💊 Squid Game: 10€\n• 💊 Punisher: 10€\n• 🫒 Olive: 7€\n• 🍀 Clover: 10€\n• 🪨 MDMA: 50€\n• 🪨 4MMC: 50€",
+        "price_menu_ch": "\n\n🇨🇭 *SCHWEIZ:*\n• ❄️ Snow: 100€\n• 💊 Squid Game: 15€\n• 💊 Punisher: 15€\n• 🫒 Olive: 8€\n• 🍀 Clover: 12€\n• 🪨 MDMA: 70€\n• 🪨 4MMC: 70€",
         "france": "🇫🇷 Frankreich",
         "switzerland": "🇨🇭 Schweiz",
         "standard": "📦 Standard",
@@ -579,6 +594,7 @@ async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("💊", callback_data="product_pill")],
         [InlineKeyboardButton("🫒", callback_data="product_olive")],
         [InlineKeyboardButton("🍀", callback_data="product_clover")],
+        [InlineKeyboardButton("🪨", callback_data="product_rock")],
         [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
     
@@ -606,7 +622,7 @@ async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     product_code = query.data.replace("product_", "")
     
-    # Si c'est une pilule, afficher le sous-menu
+    # Si c'est une pilule, afficher le sous-menu pills
     if product_code == "pill":
         keyboard = [
             [InlineKeyboardButton("💊 Squid Game", callback_data="pill_squid_game")],
@@ -629,6 +645,30 @@ async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         
         return PILL_SUBCATEGORY
+    
+    # Si c'est rock (MDMA/4MMC), afficher le sous-menu rocks
+    elif product_code == "rock":
+        keyboard = [
+            [InlineKeyboardButton("🪨 MDMA", callback_data="rock_mdma")],
+            [InlineKeyboardButton("🪨 4MMC", callback_data="rock_fourmmc")],
+            [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_products")],
+            [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
+        ]
+        
+        try:
+            await query.message.edit_text(
+                tr(context.user_data, "choose_rock_type"),
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+        except:
+            await query.message.edit_caption(
+                caption=tr(context.user_data, "choose_rock_type"),
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+        
+        return ROCK_SUBCATEGORY
     
     # Pour les autres produits, continuer normalement
     product_emoji = PRODUCT_MAP.get(product_code, product_code)
@@ -657,6 +697,7 @@ async def choix_pill_subcategory(update: Update, context: ContextTypes.DEFAULT_T
             [InlineKeyboardButton("💊", callback_data="product_pill")],
             [InlineKeyboardButton("🫒", callback_data="product_olive")],
             [InlineKeyboardButton("🍀", callback_data="product_clover")],
+            [InlineKeyboardButton("🪨", callback_data="product_rock")],
             [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
         ]
         
@@ -678,6 +719,53 @@ async def choix_pill_subcategory(update: Update, context: ContextTypes.DEFAULT_T
     # Récupérer la sous-catégorie choisie
     pill_type = query.data.replace("pill_", "")
     product_name = PILL_SUBCATEGORIES.get(pill_type, "💊")
+    context.user_data['current_product'] = product_name
+    
+    text = f"{tr(context.user_data, 'product_selected')} {product_name}\n\n{tr(context.user_data, 'enter_quantity')}"
+    
+    try:
+        await query.message.edit_text(text, parse_mode='Markdown')
+    except:
+        await query.message.edit_caption(caption=text, parse_mode='Markdown')
+    
+    return QUANTITE
+
+@security_check
+@error_handler
+async def choix_rock_subcategory(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Choix de la sous-catégorie de crystal (MDMA/4MMC)"""
+    query = update.callback_query
+    await query.answer()
+    
+    if query.data == "back_to_products":
+        # Retour au menu des produits
+        keyboard = [
+            [InlineKeyboardButton("❄️", callback_data="product_snow")],
+            [InlineKeyboardButton("💊", callback_data="product_pill")],
+            [InlineKeyboardButton("🫒", callback_data="product_olive")],
+            [InlineKeyboardButton("🍀", callback_data="product_clover")],
+            [InlineKeyboardButton("🪨", callback_data="product_rock")],
+            [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
+        ]
+        
+        try:
+            await query.message.edit_text(
+                tr(context.user_data, "choose_product"),
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+        except:
+            await query.message.edit_caption(
+                caption=tr(context.user_data, "choose_product"),
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+        
+        return PRODUIT
+    
+    # Récupérer la sous-catégorie choisie
+    rock_type = query.data.replace("rock_", "")
+    product_name = ROCK_SUBCATEGORIES.get(rock_type, "🪨")
     context.user_data['current_product'] = product_name
     
     text = f"{tr(context.user_data, 'product_selected')} {product_name}\n\n{tr(context.user_data, 'enter_quantity')}"
@@ -738,6 +826,7 @@ async def cart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("💊", callback_data="product_pill")],
             [InlineKeyboardButton("🫒", callback_data="product_olive")],
             [InlineKeyboardButton("🍀", callback_data="product_clover")],
+            [InlineKeyboardButton("🪨", callback_data="product_rock")],
             [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
         ]
         
@@ -922,6 +1011,10 @@ def main():
             ],
             PILL_SUBCATEGORY: [
                 CallbackQueryHandler(choix_pill_subcategory, pattern='^(pill_|back_to_products)'),
+                CallbackQueryHandler(cancel, pattern='^cancel')
+            ],
+            ROCK_SUBCATEGORY: [
+                CallbackQueryHandler(choix_rock_subcategory, pattern='^(rock_|back_to_products)'),
                 CallbackQueryHandler(cancel, pattern='^cancel')
             ],
             QUANTITE: [

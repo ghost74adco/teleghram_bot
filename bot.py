@@ -3,6 +3,7 @@ import sys
 import logging
 import re
 import signal
+import csv
 from dotenv import load_dotenv
 from pathlib import Path
 from functools import wraps
@@ -75,8 +76,11 @@ RATE_LIMIT_WINDOW = 60
 SESSION_TIMEOUT_MINUTES = 30
 MAX_QUANTITY_PER_PRODUCT = 100
 
+# Frais de livraison
+FRAIS_POSTAL = 10  # Frais fixes pour livraison postale
+
 # États de conversation
-LANGUE, PAYS, PRODUIT, PILL_SUBCATEGORY, ROCK_SUBCATEGORY, QUANTITE, CART_MENU, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION = range(11)
+LANGUE, PAYS, PRODUIT, PILL_SUBCATEGORY, ROCK_SUBCATEGORY, QUANTITE, CART_MENU, ADRESSE, LIVRAISON, SAISIE_DISTANCE, PAIEMENT, VALIDATION_LIVRAISON, CONFIRMATION = range(13)
 
 # Produits
 PRODUCT_MAP = {
@@ -133,19 +137,24 @@ TRANSLATIONS = {
         "enter_quantity": "📝 *Entrez la quantité désirée :*",
         "enter_address": "📍 *Entrez votre adresse complète :*",
         "choose_delivery": "📦 *Choisissez le type de livraison :*",
+        "enter_distance": "📏 *Entrez la distance en km pour la livraison express :*\n\n(Tarif: 2€/km + 0.5% du montant total)",
         "choose_payment": "💳 *Choisissez le mode de paiement :*",
         "order_summary": "✅ *Résumé de votre commande :*",
+        "delivery_validation": "📦 *Validation de la livraison*\n\nVeuillez confirmer la réception de votre commande :",
+        "delivery_confirmed": "✅ *Livraison confirmée !*\n\nMerci d'avoir confirmé la réception.\nTransaction terminée avec succès ! 🎉",
         "confirm": "✅ Confirmer",
+        "validate_delivery": "✅ Valider la livraison",
         "cancel": "❌ Annuler",
         "order_confirmed": "✅ *Commande confirmée !*\n\nMerci pour votre commande.\nVous serez contacté prochainement. 📞",
         "order_cancelled": "❌ *Commande annulée.*",
         "add_more": "➕ Ajouter un produit",
         "proceed": "✅ Valider le panier",
         "invalid_quantity": "❌ Veuillez entrer un nombre valide entre 1 et {max}.",
+        "invalid_distance": "❌ Veuillez entrer une distance valide (entre 1 et 500 km).",
         "cart_title": "🛒 *Votre panier :*",
         "info_title": "ℹ️ *INFORMATIONS*",
         "info_shop": "🛍️ *Notre boutique :*\n• Livraison France 🇫🇷 & Suisse 🇨🇭\n• Produits de qualité\n• Service client réactif",
-        "info_delivery": "📦 *Livraison :*\n• Standard : 3-5 jours\n• Express : 24-48h",
+        "info_delivery": "📦 *Livraison :*\n• Postale ✉️📭: +10€ (3-5 jours)\n• Express 🏎⚡: Tarif selon distance (24-48h)",
         "info_payment": "💳 *Paiement :*\n• Espèces à la livraison\n• Crypto (Bitcoin, USDT)",
         "info_security": "🔒 *Sécurité :*\nTous les échanges sont cryptés et confidentiels.",
         "contact_title": "📞 *CONTACT*",
@@ -161,8 +170,8 @@ TRANSLATIONS = {
         "price_menu_ch": "\n\n🇨🇭 *SUISSE:*\n• ❄️ Snow: 100€\n• 💊 Squid Game: 15€\n• 💊 Punisher: 15€\n• 🫒 Olive: 8€\n• 🍀 Clover: 12€\n• 🪨 MDMA: 70€\n• 🪨 4MMC: 70€",
         "france": "🇫🇷 France",
         "switzerland": "🇨🇭 Suisse",
-        "standard": "📦 Standard",
-        "express": "⚡ Express",
+        "postal": "✉️📭 Postale (+10€)",
+        "express": "🏎⚡ Express",
         "cash": "💵 Espèces",
         "crypto": "₿ Crypto",
         "unauthorized": "❌ Accès non autorisé.",
@@ -170,7 +179,9 @@ TRANSLATIONS = {
         "session_expired": "⏱️ Session expirée. Utilisez /start pour recommencer.",
         "invalid_address": "❌ Adresse invalide. Elle doit contenir au moins 15 caractères.",
         "product_selected": "✅ Produit sélectionné :",
-        "total": "💰 *Total :*"
+        "total": "💰 *Total :*",
+        "delivery_fee": "📦 *Frais de livraison :*",
+        "subtotal": "💵 *Sous-total produits :*"
     },
     "en": {
         "welcome": "🌿 *WELCOME* 🌿\n\n⚠️ *IMPORTANT:*\nAll conversations must be established in *SECRET EXCHANGE*.\n\n🙏 *Thank you* 💪💚",
@@ -183,19 +194,24 @@ TRANSLATIONS = {
         "enter_quantity": "📝 *Enter desired quantity:*",
         "enter_address": "📍 *Enter your complete address:*",
         "choose_delivery": "📦 *Choose delivery type:*",
+        "enter_distance": "📏 *Enter distance in km for express delivery:*\n\n(Rate: €2/km + 0.5% of total)",
         "choose_payment": "💳 *Choose payment method:*",
         "order_summary": "✅ *Your order summary:*",
+        "delivery_validation": "📦 *Delivery Validation*\n\nPlease confirm receipt of your order:",
+        "delivery_confirmed": "✅ *Delivery confirmed!*\n\nThank you for confirming receipt.\nTransaction completed successfully! 🎉",
         "confirm": "✅ Confirm",
+        "validate_delivery": "✅ Validate delivery",
         "cancel": "❌ Cancel",
         "order_confirmed": "✅ *Order confirmed!*\n\nThank you for your order.\nYou will be contacted soon. 📞",
         "order_cancelled": "❌ *Order cancelled.*",
         "add_more": "➕ Add product",
         "proceed": "✅ Checkout",
         "invalid_quantity": "❌ Please enter a valid number between 1 and {max}.",
+        "invalid_distance": "❌ Please enter a valid distance (between 1 and 500 km).",
         "cart_title": "🛒 *Your cart:*",
         "info_title": "ℹ️ *INFORMATION*",
         "info_shop": "🛍️ *Our shop:*\n• Delivery France 🇫🇷 & Switzerland 🇨🇭\n• Quality products\n• Responsive customer service",
-        "info_delivery": "📦 *Delivery:*\n• Standard: 3-5 days\n• Express: 24-48h",
+        "info_delivery": "📦 *Delivery:*\n• Postal ✉️📭: +€10 (3-5 days)\n• Express 🏎⚡: Rate by distance (24-48h)",
         "info_payment": "💳 *Payment:*\n• Cash on delivery\n• Crypto (Bitcoin, USDT)",
         "info_security": "🔒 *Security:*\nAll exchanges are encrypted and confidential.",
         "contact_title": "📞 *CONTACT*",
@@ -211,8 +227,8 @@ TRANSLATIONS = {
         "price_menu_ch": "\n\n🇨🇭 *SWITZERLAND:*\n• ❄️ Snow: €100\n• 💊 Squid Game: €15\n• 💊 Punisher: €15\n• 🫒 Olive: €8\n• 🍀 Clover: €12\n• 🪨 MDMA: €70\n• 🪨 4MMC: €70",
         "france": "🇫🇷 France",
         "switzerland": "🇨🇭 Switzerland",
-        "standard": "📦 Standard",
-        "express": "⚡ Express",
+        "postal": "✉️📭 Postal (+€10)",
+        "express": "🏎⚡ Express",
         "cash": "💵 Cash",
         "crypto": "₿ Crypto",
         "unauthorized": "❌ Unauthorized access.",
@@ -220,7 +236,9 @@ TRANSLATIONS = {
         "session_expired": "⏱️ Session expired. Use /start to restart.",
         "invalid_address": "❌ Invalid address. It must contain at least 15 characters.",
         "product_selected": "✅ Product selected:",
-        "total": "💰 *Total:*"
+        "total": "💰 *Total:*",
+        "delivery_fee": "📦 *Delivery fee:*",
+        "subtotal": "💵 *Products subtotal:*"
     },
     "es": {
         "welcome": "🌿 *BIENVENIDO* 🌿\n\n⚠️ *IMPORTANTE:*\nTodas las conversaciones deben establecerse en *INTERCAMBIO SECRETO*.\n\n🙏 *Gracias* 💪💚",
@@ -233,19 +251,24 @@ TRANSLATIONS = {
         "enter_quantity": "📝 *Ingrese la cantidad deseada:*",
         "enter_address": "📍 *Ingrese su dirección completa:*",
         "choose_delivery": "📦 *Elija el tipo de entrega:*",
+        "enter_distance": "📏 *Ingrese la distancia en km para entrega express:*\n\n(Tarifa: 2€/km + 0.5% del total)",
         "choose_payment": "💳 *Elija el método de pago:*",
         "order_summary": "✅ *Resumen de su pedido:*",
+        "delivery_validation": "📦 *Validación de entrega*\n\nPor favor confirme la recepción de su pedido:",
+        "delivery_confirmed": "✅ *¡Entrega confirmada!*\n\nGracias por confirmar la recepción.\n¡Transacción completada con éxito! 🎉",
         "confirm": "✅ Confirmar",
+        "validate_delivery": "✅ Validar entrega",
         "cancel": "❌ Cancelar",
         "order_confirmed": "✅ *¡Pedido confirmado!*\n\nGracias por su pedido.\nSerá contactado pronto. 📞",
         "order_cancelled": "❌ *Pedido cancelado.*",
         "add_more": "➕ Agregar producto",
         "proceed": "✅ Finalizar compra",
         "invalid_quantity": "❌ Por favor ingrese un número válido entre 1 y {max}.",
+        "invalid_distance": "❌ Por favor ingrese una distancia válida (entre 1 y 500 km).",
         "cart_title": "🛒 *Su carrito:*",
         "info_title": "ℹ️ *INFORMACIÓN*",
         "info_shop": "🛍️ *Nuestra tienda:*\n• Entrega Francia 🇫🇷 & Suiza 🇨🇭\n• Productos de calidad\n• Servicio al cliente receptivo",
-        "info_delivery": "📦 *Entrega:*\n• Estándar: 3-5 días\n• Express: 24-48h",
+        "info_delivery": "📦 *Entrega:*\n• Postal ✉️📭: +10€ (3-5 días)\n• Express 🏎⚡: Tarifa según distancia (24-48h)",
         "info_payment": "💳 *Pago:*\n• Efectivo contra entrega\n• Crypto (Bitcoin, USDT)",
         "info_security": "🔒 *Seguridad:*\nTodos los intercambios están encriptados y son confidenciales.",
         "contact_title": "📞 *CONTACTO*",
@@ -261,8 +284,8 @@ TRANSLATIONS = {
         "price_menu_ch": "\n\n🇨🇭 *SUIZA:*\n• ❄️ Snow: 100€\n• 💊 Squid Game: 15€\n• 💊 Punisher: 15€\n• 🫒 Olive: 8€\n• 🍀 Clover: 12€\n• 🪨 MDMA: 70€\n• 🪨 4MMC: 70€",
         "france": "🇫🇷 Francia",
         "switzerland": "🇨🇭 Suiza",
-        "standard": "📦 Estándar",
-        "express": "⚡ Express",
+        "postal": "✉️📭 Postal (+10€)",
+        "express": "🏎⚡ Express",
         "cash": "💵 Efectivo",
         "crypto": "₿ Crypto",
         "unauthorized": "❌ Acceso no autorizado.",
@@ -270,7 +293,9 @@ TRANSLATIONS = {
         "session_expired": "⏱️ Sesión expirada. Use /start para reiniciar.",
         "invalid_address": "❌ Dirección inválida. Debe contener al menos 15 caracteres.",
         "product_selected": "✅ Producto seleccionado:",
-        "total": "💰 *Total:*"
+        "total": "💰 *Total:*",
+        "delivery_fee": "📦 *Gastos de envío:*",
+        "subtotal": "💵 *Subtotal productos:*"
     },
     "de": {
         "welcome": "🌿 *WILLKOMMEN* 🌿\n\n⚠️ *WICHTIG:*\nAlle Gespräche müssen in *GEHEIMEM AUSTAUSCH* geführt werden.\n\n🙏 *Danke* 💪💚",
@@ -283,19 +308,24 @@ TRANSLATIONS = {
         "enter_quantity": "📝 *Geben Sie die gewünschte Menge ein:*",
         "enter_address": "📍 *Geben Sie Ihre vollständige Adresse ein:*",
         "choose_delivery": "📦 *Wählen Sie die Lieferart:*",
+        "enter_distance": "📏 *Geben Sie die Entfernung in km für Express ein:*\n\n(Tarif: 2€/km + 0.5% der Summe)",
         "choose_payment": "💳 *Wählen Sie die Zahlungsmethode:*",
         "order_summary": "✅ *Ihre Bestellübersicht:*",
+        "delivery_validation": "📦 *Lieferungsvalidierung*\n\nBitte bestätigen Sie den Erhalt Ihrer Bestellung:",
+        "delivery_confirmed": "✅ *Lieferung bestätigt!*\n\nVielen Dank für die Bestätigung.\nTransaktion erfolgreich abgeschlossen! 🎉",
         "confirm": "✅ Bestätigen",
+        "validate_delivery": "✅ Lieferung validieren",
         "cancel": "❌ Abbrechen",
         "order_confirmed": "✅ *Bestellung bestätigt!*\n\nVielen Dank für Ihre Bestellung.\nSie werden bald kontaktiert. 📞",
         "order_cancelled": "❌ *Bestellung storniert.*",
         "add_more": "➕ Produkt hinzufügen",
         "proceed": "✅ Zur Kasse",
         "invalid_quantity": "❌ Bitte geben Sie eine gültige Zahl zwischen 1 und {max} ein.",
+        "invalid_distance": "❌ Bitte geben Sie eine gültige Entfernung ein (zwischen 1 und 500 km).",
         "cart_title": "🛒 *Ihr Warenkorb:*",
         "info_title": "ℹ️ *INFORMATION*",
         "info_shop": "🛍️ *Unser Shop:*\n• Lieferung Frankreich 🇫🇷 & Schweiz 🇨🇭\n• Qualitätsprodukte\n• Reaktionsschneller Kundenservice",
-        "info_delivery": "📦 *Lieferung:*\n• Standard: 3-5 Tage\n• Express: 24-48h",
+        "info_delivery": "📦 *Lieferung:*\n• Postal ✉️📭: +10€ (3-5 Tage)\n• Express 🏎⚡: Tarif nach Entfernung (24-48h)",
         "info_payment": "💳 *Zahlung:*\n• Barzahlung bei Lieferung\n• Krypto (Bitcoin, USDT)",
         "info_security": "🔒 *Sicherheit:*\nAlle Transaktionen sind verschlüsselt und vertraulich.",
         "contact_title": "📞 *KONTAKT*",
@@ -311,8 +341,8 @@ TRANSLATIONS = {
         "price_menu_ch": "\n\n🇨🇭 *SCHWEIZ:*\n• ❄️ Snow: 100€\n• 💊 Squid Game: 15€\n• 💊 Punisher: 15€\n• 🫒 Olive: 8€\n• 🍀 Clover: 12€\n• 🪨 MDMA: 70€\n• 🪨 4MMC: 70€",
         "france": "🇫🇷 Frankreich",
         "switzerland": "🇨🇭 Schweiz",
-        "standard": "📦 Standard",
-        "express": "⚡ Express",
+        "postal": "✉️📭 Postal (+10€)",
+        "express": "🏎⚡ Express",
         "cash": "💵 Bargeld",
         "crypto": "₿ Krypto",
         "unauthorized": "❌ Unbefugter Zugriff.",
@@ -320,7 +350,9 @@ TRANSLATIONS = {
         "session_expired": "⏱️ Sitzung abgelaufen. Verwenden Sie /start zum Neustarten.",
         "invalid_address": "❌ Ungültige Adresse. Sie muss mindestens 15 Zeichen enthalten.",
         "product_selected": "✅ Produkt ausgewählt:",
-        "total": "💰 *Gesamt:*"
+        "total": "💰 *Gesamt:*",
+        "delivery_fee": "📦 *Versandkosten:*",
+        "subtotal": "💵 *Zwischensumme Produkte:*"
     }
 }
 
@@ -371,10 +403,25 @@ def update_last_activity(user_data: dict):
     """Met à jour l'activité"""
     user_data['last_activity'] = datetime.now()
 
-def calculate_total(cart, country):
-    """Calcule le total"""
+def calculate_delivery_fee(delivery_type: str, distance: int = 0, subtotal: float = 0) -> float:
+    """Calcule les frais de livraison"""
+    if delivery_type == "postal":
+        return FRAIS_POSTAL
+    elif delivery_type == "express":
+        # 2€/km + 0.5% du montant total
+        return (distance * 2) + (subtotal * 0.005)
+    return 0
+
+def calculate_total(cart, country, delivery_type: str = None, distance: int = 0):
+    """Calcule le total avec frais de livraison"""
     prix_table = PRIX_FR if country == "FR" else PRIX_CH
-    return sum(prix_table[item["produit"]] * item["quantite"] for item in cart)
+    subtotal = sum(prix_table[item["produit"]] * item["quantite"] for item in cart)
+    
+    if delivery_type:
+        delivery_fee = calculate_delivery_fee(delivery_type, distance, subtotal)
+        return subtotal + delivery_fee, subtotal, delivery_fee
+    
+    return subtotal, subtotal, 0
 
 def format_cart(cart, user_data):
     """Formate le panier"""
@@ -384,6 +431,32 @@ def format_cart(cart, user_data):
     for item in cart:
         cart_text += f"• {item['produit']} x {item['quantite']}\n"
     return cart_text
+
+def save_order_to_csv(order_data: dict):
+    """Sauvegarde la commande dans un fichier CSV"""
+    csv_path = Path(__file__).parent / "orders.csv"
+    file_exists = csv_path.exists()
+    
+    try:
+        with open(csv_path, 'a', newline='', encoding='utf-8') as csvfile:
+            fieldnames = [
+                'date', 'order_id', 'user_id', 'username', 'first_name',
+                'products', 'country', 'address', 'delivery_type', 
+                'distance_km', 'payment_method', 'subtotal', 'delivery_fee', 
+                'total', 'status'
+            ]
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            
+            if not file_exists:
+                writer.writeheader()
+            
+            writer.writerow(order_data)
+        
+        logger.info(f"✅ Commande sauvegardée: {order_data['order_id']}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Erreur sauvegarde CSV: {e}")
+        return False
 
 # --- Décorateurs ---
 def security_check(func):
@@ -548,7 +621,8 @@ async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "info":
         text = (
             f"{tr(context.user_data, 'info_title')}\n\n"
-            f"{tr(context.user_data, 'info_shop')}"
+            f"{tr(context.user_data, 'info_shop')}\n\n"
+            f"{tr(context.user_data, 'info_delivery')}"
         )
         keyboard = [
             [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
@@ -622,7 +696,6 @@ async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     product_code = query.data.replace("product_", "")
     
-    # Si c'est une pilule, afficher le sous-menu pills
     if product_code == "pill":
         keyboard = [
             [InlineKeyboardButton("💊 Squid Game", callback_data="pill_squid_game")],
@@ -646,7 +719,6 @@ async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         return PILL_SUBCATEGORY
     
-    # Si c'est rock (MDMA/4MMC), afficher le sous-menu rocks
     elif product_code == "rock":
         keyboard = [
             [InlineKeyboardButton("🪨 MDMA", callback_data="rock_mdma")],
@@ -670,7 +742,6 @@ async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         return ROCK_SUBCATEGORY
     
-    # Pour les autres produits, continuer normalement
     product_emoji = PRODUCT_MAP.get(product_code, product_code)
     context.user_data['current_product'] = product_emoji
     
@@ -691,7 +762,6 @@ async def choix_pill_subcategory(update: Update, context: ContextTypes.DEFAULT_T
     await query.answer()
     
     if query.data == "back_to_products":
-        # Retour au menu des produits
         keyboard = [
             [InlineKeyboardButton("❄️", callback_data="product_snow")],
             [InlineKeyboardButton("💊", callback_data="product_pill")],
@@ -716,7 +786,6 @@ async def choix_pill_subcategory(update: Update, context: ContextTypes.DEFAULT_T
         
         return PRODUIT
     
-    # Récupérer la sous-catégorie choisie
     pill_type = query.data.replace("pill_", "")
     product_name = PILL_SUBCATEGORIES.get(pill_type, "💊")
     context.user_data['current_product'] = product_name
@@ -738,7 +807,6 @@ async def choix_rock_subcategory(update: Update, context: ContextTypes.DEFAULT_T
     await query.answer()
     
     if query.data == "back_to_products":
-        # Retour au menu des produits
         keyboard = [
             [InlineKeyboardButton("❄️", callback_data="product_snow")],
             [InlineKeyboardButton("💊", callback_data="product_pill")],
@@ -763,7 +831,6 @@ async def choix_rock_subcategory(update: Update, context: ContextTypes.DEFAULT_T
         
         return PRODUIT
     
-    # Récupérer la sous-catégorie choisie
     rock_type = query.data.replace("rock_", "")
     product_name = ROCK_SUBCATEGORIES.get(rock_type, "🪨")
     context.user_data['current_product'] = product_name
@@ -855,7 +922,7 @@ async def saisie_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['adresse'] = address
     
     keyboard = [
-        [InlineKeyboardButton(tr(context.user_data, "standard"), callback_data="delivery_standard")],
+        [InlineKeyboardButton(tr(context.user_data, "postal"), callback_data="delivery_postal")],
         [InlineKeyboardButton(tr(context.user_data, "express"), callback_data="delivery_express")],
         [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
@@ -878,14 +945,65 @@ async def choix_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
     delivery_type = query.data.replace("delivery_", "")
     context.user_data['livraison'] = delivery_type
     
+    if delivery_type == "express":
+        # Demander la distance pour express
+        await query.message.edit_text(
+            tr(context.user_data, "enter_distance"),
+            parse_mode='Markdown'
+        )
+        return SAISIE_DISTANCE
+    else:
+        # Pour postal, passer directement au paiement
+        context.user_data['distance'] = 0
+        keyboard = [
+            [InlineKeyboardButton(tr(context.user_data, "cash"), callback_data="payment_cash")],
+            [InlineKeyboardButton(tr(context.user_data, "crypto"), callback_data="payment_crypto")],
+            [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
+        ]
+        
+        await query.message.edit_text(
+            tr(context.user_data, "choose_payment"),
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        
+        return PAIEMENT
+
+@security_check
+@error_handler
+async def saisie_distance(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Saisie de la distance pour livraison express"""
+    distance_str = sanitize_input(update.message.text, max_length=10)
+    
+    if not distance_str.isdigit():
+        await update.message.reply_text(tr(context.user_data, "invalid_distance"))
+        return SAISIE_DISTANCE
+    
+    distance = int(distance_str)
+    if distance <= 0 or distance > 500:
+        await update.message.reply_text(tr(context.user_data, "invalid_distance"))
+        return SAISIE_DISTANCE
+    
+    context.user_data['distance'] = distance
+    
+    # Calculer et afficher le coût estimé
+    cart = context.user_data['cart']
+    country = context.user_data['pays']
+    subtotal, _, _ = calculate_total(cart, country)
+    delivery_fee = calculate_delivery_fee("express", distance, subtotal)
+    
     keyboard = [
         [InlineKeyboardButton(tr(context.user_data, "cash"), callback_data="payment_cash")],
         [InlineKeyboardButton(tr(context.user_data, "crypto"), callback_data="payment_crypto")],
         [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
     ]
     
-    await query.message.edit_text(
-        tr(context.user_data, "choose_payment"),
+    text = f"{tr(context.user_data, 'choose_payment')}\n\n"
+    text += f"📏 Distance: {distance} km\n"
+    text += f"💶 Frais de livraison estimés: {delivery_fee:.2f}€"
+    
+    await update.message.reply_text(
+        text,
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
@@ -905,14 +1023,24 @@ async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Résumé de la commande
     cart = context.user_data['cart']
     country = context.user_data['pays']
-    total = calculate_total(cart, country)
+    delivery_type = context.user_data['livraison']
+    distance = context.user_data.get('distance', 0)
+    
+    total, subtotal, delivery_fee = calculate_total(cart, country, delivery_type, distance)
     
     summary = f"{tr(context.user_data, 'order_summary')}\n\n"
     summary += format_cart(cart, context.user_data)
-    summary += f"\n{tr(context.user_data, 'total')} {total}€\n\n"
+    summary += f"\n{tr(context.user_data, 'subtotal')} {subtotal}€\n"
+    summary += f"{tr(context.user_data, 'delivery_fee')} {delivery_fee:.2f}€\n"
+    summary += f"{tr(context.user_data, 'total')} {total:.2f}€\n\n"
     summary += f"📍 {context.user_data['adresse']}\n"
-    summary += f"📦 {tr(context.user_data, context.user_data['livraison'])}\n"
-    summary += f"💳 {tr(context.user_data, context.user_data['paiement'])}\n"
+    
+    if delivery_type == "postal":
+        summary += f"📦 ✉️📭 {tr(context.user_data, 'postal')}\n"
+    else:
+        summary += f"📦 🏎⚡ {tr(context.user_data, 'express')} ({distance} km)\n"
+    
+    summary += f"💳 {tr(context.user_data, payment_type)}\n"
     
     keyboard = [
         [InlineKeyboardButton(tr(context.user_data, "confirm"), callback_data="confirm_order")],
@@ -935,19 +1063,61 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     if query.data == "confirm_order":
-        # Envoi de la commande à l'admin
         cart = context.user_data['cart']
         country = context.user_data['pays']
-        total = calculate_total(cart, country)
+        delivery_type = context.user_data['livraison']
+        distance = context.user_data.get('distance', 0)
         
+        total, subtotal, delivery_fee = calculate_total(cart, country, delivery_type, distance)
+        
+        # Générer un ID de commande unique
+        order_id = f"ORD-{datetime.now().strftime('%Y%m%d%H%M%S')}-{update.effective_user.id}"
+        
+        # Préparer les données pour le CSV
+        products_str = "; ".join([f"{item['produit']} x{item['quantite']}" for item in cart])
+        
+        order_data = {
+            'date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'order_id': order_id,
+            'user_id': update.effective_user.id,
+            'username': update.effective_user.username or "N/A",
+            'first_name': update.effective_user.first_name or "N/A",
+            'products': products_str,
+            'country': country,
+            'address': context.user_data['adresse'],
+            'delivery_type': delivery_type,
+            'distance_km': distance if delivery_type == "express" else 0,
+            'payment_method': context.user_data['paiement'],
+            'subtotal': f"{subtotal:.2f}",
+            'delivery_fee': f"{delivery_fee:.2f}",
+            'total': f"{total:.2f}",
+            'status': 'En attente validation'
+        }
+        
+        # Sauvegarder dans le CSV
+        save_order_to_csv(order_data)
+        
+        # Stocker l'ID de commande dans user_data pour validation ultérieure
+        context.user_data['order_id'] = order_id
+        context.user_data['order_total'] = total
+        
+        # Envoi de la commande à l'admin
         admin_message = f"🆕 *NOUVELLE COMMANDE*\n\n"
+        admin_message += f"📋 Commande: `{order_id}`\n"
         admin_message += f"👤 Client: {update.effective_user.first_name} (@{update.effective_user.username})\n"
         admin_message += f"🆔 User ID: {update.effective_user.id}\n\n"
         admin_message += format_cart(cart, context.user_data)
-        admin_message += f"\n💰 Total: {total}€\n\n"
+        admin_message += f"\n💵 Sous-total: {subtotal}€\n"
+        admin_message += f"📦 Frais de livraison: {delivery_fee:.2f}€\n"
+        admin_message += f"💰 Total: {total:.2f}€\n\n"
         admin_message += f"🌍 Pays: {country}\n"
         admin_message += f"📍 Adresse: {context.user_data['adresse']}\n"
-        admin_message += f"📦 Livraison: {context.user_data['livraison']}\n"
+        
+        if delivery_type == "postal":
+            admin_message += f"📦 Livraison: ✉️📭 Postale (+10€)\n"
+        else:
+            admin_message += f"📦 Livraison: 🏎⚡ Express ({distance} km)\n"
+        
         admin_message += f"💳 Paiement: {context.user_data['paiement']}\n"
         
         try:
@@ -959,8 +1129,81 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.error(f"Erreur envoi admin: {e}")
         
+        # Afficher le message de confirmation avec bouton de validation
+        keyboard = [
+            [InlineKeyboardButton(
+                tr(context.user_data, "validate_delivery"), 
+                callback_data="validate_delivery"
+            )]
+        ]
+        
+        confirmation_text = tr(context.user_data, "order_confirmed")
+        confirmation_text += f"\n\n📋 Numéro de commande: `{order_id}`"
+        confirmation_text += f"\n💰 Montant total: {total:.2f}€"
+        confirmation_text += f"\n\n⚠️ Une fois la livraison reçue, veuillez valider ci-dessous:"
+        
         await query.message.edit_text(
-            tr(context.user_data, "order_confirmed"),
+            confirmation_text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        
+        return VALIDATION_LIVRAISON
+
+@security_check
+@error_handler
+async def validation_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Validation de la livraison par le client"""
+    query = update.callback_query
+    await query.answer()
+    
+    if query.data == "validate_delivery":
+        order_id = context.user_data.get('order_id', 'N/A')
+        
+        # Mettre à jour le statut dans le CSV
+        csv_path = Path(__file__).parent / "orders.csv"
+        if csv_path.exists():
+            try:
+                # Lire toutes les lignes
+                rows = []
+                with open(csv_path, 'r', encoding='utf-8') as csvfile:
+                    reader = csv.DictReader(csvfile)
+                    for row in reader:
+                        if row['order_id'] == order_id:
+                            row['status'] = 'Livraison validée'
+                        rows.append(row)
+                
+                # Réécrire le fichier avec le statut mis à jour
+                if rows:
+                    with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
+                        writer = csv.DictWriter(csvfile, fieldnames=rows[0].keys())
+                        writer.writeheader()
+                        writer.writerows(rows)
+                    
+                    logger.info(f"✅ Validation livraison: {order_id}")
+            except Exception as e:
+                logger.error(f"❌ Erreur mise à jour CSV: {e}")
+        
+        # Notifier l'admin
+        admin_notification = f"✅ *LIVRAISON VALIDÉE*\n\n"
+        admin_notification += f"📋 Commande: `{order_id}`\n"
+        admin_notification += f"👤 Client: {update.effective_user.first_name} (@{update.effective_user.username})\n"
+        admin_notification += f"🆔 User ID: {update.effective_user.id}\n"
+        admin_notification += f"💰 Montant: {context.user_data.get('order_total', 0):.2f}€\n"
+        admin_notification += f"📅 Date validation: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        
+        try:
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=admin_notification,
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            logger.error(f"Erreur notification admin: {e}")
+        
+        # Message au client
+        await query.message.edit_text(
+            tr(context.user_data, "delivery_confirmed"),
             parse_mode='Markdown'
         )
         
@@ -1031,6 +1274,9 @@ def main():
                 CallbackQueryHandler(choix_livraison, pattern='^delivery_'),
                 CallbackQueryHandler(cancel, pattern='^cancel')
             ],
+            SAISIE_DISTANCE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_distance)
+            ],
             PAIEMENT: [
                 CallbackQueryHandler(choix_paiement, pattern='^payment_'),
                 CallbackQueryHandler(cancel, pattern='^cancel')
@@ -1038,6 +1284,9 @@ def main():
             CONFIRMATION: [
                 CallbackQueryHandler(confirmation, pattern='^confirm_order'),
                 CallbackQueryHandler(cancel, pattern='^cancel')
+            ],
+            VALIDATION_LIVRAISON: [
+                CallbackQueryHandler(validation_livraison, pattern='^validate_delivery')
             ]
         },
         fallbacks=[

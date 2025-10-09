@@ -429,6 +429,54 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     update_last_activity(context.user_data)
     
+    welcome_text = (
+        "🌍 *Choisissez votre langue / Select your language*\n"
+        "🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
+        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
+        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
+        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
+    ]
+    
+    image_path = Path(__file__).parent / "welcome_image.jpg"
+    
+    if image_path.exists():
+        try:
+            with open(image_path, 'rb') as photo:
+                await update.message.reply_photo(
+                    photo=photo,
+                    caption=welcome_text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+        except:
+            await update.message.reply_text(
+                welcome_text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+    else:
+        await update.message.reply_text(
+            welcome_text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    
+    return LANGUE
+
+@security_check
+@error_handler
+async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Définit la langue et affiche le menu principal"""
+    query = update.callback_query
+    await query.answer()
+    
+    lang_code = query.data.replace("lang_", "")
+    context.user_data['langue'] = lang_code
+    
     welcome_text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
     
     keyboard = [
@@ -865,523 +913,43 @@ def main():
                 CallbackQueryHandler(set_langue, pattern='^lang_')
             ],
             PAYS: [
-                CallbackQueryHandler(menu_navigation, pattern='^(start_order|price_menu|info|contact_admin|back_menu) (
-        "🌍 *Choisissez votre langue / Select your language*\n"
-        "🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
-    )
-    
-    keyboard = [
-        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
-        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
-        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
-        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
-    ]
-    
-    image_path = Path(__file__).parent / "welcome_image.jpg"
-    
-    if image_path.exists():
-        try:
-            with open(image_path, 'rb') as photo:
-                await update.message.reply_photo(
-                    photo=photo,
-                    caption=welcome_text,
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode='Markdown'
-                )
-        except:
-            await update.message.reply_text(
-                welcome_text,
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode='Markdown'
-            )
-    else:
-        await update.message.reply_text(
-            welcome_text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
-        )
-    
-    return LANGUE
-
-@security_check
-@error_handler
-async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Définit la langue et affiche le menu principal"""
-    query = update.callback_query
-    await query.answer()
-    
-    lang_code = query.data.replace("lang_", "")
-    context.user_data['langue'] = lang_code
-    
-    welcome_text =),
+                CallbackQueryHandler(menu_navigation, pattern='^(start_order|price_menu|info|contact_admin|back_menu)),
                 CallbackQueryHandler(choix_pays, pattern='^country_')
             ],
             PRODUIT: [
                 CallbackQueryHandler(choix_produit, pattern='^product_'),
-                CallbackQueryHandler(cancel, pattern='^cancel (
-        "🌍 *Choisissez votre langue / Select your language*\n"
-        "🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
-    )
-    
-    keyboard = [
-        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
-        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
-        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
-        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
-    ]
-    
-    image_path = Path(__file__).parent / "welcome_image.jpg"
-    
-    if image_path.exists():
-        try:
-            with open(image_path, 'rb') as photo:
-                await update.message.reply_photo(
-                    photo=photo,
-                    caption=welcome_text,
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode='Markdown'
-                )
-        except:
-            await update.message.reply_text(
-                welcome_text,
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode='Markdown'
-            )
-    else:
-        await update.message.reply_text(
-            welcome_text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
-        )
-    
-    return LANGUE
-
-@security_check
-@error_handler
-async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Définit la langue et affiche le menu principal"""
-    query = update.callback_query
-    await query.answer()
-    
-    lang_code = query.data.replace("lang_", "")
-    context.user_data['langue'] = lang_code
-    
-    welcome_text =)
+                CallbackQueryHandler(cancel, pattern='^cancel)
             ],
             PILL_SUBCATEGORY: [
                 CallbackQueryHandler(choix_pill_subcategory, pattern='^(pill_|back_to_products)'),
-                CallbackQueryHandler(cancel, pattern='^cancel (
-        "🌍 *Choisissez votre langue / Select your language*\n"
-        "🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
-    )
-    
-    keyboard = [
-        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
-        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
-        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
-        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
-    ]
-    
-    image_path = Path(__file__).parent / "welcome_image.jpg"
-    
-    if image_path.exists():
-        try:
-            with open(image_path, 'rb') as photo:
-                await update.message.reply_photo(
-                    photo=photo,
-                    caption=welcome_text,
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode='Markdown'
-                )
-        except:
-            await update.message.reply_text(
-                welcome_text,
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode='Markdown'
-            )
-    else:
-        await update.message.reply_text(
-            welcome_text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
-        )
-    
-    return LANGUE
-
-@security_check
-@error_handler
-async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Définit la langue et affiche le menu principal"""
-    query = update.callback_query
-    await query.answer()
-    
-    lang_code = query.data.replace("lang_", "")
-    context.user_data['langue'] = lang_code
-    
-    welcome_text =)
+                CallbackQueryHandler(cancel, pattern='^cancel)
             ],
             QUANTITE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_quantite)
             ],
             CART_MENU: [
-                CallbackQueryHandler(cart_menu, pattern='^(add_more|proceed_checkout) (
-        "🌍 *Choisissez votre langue / Select your language*\n"
-        "🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
-    )
-    
-    keyboard = [
-        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
-        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
-        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
-        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
-    ]
-    
-    image_path = Path(__file__).parent / "welcome_image.jpg"
-    
-    if image_path.exists():
-        try:
-            with open(image_path, 'rb') as photo:
-                await update.message.reply_photo(
-                    photo=photo,
-                    caption=welcome_text,
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode='Markdown'
-                )
-        except:
-            await update.message.reply_text(
-                welcome_text,
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode='Markdown'
-            )
-    else:
-        await update.message.reply_text(
-            welcome_text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
-        )
-    
-    return LANGUE
-
-@security_check
-@error_handler
-async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Définit la langue et affiche le menu principal"""
-    query = update.callback_query
-    await query.answer()
-    
-    lang_code = query.data.replace("lang_", "")
-    context.user_data['langue'] = lang_code
-    
-    welcome_text =),
-                CallbackQueryHandler(cancel, pattern='^cancel (
-        "🌍 *Choisissez votre langue / Select your language*\n"
-        "🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
-    )
-    
-    keyboard = [
-        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
-        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
-        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
-        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
-    ]
-    
-    image_path = Path(__file__).parent / "welcome_image.jpg"
-    
-    if image_path.exists():
-        try:
-            with open(image_path, 'rb') as photo:
-                await update.message.reply_photo(
-                    photo=photo,
-                    caption=welcome_text,
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode='Markdown'
-                )
-        except:
-            await update.message.reply_text(
-                welcome_text,
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode='Markdown'
-            )
-    else:
-        await update.message.reply_text(
-            welcome_text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
-        )
-    
-    return LANGUE
-
-@security_check
-@error_handler
-async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Définit la langue et affiche le menu principal"""
-    query = update.callback_query
-    await query.answer()
-    
-    lang_code = query.data.replace("lang_", "")
-    context.user_data['langue'] = lang_code
-    
-    welcome_text =)
+                CallbackQueryHandler(cart_menu, pattern='^(add_more|proceed_checkout)),
+                CallbackQueryHandler(cancel, pattern='^cancel)
             ],
             ADRESSE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_adresse)
             ],
             LIVRAISON: [
                 CallbackQueryHandler(choix_livraison, pattern='^delivery_'),
-                CallbackQueryHandler(cancel, pattern='^cancel (
-        "🌍 *Choisissez votre langue / Select your language*\n"
-        "🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
-    )
-    
-    keyboard = [
-        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
-        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
-        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
-        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
-    ]
-    
-    image_path = Path(__file__).parent / "welcome_image.jpg"
-    
-    if image_path.exists():
-        try:
-            with open(image_path, 'rb') as photo:
-                await update.message.reply_photo(
-                    photo=photo,
-                    caption=welcome_text,
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode='Markdown'
-                )
-        except:
-            await update.message.reply_text(
-                welcome_text,
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode='Markdown'
-            )
-    else:
-        await update.message.reply_text(
-            welcome_text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
-        )
-    
-    return LANGUE
-
-@security_check
-@error_handler
-async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Définit la langue et affiche le menu principal"""
-    query = update.callback_query
-    await query.answer()
-    
-    lang_code = query.data.replace("lang_", "")
-    context.user_data['langue'] = lang_code
-    
-    welcome_text =)
+                CallbackQueryHandler(cancel, pattern='^cancel)
             ],
             PAIEMENT: [
                 CallbackQueryHandler(choix_paiement, pattern='^payment_'),
-                CallbackQueryHandler(cancel, pattern='^cancel (
-        "🌍 *Choisissez votre langue / Select your language*\n"
-        "🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
-    )
-    
-    keyboard = [
-        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
-        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
-        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
-        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
-    ]
-    
-    image_path = Path(__file__).parent / "welcome_image.jpg"
-    
-    if image_path.exists():
-        try:
-            with open(image_path, 'rb') as photo:
-                await update.message.reply_photo(
-                    photo=photo,
-                    caption=welcome_text,
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode='Markdown'
-                )
-        except:
-            await update.message.reply_text(
-                welcome_text,
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode='Markdown'
-            )
-    else:
-        await update.message.reply_text(
-            welcome_text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
-        )
-    
-    return LANGUE
-
-@security_check
-@error_handler
-async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Définit la langue et affiche le menu principal"""
-    query = update.callback_query
-    await query.answer()
-    
-    lang_code = query.data.replace("lang_", "")
-    context.user_data['langue'] = lang_code
-    
-    welcome_text =)
+                CallbackQueryHandler(cancel, pattern='^cancel)
             ],
             CONFIRMATION: [
-                CallbackQueryHandler(confirmation, pattern='^confirm_order (
-        "🌍 *Choisissez votre langue / Select your language*\n"
-        "🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
-    )
-    
-    keyboard = [
-        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
-        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
-        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
-        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
-    ]
-    
-    image_path = Path(__file__).parent / "welcome_image.jpg"
-    
-    if image_path.exists():
-        try:
-            with open(image_path, 'rb') as photo:
-                await update.message.reply_photo(
-                    photo=photo,
-                    caption=welcome_text,
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode='Markdown'
-                )
-        except:
-            await update.message.reply_text(
-                welcome_text,
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode='Markdown'
-            )
-    else:
-        await update.message.reply_text(
-            welcome_text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
-        )
-    
-    return LANGUE
-
-@security_check
-@error_handler
-async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Définit la langue et affiche le menu principal"""
-    query = update.callback_query
-    await query.answer()
-    
-    lang_code = query.data.replace("lang_", "")
-    context.user_data['langue'] = lang_code
-    
-    welcome_text =),
-                CallbackQueryHandler(cancel, pattern='^cancel (
-        "🌍 *Choisissez votre langue / Select your language*\n"
-        "🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
-    )
-    
-    keyboard = [
-        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
-        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
-        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
-        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
-    ]
-    
-    image_path = Path(__file__).parent / "welcome_image.jpg"
-    
-    if image_path.exists():
-        try:
-            with open(image_path, 'rb') as photo:
-                await update.message.reply_photo(
-                    photo=photo,
-                    caption=welcome_text,
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode='Markdown'
-                )
-        except:
-            await update.message.reply_text(
-                welcome_text,
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode='Markdown'
-            )
-    else:
-        await update.message.reply_text(
-            welcome_text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
-        )
-    
-    return LANGUE
-
-@security_check
-@error_handler
-async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Définit la langue et affiche le menu principal"""
-    query = update.callback_query
-    await query.answer()
-    
-    lang_code = query.data.replace("lang_", "")
-    context.user_data['langue'] = lang_code
-    
-    welcome_text =)
+                CallbackQueryHandler(confirmation, pattern='^confirm_order),
+                CallbackQueryHandler(cancel, pattern='^cancel)
             ]
         },
         fallbacks=[
             CommandHandler('start', start_command),
-            CallbackQueryHandler(cancel, pattern='^cancel (
-        "🌍 *Choisissez votre langue / Select your language*\n"
-        "🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
-    )
-    
-    keyboard = [
-        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
-        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
-        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
-        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
-    ]
-    
-    image_path = Path(__file__).parent / "welcome_image.jpg"
-    
-    if image_path.exists():
-        try:
-            with open(image_path, 'rb') as photo:
-                await update.message.reply_photo(
-                    photo=photo,
-                    caption=welcome_text,
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode='Markdown'
-                )
-        except:
-            await update.message.reply_text(
-                welcome_text,
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode='Markdown'
-            )
-    else:
-        await update.message.reply_text(
-            welcome_text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
-        )
-    
-    return LANGUE
-
-@security_check
-@error_handler
-async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Définit la langue et affiche le menu principal"""
-    query = update.callback_query
-    await query.answer()
-    
-    lang_code = query.data.replace("lang_", "")
-    context.user_data['langue'] = lang_code
-    
-    welcome_text =)
+            CallbackQueryHandler(cancel, pattern='^cancel)
         ]
     )
     
@@ -1398,52 +966,4 @@ if __name__ == '__main__':
         logger.info("🛑 Bot arrêté par l'utilisateur")
     except Exception as e:
         logger.error(f"❌ Erreur fatale: {e}", exc_info=True)
-        sys.exit(1) (
-        "🌍 *Choisissez votre langue / Select your language*\n"
-        "🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
-    )
-    
-    keyboard = [
-        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
-        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
-        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
-        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
-    ]
-    
-    image_path = Path(__file__).parent / "welcome_image.jpg"
-    
-    if image_path.exists():
-        try:
-            with open(image_path, 'rb') as photo:
-                await update.message.reply_photo(
-                    photo=photo,
-                    caption=welcome_text,
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode='Markdown'
-                )
-        except:
-            await update.message.reply_text(
-                welcome_text,
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode='Markdown'
-            )
-    else:
-        await update.message.reply_text(
-            welcome_text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
-        )
-    
-    return LANGUE
-
-@security_check
-@error_handler
-async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Définit la langue et affiche le menu principal"""
-    query = update.callback_query
-    await query.answer()
-    
-    lang_code = query.data.replace("lang_", "")
-    context.user_data['langue'] = lang_code
-    
-    welcome_text =
+        sys.exit(1)

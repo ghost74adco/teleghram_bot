@@ -80,10 +80,10 @@ LANGUE, PAYS, PRODUIT, PILL_SUBCATEGORY, QUANTITE, CART_MENU, ADRESSE, LIVRAISON
 
 # Produits
 PRODUCT_MAP = {
-    "snow": "❄️",
-    "pill": "💊",
-    "olive": "🫒",
-    "clover": "🍀"
+    "snow": "❄️ Coco",
+    "pill": "💊 Exta",
+    "olive": "🍫 Résine",
+    "clover": "🍀 Weed"
 }
 
 # Sous-catégories pour Pills
@@ -94,17 +94,17 @@ PILL_SUBCATEGORIES = {
 
 # Prix (avec sous-catégories pour pills)
 PRIX_FR = {
-    "❄️": 80,
-    "💊 Squid Game": 10,
-    "💊 Punisher": 12,
-    "🫒": 7,
+    "❄️": 80 le grammes,
+    "💊 Squid Game": 10
+    "💊 Punisher": 10
+    "🫒": 7
     "🍀": 10
 }
 
 PRIX_CH = {
     "❄️": 100,
     "💊 Squid Game": 15,
-    "💊 Punisher": 18,
+    "💊 Punisher": 15,
     "🫒": 8,
     "🍀": 12
 }
@@ -115,7 +115,7 @@ TRANSLATIONS = {
         "welcome": "🌿 *BIENVENUE* 🌿\n\n⚠️ *IMPORTANT :*\nToutes les conversations doivent être établies en *ÉCHANGE SECRET*.\n\n🙏 *Merci* 💪💚",
         "choose_language": "🌍 *Choisissez votre langue :*",
         "main_menu": "\n\n📱 *MENU PRINCIPAL :*\n\n👇 Choisissez une option :",
-        "choose_country": "🌍 *Choisissez votre pays :*",
+        "choose_country": "🌍 *Choisissez votre pays de livraisons :*",
         "choose_product": "🛍️ *Choisissez votre produit :*",
         "choose_pill_type": "💊 *Choisissez le type de pilule :*",
         "enter_quantity": "📝 *Entrez la quantité désirée :*",
@@ -164,7 +164,7 @@ TRANSLATIONS = {
         "welcome": "🌿 *WELCOME* 🌿\n\n⚠️ *IMPORTANT:*\nAll conversations must be established in *SECRET EXCHANGE*.\n\n🙏 *Thank you* 💪💚",
         "choose_language": "🌍 *Select your language:*",
         "main_menu": "\n\n📱 *MAIN MENU:*\n\n👇 Choose an option:",
-        "choose_country": "🌍 *Choose your country:*",
+        "choose_country": "🌍 *Choose your country for the delivery:*",
         "choose_product": "🛍️ *Choose your product:*",
         "choose_pill_type": "💊 *Choose pill type:*",
         "enter_quantity": "📝 *Enter desired quantity:*",
@@ -213,7 +213,7 @@ TRANSLATIONS = {
         "welcome": "🌿 *BIENVENIDO* 🌿\n\n⚠️ *IMPORTANTE:*\nTodas las conversaciones deben establecerse en *INTERCAMBIO SECRETO*.\n\n🙏 *Gracias* 💪💚",
         "choose_language": "🌍 *Seleccione su idioma:*",
         "main_menu": "\n\n📱 *MENÚ PRINCIPAL:*\n\n👇 Elija una opción:",
-        "choose_country": "🌍 *Elija su país:*",
+        "choose_country": "🌍 *Elige tu país de entrega:*",
         "choose_product": "🛍️ *Elija su producto:*",
         "choose_pill_type": "💊 *Elija el tipo de píldora:*",
         "enter_quantity": "📝 *Ingrese la cantidad deseada:*",
@@ -262,7 +262,7 @@ TRANSLATIONS = {
         "welcome": "🌿 *WILLKOMMEN* 🌿\n\n⚠️ *WICHTIG:*\nAlle Gespräche müssen in *GEHEIMEM AUSTAUSCH* geführt werden.\n\n🙏 *Danke* 💪💚",
         "choose_language": "🌍 *Wählen Sie Ihre Sprache:*",
         "main_menu": "\n\n📱 *HAUPTMENÜ:*\n\n👇 Wählen Sie eine Option:",
-        "choose_country": "🌍 *Wählen Sie Ihr Land:*",
+        "choose_country": "🌍 *Wählen Sie Ihr Lieferland:*",
         "choose_product": "🛍️ *Wählen Sie Ihr Produkt:*",
         "choose_pill_type": "💊 *Wählen Sie den Pillentyp:*",
         "enter_quantity": "📝 *Geben Sie die gewünschte Menge ein:*",

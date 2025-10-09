@@ -76,7 +76,7 @@ SESSION_TIMEOUT_MINUTES = 30
 MAX_QUANTITY_PER_PRODUCT = 100
 
 # États de conversation
-LANGUE, PAYS, PRODUIT, QUANTITE, CART_MENU, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION = range(9)
+LANGUE, PAYS, PRODUIT, PILL_SUBCATEGORY, QUANTITE, CART_MENU, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION = range(10)
 
 # Produits
 PRODUCT_MAP = {
@@ -86,11 +86,30 @@ PRODUCT_MAP = {
     "clover": "🍀"
 }
 
-# Prix
-PRIX_FR = {"❄️": 80, "💊": 10, "🫒": 7, "🍀": 10}
-PRIX_CH = {"❄️": 100, "💊": 15, "🫒": 8, "🍀": 12}
+# Sous-catégories pour Pills
+PILL_SUBCATEGORIES = {
+    "squid_game": "💊 Squid Game",
+    "punisher": "💊 Punisher"
+}
 
-# --- Traductions ---
+# Prix (avec sous-catégories pour pills)
+PRIX_FR = {
+    "❄️": 80,
+    "💊 Squid Game": 10,
+    "💊 Punisher": 12,
+    "🫒": 7,
+    "🍀": 10
+}
+
+PRIX_CH = {
+    "❄️": 100,
+    "💊 Squid Game": 15,
+    "💊 Punisher": 18,
+    "🫒": 8,
+    "🍀": 12
+}
+
+# --- Traductions Complètes ---
 TRANSLATIONS = {
     "fr": {
         "welcome": "🌿 *BIENVENUE* 🌿\n\n⚠️ *IMPORTANT :*\nToutes les conversations doivent être établies en *ÉCHANGE SECRET*.\n\n🙏 *Merci* 💪💚",
@@ -98,6 +117,7 @@ TRANSLATIONS = {
         "main_menu": "\n\n📱 *MENU PRINCIPAL :*\n\n👇 Choisissez une option :",
         "choose_country": "🌍 *Choisissez votre pays :*",
         "choose_product": "🛍️ *Choisissez votre produit :*",
+        "choose_pill_type": "💊 *Choisissez le type de pilule :*",
         "enter_quantity": "📝 *Entrez la quantité désirée :*",
         "enter_address": "📍 *Entrez votre adresse complète :*",
         "choose_delivery": "📦 *Choisissez le type de livraison :*",
@@ -125,8 +145,8 @@ TRANSLATIONS = {
         "contact_admin": "💬 Contacter Admin",
         "price_menu": "🏴‍☠️ Carte du Pirate",
         "price_menu_title": "🏴‍☠️ *CARTE DU PIRATE*",
-        "price_menu_fr": "\n\n🇫🇷 *FRANCE:*\n• ❄️ Snow: 80€\n• 💊 Pill: 10€\n• 🫒 Olive: 7€\n• 🍀 Clover: 10€",
-        "price_menu_ch": "\n\n🇨🇭 *SUISSE:*\n• ❄️ Snow: 100€\n• 💊 Pill: 15€\n• 🫒 Olive: 8€\n• 🍀 Clover: 12€",
+        "price_menu_fr": "\n\n🇫🇷 *FRANCE:*\n• ❄️ Snow: 80€\n• 💊 Squid Game: 10€\n• 💊 Punisher: 12€\n• 🫒 Olive: 7€\n• 🍀 Clover: 10€",
+        "price_menu_ch": "\n\n🇨🇭 *SUISSE:*\n• ❄️ Snow: 100€\n• 💊 Squid Game: 15€\n• 💊 Punisher: 18€\n• 🫒 Olive: 8€\n• 🍀 Clover: 12€",
         "france": "🇫🇷 France",
         "switzerland": "🇨🇭 Suisse",
         "standard": "📦 Standard",
@@ -136,7 +156,9 @@ TRANSLATIONS = {
         "unauthorized": "❌ Accès non autorisé.",
         "rate_limit": "⚠️ Trop de requêtes. Attendez 1 minute.",
         "session_expired": "⏱️ Session expirée. Utilisez /start pour recommencer.",
-        "invalid_address": "❌ Adresse invalide. Elle doit contenir au moins 15 caractères."
+        "invalid_address": "❌ Adresse invalide. Elle doit contenir au moins 15 caractères.",
+        "product_selected": "✅ Produit sélectionné :",
+        "total": "💰 *Total :*"
     },
     "en": {
         "welcome": "🌿 *WELCOME* 🌿\n\n⚠️ *IMPORTANT:*\nAll conversations must be established in *SECRET EXCHANGE*.\n\n🙏 *Thank you* 💪💚",
@@ -144,6 +166,7 @@ TRANSLATIONS = {
         "main_menu": "\n\n📱 *MAIN MENU:*\n\n👇 Choose an option:",
         "choose_country": "🌍 *Choose your country:*",
         "choose_product": "🛍️ *Choose your product:*",
+        "choose_pill_type": "💊 *Choose pill type:*",
         "enter_quantity": "📝 *Enter desired quantity:*",
         "enter_address": "📍 *Enter your complete address:*",
         "choose_delivery": "📦 *Choose delivery type:*",
@@ -157,12 +180,13 @@ TRANSLATIONS = {
         "proceed": "✅ Checkout",
         "invalid_quantity": "❌ Please enter a valid number between 1 and {max}.",
         "cart_title": "🛒 *Your cart:*",
-        "france": "🇫🇷 France",
-        "switzerland": "🇨🇭 Switzerland",
-        "standard": "📦 Standard",
-        "express": "⚡ Express",
-        "cash": "💵 Cash",
-        "crypto": "₿ Crypto",
+        "info_title": "ℹ️ *INFORMATION*",
+        "info_shop": "🛍️ *Our shop:*\n• Delivery France 🇫🇷 & Switzerland 🇨🇭\n• Quality products\n• Responsive customer service",
+        "info_delivery": "📦 *Delivery:*\n• Standard: 3-5 days\n• Express: 24-48h",
+        "info_payment": "💳 *Payment:*\n• Cash on delivery\n• Crypto (Bitcoin, USDT)",
+        "info_security": "🔒 *Security:*\nAll exchanges are encrypted and confidential.",
+        "contact_title": "📞 *CONTACT*",
+        "contact_text": "For any questions or assistance, you can:\n\n• Continue with the order\n• Contact the administrator\n\nOur team is available 24/7 to help you! 💬",
         "start_order": "🛍️ Order Now",
         "informations": "ℹ️ Information",
         "contact": "📞 Contact",
@@ -170,12 +194,118 @@ TRANSLATIONS = {
         "contact_admin": "💬 Contact Admin",
         "price_menu": "🏴‍☠️ Pirate's Menu",
         "price_menu_title": "🏴‍☠️ *PIRATE'S MENU*",
-        "price_menu_fr": "\n\n🇫🇷 *FRANCE:*\n• ❄️ Snow: €80\n• 💊 Pill: €10\n• 🫒 Olive: €7\n• 🍀 Clover: €10",
-        "price_menu_ch": "\n\n🇨🇭 *SWITZERLAND:*\n• ❄️ Snow: €100\n• 💊 Pill: €15\n• 🫒 Olive: €8\n• 🍀 Clover: €12",
+        "price_menu_fr": "\n\n🇫🇷 *FRANCE:*\n• ❄️ Snow: €80\n• 💊 Squid Game: €10\n• 💊 Punisher: €12\n• 🫒 Olive: €7\n• 🍀 Clover: €10",
+        "price_menu_ch": "\n\n🇨🇭 *SWITZERLAND:*\n• ❄️ Snow: €100\n• 💊 Squid Game: €15\n• 💊 Punisher: €18\n• 🫒 Olive: €8\n• 🍀 Clover: €12",
+        "france": "🇫🇷 France",
+        "switzerland": "🇨🇭 Switzerland",
+        "standard": "📦 Standard",
+        "express": "⚡ Express",
+        "cash": "💵 Cash",
+        "crypto": "₿ Crypto",
+        "unauthorized": "❌ Unauthorized access.",
+        "rate_limit": "⚠️ Too many requests. Wait 1 minute.",
+        "session_expired": "⏱️ Session expired. Use /start to restart.",
+        "invalid_address": "❌ Invalid address. It must contain at least 15 characters.",
+        "product_selected": "✅ Product selected:",
+        "total": "💰 *Total:*"
+    },
+    "es": {
+        "welcome": "🌿 *BIENVENIDO* 🌿\n\n⚠️ *IMPORTANTE:*\nTodas las conversaciones deben establecerse en *INTERCAMBIO SECRETO*.\n\n🙏 *Gracias* 💪💚",
+        "choose_language": "🌍 *Seleccione su idioma:*",
+        "main_menu": "\n\n📱 *MENÚ PRINCIPAL:*\n\n👇 Elija una opción:",
+        "choose_country": "🌍 *Elija su país:*",
+        "choose_product": "🛍️ *Elija su producto:*",
+        "choose_pill_type": "💊 *Elija el tipo de píldora:*",
+        "enter_quantity": "📝 *Ingrese la cantidad deseada:*",
+        "enter_address": "📍 *Ingrese su dirección completa:*",
+        "choose_delivery": "📦 *Elija el tipo de entrega:*",
+        "choose_payment": "💳 *Elija el método de pago:*",
+        "order_summary": "✅ *Resumen de su pedido:*",
+        "confirm": "✅ Confirmar",
+        "cancel": "❌ Cancelar",
+        "order_confirmed": "✅ *¡Pedido confirmado!*\n\nGracias por su pedido.\nSerá contactado pronto. 📞",
+        "order_cancelled": "❌ *Pedido cancelado.*",
+        "add_more": "➕ Agregar producto",
+        "proceed": "✅ Finalizar compra",
+        "invalid_quantity": "❌ Por favor ingrese un número válido entre 1 y {max}.",
+        "cart_title": "🛒 *Su carrito:*",
+        "info_title": "ℹ️ *INFORMACIÓN*",
+        "info_shop": "🛍️ *Nuestra tienda:*\n• Entrega Francia 🇫🇷 & Suiza 🇨🇭\n• Productos de calidad\n• Servicio al cliente receptivo",
+        "info_delivery": "📦 *Entrega:*\n• Estándar: 3-5 días\n• Express: 24-48h",
+        "info_payment": "💳 *Pago:*\n• Efectivo contra entrega\n• Crypto (Bitcoin, USDT)",
+        "info_security": "🔒 *Seguridad:*\nTodos los intercambios están encriptados y son confidenciales.",
+        "contact_title": "📞 *CONTACTO*",
+        "contact_text": "Para cualquier pregunta o asistencia, puede:\n\n• Continuar con el pedido\n• Contactar al administrador\n\n¡Nuestro equipo está disponible 24/7 para ayudarle! 💬",
+        "start_order": "🛍️ Ordenar ahora",
+        "informations": "ℹ️ Información",
+        "contact": "📞 Contacto",
+        "back": "🔙 Volver",
+        "contact_admin": "💬 Contactar Admin",
+        "price_menu": "🏴‍☠️ Menú del Pirata",
+        "price_menu_title": "🏴‍☠️ *MENÚ DEL PIRATA*",
+        "price_menu_fr": "\n\n🇫🇷 *FRANCIA:*\n• ❄️ Snow: 80€\n• 💊 Squid Game: 10€\n• 💊 Punisher: 12€\n• 🫒 Olive: 7€\n• 🍀 Clover: 10€",
+        "price_menu_ch": "\n\n🇨🇭 *SUIZA:*\n• ❄️ Snow: 100€\n• 💊 Squid Game: 15€\n• 💊 Punisher: 18€\n• 🫒 Olive: 8€\n• 🍀 Clover: 12€",
+        "france": "🇫🇷 Francia",
+        "switzerland": "🇨🇭 Suiza",
+        "standard": "📦 Estándar",
+        "express": "⚡ Express",
+        "cash": "💵 Efectivo",
+        "crypto": "₿ Crypto",
+        "unauthorized": "❌ Acceso no autorizado.",
+        "rate_limit": "⚠️ Demasiadas solicitudes. Espere 1 minuto.",
+        "session_expired": "⏱️ Sesión expirada. Use /start para reiniciar.",
+        "invalid_address": "❌ Dirección inválida. Debe contener al menos 15 caracteres.",
+        "product_selected": "✅ Producto seleccionado:",
+        "total": "💰 *Total:*"
+    },
+    "de": {
+        "welcome": "🌿 *WILLKOMMEN* 🌿\n\n⚠️ *WICHTIG:*\nAlle Gespräche müssen in *GEHEIMEM AUSTAUSCH* geführt werden.\n\n🙏 *Danke* 💪💚",
+        "choose_language": "🌍 *Wählen Sie Ihre Sprache:*",
+        "main_menu": "\n\n📱 *HAUPTMENÜ:*\n\n👇 Wählen Sie eine Option:",
+        "choose_country": "🌍 *Wählen Sie Ihr Land:*",
+        "choose_product": "🛍️ *Wählen Sie Ihr Produkt:*",
+        "choose_pill_type": "💊 *Wählen Sie den Pillentyp:*",
+        "enter_quantity": "📝 *Geben Sie die gewünschte Menge ein:*",
+        "enter_address": "📍 *Geben Sie Ihre vollständige Adresse ein:*",
+        "choose_delivery": "📦 *Wählen Sie die Lieferart:*",
+        "choose_payment": "💳 *Wählen Sie die Zahlungsmethode:*",
+        "order_summary": "✅ *Ihre Bestellübersicht:*",
+        "confirm": "✅ Bestätigen",
+        "cancel": "❌ Abbrechen",
+        "order_confirmed": "✅ *Bestellung bestätigt!*\n\nVielen Dank für Ihre Bestellung.\nSie werden bald kontaktiert. 📞",
+        "order_cancelled": "❌ *Bestellung storniert.*",
+        "add_more": "➕ Produkt hinzufügen",
+        "proceed": "✅ Zur Kasse",
+        "invalid_quantity": "❌ Bitte geben Sie eine gültige Zahl zwischen 1 und {max} ein.",
+        "cart_title": "🛒 *Ihr Warenkorb:*",
         "info_title": "ℹ️ *INFORMATION*",
-        "info_shop": "🛍️ *Our shop:*\n• Delivery France 🇫🇷 & Switzerland 🇨🇭\n• Quality products\n• Responsive customer service",
-        "contact_title": "📞 *CONTACT*",
-        "contact_text": "For any questions or assistance, you can:\n\n• Continue with the order\n• Contact the administrator\n\nOur team is available 24/7 to help you! 💬"
+        "info_shop": "🛍️ *Unser Shop:*\n• Lieferung Frankreich 🇫🇷 & Schweiz 🇨🇭\n• Qualitätsprodukte\n• Reaktionsschneller Kundenservice",
+        "info_delivery": "📦 *Lieferung:*\n• Standard: 3-5 Tage\n• Express: 24-48h",
+        "info_payment": "💳 *Zahlung:*\n• Barzahlung bei Lieferung\n• Krypto (Bitcoin, USDT)",
+        "info_security": "🔒 *Sicherheit:*\nAlle Transaktionen sind verschlüsselt und vertraulich.",
+        "contact_title": "📞 *KONTAKT*",
+        "contact_text": "Bei Fragen oder für Unterstützung können Sie:\n\n• Mit der Bestellung fortfahren\n• Den Administrator kontaktieren\n\nUnser Team ist 24/7 für Sie da! 💬",
+        "start_order": "🛍️ Jetzt bestellen",
+        "informations": "ℹ️ Information",
+        "contact": "📞 Kontakt",
+        "back": "🔙 Zurück",
+        "contact_admin": "💬 Admin kontaktieren",
+        "price_menu": "🏴‍☠️ Piraten-Menü",
+        "price_menu_title": "🏴‍☠️ *PIRATEN-MENÜ*",
+        "price_menu_fr": "\n\n🇫🇷 *FRANKREICH:*\n• ❄️ Snow: 80€\n• 💊 Squid Game: 10€\n• 💊 Punisher: 12€\n• 🫒 Olive: 7€\n• 🍀 Clover: 10€",
+        "price_menu_ch": "\n\n🇨🇭 *SCHWEIZ:*\n• ❄️ Snow: 100€\n• 💊 Squid Game: 15€\n• 💊 Punisher: 18€\n• 🫒 Olive: 8€\n• 🍀 Clover: 12€",
+        "france": "🇫🇷 Frankreich",
+        "switzerland": "🇨🇭 Schweiz",
+        "standard": "📦 Standard",
+        "express": "⚡ Express",
+        "cash": "💵 Bargeld",
+        "crypto": "₿ Krypto",
+        "unauthorized": "❌ Unbefugter Zugriff.",
+        "rate_limit": "⚠️ Zu viele Anfragen. Warten Sie 1 Minute.",
+        "session_expired": "⏱️ Sitzung abgelaufen. Verwenden Sie /start zum Neustarten.",
+        "invalid_address": "❌ Ungültige Adresse. Sie muss mindestens 15 Zeichen enthalten.",
+        "product_selected": "✅ Produkt ausgewählt:",
+        "total": "💰 *Gesamt:*"
     }
 }
 
@@ -295,57 +425,9 @@ def error_handler(func):
 @security_check
 @error_handler
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Commande /start"""
+    """Commande /start - Sélection de la langue"""
     context.user_data.clear()
     update_last_activity(context.user_data)
-    
-    welcome_text = (
-        "🌍 *Choisissez votre langue / Select your language*\n"
-        "🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
-    )
-    
-    keyboard = [
-        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
-        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
-        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
-        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
-    ]
-    
-    image_path = Path(__file__).parent / "welcome_image.jpg"
-    
-    if image_path.exists():
-        try:
-            with open(image_path, 'rb') as photo:
-                await update.message.reply_photo(
-                    photo=photo,
-                    caption=welcome_text,
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode='Markdown'
-                )
-        except:
-            await update.message.reply_text(
-                welcome_text,
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode='Markdown'
-            )
-    else:
-        await update.message.reply_text(
-            welcome_text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
-        )
-    
-    return LANGUE
-
-@security_check
-@error_handler
-async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Définit la langue"""
-    query = update.callback_query
-    await query.answer()
-    
-    lang_code = query.data.replace("lang_", "")
-    context.user_data['langue'] = lang_code
     
     welcome_text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
     
@@ -475,10 +557,82 @@ async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     product_code = query.data.replace("product_", "")
+    
+    # Si c'est une pilule, afficher le sous-menu
+    if product_code == "pill":
+        keyboard = [
+            [InlineKeyboardButton("💊 Squid Game", callback_data="pill_squid_game")],
+            [InlineKeyboardButton("💊 Punisher", callback_data="pill_punisher")],
+            [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_products")],
+            [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
+        ]
+        
+        try:
+            await query.message.edit_text(
+                tr(context.user_data, "choose_pill_type"),
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+        except:
+            await query.message.edit_caption(
+                caption=tr(context.user_data, "choose_pill_type"),
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+        
+        return PILL_SUBCATEGORY
+    
+    # Pour les autres produits, continuer normalement
     product_emoji = PRODUCT_MAP.get(product_code, product_code)
     context.user_data['current_product'] = product_emoji
     
-    text = f"{tr(context.user_data, 'choose_product')}\n\n✅ Produit: {product_emoji}\n\n{tr(context.user_data, 'enter_quantity')}"
+    text = f"{tr(context.user_data, 'product_selected')} {product_emoji}\n\n{tr(context.user_data, 'enter_quantity')}"
+    
+    try:
+        await query.message.edit_text(text, parse_mode='Markdown')
+    except:
+        await query.message.edit_caption(caption=text, parse_mode='Markdown')
+    
+    return QUANTITE
+
+@security_check
+@error_handler
+async def choix_pill_subcategory(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Choix de la sous-catégorie de pilule"""
+    query = update.callback_query
+    await query.answer()
+    
+    if query.data == "back_to_products":
+        # Retour au menu des produits
+        keyboard = [
+            [InlineKeyboardButton("❄️", callback_data="product_snow")],
+            [InlineKeyboardButton("💊", callback_data="product_pill")],
+            [InlineKeyboardButton("🫒", callback_data="product_olive")],
+            [InlineKeyboardButton("🍀", callback_data="product_clover")],
+            [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
+        ]
+        
+        try:
+            await query.message.edit_text(
+                tr(context.user_data, "choose_product"),
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+        except:
+            await query.message.edit_caption(
+                caption=tr(context.user_data, "choose_product"),
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+        
+        return PRODUIT
+    
+    # Récupérer la sous-catégorie choisie
+    pill_type = query.data.replace("pill_", "")
+    product_name = PILL_SUBCATEGORIES.get(pill_type, "💊")
+    context.user_data['current_product'] = product_name
+    
+    text = f"{tr(context.user_data, 'product_selected')} {product_name}\n\n{tr(context.user_data, 'enter_quantity')}"
     
     try:
         await query.message.edit_text(text, parse_mode='Markdown')
@@ -525,7 +679,7 @@ async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @security_check
 @error_handler
-async def cart_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Menu du panier"""
     query = update.callback_query
     await query.answer()
@@ -538,6 +692,7 @@ async def cart_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("🍀", callback_data="product_clover")],
             [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
         ]
+        
         await query.message.edit_text(
             tr(context.user_data, "choose_product"),
             reply_markup=InlineKeyboardMarkup(keyboard),
@@ -546,25 +701,21 @@ async def cart_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return PRODUIT
     
     elif query.data == "proceed_checkout":
-        await query.message.edit_text(
-            tr(context.user_data, "enter_address"),
-            parse_mode='Markdown'
-        )
+        text = f"{tr(context.user_data, 'enter_address')}"
+        await query.message.edit_text(text, parse_mode='Markdown')
         return ADRESSE
-    
-    return CART_MENU
 
 @security_check
 @error_handler
 async def saisie_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Saisie de l'adresse"""
-    adresse = sanitize_input(update.message.text, max_length=300)
+    address = sanitize_input(update.message.text, max_length=300)
     
-    if len(adresse) < 15:
+    if len(address) < 15:
         await update.message.reply_text(tr(context.user_data, "invalid_address"))
         return ADRESSE
     
-    context.user_data['adresse'] = adresse
+    context.user_data['adresse'] = address
     
     keyboard = [
         [InlineKeyboardButton(tr(context.user_data, "standard"), callback_data="delivery_standard")],
@@ -614,22 +765,17 @@ async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
     payment_type = query.data.replace("payment_", "")
     context.user_data['paiement'] = payment_type
     
-    total = calculate_total(context.user_data['cart'], context.user_data['pays'])
+    # Résumé de la commande
+    cart = context.user_data['cart']
+    country = context.user_data['pays']
+    total = calculate_total(cart, country)
+    
     summary = f"{tr(context.user_data, 'order_summary')}\n\n"
-    
-    prix_table = PRIX_FR if context.user_data['pays'] == "FR" else PRIX_CH
-    for item in context.user_data['cart']:
-        prix_unitaire = prix_table[item['produit']]
-        subtotal = prix_unitaire * item['quantite']
-        summary += f"• {item['produit']} x {item['quantite']} = {subtotal}€\n"
-    
-    summary += f"\n📍 Adresse: {context.user_data['adresse'][:50]}...\n"
-    summary += f"📦 Livraison: {context.user_data['livraison']}\n"
-    summary += f"💳 Paiement: {context.user_data['paiement']}\n"
-    summary += f"\n💰 TOTAL: {total}€"
-    
-    if context.user_data['paiement'] == 'crypto':
-        summary += f"\n\n₿ Wallet: `{CRYPTO_WALLET}`"
+    summary += format_cart(cart, context.user_data)
+    summary += f"\n{tr(context.user_data, 'total')} {total}€\n\n"
+    summary += f"📍 {context.user_data['adresse']}\n"
+    summary += f"📦 {tr(context.user_data, context.user_data['livraison'])}\n"
+    summary += f"💳 {tr(context.user_data, context.user_data['paiement'])}\n"
     
     keyboard = [
         [InlineKeyboardButton(tr(context.user_data, "confirm"), callback_data="confirm_order")],
@@ -647,54 +793,47 @@ async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @security_check
 @error_handler
 async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Confirmation de commande"""
+    """Confirmation de la commande"""
     query = update.callback_query
     await query.answer()
     
     if query.data == "confirm_order":
+        # Envoi de la commande à l'admin
+        cart = context.user_data['cart']
+        country = context.user_data['pays']
+        total = calculate_total(cart, country)
+        
+        admin_message = f"🆕 *NOUVELLE COMMANDE*\n\n"
+        admin_message += f"👤 Client: {update.effective_user.first_name} (@{update.effective_user.username})\n"
+        admin_message += f"🆔 User ID: {update.effective_user.id}\n\n"
+        admin_message += format_cart(cart, context.user_data)
+        admin_message += f"\n💰 Total: {total}€\n\n"
+        admin_message += f"🌍 Pays: {country}\n"
+        admin_message += f"📍 Adresse: {context.user_data['adresse']}\n"
+        admin_message += f"📦 Livraison: {context.user_data['livraison']}\n"
+        admin_message += f"💳 Paiement: {context.user_data['paiement']}\n"
+        
+        try:
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=admin_message,
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            logger.error(f"Erreur envoi admin: {e}")
+        
         await query.message.edit_text(
             tr(context.user_data, "order_confirmed"),
             parse_mode='Markdown'
         )
         
-        # Notification admin
-        total = calculate_total(context.user_data['cart'], context.user_data['pays'])
-        user = query.from_user
-        
-        order_details = "🔔 NOUVELLE COMMANDE\n"
-        order_details += "=" * 30 + "\n\n"
-        order_details += "👤 CLIENT:\n"
-        order_details += f"├─ ID: {user.id}\n"
-        order_details += f"└─ Username: @{user.username if user.username else 'N/A'}\n\n"
-        order_details += "🛒 PRODUITS:\n"
-        
-        prix_table = PRIX_FR if context.user_data['pays'] == "FR" else PRIX_CH
-        for idx, item in enumerate(context.user_data['cart'], 1):
-            prix_unitaire = prix_table[item['produit']]
-            subtotal = prix_unitaire * item['quantite']
-            order_details += f"├─ {idx}. {item['produit']} x {item['quantite']} = {subtotal}€\n"
-        
-        order_details += f"\n📦 LIVRAISON:\n"
-        order_details += f"├─ Pays: {context.user_data['pays']}\n"
-        order_details += f"├─ Adresse: {context.user_data['adresse']}\n"
-        order_details += f"└─ Type: {context.user_data['livraison']}\n\n"
-        order_details += f"💳 PAIEMENT: {context.user_data['paiement']}\n"
-        order_details += f"💰 TOTAL: {total}€\n"
-        order_details += "=" * 30
-        
-        try:
-            await context.bot.send_message(chat_id=ADMIN_ID, text=order_details)
-            logger.info(f"✅ Commande confirmée - User: {user.id}")
-        except Exception as e:
-            logger.error(f"Erreur notification admin: {e}")
-    
-    context.user_data.clear()
-    return ConversationHandler.END
+        context.user_data.clear()
+        return ConversationHandler.END
 
 @security_check
 @error_handler
-async def annuler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Annulation"""
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Annulation de la commande"""
     query = update.callback_query
     await query.answer()
     
@@ -706,121 +845,605 @@ async def annuler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     return ConversationHandler.END
 
-async def error_callback(update: object, context: ContextTypes.DEFAULT_TYPE):
-    """Gestion globale des erreurs"""
-    logger.error("Erreur non gérée:", exc_info=context.error)
-    
-    # Ignorer les erreurs réseau temporaires
-    if isinstance(context.error, (NetworkError, TimedOut, Conflict)):
-        logger.info("Erreur réseau temporaire ignorée")
-        return
-    
-    # Notifier l'admin pour les erreurs critiques
-    try:
-        error_msg = f"🚨 ERREUR BOT\n\nType: {type(context.error).__name__}\n{str(context.error)[:200]}"
-        await context.bot.send_message(chat_id=ADMIN_ID, text=error_msg)
-    except:
-        pass
+# --- Gestion des erreurs globales ---
+async def error_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gestion des erreurs globales"""
+    logger.error(f"Exception: {context.error}", exc_info=context.error)
 
-async def shutdown(application: Application):
-    """Arrêt propre du bot"""
-    logger.info("🛑 Arrêt du bot...")
-    await application.stop()
-    await application.shutdown()
-    logger.info("✅ Bot arrêté proprement")
-
+# --- Configuration du bot ---
 def main():
     """Fonction principale"""
-    # Construction de l'application
-    application = (
-        Application.builder()
-        .token(TOKEN)
-        .connect_timeout(30.0)
-        .read_timeout(30.0)
-        .write_timeout(30.0)
-        .pool_timeout(30.0)
-        .build()
-    )
+    logger.info("🚀 Démarrage du bot...")
     
-    # Gestionnaire d'erreurs global
-    application.add_error_handler(error_callback)
+    application = Application.builder().token(TOKEN).build()
     
-    # Conversation handler
+    # ConversationHandler
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("start", start_command)],
+        entry_points=[CommandHandler('start', start_command)],
         states={
             LANGUE: [
-                CallbackQueryHandler(set_langue, pattern="^lang_(fr|en|es|de)$")
+                CallbackQueryHandler(set_langue, pattern='^lang_')
             ],
             PAYS: [
-                CallbackQueryHandler(choix_pays, pattern="^country_(FR|CH)$"),
-                CallbackQueryHandler(menu_navigation, pattern="^(start_order|info|price_menu|contact_admin|back_menu)$")
+                CallbackQueryHandler(menu_navigation, pattern='^(start_order|price_menu|info|contact_admin|back_menu) (
+        "🌍 *Choisissez votre langue / Select your language*\n"
+        "🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
+        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
+        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
+        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
+    ]
+    
+    image_path = Path(__file__).parent / "welcome_image.jpg"
+    
+    if image_path.exists():
+        try:
+            with open(image_path, 'rb') as photo:
+                await update.message.reply_photo(
+                    photo=photo,
+                    caption=welcome_text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+        except:
+            await update.message.reply_text(
+                welcome_text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+    else:
+        await update.message.reply_text(
+            welcome_text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    
+    return LANGUE
+
+@security_check
+@error_handler
+async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Définit la langue et affiche le menu principal"""
+    query = update.callback_query
+    await query.answer()
+    
+    lang_code = query.data.replace("lang_", "")
+    context.user_data['langue'] = lang_code
+    
+    welcome_text =),
+                CallbackQueryHandler(choix_pays, pattern='^country_')
             ],
             PRODUIT: [
-                CallbackQueryHandler(choix_produit, pattern="^product_(snow|pill|olive|clover)$")
+                CallbackQueryHandler(choix_produit, pattern='^product_'),
+                CallbackQueryHandler(cancel, pattern='^cancel (
+        "🌍 *Choisissez votre langue / Select your language*\n"
+        "🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
+        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
+        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
+        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
+    ]
+    
+    image_path = Path(__file__).parent / "welcome_image.jpg"
+    
+    if image_path.exists():
+        try:
+            with open(image_path, 'rb') as photo:
+                await update.message.reply_photo(
+                    photo=photo,
+                    caption=welcome_text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+        except:
+            await update.message.reply_text(
+                welcome_text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+    else:
+        await update.message.reply_text(
+            welcome_text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    
+    return LANGUE
+
+@security_check
+@error_handler
+async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Définit la langue et affiche le menu principal"""
+    query = update.callback_query
+    await query.answer()
+    
+    lang_code = query.data.replace("lang_", "")
+    context.user_data['langue'] = lang_code
+    
+    welcome_text =)
+            ],
+            PILL_SUBCATEGORY: [
+                CallbackQueryHandler(choix_pill_subcategory, pattern='^(pill_|back_to_products)'),
+                CallbackQueryHandler(cancel, pattern='^cancel (
+        "🌍 *Choisissez votre langue / Select your language*\n"
+        "🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
+        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
+        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
+        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
+    ]
+    
+    image_path = Path(__file__).parent / "welcome_image.jpg"
+    
+    if image_path.exists():
+        try:
+            with open(image_path, 'rb') as photo:
+                await update.message.reply_photo(
+                    photo=photo,
+                    caption=welcome_text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+        except:
+            await update.message.reply_text(
+                welcome_text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+    else:
+        await update.message.reply_text(
+            welcome_text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    
+    return LANGUE
+
+@security_check
+@error_handler
+async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Définit la langue et affiche le menu principal"""
+    query = update.callback_query
+    await query.answer()
+    
+    lang_code = query.data.replace("lang_", "")
+    context.user_data['langue'] = lang_code
+    
+    welcome_text =)
             ],
             QUANTITE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_quantite)
             ],
             CART_MENU: [
-                CallbackQueryHandler(cart_menu_handler, pattern="^(add_more|proceed_checkout)$")
+                CallbackQueryHandler(cart_menu, pattern='^(add_more|proceed_checkout) (
+        "🌍 *Choisissez votre langue / Select your language*\n"
+        "🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
+        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
+        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
+        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
+    ]
+    
+    image_path = Path(__file__).parent / "welcome_image.jpg"
+    
+    if image_path.exists():
+        try:
+            with open(image_path, 'rb') as photo:
+                await update.message.reply_photo(
+                    photo=photo,
+                    caption=welcome_text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+        except:
+            await update.message.reply_text(
+                welcome_text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+    else:
+        await update.message.reply_text(
+            welcome_text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    
+    return LANGUE
+
+@security_check
+@error_handler
+async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Définit la langue et affiche le menu principal"""
+    query = update.callback_query
+    await query.answer()
+    
+    lang_code = query.data.replace("lang_", "")
+    context.user_data['langue'] = lang_code
+    
+    welcome_text =),
+                CallbackQueryHandler(cancel, pattern='^cancel (
+        "🌍 *Choisissez votre langue / Select your language*\n"
+        "🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
+        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
+        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
+        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
+    ]
+    
+    image_path = Path(__file__).parent / "welcome_image.jpg"
+    
+    if image_path.exists():
+        try:
+            with open(image_path, 'rb') as photo:
+                await update.message.reply_photo(
+                    photo=photo,
+                    caption=welcome_text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+        except:
+            await update.message.reply_text(
+                welcome_text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+    else:
+        await update.message.reply_text(
+            welcome_text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    
+    return LANGUE
+
+@security_check
+@error_handler
+async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Définit la langue et affiche le menu principal"""
+    query = update.callback_query
+    await query.answer()
+    
+    lang_code = query.data.replace("lang_", "")
+    context.user_data['langue'] = lang_code
+    
+    welcome_text =)
             ],
             ADRESSE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_adresse)
             ],
             LIVRAISON: [
-                CallbackQueryHandler(choix_livraison, pattern="^delivery_(standard|express)$")
+                CallbackQueryHandler(choix_livraison, pattern='^delivery_'),
+                CallbackQueryHandler(cancel, pattern='^cancel (
+        "🌍 *Choisissez votre langue / Select your language*\n"
+        "🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
+        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
+        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
+        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
+    ]
+    
+    image_path = Path(__file__).parent / "welcome_image.jpg"
+    
+    if image_path.exists():
+        try:
+            with open(image_path, 'rb') as photo:
+                await update.message.reply_photo(
+                    photo=photo,
+                    caption=welcome_text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+        except:
+            await update.message.reply_text(
+                welcome_text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+    else:
+        await update.message.reply_text(
+            welcome_text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    
+    return LANGUE
+
+@security_check
+@error_handler
+async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Définit la langue et affiche le menu principal"""
+    query = update.callback_query
+    await query.answer()
+    
+    lang_code = query.data.replace("lang_", "")
+    context.user_data['langue'] = lang_code
+    
+    welcome_text =)
             ],
             PAIEMENT: [
-                CallbackQueryHandler(choix_paiement, pattern="^payment_(cash|crypto)$")
+                CallbackQueryHandler(choix_paiement, pattern='^payment_'),
+                CallbackQueryHandler(cancel, pattern='^cancel (
+        "🌍 *Choisissez votre langue / Select your language*\n"
+        "🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
+        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
+        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
+        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
+    ]
+    
+    image_path = Path(__file__).parent / "welcome_image.jpg"
+    
+    if image_path.exists():
+        try:
+            with open(image_path, 'rb') as photo:
+                await update.message.reply_photo(
+                    photo=photo,
+                    caption=welcome_text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+        except:
+            await update.message.reply_text(
+                welcome_text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+    else:
+        await update.message.reply_text(
+            welcome_text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    
+    return LANGUE
+
+@security_check
+@error_handler
+async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Définit la langue et affiche le menu principal"""
+    query = update.callback_query
+    await query.answer()
+    
+    lang_code = query.data.replace("lang_", "")
+    context.user_data['langue'] = lang_code
+    
+    welcome_text =)
             ],
             CONFIRMATION: [
-                CallbackQueryHandler(confirmation, pattern="^confirm_order$")
+                CallbackQueryHandler(confirmation, pattern='^confirm_order (
+        "🌍 *Choisissez votre langue / Select your language*\n"
+        "🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
+        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
+        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
+        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
+    ]
+    
+    image_path = Path(__file__).parent / "welcome_image.jpg"
+    
+    if image_path.exists():
+        try:
+            with open(image_path, 'rb') as photo:
+                await update.message.reply_photo(
+                    photo=photo,
+                    caption=welcome_text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+        except:
+            await update.message.reply_text(
+                welcome_text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+    else:
+        await update.message.reply_text(
+            welcome_text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    
+    return LANGUE
+
+@security_check
+@error_handler
+async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Définit la langue et affiche le menu principal"""
+    query = update.callback_query
+    await query.answer()
+    
+    lang_code = query.data.replace("lang_", "")
+    context.user_data['langue'] = lang_code
+    
+    welcome_text =),
+                CallbackQueryHandler(cancel, pattern='^cancel (
+        "🌍 *Choisissez votre langue / Select your language*\n"
+        "🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
+        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
+        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
+        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
+    ]
+    
+    image_path = Path(__file__).parent / "welcome_image.jpg"
+    
+    if image_path.exists():
+        try:
+            with open(image_path, 'rb') as photo:
+                await update.message.reply_photo(
+                    photo=photo,
+                    caption=welcome_text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+        except:
+            await update.message.reply_text(
+                welcome_text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+    else:
+        await update.message.reply_text(
+            welcome_text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    
+    return LANGUE
+
+@security_check
+@error_handler
+async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Définit la langue et affiche le menu principal"""
+    query = update.callback_query
+    await query.answer()
+    
+    lang_code = query.data.replace("lang_", "")
+    context.user_data['langue'] = lang_code
+    
+    welcome_text =)
             ]
         },
         fallbacks=[
-            CallbackQueryHandler(annuler, pattern="^cancel$"),
-            CommandHandler("start", start_command)
-        ],
-        per_message=False,
-        allow_reentry=True,
-        conversation_timeout=1800  # 30 minutes
+            CommandHandler('start', start_command),
+            CallbackQueryHandler(cancel, pattern='^cancel (
+        "🌍 *Choisissez votre langue / Select your language*\n"
+        "🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
+        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
+        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
+        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
+    ]
+    
+    image_path = Path(__file__).parent / "welcome_image.jpg"
+    
+    if image_path.exists():
+        try:
+            with open(image_path, 'rb') as photo:
+                await update.message.reply_photo(
+                    photo=photo,
+                    caption=welcome_text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+        except:
+            await update.message.reply_text(
+                welcome_text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+    else:
+        await update.message.reply_text(
+            welcome_text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    
+    return LANGUE
+
+@security_check
+@error_handler
+async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Définit la langue et affiche le menu principal"""
+    query = update.callback_query
+    await query.answer()
+    
+    lang_code = query.data.replace("lang_", "")
+    context.user_data['langue'] = lang_code
+    
+    welcome_text =)
+        ]
     )
     
     application.add_handler(conv_handler)
+    application.add_error_handler(error_callback)
     
-    # Gestion de l'arrêt propre
-    def signal_handler(sig, frame):
-        logger.info(f"Signal {sig} reçu, arrêt du bot...")
-        import asyncio
-        asyncio.create_task(shutdown(application))
-    
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-    
-    # Informations de démarrage
-    logger.info("=" * 50)
-    logger.info("🚀 Bot démarré avec succès!")
-    logger.info(f"🔒 Whitelist: {'Activée' if USE_WHITELIST else 'Désactivée'}")
-    logger.info(f"⏱️ Rate limit: {MAX_MESSAGES_PER_MINUTE} msg/min")
-    logger.info(f"⏳ Session timeout: {SESSION_TIMEOUT_MINUTES} min")
-    logger.info(f"📊 Max quantité: {MAX_QUANTITY_PER_PRODUCT}")
-    logger.info("=" * 50)
-    
-    # Démarrage du polling avec gestion robuste
-    try:
-        application.run_polling(
-            allowed_updates=Update.ALL_TYPES,
-            drop_pending_updates=True,  # Important: évite les conflits
-            close_loop=False
-        )
-    except Conflict as e:
-        logger.error("❌ CONFLIT: Une autre instance du bot est déjà en cours d'exécution!")
-        logger.error("Solution: Arrêtez toutes les autres instances du bot avant de redémarrer.")
-        sys.exit(1)
-    except Exception as e:
-        logger.error(f"❌ Erreur critique: {e}", exc_info=True)
-        sys.exit(1)
+    logger.info("✅ Bot démarré avec succès!")
+    application.run_polling(drop_pending_updates=True)
 
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    try:
+        main()
+    except KeyboardInterrupt:
+        logger.info("🛑 Bot arrêté par l'utilisateur")
+    except Exception as e:
+        logger.error(f"❌ Erreur fatale: {e}", exc_info=True)
+        sys.exit(1) (
+        "🌍 *Choisissez votre langue / Select your language*\n"
+        "🌍 *Seleccione su idioma / Wählen Sie Ihre Sprache*"
+    )
+    
+    keyboard = [
+        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
+        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
+        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
+        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")]
+    ]
+    
+    image_path = Path(__file__).parent / "welcome_image.jpg"
+    
+    if image_path.exists():
+        try:
+            with open(image_path, 'rb') as photo:
+                await update.message.reply_photo(
+                    photo=photo,
+                    caption=welcome_text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+        except:
+            await update.message.reply_text(
+                welcome_text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+    else:
+        await update.message.reply_text(
+            welcome_text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    
+    return LANGUE
+
+@security_check
+@error_handler
+async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Définit la langue et affiche le menu principal"""
+    query = update.callback_query
+    await query.answer()
+    
+    lang_code = query.data.replace("lang_", "")
+    context.user_data['langue'] = lang_code
+    
+    welcome_text =

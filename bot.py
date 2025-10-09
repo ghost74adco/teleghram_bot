@@ -4,6 +4,7 @@ import logging
 import re
 import signal
 import csv
+import math
 from dotenv import load_dotenv
 from pathlib import Path
 from functools import wraps
@@ -54,6 +55,7 @@ validate_environment()
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 CRYPTO_WALLET = os.getenv("CRYPTO_WALLET")
+ADMIN_ADDRESS = os.getenv("ADMIN_ADDRESS", "Chamonix-Mont-Blanc, France")  # Adresse par défaut
 
 # --- Imports Telegram ---
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -63,6 +65,15 @@ from telegram.ext import (
 )
 from telegram.error import NetworkError, TimedOut, Conflict
 import asyncio
+
+# --- Imports pour géolocalisation ---
+try:
+    from geopy.geocoders import Nominatim
+    from geopy.distance import geodesic
+    GEOPY_AVAILABLE = True
+except ImportError:
+    GEOPY_AVAILABLE = False
+    logger.warning("⚠️ geopy non installé. Installez avec: pip install geopy")
 
 # --- Configuration ---
 USE_WHITELIST = False
@@ -80,7 +91,7 @@ MAX_QUANTITY_PER_PRODUCT = 100
 FRAIS_POSTAL = 10  # Frais fixes pour livraison postale
 
 # États de conversation
-LANGUE, PAYS, PRODUIT, PILL_SUBCATEGORY, ROCK_SUBCATEGORY, QUANTITE, CART_MENU, ADRESSE, LIVRAISON, SAISIE_DISTANCE, PAIEMENT, VALIDATION_LIVRAISON, CONFIRMATION = range(13)
+LANGUE, PAYS, PRODUIT, PILL_SUBCATEGORY, ROCK_SUBCATEGORY, QUANTITE, CART_MENU, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION = range(11)
 
 # Produits
 PRODUCT_MAP = {
@@ -135,9 +146,11 @@ TRANSLATIONS = {
         "choose_pill_type": "💊 *Choisissez le type de pilule :*",
         "choose_rock_type": "🪨 *Choisissez le type de crystal :*",
         "enter_quantity": "📝 *Entrez la quantité désirée :*",
-        "enter_address": "📍 *Entrez votre adresse complète :*",
+        "enter_address": "📍 *Entrez votre adresse complète :*\n\n(Exemple: 123 Rue de la Paix, 75001 Paris, France)",
         "choose_delivery": "📦 *Choisissez le type de livraison :*",
-        "enter_distance": "📏 *Entrez la distance en km pour la livraison express :*\n\n(Tarif: 2€/km + 0.5% du montant total)",
+        "calculating_distance": "📏 Calcul de la distance en cours...",
+        "distance_calculated": "📏 *Distance calculée :* {distance} km\n💶 *Frais de livraison :* {fee}€\n\n{formula}",
+        "geocoding_error": "❌ Impossible de localiser l'adresse. Veuillez vérifier et réessayer.",
         "choose_payment": "💳 *Choisissez le mode de paiement :*",
         "order_summary": "✅ *Résumé de votre commande :*",
         "delivery_validation": "📦 *Validation de la livraison*\n\nVeuillez confirmer la réception de votre commande :",
@@ -408,9 +421,48 @@ def calculate_delivery_fee(delivery_type: str, distance: int = 0, subtotal: floa
     if delivery_type == "postal":
         return FRAIS_POSTAL
     elif delivery_type == "express":
-        # 2€/km + 0.5% du montant total
-        return (distance * 2) + (subtotal * 0.005)
+        # 2€/km + 3% du montant total, arrondi à la dizaine supérieure
+        base_fee = (distance * 2) + (subtotal * 0.03)
+        # Arrondir à la dizaine supérieure
+        return math.ceil(base_fee / 10) * 10
     return 0
+
+async def get_distance_between_addresses(address1: str, address2: str) -> tuple:
+    """
+    Calcule la distance entre deux adresses
+    Retourne (distance_km, success, error_message)
+    """
+    if not GEOPY_AVAILABLE:
+        logger.error("geopy n'est pas installé")
+        return (0, False, "Module de géolocalisation non disponible")
+    
+    try:
+        geolocator = Nominatim(user_agent="telegram_shop_bot")
+        
+        # Géocoder les deux adresses
+        location1 = geolocator.geocode(address1, timeout=10)
+        location2 = geolocator.geocode(address2, timeout=10)
+        
+        if not location1:
+            return (0, False, f"Adresse de départ introuvable: {address1}")
+        
+        if not location2:
+            return (0, False, f"Adresse de livraison introuvable: {address2}")
+        
+        # Calculer la distance
+        coords1 = (location1.latitude, location1.longitude)
+        coords2 = (location2.latitude, location2.longitude)
+        
+        distance = geodesic(coords1, coords2).kilometers
+        distance_rounded = round(distance, 1)
+        
+        logger.info(f"Distance calculée: {distance_rounded} km entre {address1} et {address2}")
+        
+        return (distance_rounded, True, None)
+        
+    except Exception as e:
+        logger.error(f"Erreur calcul distance: {e}")
+        return (0, False, str(e))
 
 def calculate_total(cart, country, delivery_type: str = None, distance: int = 0):
     """Calcule le total avec frais de livraison"""
@@ -913,6 +965,16 @@ async def cart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @error_handler
 async def saisie_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Saisie de l'adresse"""
+    # Gérer à la fois les messages texte et les callback queries
+    if update.callback_query:
+        # Retour depuis une erreur de géolocalisation
+        query = update.callback_query
+        await query.answer()
+        text = tr(context.user_data, 'enter_address')
+        await query.message.edit_text(text, parse_mode='Markdown')
+        return ADRESSE
+    
+    # Saisie normale de l'adresse
     address = sanitize_input(update.message.text, max_length=300)
     
     if len(address) < 15:
@@ -946,12 +1008,69 @@ async def choix_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['livraison'] = delivery_type
     
     if delivery_type == "express":
-        # Demander la distance pour express
+        # Calculer automatiquement la distance
+        client_address = context.user_data.get('adresse', '')
+        
+        # Afficher message de calcul en cours
         await query.message.edit_text(
-            tr(context.user_data, "enter_distance"),
+            tr(context.user_data, "calculating_distance"),
             parse_mode='Markdown'
         )
-        return SAISIE_DISTANCE
+        
+        # Calculer la distance
+        distance_km, success, error_msg = await get_distance_between_addresses(
+            ADMIN_ADDRESS,
+            client_address
+        )
+        
+        if not success:
+            # Si erreur de géolocalisation, informer l'utilisateur
+            error_text = tr(context.user_data, "geocoding_error")
+            error_text += f"\n\n⚠️ {error_msg}\n\n"
+            error_text += "Veuillez réessayer avec une adresse plus précise."
+            
+            keyboard = [
+                [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_address")],
+                [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
+            ]
+            
+            await query.message.edit_text(
+                error_text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+            return LIVRAISON
+        
+        # Calculer les frais
+        cart = context.user_data['cart']
+        country = context.user_data['pays']
+        subtotal, _, _ = calculate_total(cart, country)
+        delivery_fee = calculate_delivery_fee("express", distance_km, subtotal)
+        
+        context.user_data['distance'] = distance_km
+        
+        # Afficher le résultat avec formule détaillée
+        formula_detail = f"*Calcul :*\n• Distance: {distance_km} km × 2€ = {distance_km * 2}€\n• Pourcentage: {subtotal}€ × 3% = {subtotal * 0.03:.2f}€\n• Total brut: {(distance_km * 2) + (subtotal * 0.03):.2f}€\n• Arrondi dizaine sup.: {delivery_fee}€"
+        
+        distance_text = tr(context.user_data, "distance_calculated").format(
+            distance=distance_km,
+            fee=delivery_fee,
+            formula=formula_detail
+        )
+        
+        keyboard = [
+            [InlineKeyboardButton(tr(context.user_data, "cash"), callback_data="payment_cash")],
+            [InlineKeyboardButton(tr(context.user_data, "crypto"), callback_data="payment_crypto")],
+            [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
+        ]
+        
+        await query.message.edit_text(
+            distance_text + "\n\n" + tr(context.user_data, "choose_payment"),
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        
+        return PAIEMENT
     else:
         # Pour postal, passer directement au paiement
         context.user_data['distance'] = 0
@@ -968,47 +1087,6 @@ async def choix_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
         return PAIEMENT
-
-@security_check
-@error_handler
-async def saisie_distance(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Saisie de la distance pour livraison express"""
-    distance_str = sanitize_input(update.message.text, max_length=10)
-    
-    if not distance_str.isdigit():
-        await update.message.reply_text(tr(context.user_data, "invalid_distance"))
-        return SAISIE_DISTANCE
-    
-    distance = int(distance_str)
-    if distance <= 0 or distance > 500:
-        await update.message.reply_text(tr(context.user_data, "invalid_distance"))
-        return SAISIE_DISTANCE
-    
-    context.user_data['distance'] = distance
-    
-    # Calculer et afficher le coût estimé
-    cart = context.user_data['cart']
-    country = context.user_data['pays']
-    subtotal, _, _ = calculate_total(cart, country)
-    delivery_fee = calculate_delivery_fee("express", distance, subtotal)
-    
-    keyboard = [
-        [InlineKeyboardButton(tr(context.user_data, "cash"), callback_data="payment_cash")],
-        [InlineKeyboardButton(tr(context.user_data, "crypto"), callback_data="payment_crypto")],
-        [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
-    ]
-    
-    text = f"{tr(context.user_data, 'choose_payment')}\n\n"
-    text += f"📏 Distance: {distance} km\n"
-    text += f"💶 Frais de livraison estimés: {delivery_fee:.2f}€"
-    
-    await update.message.reply_text(
-        text,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
-    
-    return PAIEMENT
 
 @security_check
 @error_handler
@@ -1031,8 +1109,8 @@ async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
     summary = f"{tr(context.user_data, 'order_summary')}\n\n"
     summary += format_cart(cart, context.user_data)
     summary += f"\n{tr(context.user_data, 'subtotal')} {subtotal}€\n"
-    summary += f"{tr(context.user_data, 'delivery_fee')} {delivery_fee:.2f}€\n"
-    summary += f"{tr(context.user_data, 'total')} {total:.2f}€\n\n"
+    summary += f"{tr(context.user_data, 'delivery_fee')} {delivery_fee}€\n"
+    summary += f"{tr(context.user_data, 'total')} *{total}€*\n\n"
     summary += f"📍 {context.user_data['adresse']}\n"
     
     if delivery_type == "postal":
@@ -1120,95 +1198,109 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         admin_message += f"💳 Paiement: {context.user_data['paiement']}\n"
         
+        # Bouton de validation pour l'admin
+        admin_keyboard = [
+            [InlineKeyboardButton(
+                "✅ Valider la livraison", 
+                callback_data=f"admin_validate_{order_id}_{update.effective_user.id}"
+            )]
+        ]
+        
         try:
             await context.bot.send_message(
                 chat_id=ADMIN_ID,
                 text=admin_message,
+                reply_markup=InlineKeyboardMarkup(admin_keyboard),
                 parse_mode='Markdown'
             )
         except Exception as e:
             logger.error(f"Erreur envoi admin: {e}")
         
-        # Afficher le message de confirmation avec bouton de validation
-        keyboard = [
-            [InlineKeyboardButton(
-                tr(context.user_data, "validate_delivery"), 
-                callback_data="validate_delivery"
-            )]
-        ]
-        
+        # Message de confirmation simple pour le client
         confirmation_text = tr(context.user_data, "order_confirmed")
         confirmation_text += f"\n\n📋 Numéro de commande: `{order_id}`"
         confirmation_text += f"\n💰 Montant total: {total:.2f}€"
-        confirmation_text += f"\n\n⚠️ Une fois la livraison reçue, veuillez valider ci-dessous:"
         
         await query.message.edit_text(
             confirmation_text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
-        )
-        
-        return VALIDATION_LIVRAISON
-
-@security_check
-@error_handler
-async def validation_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Validation de la livraison par le client"""
-    query = update.callback_query
-    await query.answer()
-    
-    if query.data == "validate_delivery":
-        order_id = context.user_data.get('order_id', 'N/A')
-        
-        # Mettre à jour le statut dans le CSV
-        csv_path = Path(__file__).parent / "orders.csv"
-        if csv_path.exists():
-            try:
-                # Lire toutes les lignes
-                rows = []
-                with open(csv_path, 'r', encoding='utf-8') as csvfile:
-                    reader = csv.DictReader(csvfile)
-                    for row in reader:
-                        if row['order_id'] == order_id:
-                            row['status'] = 'Livraison validée'
-                        rows.append(row)
-                
-                # Réécrire le fichier avec le statut mis à jour
-                if rows:
-                    with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
-                        writer = csv.DictWriter(csvfile, fieldnames=rows[0].keys())
-                        writer.writeheader()
-                        writer.writerows(rows)
-                    
-                    logger.info(f"✅ Validation livraison: {order_id}")
-            except Exception as e:
-                logger.error(f"❌ Erreur mise à jour CSV: {e}")
-        
-        # Notifier l'admin
-        admin_notification = f"✅ *LIVRAISON VALIDÉE*\n\n"
-        admin_notification += f"📋 Commande: `{order_id}`\n"
-        admin_notification += f"👤 Client: {update.effective_user.first_name} (@{update.effective_user.username})\n"
-        admin_notification += f"🆔 User ID: {update.effective_user.id}\n"
-        admin_notification += f"💰 Montant: {context.user_data.get('order_total', 0):.2f}€\n"
-        admin_notification += f"📅 Date validation: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-        
-        try:
-            await context.bot.send_message(
-                chat_id=ADMIN_ID,
-                text=admin_notification,
-                parse_mode='Markdown'
-            )
-        except Exception as e:
-            logger.error(f"Erreur notification admin: {e}")
-        
-        # Message au client
-        await query.message.edit_text(
-            tr(context.user_data, "delivery_confirmed"),
             parse_mode='Markdown'
         )
         
         context.user_data.clear()
         return ConversationHandler.END
+
+@security_check
+@error_handler
+async def admin_validation_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Validation de la livraison par l'admin"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Vérifier que c'est bien l'admin
+    if update.effective_user.id != ADMIN_ID:
+        await query.answer("❌ Action non autorisée", show_alert=True)
+        return
+    
+    # Extraire order_id et client_id du callback_data
+    data_parts = query.data.split("_")
+    if len(data_parts) >= 4:
+        order_id = "_".join(data_parts[2:-1])  # Récupère l'order_id complet
+        client_id = int(data_parts[-1])
+    else:
+        await query.answer("❌ Erreur de données", show_alert=True)
+        return
+    
+    # Mettre à jour le statut dans le CSV
+    csv_path = Path(__file__).parent / "orders.csv"
+    if csv_path.exists():
+        try:
+            # Lire toutes les lignes
+            rows = []
+            with open(csv_path, 'r', encoding='utf-8') as csvfile:
+                reader = csv.DictReader(csvfile)
+                for row in reader:
+                    if row['order_id'] == order_id:
+                        row['status'] = 'Livraison validée'
+                    rows.append(row)
+            
+            # Réécrire le fichier avec le statut mis à jour
+            if rows:
+                with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
+                    writer = csv.DictWriter(csvfile, fieldnames=rows[0].keys())
+                    writer.writeheader()
+                    writer.writerows(rows)
+                
+                logger.info(f"✅ Validation livraison par admin: {order_id}")
+        except Exception as e:
+            logger.error(f"❌ Erreur mise à jour CSV: {e}")
+            await query.answer("❌ Erreur de mise à jour", show_alert=True)
+            return
+    
+    # Modifier le message admin pour confirmer la validation
+    try:
+        new_text = query.message.text + "\n\n✅ *LIVRAISON VALIDÉE*"
+        new_text += f"\n📅 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        await query.message.edit_text(new_text, parse_mode='Markdown')
+    except:
+        pass
+    
+    # Notifier le client
+    try:
+        client_message = "✅ *Livraison confirmée !*\n\n"
+        client_message += f"📋 Commande: `{order_id}`\n"
+        client_message += "Votre livraison a été validée par notre équipe.\n"
+        client_message += "Transaction terminée avec succès ! 🎉\n\n"
+        client_message += "Merci de votre confiance ! 💚"
+        
+        await context.bot.send_message(
+            chat_id=client_id,
+            text=client_message,
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        logger.error(f"Erreur notification client: {e}")
+    
+    await query.answer("✅ Livraison validée avec succès!", show_alert=True)
 
 @security_check
 @error_handler
@@ -1272,10 +1364,8 @@ def main():
             ],
             LIVRAISON: [
                 CallbackQueryHandler(choix_livraison, pattern='^delivery_'),
-                CallbackQueryHandler(cancel, pattern='^cancel')
-            ],
-            SAISIE_DISTANCE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_distance)
+                CallbackQueryHandler(cancel, pattern='^cancel'),
+                CallbackQueryHandler(saisie_adresse, pattern='^back_to_address')
             ],
             PAIEMENT: [
                 CallbackQueryHandler(choix_paiement, pattern='^payment_'),
@@ -1284,9 +1374,6 @@ def main():
             CONFIRMATION: [
                 CallbackQueryHandler(confirmation, pattern='^confirm_order'),
                 CallbackQueryHandler(cancel, pattern='^cancel')
-            ],
-            VALIDATION_LIVRAISON: [
-                CallbackQueryHandler(validation_livraison, pattern='^validate_delivery')
             ]
         },
         fallbacks=[
@@ -1296,6 +1383,13 @@ def main():
     )
     
     application.add_handler(conv_handler)
+    
+    # Handler séparé pour la validation admin (en dehors du conversation handler)
+    application.add_handler(CallbackQueryHandler(
+        admin_validation_livraison, 
+        pattern='^admin_validate_'
+    ))
+    
     application.add_error_handler(error_callback)
     
     logger.info("✅ Bot démarré avec succès!")

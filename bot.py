@@ -95,11 +95,11 @@ LANGUE, PAYS, PRODUIT, PILL_SUBCATEGORY, ROCK_SUBCATEGORY, QUANTITE, CART_MENU, 
 
 # Produits
 PRODUCT_MAP = {
-    "snow": "❄️ Coco",
-    "pill": "💊 Exta",
-    "olive": "🍫 Résine",
-    "clover": "🍀 Weed",
-    "rock": "🪨 Crystal"
+    "snow": "❄️",
+    "pill": "💊",
+    "olive": "🫒",
+    "clover": "🍀",
+    "rock": "🪨"
 }
 
 # Sous-catégories pour Pills

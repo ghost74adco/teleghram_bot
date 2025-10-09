@@ -95,11 +95,11 @@ LANGUE, PAYS, PRODUIT, PILL_SUBCATEGORY, ROCK_SUBCATEGORY, QUANTITE, CART_MENU, 
 
 # Produits
 PRODUCT_MAP = {
-    "snow": "❄️",
-    "pill": "💊",
-    "olive": "🫒",
-    "clover": "🍀",
-    "rock": "🪨"
+    "snow": "❄️ COCO",
+    "pill": "💊 Exta Pills",
+    "olive": "🍫 Hash",
+    "clover": "🍀 Weed",
+    "rock": "🪨 MDMA, 4MMC"
 }
 
 # Sous-catégories pour Pills
@@ -116,21 +116,21 @@ ROCK_SUBCATEGORIES = {
 
 # Prix (avec sous-catégories pour pills et rocks)
 PRIX_FR = {
-    "❄️": 80,
+    "❄️ Coco": 80,
     "💊 Squid Game": 10,
     "💊 Punisher": 10,
-    "🫒": 7,
-    "🍀": 10,
+    "🍫 Hash": 7,
+    "🍀 Weed": 10,
     "🪨 MDMA": 50,
     "🪨 4MMC": 50
 }
 
 PRIX_CH = {
-    "❄️": 100,
+    "❄️ Coco": 100,
     "💊 Squid Game": 15,
     "💊 Punisher": 15,
-    "🫒": 8,
-    "🍀": 12,
+    "🍫 Hash": 8,
+    "🍀 Weed": 12,
     "🪨 MDMA": 70,
     "🪨 4MMC": 70
 }

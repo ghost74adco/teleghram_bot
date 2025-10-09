@@ -3,3 +3,4 @@ python-telegram-bot==20.3
 python-dotenv
 flask
 gunicorn
+geopy==2.4.1

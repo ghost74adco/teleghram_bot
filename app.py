@@ -202,247 +202,160 @@ BACKGROUND_URL = "https://res.cloudinary.com/dfhrrtzsd/image/upload/v1760118433/
 # Return HTML as a plain string (do NOT use f-strings with braces in JSX)
 @app.route('/')
 @app.route('/catalogue')
-def frontend():
-    html = """<!DOCTYPE html>
+def catalogue():
+    return """
+<!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Pirates Supply — Catalogue</title>
-
+<meta charset="UTF-8">
+<title>Catalogue Produits</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
 <style>
-  :root {
-    --card-bg: rgba(0,0,0,0.65);
-    --accent: #ffcc00;
-    --text: #ffffff;
-  }
-  html,body { height:100%; margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; color:var(--text); }
-  body {
-    background-image: url('""" + BACKGROUND_URL + """');
-    background-size: cover;
-    background-position: center;
-    background-attachment: fixed;
-    -webkit-font-smoothing:antialiased;
-    -moz-osx-font-smoothing:grayscale;
-  }
-  .container {
-    max-width:1000px;
-    margin:28px auto;
-    padding:20px;
-    background: linear-gradient(rgba(0,0,0,0.45), rgba(0,0,0,0.35));
-    border-radius:16px;
-    box-shadow:0 8px 30px rgba(0,0,0,0.6);
-  }
-  header { text-align:center; margin-bottom:18px; }
-  h1 { margin:0 0 6px 0; font-size:28px; letter-spacing:1px; }
-  .subtitle { opacity:0.85; margin-bottom:12px; }
-  .actions { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-bottom:12px; }
-  button { background:var(--accent); color:#000; border:none; padding:10px 12px; border-radius:10px; cursor:pointer; font-weight:700; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:14px; }
-  .card { background:var(--card-bg); border-radius:12px; padding:12px; overflow:hidden; }
-  .card img, .card video { width:100%; height:180px; object-fit:cover; border-radius:8px; display:block; margin-bottom:8px; }
-  .meta { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:6px; }
-  input, textarea { width:100%; padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03); color:var(--text); margin-bottom:8px; }
-  .form { background: rgba(255,255,255,0.03); padding:12px; border-radius:12px; margin-bottom:12px; }
-  a.link { color:var(--accent); text-decoration:none; font-weight:700; }
-  .small-muted { font-size:13px; opacity:0.9; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+  background: url('https://res.cloudinary.com/dfhrrtzsd/image/upload/v1760118433/ChatGPT_Image_8_oct._2025_03_01_21_zm5zfy.png') no-repeat center center fixed;
+  background-size: cover;
+  margin: 0;
+  padding: 0;
+  color: #fff;
+}
+.container {
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(6px);
+  border-radius: 16px;
+  padding: 20px;
+  margin: 20px auto;
+  max-width: 800px;
+}
+button {
+  background: #ffcc00;
+  color: #000;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  margin-right: 10px;
+}
+button:hover { background: #ffd633; }
+input, textarea {
+  width: 100%;
+  margin: 5px 0;
+  padding: 8px;
+  border-radius: 6px;
+  border: none;
+}
+.card {
+  background: rgba(255,255,255,0.9);
+  color: #000;
+  border-radius: 12px;
+  margin: 10px 0;
+  padding: 10px;
+}
+.card img, .card video {
+  width: 100%;
+  border-radius: 8px;
+}
 </style>
 </head>
 <body>
-  <div id="root"></div>
-
+<div id="root"></div>
 <script type="text/babel">
-const { useState, useEffect } = React;
-const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
-
+const {useState,useEffect}=React;
+const tg=window.Telegram?.WebApp;
 function App(){
-  const [products, setProducts] = useState([]);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [showForm, setShowForm] = useState(false);
-  const [edit, setEdit] = useState(null);
-  const [formData, setFormData] = useState({ name:'', price:0, description:'', category:'', stock:0, image_url:'', video_url:'' });
-  const [pw, setPw] = useState('');
+ const[products,setProducts]=useState([]);
+ const[isAdmin,setIsAdmin]=useState(false);
+ const[formData,setFormData]=useState({name:'',price:'',description:'',category:'',stock:'',image_url:'',video_url:''});
+ const[showForm,setShowForm]=useState(false);
+ const[edit,setEdit]=useState(null);
 
-  useEffect(() => {
-    if (tg) {
-      try { tg.ready(); tg.expand(); } catch(e){}
-    }
-    loadProducts();
-    checkAdmin();
-  }, []);
+ useEffect(()=>{if(tg){tg.ready();tg.expand();}load();check();},[]);
 
-  const headersWithTelegram = () => {
-    const headers = { 'Content-Type': 'application/json' };
-    if (tg && tg.initData) {
-      headers['X-Telegram-Init-Data'] = tg.initData;
-    }
-    return headers;
-  };
+ const headers=()=>({'Content-Type':'application/json','X-Telegram-Init-Data':tg?.initData||''});
 
-  async function loadProducts(){
-    try {
-      const res = await fetch('/api/products');
-      const data = await res.json();
-      setProducts(data || []);
-    } catch(e){
-      console.error(e);
-    }
+ async function load(){
+   const res=await fetch('/api/products');
+   setProducts(await res.json());
+ }
+
+ async function check(){
+   try{
+     const res=await fetch('/api/admin/check',{headers:headers()});
+     setIsAdmin(res.ok);
+   }catch(e){setIsAdmin(false);}
+ }
+
+ async function save(){
+   if(!formData.name||!formData.price){alert('Nom et prix requis');return;}
+   const url=edit?`/api/admin/products/${edit.id}`:'/api/admin/products';
+   const method=edit?'PUT':'POST';
+   const res=await fetch(url,{method,headers:headers(),body:JSON.stringify(formData)});
+   if(res.ok){setShowForm(false);setEdit(null);await load();}
+ }
+
+ async function del(id){
+   if(!confirm('Supprimer ?'))return;
+   await fetch(`/api/admin/products/${id}`,{method:'DELETE',headers:headers()});
+   load();
+ }
+
+ async function uploadFile(e){
+   const file=e.target.files[0];if(!file)return;
+   const fd=new FormData();fd.append('file',file);
+   const res=await fetch('/api/upload',{method:'POST',headers:{'X-Telegram-Init-Data':tg?.initData||''},body:fd});
+   const data=await res.json();
+   if(data.url){
+     if(file.type.startsWith('video'))setFormData({...formData,video_url:data.url,image_url:''});
+     else setFormData({...formData,image_url:data.url,video_url:''});
+   }else alert('Erreur upload');
+ }
+
+ return <div className="container">
+  <h1>🛍️ Mon Catalogue</h1>
+
+  {isAdmin && !showForm &&
+    <button onClick={()=>{setShowForm(true);setEdit(null);setFormData({name:'',price:'',description:'',category:'',stock:'',image_url:'',video_url:''})}}>➕ Ajouter un produit</button>
   }
 
-  async function checkAdmin(){
-    try {
-      const hdr = {};
-      if (tg && tg.initData) hdr['X-Telegram-Init-Data'] = tg.initData;
-      const res = await fetch('/api/admin/check', { headers: hdr });
-      const data = await res.json();
-      setIsAdmin(!!data.admin);
-    } catch(e){
-      setIsAdmin(false);
-    }
-  }
-
-  async function loginWithPassword(){
-    try {
-      const res = await fetch('/api/admin/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ password: pw }) });
-      if (res.ok){
-        const j = await res.json();
-        if (j.success){ setIsAdmin(true); setPw(''); }
-      } else {
-        alert('Mot de passe incorrect');
-      }
-    } catch(e){ alert('Erreur'); }
-  }
-
-  async function logout(){
-    await fetch('/api/admin/logout', { method:'POST' });
-    setIsAdmin(false);
-  }
-
-  function startAdd(){
-    setEdit(null);
-    setFormData({ name:'', price:0, description:'', category:'', stock:0, image_url:'', video_url:'' });
-    setShowForm(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  async function uploadFile(e){
-    const file = e.target.files[0];
-    if (!file) return;
-    const fd = new FormData();
-    fd.append('file', file);
-    // include Telegram header if present in WebApp
-    const headers = {};
-    if (tg && tg.initData) headers['X-Telegram-Init-Data'] = tg.initData;
-    const res = await fetch('/api/upload', { method:'POST', headers: headers, body: fd });
-    const j = await res.json();
-    if (j.url){
-      if (file.type.startsWith('video')) setFormData({...formData, video_url: j.url, image_url: ''});
-      else setFormData({...formData, image_url: j.url, video_url: ''});
-    } else {
-      alert('Erreur upload');
-    }
-  }
-
-  async function save(){
-    if (!formData.name.trim() || Number(formData.price) <= 0){
-      alert('Veuillez renseigner un nom et un prix valide');
-      return;
-    }
-    const url = edit ? `/api/admin/products/${edit.id}` : '/api/admin/products';
-    const method = edit ? 'PUT' : 'POST';
-    // include Telegram header if present
-    const headers = headersWithTelegram();
-    const res = await fetch(url, { method, headers, body: JSON.stringify(formData) });
-    if (res.ok){
-      setShowForm(false); setEdit(null);
-      await loadProducts();
-    } else {
-      const j = await res.json();
-      alert(j.error || 'Erreur');
-    }
-  }
-
-  async function removeProduct(id){
-    if (!confirm('Supprimer ce produit ?')) return;
-    const headers = headersWithTelegram();
-    const res = await fetch(`/api/admin/products/${id}`, { method:'DELETE', headers });
-    if (res.ok) loadProducts();
-  }
-
-  function startEdit(p){
-    setEdit(p);
-    setFormData({ ...p });
-    setShowForm(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  return (
-    <div className="container">
-      <header>
-        <h1>🏴‍☠️ Pirates Supply</h1>
-        <div className="subtitle small-muted">Boutique & catalogue — gérer photos, vidéos et prix</div>
-        <div className="actions">
-          {!isAdmin && (
-            <>
-              <input type="password" placeholder="Mot de passe admin" value={pw} onChange={e => setPw(e.target.value)} />
-              <button onClick={loginWithPassword}>Se connecter</button>
-            </>
-          )}
-          {isAdmin && <button onClick={logout}>🚪 Déconnexion admin</button>}
-          {isAdmin && <button onClick={startAdd}>➕ Ajouter un produit</button>}
-        </div>
-      </header>
-
-      {isAdmin && showForm && (
-        <div className="form">
-          <input placeholder="Nom" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-          <input type="number" placeholder="Prix (€)" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} />
-          <input placeholder="Catégorie" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} />
-          <input type="number" placeholder="Stock" value={formData.stock} onChange={e => setFormData({...formData, stock: e.target.value})} />
-          <textarea placeholder="Description" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
-          <div style={{display:'flex',gap:8,alignItems:'center'}}>
-            <input type="file" accept="image/*,video/*" onChange={uploadFile} />
-            <div style={{fontSize:13,color:'rgba(255,255,255,0.85)'}}>Uploader une image ou une vidéo (Cloudinary)</div>
-          </div>
-          <div style={{marginTop:8}}>
-            <button onClick={save}>💾 Sauvegarder</button>
-            <button onClick={() => { setShowForm(false); setEdit(null); }}>❌ Annuler</button>
-          </div>
-        </div>
-      )}
-
-      <section className="grid" style={{marginTop:12}}>
-        {products.map(p => (
-          <article className="card" key={p.id}>
-            {p.image_url ? <img src={p.image_url} alt={p.name} /> : (p.video_url ? <video src={p.video_url} controls /> : null)}
-            <h3 style={{margin:'8px 0 4px'}}>{p.name}</h3>
-            <div style={{color:'#ffd', fontWeight:700}}>{Number(p.price).toFixed(2)} €</div>
-            <div style={{marginTop:6, minHeight:36}}>{p.description}</div>
-            <div className="meta">
-              <div className="small-muted">Stock: {p.stock}</div>
-              {isAdmin && (
-                <div style={{display:'flex',gap:8}}>
-                  <button onClick={() => startEdit(p)}>✏️</button>
-                  <button onClick={() => removeProduct(p.id)}>🗑️</button>
-                </div>
-              )}
-            </div>
-          </article>
-        ))}
-      </section>
+  {isAdmin && showForm &&
+    <div className="card">
+      <input placeholder="Nom" value={formData.name} onChange={e=>setFormData({...formData,name:e.target.value})}/>
+      <input type="number" placeholder="Prix" value={formData.price} onChange={e=>setFormData({...formData,price:e.target.value})}/>
+      <input placeholder="Catégorie" value={formData.category} onChange={e=>setFormData({...formData,category:e.target.value})}/>
+      <input type="number" placeholder="Stock" value={formData.stock} onChange={e=>setFormData({...formData,stock:e.target.value})}/>
+      <textarea placeholder="Description" value={formData.description} onChange={e=>setFormData({...formData,description:e.target.value})}></textarea>
+      <input type="file" accept="image/*,video/*" onChange={uploadFile}/>
+      <button onClick={save}>💾 Sauvegarder</button>
+      <button onClick={()=>setShowForm(false)}>❌ Annuler</button>
     </div>
-  );
-}
+  }
 
-ReactDOM.render(<App />, document.getElementById('root'));
+  {products.map(p=>
+    <div key={p.id} className="card">
+      {p.image_url && <img src={p.image_url}/>}
+      {p.video_url && <video src={p.video_url} controls/>}
+      <h3>{p.name}</h3>
+      <p>{p.description}</p>
+      <b>{p.price} €</b>
+      {!isAdmin && <p><i>Stock : {p.stock}</i></p>}
+      {isAdmin && <div>
+        <button onClick={()=>{setEdit(p);setFormData(p);setShowForm(true)}}>✏️ Modifier</button>
+        <button onClick={()=>del(p.id)}>🗑️ Supprimer</button>
+      </div>}
+    </div>
+  )}
+ </div>
+}
+ReactDOM.render(<App/>,document.getElementById('root'));
 </script>
-</body>
-</html>"""
+</body></html>
+"""
+
     return html
 
 # ----------------------------

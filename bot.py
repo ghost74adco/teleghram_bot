@@ -1396,12 +1396,12 @@ def main():
         ],
         per_chat=True,
         per_user=True,
-        per_message=True
+        per_message=False  # ✅ CHANGÉ DE True À False
     )
     
     application.add_handler(conv_handler)
     
-    # Handler séparé pour la validation admin (en dehors du conversation handler)
+    # Handler séparé pour la validation admin
     application.add_handler(CallbackQueryHandler(
         admin_validation_livraison, 
         pattern='^admin_validate_'
@@ -1413,16 +1413,33 @@ def main():
     application.post_init = setup_webapp_menu
     
     logger.info("✅ Bot démarré avec succès!")
-    application.run_polling(drop_pending_updates=True)
+    
+    # Détection automatique de l'environnement
+    PORT = int(os.environ.get('PORT', 8443))
+    WEBHOOK_URL = os.environ.get('WEBHOOK_URL')
+    
+    if WEBHOOK_URL:
+        # Mode WEBHOOK (Production sur Render)
+        logger.info(f"🌐 Mode WEBHOOK activé sur le port {PORT}")
+        logger.info(f"📡 Webhook URL: {WEBHOOK_URL}")
+        
+        application.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            url_path=TOKEN,
+            webhook_url=f"{WEBHOOK_URL}/{TOKEN}",
+            drop_pending_updates=True
+        )
+    else:
+        # Mode POLLING (Développement local)
+        logger.info("🔄 Mode POLLING activé (développement local)")
+        application.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
         logger.info("🛑 Bot arrêté par l'utilisateur")
-    except Exception as e:
-        logger.error(f"❌ Erreur fatale: {e}", exc_info=True)
-        sys.exit(1)
     except Exception as e:
         logger.error(f"❌ Erreur fatale: {e}", exc_info=True)
         sys.exit(1)

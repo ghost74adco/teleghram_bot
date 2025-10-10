@@ -1,5 +1,4 @@
 from flask import Flask, request, jsonify, session
-from flask_cors import CORS
 from dotenv import load_dotenv
 from functools import wraps
 import os, json, hmac, hashlib, cloudinary, cloudinary.uploader
@@ -10,11 +9,8 @@ import os, json, hmac, hashlib, cloudinary, cloudinary.uploader
 load_dotenv('infos.env')
 
 app = Flask(__name__)
-CORS(app, supports_credentials=True)
 app.secret_key = os.environ.get('SECRET_KEY', 'change_this_secret_key_in_production')
 app.config['SESSION_TYPE'] = 'filesystem'
-app.config['SESSION_COOKIE_SAMESITE'] = 'None'
-app.config['SESSION_COOKIE_SECURE'] = True
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN', os.environ.get('TELEGRAM_TOKEN', ''))
 ADMIN_USER_IDS = [int(i) for i in os.environ.get('ADMIN_USER_IDS', '').split(',') if i.strip()]
@@ -352,7 +348,7 @@ function App() {{
     try {{
       const res = await fetch('/api/admin/check', {{
         headers: headers(),
-        credentials: 'include'
+        credentials: 'same-origin'
       }});
       const data = await res.json();
       setIsAdmin(data.admin);
@@ -371,7 +367,7 @@ function App() {{
       const res = await fetch('/api/admin/login', {{
         method: 'POST',
         headers: headers(),
-        credentials: 'include',
+        credentials: 'same-origin',
         body: JSON.stringify({{ password }})
       }});
       const data = await res.json();
@@ -394,7 +390,7 @@ function App() {{
       await fetch('/api/admin/logout', {{
         method: 'POST',
         headers: headers(),
-        credentials: 'include'
+        credentials: 'same-origin'
       }});
       setIsAdmin(false);
       setShowForm(false);
@@ -416,7 +412,7 @@ function App() {{
       const res = await fetch(url, {{
         method,
         headers: headers(),
-        credentials: 'include',
+        credentials: 'same-origin',
         body: JSON.stringify(formData)
       }});
       if (res.ok) {{
@@ -449,7 +445,7 @@ function App() {{
       const res = await fetch(`/api/admin/products/${{id}}`, {{
         method: 'DELETE',
         headers: headers(),
-        credentials: 'include'
+        credentials: 'same-origin'
       }});
       if (res.ok) {{
         await load();
@@ -472,7 +468,7 @@ function App() {{
       const res = await fetch('/api/upload', {{
         method: 'POST',
         headers: {{ 'X-Telegram-Init-Data': tg?.initData || '' }},
-        credentials: 'include',
+        credentials: 'same-origin',
         body: fd
       }});
       const data = await res.json();

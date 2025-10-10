@@ -1,6 +1,7 @@
-from flask import Flask, request, jsonify, abort
+from flask import Flask, request, jsonify, abort, send_from_directory, session, redirect, url_for
 from dotenv import load_dotenv
 from functools import wraps
+from werkzeug.utils import secure_filename
 import os, hmac, hashlib, json, cloudinary, cloudinary.uploader
 
 # ==============================
@@ -10,23 +11,32 @@ import os, hmac, hashlib, json, cloudinary, cloudinary.uploader
 load_dotenv('infos.env')
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'mon-super-secret')
+app.secret_key = os.environ.get('SECRET_KEY', 'supersecret')
 
 BOT_TOKEN = os.environ.get('TELEGRAM_TOKEN', '')
 ADMIN_USER_IDS = [int(i) for i in os.environ.get('ADMIN_USER_IDS', '').split(',') if i]
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
+
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'mp4', 'mov'}
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 PRODUCTS_FILE = 'products.json'
 
-# Configuration Cloudinary
+# ==============================
+# CLOUDINARY CONFIG
+# ==============================
+
 cloudinary.config(
-    cloud_name=os.environ.get('CLOUD_NAME'),
-    api_key=os.environ.get('CLOUD_API_KEY'),
-    api_secret=os.environ.get('CLOUD_API_SECRET'),
+    cloud_name=os.environ.get("CLOUD_NAME"),
+    api_key=os.environ.get("CLOUD_API_KEY"),
+    api_secret=os.environ.get("CLOUD_API_SECRET"),
     secure=True
 )
 
 # ==============================
-# FONCTIONS PRODUITS
+# PRODUITS
 # ==============================
 
 def load_products():
@@ -42,7 +52,7 @@ def save_products():
 products = load_products()
 
 # ==============================
-# SECURITE TELEGRAM ADMIN
+# AUTHENTIFICATION
 # ==============================
 
 def verify_telegram_auth(init_data):
@@ -65,22 +75,52 @@ def is_admin(user_data):
     except:
         return False
 
+# --- Décorateur admin combiné ---
 def require_admin(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        init_data = request.headers.get('X-Telegram-Init-Data', '')
-        if not BOT_TOKEN:
+        # Cas 1 : déjà connecté via login
+        if session.get("admin_logged_in"):
             return f(*args, **kwargs)
-        if not init_data or not verify_telegram_auth(init_data):
-            abort(403)
-        parsed_data = dict(item.split('=', 1) for item in init_data.split('&') if '=' in item)
-        if not is_admin(parsed_data.get('user', '{}')):
-            abort(403)
-        return f(*args, **kwargs)
+        # Cas 2 : via Telegram
+        init_data = request.headers.get('X-Telegram-Init-Data', '')
+        if BOT_TOKEN and init_data and verify_telegram_auth(init_data):
+            parsed_data = dict(item.split('=', 1) for item in init_data.split('&') if '=' in item)
+            if is_admin(parsed_data.get('user', '{}')):
+                return f(*args, **kwargs)
+        # Sinon : interdit
+        abort(403)
     return decorated
 
 # ==============================
-# UPLOAD AVEC CLOUDINARY
+# LOGIN / LOGOUT
+# ==============================
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        pw = request.form.get('password')
+        if pw == ADMIN_PASSWORD:
+            session['admin_logged_in'] = True
+            return redirect('/')
+        return "Mot de passe incorrect", 403
+    return """
+    <html><body style='font-family:sans-serif;text-align:center;margin-top:100px'>
+    <h2>🔐 Connexion admin</h2>
+    <form method='post'>
+      <input type='password' name='password' placeholder='Mot de passe' style='padding:8px'>
+      <button type='submit'>Se connecter</button>
+    </form>
+    </body></html>
+    """
+
+@app.route('/logout')
+def logout():
+    session.pop('admin_logged_in', None)
+    return redirect('/')
+
+# ==============================
+# UPLOAD CLOUDINARY
 # ==============================
 
 @app.route('/api/upload', methods=['POST'])
@@ -91,15 +131,9 @@ def upload_file():
     file = request.files['file']
     if file.filename == '':
         return jsonify({'error': 'Nom de fichier vide'}), 400
-
     try:
-        upload_result = cloudinary.uploader.upload(
-            file,
-            resource_type="auto",  # prend image ou vidéo
-            folder="catalogue"
-        )
-        file_url = upload_result.get('secure_url')
-        return jsonify({'url': file_url}), 200
+        result = cloudinary.uploader.upload(file, resource_type="auto", folder="catalogue")
+        return jsonify({'url': result['secure_url']}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -165,82 +199,74 @@ def delete_product(pid):
     return jsonify({'error': 'Produit non trouvé'}), 404
 
 # ==============================
-# INTERFACE WEB REACT
+# INTERFACE REACT
 # ==============================
 
 @app.route('/')
-@app.route('/catalogue')
-def catalogue():
+def home():
+    # Si non connecté, rediriger vers /login
+    if not session.get('admin_logged_in'):
+        return redirect('/login')
     return """
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<title>Catalogue Produits</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<style>
-body{font-family:-apple-system,BlinkMacSystemFont,Roboto;background:#f5f5f5;margin:0;}
-button,input,textarea{font-family:inherit}
-</style>
-</head>
-<body>
-<div id="root"></div>
-<script type="text/babel">
-const {useState,useEffect}=React;
-const tg=window.Telegram?.WebApp;
-function App(){
- const[products,setProducts]=useState([]);
- const[isAdmin,setIsAdmin]=useState(false);
- const[formData,setFormData]=useState({name:'',price:'',description:'',category:'',stock:'',image_url:'',video_url:''});
- const[showForm,setShowForm]=useState(false);
- const[edit,setEdit]=useState(null);
- useEffect(()=>{if(tg){tg.ready();tg.expand();}load();check();},[]);
- const headers=()=>({'Content-Type':'application/json','X-Telegram-Init-Data':tg?.initData||''});
- async function load(){setProducts(await (await fetch('/api/products')).json());}
- async function check(){setIsAdmin((await fetch('/api/admin/check',{headers:headers()})).ok);}
- async function save(){
-  if(!formData.name||!formData.price){alert('Nom et prix requis');return;}
-  const url=edit?`/api/admin/products/${edit.id}`:'/api/admin/products';
-  const method=edit?'PUT':'POST';
-  const res=await fetch(url,{method,headers:headers(),body:JSON.stringify(formData)});
-  if(res.ok){setShowForm(false);setEdit(null);await load();}
- }
- async function del(id){if(!confirm('Supprimer ?'))return;await fetch(`/api/admin/products/${id}`,{method:'DELETE',headers:headers()});load();}
- async function uploadFile(e){
-  const file=e.target.files[0];if(!file)return;
-  const fd=new FormData();fd.append('file',file);
-  const res=await fetch('/api/upload',{method:'POST',headers:{'X-Telegram-Init-Data':tg?.initData||''},body:fd});
-  const data=await res.json();if(data.url){
-    if(file.type.startsWith('video'))setFormData({...formData,video_url:data.url,image_url:''});
-    else setFormData({...formData,image_url:data.url,video_url:''});
-  }else alert('Erreur upload');
- }
- return <div style={{padding:'16px',maxWidth:'800px',margin:'0 auto'}}>
-  <h1>🛍️ Catalogue</h1>
-  {isAdmin&&!showForm&&<button onClick={()=>{setShowForm(true);setEdit(null);setFormData({name:'',price:'',description:'',category:'',stock:'',image_url:'',video_url:''})}}>➕ Ajouter</button>}
-  {isAdmin&&showForm&&<div><input placeholder="Nom" value={formData.name} onChange={e=>setFormData({...formData,name:e.target.value})}/>
-  <input type="number" placeholder="Prix" value={formData.price} onChange={e=>setFormData({...formData,price:e.target.value})}/>
-  <input placeholder="Catégorie" value={formData.category} onChange={e=>setFormData({...formData,category:e.target.value})}/>
-  <input type="number" placeholder="Stock" value={formData.stock} onChange={e=>setFormData({...formData,stock:e.target.value})}/>
-  <textarea placeholder="Description" value={formData.description} onChange={e=>setFormData({...formData,description:e.target.value})}></textarea>
-  <input type="file" accept="image/*,video/*" onChange={uploadFile}/>
-  <button onClick={save}>💾 Sauvegarder</button><button onClick={()=>setShowForm(false)}>❌ Annuler</button></div>}
-  {products.map(p=><div key={p.id} style={{background:'#fff',padding:'10px',borderRadius:'8px',margin:'10px 0'}}>
-    {p.image_url&&<img src={p.image_url} style={{width:'100%',borderRadius:'8px'}}/>}
-    {p.video_url&&<video src={p.video_url} controls style={{width:'100%'}}/>}
-    <h3>{p.name}</h3><p>{p.description}</p><b>{p.price} €</b>
-    {isAdmin&&<div><button onClick={()=>{setEdit(p);setFormData(p);setShowForm(true)}}>✏️</button><button onClick={()=>del(p.id)}>🗑️</button></div>}
-  </div>)}
- </div>
-}
-ReactDOM.render(<App/>,document.getElementById('root'));
-</script>
-</body></html>
-"""
+    <html lang="fr"><head>
+    <meta charset="UTF-8"><title>Catalogue Produits</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+    body{font-family:-apple-system,BlinkMacSystemFont,Roboto;background:#f5f5f5;margin:0;}
+    button,input,textarea{font-family:inherit}
+    </style></head><body><div id="root"></div>
+    <script type="text/babel">
+    const {useState,useEffect}=React;
+    function App(){
+      const[products,setProducts]=useState([]);
+      const[formData,setFormData]=useState({name:'',price:'',description:'',category:'',stock:'',image_url:'',video_url:''});
+      const[edit,setEdit]=useState(null);
+      useEffect(()=>{load();},[]);
+      async function load(){setProducts(await (await fetch('/api/products')).json());}
+      async function save(){
+        if(!formData.name||!formData.price){alert('Nom et prix requis');return;}
+        const url=edit?`/api/admin/products/${edit.id}`:'/api/admin/products';
+        const method=edit?'PUT':'POST';
+        const res=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(formData)});
+        if(res.ok){setEdit(null);setFormData({name:'',price:'',description:'',category:'',stock:'',image_url:'',video_url:''});load();}
+      }
+      async function del(id){if(!confirm('Supprimer ?'))return;await fetch(`/api/admin/products/${id}`,{method:'DELETE'});load();}
+      async function uploadFile(e){
+        const file=e.target.files[0];if(!file)return;
+        const fd=new FormData();fd.append('file',file);
+        const res=await fetch('/api/upload',{method:'POST',body:fd});
+        const data=await res.json();
+        if(data.url){
+          if(file.type.startsWith('video'))setFormData({...formData,video_url:data.url,image_url:''});
+          else setFormData({...formData,image_url:data.url,video_url:''});
+        }else alert('Erreur upload');
+      }
+      return <div style={{padding:'16px',maxWidth:'800px',margin:'0 auto'}}>
+        <h1>🛍️ Mon Catalogue</h1>
+        <a href='/logout'>🚪 Déconnexion</a>
+        <div><input placeholder="Nom" value={formData.name} onChange={e=>setFormData({...formData,name:e.target.value})}/>
+        <input type="number" placeholder="Prix" value={formData.price} onChange={e=>setFormData({...formData,price:e.target.value})}/>
+        <input placeholder="Catégorie" value={formData.category} onChange={e=>setFormData({...formData,category:e.target.value})}/>
+        <input type="number" placeholder="Stock" value={formData.stock} onChange={e=>setFormData({...formData,stock:e.target.value})}/>
+        <textarea placeholder="Description" value={formData.description} onChange={e=>setFormData({...formData,description:e.target.value})}></textarea>
+        <input type="file" accept="image/*,video/*" onChange={uploadFile}/>
+        <button onClick={save}>💾 Sauvegarder</button>
+        {edit && <button onClick={()=>setEdit(null)}>❌ Annuler</button>}
+        </div>
+        {products.map(p=><div key={p.id} style={{background:'#fff',padding:'10px',borderRadius:'8px',margin:'10px 0'}}>
+          {p.image_url&&<img src={p.image_url} style={{width:'100%',borderRadius:'8px'}}/>}
+          {p.video_url&&<video src={p.video_url} controls style={{width:'100%'}}/>}
+          <h3>{p.name}</h3><p>{p.description}</p><b>{p.price} €</b>
+          <div><button onClick={()=>{setEdit(p);setFormData(p);}}>✏️</button><button onClick={()=>del(p.id)}>🗑️</button></div>
+        </div>)}
+      </div>
+    }
+    ReactDOM.render(<App/>,document.getElementById('root'));
+    </script></body></html>
+    """
 
 # ==============================
 # MAIN

@@ -4,3 +4,5 @@ python-dotenv
 flask
 gunicorn
 geopy==2.4.1
+cloudinary
+werkzeug

@@ -1333,13 +1333,15 @@ def main():
 
 # --- AJOUT : menu WebApp "Carte du Pirate" ---
 from telegram import MenuButtonWebApp, WebAppInfo
+from telegram.ext import Application
 
-# --- AJOUT : menu WebApp "Carte du Pirate" ---
-from telegram import MenuButtonWebApp, WebAppInfo
+# Création de l'application Telegram
+application = Application.builder().token(TOKEN).build()
 
-async def _setup_webapp_menu(app):
+# Fonction asynchrone pour configurer le menu WebApp
+async def _setup_webapp_menu():
     try:
-        await app.bot.set_chat_menu_button(
+        await application.bot.set_chat_menu_button(
             menu_button=MenuButtonWebApp(
                 text="🏴‍☠️ Carte du Pirate",
                 web_app=WebAppInfo(url="https://carte-du-pirate.onrender.com")
@@ -1348,7 +1350,23 @@ async def _setup_webapp_menu(app):
         logger.info("✅ Menu WebApp 'Carte du Pirate' configuré.")
     except Exception as e:
         logger.error(f"Erreur lors de la configuration du menu WebApp : {e}")
+
+# Démarrage du bot principal
+def main():
+    """Fonction principale"""
+    logger.info("🚀 Démarrage du bot...")
+
+    # Lancement de la tâche async pour le menu WebApp
+    try:
+        import asyncio
+        asyncio.create_task(_setup_webapp_menu())
+    except Exception as e:
+        logger.warning(f"Impossible d'exécuter _setup_webapp_menu : {e}")
+
+    # Lancer le bot
+    application.run_polling()
 # --- FIN AJOUT ---
+
 
 
 async def _setup_webapp_menu():

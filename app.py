@@ -330,10 +330,18 @@ input:focus, textarea:focus, select:focus {
 </style>
 </head>
 <body>
-<div id="root"></div>
+<div id="root">
+  <div style="color: white; text-align: center; padding: 50px;">
+    <h1>⏳ Chargement de l'application...</h1>
+    <p>Si ce message persiste, il y a un problème avec JavaScript.</p>
+  </div>
+</div>
 <script type="text/babel">
+console.log('Script démarré...');
 const {useState, useEffect} = React;
+console.log('React chargé:', React);
 const tg = window.Telegram?.WebApp;
+console.log('Telegram WebApp:', tg);
 
 function App() {
   const [products, setProducts] = useState([]);
@@ -674,6 +682,7 @@ function App() {
 }
 
 ReactDOM.render(<App />, document.getElementById('root'));
+console.log('App montée avec succès');
 </script>
 </body>
 </html>

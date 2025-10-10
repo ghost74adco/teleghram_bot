@@ -6,7 +6,7 @@ import json
 from dotenv import load_dotenv
 from functools import wraps
 
-load_dotenv()
+load_dotenv('infos.env')
 app = Flask(__name__)
 
 # Configuration de sécurité

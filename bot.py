@@ -58,7 +58,7 @@ CRYPTO_WALLET = os.getenv("CRYPTO_WALLET")
 ADMIN_ADDRESS = os.getenv("ADMIN_ADDRESS", "Chamonix-Mont-Blanc, France")  # Adresse par défaut
 
 # --- Imports Telegram ---
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, MenuButtonWebApp, WebAppInfo
 from telegram.ext import (
     Application, ContextTypes, CallbackQueryHandler,
     ConversationHandler, MessageHandler, CommandHandler, filters
@@ -1318,7 +1318,6 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 # --- Gestion des erreurs globales ---
-# --- Gestion des erreurs globales ---
 async def error_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gestion des erreurs globales"""
     logger.error(f"Exception: {context.error}", exc_info=context.error)
@@ -1327,6 +1326,8 @@ async def error_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def setup_webapp_menu(application):
     """Configure le menu WebApp après le démarrage du bot"""
     try:
+        from telegram import MenuButtonWebApp, WebAppInfo
+        
         await application.bot.set_chat_menu_button(
             menu_button=MenuButtonWebApp(
                 text="🏴‍☠️ Carte du Pirate",
@@ -1395,7 +1396,9 @@ def main():
             CommandHandler('start', start_command),
             CallbackQueryHandler(cancel, pattern='^cancel')
         ],
-        per_message=False
+        per_chat=True,
+        per_user=True,
+        per_message=True
     )
     
     application.add_handler(conv_handler)

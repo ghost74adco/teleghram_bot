@@ -200,12 +200,10 @@ def delete_product(pid):
 # ----------------------------
 # Frontend HTML (React)
 # ----------------------------
-BACKGROUND_URL = "https://res.cloudinary.com/dfhrrtzsd/image/upload/v1760118433/ChatGPT_Image_8_oct._2025_03_01_21_zm5zfy.png"
-
 @app.route('/')
 @app.route('/catalogue')
 def catalogue():
-    return f"""
+    return """
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -217,24 +215,25 @@ def catalogue():
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
-body {{
+body {
   font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
-  background: url('{BACKGROUND_URL}') no-repeat center center fixed;
-  background-size: cover;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   margin: 0;
   padding: 0;
   color: #fff;
-}}
-.container {{
-  background: rgba(0,0,0,0.6);
-  backdrop-filter: blur(6px);
+  min-height: 100vh;
+}
+.container {
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(10px);
   border-radius: 16px;
   padding: 20px;
   margin: 20px auto;
   max-width: 800px;
   min-height: 90vh;
-}}
-button {{
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+button {
   background: #ffcc00;
   color: #000;
   border: none;
@@ -244,71 +243,105 @@ button {{
   font-weight: bold;
   margin-right: 10px;
   margin-bottom: 10px;
-}}
-button:hover {{ background: #ffd633; }}
-button.secondary {{
+  transition: all 0.3s ease;
+}
+button:hover {
+  background: #ffd633;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255,204,0,0.4);
+}
+button.secondary {
   background: #666;
   color: #fff;
-}}
-button.secondary:hover {{ background: #777; }}
-input, textarea {{
+}
+button.secondary:hover {
+  background: #777;
+}
+input, textarea, select {
   width: 100%;
   margin: 5px 0;
-  padding: 8px;
+  padding: 10px;
   border-radius: 6px;
-  border: none;
+  border: 2px solid #ddd;
   box-sizing: border-box;
-}}
-.card {{
-  background: rgba(255,255,255,0.9);
+  font-size: 14px;
+}
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: #ffcc00;
+}
+.card {
+  background: rgba(255,255,255,0.95);
   color: #000;
   border-radius: 12px;
-  margin: 10px 0;
+  margin: 15px 0;
   padding: 15px;
-}}
-.card img, .card video {{
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  transition: transform 0.3s ease;
+}
+.card:hover {
+  transform: translateY(-5px);
+}
+.card img, .card video {
   width: 100%;
   max-height: 300px;
   object-fit: cover;
   border-radius: 8px;
   margin-bottom: 10px;
-}}
-.login-form {{
+}
+.login-form {
   background: rgba(255,255,255,0.95);
   color: #000;
   border-radius: 12px;
-  padding: 20px;
+  padding: 30px;
   max-width: 400px;
   margin: 50px auto;
-}}
-.admin-header {{
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+}
+.admin-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
   flex-wrap: wrap;
-}}
-.badge {{
+  gap: 10px;
+}
+.badge {
   background: #4CAF50;
   color: white;
-  padding: 5px 10px;
-  border-radius: 5px;
+  padding: 5px 12px;
+  border-radius: 20px;
   font-size: 12px;
-}}
+  font-weight: bold;
+}
+.loading {
+  text-align: center;
+  padding: 40px;
+  font-size: 18px;
+}
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #fff;
+}
+.empty-state h2 {
+  margin-bottom: 10px;
+}
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const {{useState, useEffect}} = React;
+const {useState, useEffect} = React;
 const tg = window.Telegram?.WebApp;
 
-function App() {{
+function App() {
   const [products, setProducts] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [password, setPassword] = useState('');
-  const [formData, setFormData] = useState({{
+  const [loading, setLoading] = useState(true);
+  const [formData, setFormData] = useState({
     name: '',
     price: '',
     description: '',
@@ -316,109 +349,114 @@ function App() {{
     stock: '',
     image_url: '',
     video_url: ''
-  }});
+  });
   const [showForm, setShowForm] = useState(false);
   const [edit, setEdit] = useState(null);
 
-  useEffect(() => {{
-    if (tg) {{
+  useEffect(() => {
+    if (tg) {
       tg.ready();
       tg.expand();
-    }}
-    load();
-    check();
-  }}, []);
+    }
+    init();
+  }, []);
 
-  const headers = () => ({{
+  async function init() {
+    await Promise.all([load(), check()]);
+    setLoading(false);
+  }
+
+  const headers = () => ({
     'Content-Type': 'application/json',
     'X-Telegram-Init-Data': tg?.initData || ''
-  }});
+  });
 
-  async function load() {{
-    try {{
+  async function load() {
+    try {
       const res = await fetch('/api/products');
       const data = await res.json();
       setProducts(data);
-    }} catch (e) {{
+    } catch (e) {
       console.error('Erreur chargement produits:', e);
-    }}
-  }}
+      alert('Erreur lors du chargement des produits');
+    }
+  }
 
-  async function check() {{
-    try {{
-      const res = await fetch('/api/admin/check', {{
+  async function check() {
+    try {
+      const res = await fetch('/api/admin/check', {
         headers: headers(),
         credentials: 'same-origin'
-      }});
+      });
       const data = await res.json();
       setIsAdmin(data.admin);
-    }} catch (e) {{
+    } catch (e) {
       console.error('Erreur vérification admin:', e);
       setIsAdmin(false);
-    }}
-  }}
+    }
+  }
 
-  async function login() {{
-    if (!password) {{
+  async function login() {
+    if (!password) {
       alert('Veuillez entrer un mot de passe');
       return;
-    }}
-    try {{
-      const res = await fetch('/api/admin/login', {{
+    }
+    try {
+      const res = await fetch('/api/admin/login', {
         method: 'POST',
         headers: headers(),
         credentials: 'same-origin',
-        body: JSON.stringify({{ password }})
-      }});
+        body: JSON.stringify({ password })
+      });
       const data = await res.json();
-      if (res.ok) {{
+      if (res.ok) {
         setIsAdmin(true);
         setShowLogin(false);
         setPassword('');
-        alert('Connexion réussie !');
-      }} else {{
+        alert('✅ Connexion réussie !');
+      } else {
         alert(data.error || 'Erreur de connexion');
-      }}
-    }} catch (e) {{
+      }
+    } catch (e) {
       console.error('Erreur login:', e);
       alert('Erreur de connexion');
-    }}
-  }}
+    }
+  }
 
-  async function logout() {{
-    try {{
-      await fetch('/api/admin/logout', {{
+  async function logout() {
+    try {
+      await fetch('/api/admin/logout', {
         method: 'POST',
         headers: headers(),
         credentials: 'same-origin'
-      }});
+      });
       setIsAdmin(false);
       setShowForm(false);
       setShowLogin(false);
-      alert('Déconnexion réussie');
-    }} catch (e) {{
+      alert('👋 Déconnexion réussie');
+    } catch (e) {
       console.error('Erreur logout:', e);
-    }}
-  }}
+    }
+  }
 
-  async function save() {{
-    if (!formData.name || !formData.price) {{
-      alert('Nom et prix requis');
+  async function save() {
+    if (!formData.name || !formData.price) {
+      alert('⚠️ Nom et prix requis');
       return;
-    }}
-    try {{
-      const url = edit ? `/api/admin/products/${{edit.id}}` : '/api/admin/products';
+    }
+    try {
+      const url = edit ? `/api/admin/products/${edit.id}` : '/api/admin/products';
       const method = edit ? 'PUT' : 'POST';
-      const res = await fetch(url, {{
+      const res = await fetch(url, {
         method,
         headers: headers(),
         credentials: 'same-origin',
         body: JSON.stringify(formData)
-      }});
-      if (res.ok) {{
+      });
+      if (res.ok) {
         setShowForm(false);
         setEdit(null);
-        setFormData({{
+        setFormData({
           name: '',
           price: '',
           description: '',
@@ -426,69 +464,85 @@ function App() {{
           stock: '',
           image_url: '',
           video_url: ''
-        }});
+        });
         await load();
-        alert('Produit sauvegardé !');
-      }} else {{
+        alert('✅ Produit sauvegardé !');
+      } else {
         const data = await res.json();
         alert(data.error || 'Erreur lors de la sauvegarde');
-      }}
-    }} catch (e) {{
+      }
+    } catch (e) {
       console.error('Erreur sauvegarde:', e);
       alert('Erreur lors de la sauvegarde');
-    }}
-  }}
+    }
+  }
 
-  async function del(id) {{
-    if (!confirm('Supprimer ce produit ?')) return;
-    try {{
-      const res = await fetch(`/api/admin/products/${{id}}`, {{
+  async function del(id) {
+    if (!confirm('🗑️ Supprimer ce produit ?')) return;
+    try {
+      const res = await fetch(`/api/admin/products/${id}`, {
         method: 'DELETE',
         headers: headers(),
         credentials: 'same-origin'
-      }});
-      if (res.ok) {{
+      });
+      if (res.ok) {
         await load();
-        alert('Produit supprimé');
-      }} else {{
+        alert('✅ Produit supprimé');
+      } else {
         alert('Erreur lors de la suppression');
-      }}
-    }} catch (e) {{
+      }
+    } catch (e) {
       console.error('Erreur suppression:', e);
       alert('Erreur lors de la suppression');
-    }}
-  }}
+    }
+  }
 
-  async function uploadFile(e) {{
+  async function uploadFile(e) {
     const file = e.target.files[0];
     if (!file) return;
+    
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      alert('⚠️ Fichier trop volumineux (max 10MB)');
+      return;
+    }
+    
     const fd = new FormData();
     fd.append('file', file);
-    try {{
-      const res = await fetch('/api/upload', {{
+    
+    try {
+      const res = await fetch('/api/upload', {
         method: 'POST',
-        headers: {{ 'X-Telegram-Init-Data': tg?.initData || '' }},
+        headers: { 'X-Telegram-Init-Data': tg?.initData || '' },
         credentials: 'same-origin',
         body: fd
-      }});
+      });
       const data = await res.json();
-      if (data.url) {{
-        if (file.type.startsWith('video')) {{
-          setFormData({{ ...formData, video_url: data.url, image_url: '' }});
-        }} else {{
-          setFormData({{ ...formData, image_url: data.url, video_url: '' }});
-        }}
-        alert('Fichier uploadé avec succès !');
-      }} else {{
+      if (data.url) {
+        if (file.type.startsWith('video')) {
+          setFormData({ ...formData, video_url: data.url, image_url: '' });
+        } else {
+          setFormData({ ...formData, image_url: data.url, video_url: '' });
+        }
+        alert('✅ Fichier uploadé avec succès !');
+      } else {
         alert(data.error || 'Erreur upload');
-      }}
-    }} catch (e) {{
+      }
+    } catch (e) {
       console.error('Erreur upload:', e);
       alert('Erreur lors de l\'upload');
-    }}
-  }}
+    }
+  }
 
-  if (showLogin) {{
+  if (loading) {
+    return (
+      <div className="container">
+        <div className="loading">⏳ Chargement...</div>
+      </div>
+    );
+  }
+
+  if (showLogin) {
     return (
       <div className="container">
         <div className="login-form">
@@ -496,33 +550,33 @@ function App() {{
           <input
             type="password"
             placeholder="Mot de passe"
-            value={{password}}
-            onChange={{e => setPassword(e.target.value)}}
-            onKeyPress={{e => e.key === 'Enter' && login()}}
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            onKeyPress={e => e.key === 'Enter' && login()}
           />
-          <button onClick={{login}}>Se connecter</button>
-          <button className="secondary" onClick={{() => setShowLogin(false)}}>Annuler</button>
+          <button onClick={login}>Se connecter</button>
+          <button className="secondary" onClick={() => setShowLogin(false)}>Annuler</button>
         </div>
       </div>
     );
-  }}
+  }
 
   return (
     <div className="container">
       <div className="admin-header">
         <h1>🛍️ Mon Catalogue</h1>
         <div>
-          {{isAdmin && <span className="badge">👑 Admin</span>}}
-          {{!isAdmin && <button onClick={{() => setShowLogin(true)}}>🔑 Mode Admin</button>}}
-          {{isAdmin && <button className="secondary" onClick={{logout}}>🚪 Déconnexion</button>}}
+          {isAdmin && <span className="badge">👑 Admin</span>}
+          {!isAdmin && <button onClick={() => setShowLogin(true)}>🔑 Mode Admin</button>}
+          {isAdmin && <button className="secondary" onClick={logout}>🚪 Déconnexion</button>}
         </div>
       </div>
 
-      {{isAdmin && !showForm && (
-        <button onClick={{() => {{
+      {isAdmin && !showForm && (
+        <button onClick={() => {
           setShowForm(true);
           setEdit(null);
-          setFormData({{
+          setFormData({
             name: '',
             price: '',
             description: '',
@@ -530,94 +584,94 @@ function App() {{
             stock: '',
             image_url: '',
             video_url: ''
-          }});
-        }}}}>
+          });
+        }}>
           ➕ Ajouter un produit
         </button>
-      )}}
+      )}
 
-      {{isAdmin && showForm && (
+      {isAdmin && showForm && (
         <div className="card">
-          <h3>{{edit ? '✏️ Modifier le produit' : '➕ Nouveau produit'}}</h3>
+          <h3>{edit ? '✏️ Modifier le produit' : '➕ Nouveau produit'}</h3>
           <input
-            placeholder="Nom du produit"
-            value={{formData.name}}
-            onChange={{e => setFormData({{ ...formData, name: e.target.value }})}}
+            placeholder="Nom du produit *"
+            value={formData.name}
+            onChange={e => setFormData({ ...formData, name: e.target.value })}
           />
           <input
             type="number"
             step="0.01"
-            placeholder="Prix (€)"
-            value={{formData.price}}
-            onChange={{e => setFormData({{ ...formData, price: e.target.value }})}}
+            placeholder="Prix (€) *"
+            value={formData.price}
+            onChange={e => setFormData({ ...formData, price: e.target.value })}
           />
           <input
             placeholder="Catégorie"
-            value={{formData.category}}
-            onChange={{e => setFormData({{ ...formData, category: e.target.value }})}}
+            value={formData.category}
+            onChange={e => setFormData({ ...formData, category: e.target.value })}
           />
           <input
             type="number"
             placeholder="Stock"
-            value={{formData.stock}}
-            onChange={{e => setFormData({{ ...formData, stock: e.target.value }})}}
+            value={formData.stock}
+            onChange={e => setFormData({ ...formData, stock: e.target.value })}
           />
           <textarea
             placeholder="Description"
             rows="4"
-            value={{formData.description}}
-            onChange={{e => setFormData({{ ...formData, description: e.target.value }})}}
+            value={formData.description}
+            onChange={e => setFormData({ ...formData, description: e.target.value })}
           ></textarea>
-          <input type="file" accept="image/*,video/*" onChange={{uploadFile}} />
-          {{(formData.image_url || formData.video_url) && (
-            <p style={{{{color: 'green'}}}}>✓ Fichier chargé</p>
-          )}}
-          <button onClick={{save}}>💾 Sauvegarder</button>
-          <button className="secondary" onClick={{() => {{
+          <input type="file" accept="image/*,video/*" onChange={uploadFile} />
+          {(formData.image_url || formData.video_url) && (
+            <p style={{color: 'green', fontWeight: 'bold'}}>✓ Fichier chargé</p>
+          )}
+          <button onClick={save}>💾 Sauvegarder</button>
+          <button className="secondary" onClick={() => {
             setShowForm(false);
             setEdit(null);
-          }}}}>
+          }}>
             ❌ Annuler
           </button>
         </div>
-      )}}
+      )}
 
-      {{products.length === 0 && (
-        <div className="card">
-          <p style={{{{textAlign: 'center', color: '#666'}}}}>
-            Aucun produit disponible pour le moment
-          </p>
+      {products.length === 0 && (
+        <div className="empty-state">
+          <h2>📦 Catalogue vide</h2>
+          <p>Aucun produit disponible pour le moment</p>
+          {isAdmin && <p style={{marginTop: '20px'}}>👆 Cliquez sur "Ajouter un produit" pour commencer</p>}
         </div>
-      )}}
+      )}
 
-      {{products.map(p => (
-        <div key={{p.id}} className="card">
-          {{p.image_url && <img src={{p.image_url}} alt={{p.name}} />}}
-          {{p.video_url && <video src={{p.video_url}} controls />}}
-          <h3>{{p.name}}</h3>
-          {{p.category && <p><em>📁 {{p.category}}</em></p>}}
-          {{p.description && <p>{{p.description}}</p>}}
-          <p><strong style={{{{fontSize: '20px', color: '#4CAF50'}}}}>{{p.price}} €</strong></p>
-          <p><em>📦 Stock : {{p.stock}}</em></p>
-          {{isAdmin && (
+      {products.map(p => (
+        <div key={p.id} className="card">
+          {p.image_url && <img src={p.image_url} alt={p.name} />}
+          {p.video_url && <video src={p.video_url} controls />}
+          <h3>{p.name}</h3>
+          {p.category && <p><em>📁 {p.category}</em></p>}
+          {p.description && <p>{p.description}</p>}
+          <p><strong style={{fontSize: '24px', color: '#4CAF50'}}>{p.price} €</strong></p>
+          <p><em>📦 Stock : {p.stock}</em></p>
+          {isAdmin && (
             <div>
-              <button onClick={{() => {{
+              <button onClick={() => {
                 setEdit(p);
                 setFormData(p);
                 setShowForm(true);
-              }}}}>
+              }}>
                 ✏️ Modifier
               </button>
-              <button className="secondary" onClick={{() => del(p.id)}}>
+              <button className="secondary" onClick={() => del(p.id)}>
                 🗑️ Supprimer
               </button>
             </div>
-          )}}
+          )}
         </div>
-      ))}}
+      ))}
     </div>
   );
-}}
+}
 
 ReactDOM.render(<App />, document.getElementById('root'));
 </script>

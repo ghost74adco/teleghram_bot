@@ -212,7 +212,7 @@ def catalogue():
     else:
         background_style = "background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"
     
-    return f"""
+    html_content = f"""
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -221,15 +221,15 @@ def catalogue():
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
-* {{ box-sizing: border-box; margin: 0; padding: 0; }}
-body {{
+* {{{{ box-sizing: border-box; margin: 0; padding: 0; }}}}
+body {{{{
   font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
   {background_style}
   color: #fff;
   min-height: 100vh;
   padding: 20px;
-}}
-.container {
+}}}}
+.container {{{{
   background: rgba(0,0,0,0.7);
   backdrop-filter: blur(10px);
   border-radius: 16px;
@@ -237,17 +237,17 @@ body {{
   max-width: 800px;
   margin: 0 auto;
   box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-}
-.header {
+}}}}
+.header {{{{
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
   flex-wrap: wrap;
   gap: 10px;
-}
-h1 { font-size: 24px; }
-button {
+}}}}
+h1 {{{{ font-size: 24px; }}}}
+button {{{{
   background: #ffcc00;
   color: #000;
   border: none;
@@ -258,48 +258,48 @@ button {
   margin-right: 5px;
   margin-bottom: 5px;
   transition: all 0.3s ease;
-}
-button:hover {
+}}}}
+button:hover {{{{
   background: #ffd633;
   transform: translateY(-2px);
-}
-button.secondary {
+}}}}
+button.secondary {{{{
   background: #666;
   color: #fff;
-}
-button.secondary:hover { background: #777; }
-input, textarea {
+}}}}
+button.secondary:hover {{{{ background: #777; }}}}
+input, textarea {{{{
   width: 100%;
   margin: 8px 0;
   padding: 10px;
   border-radius: 6px;
   border: 2px solid #ddd;
   font-size: 14px;
-}
-.card {
+}}}}
+.card {{{{
   background: rgba(255,255,255,0.95);
   color: #000;
   border-radius: 12px;
   margin: 15px 0;
   padding: 15px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-.card img, .card video {
+}}}}
+.card img, .card video {{{{
   width: 100%;
   max-height: 300px;
   object-fit: cover;
   border-radius: 8px;
   margin-bottom: 10px;
-}
-.badge {
+}}}}
+.badge {{{{
   background: #4CAF50;
   color: white;
   padding: 5px 12px;
   border-radius: 20px;
   font-size: 12px;
   font-weight: bold;
-}
-.modal {
+}}}}
+.modal {{{{
   position: fixed;
   top: 0;
   left: 0;
@@ -310,18 +310,18 @@ input, textarea {
   align-items: center;
   justify-content: center;
   z-index: 1000;
-}
-.modal.show { display: flex; }
-.modal-content {
+}}}}
+.modal.show {{{{ display: flex; }}}}
+.modal-content {{{{
   background: white;
   color: black;
   padding: 30px;
   border-radius: 12px;
   max-width: 400px;
   width: 90%;
-}
-.empty { text-align: center; padding: 60px 20px; }
-.loading { text-align: center; padding: 40px; font-size: 18px; }
+}}}}
+.empty {{{{ text-align: center; padding: 60px 20px; }}}}
+.loading {{{{ text-align: center; padding: 40px; font-size: 18px; }}}}
 </style>
 </head>
 <body>
@@ -663,6 +663,7 @@ init();
 </body>
 </html>
 """
+    return html_content
 
 # ----------------------------
 # Run

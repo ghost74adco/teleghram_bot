@@ -198,12 +198,21 @@ def delete_product(pid):
     return jsonify({'error': 'Produit non trouvé'}), 404
 
 # ----------------------------
-# Frontend HTML (React)
+# Frontend HTML (Vanilla JS)
 # ----------------------------
+# Tu peux personnaliser l'image de fond ici
+BACKGROUND_IMAGE = os.environ.get('BACKGROUND_IMAGE', '')  # URL de ton image
+
 @app.route('/')
 @app.route('/catalogue')
 def catalogue():
-    return """
+    # Style du background selon si une image est définie ou non
+    if BACKGROUND_IMAGE:
+        background_style = f"background: url('{BACKGROUND_IMAGE}') no-repeat center center fixed; background-size: cover;"
+    else:
+        background_style = "background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"
+    
+    return f"""
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -211,28 +220,33 @@ def catalogue():
 <title>Catalogue Produits</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
-body {
+* {{ box-sizing: border-box; margin: 0; padding: 0; }}
+body {{
   font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  margin: 0;
-  padding: 0;
+  {background_style}
   color: #fff;
   min-height: 100vh;
-}
+  padding: 20px;
+}}
 .container {
   background: rgba(0,0,0,0.7);
   backdrop-filter: blur(10px);
   border-radius: 16px;
   padding: 20px;
-  margin: 20px auto;
   max-width: 800px;
-  min-height: 90vh;
+  margin: 0 auto;
   box-shadow: 0 8px 32px rgba(0,0,0,0.3);
 }
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+h1 { font-size: 24px; }
 button {
   background: #ffcc00;
   color: #000;
@@ -241,34 +255,26 @@ button {
   border-radius: 8px;
   cursor: pointer;
   font-weight: bold;
-  margin-right: 10px;
-  margin-bottom: 10px;
+  margin-right: 5px;
+  margin-bottom: 5px;
   transition: all 0.3s ease;
 }
 button:hover {
   background: #ffd633;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(255,204,0,0.4);
 }
 button.secondary {
   background: #666;
   color: #fff;
 }
-button.secondary:hover {
-  background: #777;
-}
-input, textarea, select {
+button.secondary:hover { background: #777; }
+input, textarea {
   width: 100%;
-  margin: 5px 0;
+  margin: 8px 0;
   padding: 10px;
   border-radius: 6px;
   border: 2px solid #ddd;
-  box-sizing: border-box;
   font-size: 14px;
-}
-input:focus, textarea:focus, select:focus {
-  outline: none;
-  border-color: #ffcc00;
 }
 .card {
   background: rgba(255,255,255,0.95);
@@ -277,10 +283,6 @@ input:focus, textarea:focus, select:focus {
   margin: 15px 0;
   padding: 15px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-  transition: transform 0.3s ease;
-}
-.card:hover {
-  transform: translateY(-5px);
 }
 .card img, .card video {
   width: 100%;
@@ -288,23 +290,6 @@ input:focus, textarea:focus, select:focus {
   object-fit: cover;
   border-radius: 8px;
   margin-bottom: 10px;
-}
-.login-form {
-  background: rgba(255,255,255,0.95);
-  color: #000;
-  border-radius: 12px;
-  padding: 30px;
-  max-width: 400px;
-  margin: 50px auto;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
-}
-.admin-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-  gap: 10px;
 }
 .badge {
   background: #4CAF50;
@@ -314,375 +299,366 @@ input:focus, textarea:focus, select:focus {
   font-size: 12px;
   font-weight: bold;
 }
-.loading {
-  text-align: center;
-  padding: 40px;
-  font-size: 18px;
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.8);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
 }
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
-  color: #fff;
+.modal.show { display: flex; }
+.modal-content {
+  background: white;
+  color: black;
+  padding: 30px;
+  border-radius: 12px;
+  max-width: 400px;
+  width: 90%;
 }
-.empty-state h2 {
-  margin-bottom: 10px;
-}
+.empty { text-align: center; padding: 60px 20px; }
+.loading { text-align: center; padding: 40px; font-size: 18px; }
 </style>
 </head>
 <body>
-<div id="root">
-  <div style="color: white; text-align: center; padding: 50px;">
-    <h1>⏳ Chargement de l'application...</h1>
-    <p>Si ce message persiste, il y a un problème avec JavaScript.</p>
+<div class="container">
+  <div class="header">
+    <h1>🛍️ Mon Catalogue</h1>
+    <div id="admin-controls"></div>
+  </div>
+  <div id="content" class="loading">⏳ Chargement...</div>
+</div>
+
+<div id="login-modal" class="modal">
+  <div class="modal-content">
+    <h2>🔐 Connexion Admin</h2>
+    <input type="password" id="password-input" placeholder="Mot de passe">
+    <button onclick="login()">Se connecter</button>
+    <button class="secondary" onclick="closeLogin()">Annuler</button>
   </div>
 </div>
-<script type="text/babel">
-console.log('Script démarré...');
-const {useState, useEffect} = React;
-console.log('React chargé:', React);
+
+<div id="form-modal" class="modal">
+  <div class="modal-content">
+    <h3 id="form-title">➕ Nouveau produit</h3>
+    <input type="text" id="name" placeholder="Nom du produit *">
+    <input type="number" id="price" step="0.01" placeholder="Prix (€) *">
+    <input type="text" id="category" placeholder="Catégorie">
+    <input type="number" id="stock" placeholder="Stock">
+    <textarea id="description" rows="4" placeholder="Description"></textarea>
+    <input type="file" id="file-input" accept="image/*,video/*">
+    <div id="file-status"></div>
+    <button onclick="saveProduct()">💾 Sauvegarder</button>
+    <button class="secondary" onclick="closeForm()">❌ Annuler</button>
+  </div>
+</div>
+
+<script>
 const tg = window.Telegram?.WebApp;
-console.log('Telegram WebApp:', tg);
+let isAdmin = false;
+let products = [];
+let editingProduct = null;
+let currentImageUrl = '';
+let currentVideoUrl = '';
 
-function App() {
-  const [products, setProducts] = useState([]);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [showLogin, setShowLogin] = useState(false);
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [formData, setFormData] = useState({
-    name: '',
-    price: '',
-    description: '',
-    category: '',
-    stock: '',
-    image_url: '',
-    video_url: ''
-  });
-  const [showForm, setShowForm] = useState(false);
-  const [edit, setEdit] = useState(null);
-
-  useEffect(() => {
-    if (tg) {
-      tg.ready();
-      tg.expand();
-    }
-    init();
-  }, []);
-
-  async function init() {
-    await Promise.all([load(), check()]);
-    setLoading(false);
-  }
-
-  const headers = () => ({
-    'Content-Type': 'application/json',
-    'X-Telegram-Init-Data': tg?.initData || ''
-  });
-
-  async function load() {
-    try {
-      const res = await fetch('/api/products');
-      const data = await res.json();
-      setProducts(data);
-    } catch (e) {
-      console.error('Erreur chargement produits:', e);
-      alert('Erreur lors du chargement des produits');
-    }
-  }
-
-  async function check() {
-    try {
-      const res = await fetch('/api/admin/check', {
-        headers: headers(),
-        credentials: 'same-origin'
-      });
-      const data = await res.json();
-      setIsAdmin(data.admin);
-    } catch (e) {
-      console.error('Erreur vérification admin:', e);
-      setIsAdmin(false);
-    }
-  }
-
-  async function login() {
-    if (!password) {
-      alert('Veuillez entrer un mot de passe');
-      return;
-    }
-    try {
-      const res = await fetch('/api/admin/login', {
-        method: 'POST',
-        headers: headers(),
-        credentials: 'same-origin',
-        body: JSON.stringify({ password })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setIsAdmin(true);
-        setShowLogin(false);
-        setPassword('');
-        alert('✅ Connexion réussie !');
-      } else {
-        alert(data.error || 'Erreur de connexion');
-      }
-    } catch (e) {
-      console.error('Erreur login:', e);
-      alert('Erreur de connexion');
-    }
-  }
-
-  async function logout() {
-    try {
-      await fetch('/api/admin/logout', {
-        method: 'POST',
-        headers: headers(),
-        credentials: 'same-origin'
-      });
-      setIsAdmin(false);
-      setShowForm(false);
-      setShowLogin(false);
-      alert('👋 Déconnexion réussie');
-    } catch (e) {
-      console.error('Erreur logout:', e);
-    }
-  }
-
-  async function save() {
-    if (!formData.name || !formData.price) {
-      alert('⚠️ Nom et prix requis');
-      return;
-    }
-    try {
-      const url = edit ? `/api/admin/products/${edit.id}` : '/api/admin/products';
-      const method = edit ? 'PUT' : 'POST';
-      const res = await fetch(url, {
-        method,
-        headers: headers(),
-        credentials: 'same-origin',
-        body: JSON.stringify(formData)
-      });
-      if (res.ok) {
-        setShowForm(false);
-        setEdit(null);
-        setFormData({
-          name: '',
-          price: '',
-          description: '',
-          category: '',
-          stock: '',
-          image_url: '',
-          video_url: ''
-        });
-        await load();
-        alert('✅ Produit sauvegardé !');
-      } else {
-        const data = await res.json();
-        alert(data.error || 'Erreur lors de la sauvegarde');
-      }
-    } catch (e) {
-      console.error('Erreur sauvegarde:', e);
-      alert('Erreur lors de la sauvegarde');
-    }
-  }
-
-  async function del(id) {
-    if (!confirm('🗑️ Supprimer ce produit ?')) return;
-    try {
-      const res = await fetch(`/api/admin/products/${id}`, {
-        method: 'DELETE',
-        headers: headers(),
-        credentials: 'same-origin'
-      });
-      if (res.ok) {
-        await load();
-        alert('✅ Produit supprimé');
-      } else {
-        alert('Erreur lors de la suppression');
-      }
-    } catch (e) {
-      console.error('Erreur suppression:', e);
-      alert('Erreur lors de la suppression');
-    }
-  }
-
-  async function uploadFile(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    const maxSize = 10 * 1024 * 1024; // 10MB
-    if (file.size > maxSize) {
-      alert('⚠️ Fichier trop volumineux (max 10MB)');
-      return;
-    }
-    
-    const fd = new FormData();
-    fd.append('file', file);
-    
-    try {
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        headers: { 'X-Telegram-Init-Data': tg?.initData || '' },
-        credentials: 'same-origin',
-        body: fd
-      });
-      const data = await res.json();
-      if (data.url) {
-        if (file.type.startsWith('video')) {
-          setFormData({ ...formData, video_url: data.url, image_url: '' });
-        } else {
-          setFormData({ ...formData, image_url: data.url, video_url: '' });
-        }
-        alert('✅ Fichier uploadé avec succès !');
-      } else {
-        alert(data.error || 'Erreur upload');
-      }
-    } catch (e) {
-      console.error('Erreur upload:', e);
-      alert('Erreur lors de l\'upload');
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="container">
-        <div className="loading">⏳ Chargement...</div>
-      </div>
-    );
-  }
-
-  if (showLogin) {
-    return (
-      <div className="container">
-        <div className="login-form">
-          <h2>🔐 Connexion Admin</h2>
-          <input
-            type="password"
-            placeholder="Mot de passe"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            onKeyPress={e => e.key === 'Enter' && login()}
-          />
-          <button onClick={login}>Se connecter</button>
-          <button className="secondary" onClick={() => setShowLogin(false)}>Annuler</button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="container">
-      <div className="admin-header">
-        <h1>🛍️ Mon Catalogue</h1>
-        <div>
-          {isAdmin && <span className="badge">👑 Admin</span>}
-          {!isAdmin && <button onClick={() => setShowLogin(true)}>🔑 Mode Admin</button>}
-          {isAdmin && <button className="secondary" onClick={logout}>🚪 Déconnexion</button>}
-        </div>
-      </div>
-
-      {isAdmin && !showForm && (
-        <button onClick={() => {
-          setShowForm(true);
-          setEdit(null);
-          setFormData({
-            name: '',
-            price: '',
-            description: '',
-            category: '',
-            stock: '',
-            image_url: '',
-            video_url: ''
-          });
-        }}>
-          ➕ Ajouter un produit
-        </button>
-      )}
-
-      {isAdmin && showForm && (
-        <div className="card">
-          <h3>{edit ? '✏️ Modifier le produit' : '➕ Nouveau produit'}</h3>
-          <input
-            placeholder="Nom du produit *"
-            value={formData.name}
-            onChange={e => setFormData({ ...formData, name: e.target.value })}
-          />
-          <input
-            type="number"
-            step="0.01"
-            placeholder="Prix (€) *"
-            value={formData.price}
-            onChange={e => setFormData({ ...formData, price: e.target.value })}
-          />
-          <input
-            placeholder="Catégorie"
-            value={formData.category}
-            onChange={e => setFormData({ ...formData, category: e.target.value })}
-          />
-          <input
-            type="number"
-            placeholder="Stock"
-            value={formData.stock}
-            onChange={e => setFormData({ ...formData, stock: e.target.value })}
-          />
-          <textarea
-            placeholder="Description"
-            rows="4"
-            value={formData.description}
-            onChange={e => setFormData({ ...formData, description: e.target.value })}
-          ></textarea>
-          <input type="file" accept="image/*,video/*" onChange={uploadFile} />
-          {(formData.image_url || formData.video_url) && (
-            <p style={{color: 'green', fontWeight: 'bold'}}>✓ Fichier chargé</p>
-          )}
-          <button onClick={save}>💾 Sauvegarder</button>
-          <button className="secondary" onClick={() => {
-            setShowForm(false);
-            setEdit(null);
-          }}>
-            ❌ Annuler
-          </button>
-        </div>
-      )}
-
-      {products.length === 0 && (
-        <div className="empty-state">
-          <h2>📦 Catalogue vide</h2>
-          <p>Aucun produit disponible pour le moment</p>
-          {isAdmin && <p style={{marginTop: '20px'}}>👆 Cliquez sur "Ajouter un produit" pour commencer</p>}
-        </div>
-      )}
-
-      {products.map(p => (
-        <div key={p.id} className="card">
-          {p.image_url && <img src={p.image_url} alt={p.name} />}
-          {p.video_url && <video src={p.video_url} controls />}
-          <h3>{p.name}</h3>
-          {p.category && <p><em>📁 {p.category}</em></p>}
-          {p.description && <p>{p.description}</p>}
-          <p><strong style={{fontSize: '24px', color: '#4CAF50'}}>{p.price} €</strong></p>
-          <p><em>📦 Stock : {p.stock}</em></p>
-          {isAdmin && (
-            <div>
-              <button onClick={() => {
-                setEdit(p);
-                setFormData(p);
-                setShowForm(true);
-              }}>
-                ✏️ Modifier
-              </button>
-              <button className="secondary" onClick={() => del(p.id)}>
-                🗑️ Supprimer
-              </button>
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
+if (tg) {
+  tg.ready();
+  tg.expand();
 }
 
-ReactDOM.render(<App />, document.getElementById('root'));
-console.log('App montée avec succès');
+async function init() {
+  await checkAdmin();
+  await loadProducts();
+  render();
+}
+
+async function checkAdmin() {
+  try {
+    const res = await fetch('/api/admin/check', {
+      credentials: 'same-origin',
+      headers: { 'X-Telegram-Init-Data': tg?.initData || '' }
+    });
+    const data = await res.json();
+    isAdmin = data.admin;
+  } catch (e) {
+    console.error('Erreur check admin:', e);
+    isAdmin = false;
+  }
+}
+
+async function loadProducts() {
+  try {
+    const res = await fetch('/api/products');
+    products = await res.json();
+  } catch (e) {
+    console.error('Erreur chargement:', e);
+    alert('Erreur lors du chargement des produits');
+  }
+}
+
+function render() {
+  const adminControls = document.getElementById('admin-controls');
+  const content = document.getElementById('content');
+  
+  // Admin controls
+  if (isAdmin) {
+    adminControls.innerHTML = `
+      <span class="badge">👑 Admin</span>
+      <button onclick="showForm()">➕ Ajouter</button>
+      <button class="secondary" onclick="logout()">🚪 Déconnexion</button>
+    `;
+  } else {
+    adminControls.innerHTML = '<button onclick="showLogin()">🔑 Mode Admin</button>';
+  }
+  
+  // Products
+  if (products.length === 0) {
+    content.innerHTML = `
+      <div class="empty">
+        <h2>📦 Catalogue vide</h2>
+        <p>Aucun produit disponible</p>
+      </div>
+    `;
+  } else {
+    content.innerHTML = products.map(p => `
+      <div class="card">
+        ${p.image_url ? `<img src="${p.image_url}" alt="${p.name}">` : ''}
+        ${p.video_url ? `<video src="${p.video_url}" controls></video>` : ''}
+        <h3>${p.name}</h3>
+        ${p.category ? `<p><em>📁 ${p.category}</em></p>` : ''}
+        ${p.description ? `<p>${p.description}</p>` : ''}
+        <p><strong style="font-size: 24px; color: #4CAF50;">${p.price} €</strong></p>
+        <p><em>📦 Stock : ${p.stock}</em></p>
+        ${isAdmin ? `
+          <button onclick="editProduct(${p.id})">✏️ Modifier</button>
+          <button class="secondary" onclick="deleteProduct(${p.id})">🗑️ Supprimer</button>
+        ` : ''}
+      </div>
+    `).join('');
+  }
+}
+
+function showLogin() {
+  document.getElementById('login-modal').classList.add('show');
+}
+
+function closeLogin() {
+  document.getElementById('login-modal').classList.remove('show');
+  document.getElementById('password-input').value = '';
+}
+
+async function login() {
+  const password = document.getElementById('password-input').value;
+  if (!password) {
+    alert('Entrez un mot de passe');
+    return;
+  }
+  try {
+    const res = await fetch('/api/admin/login', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password })
+    });
+    if (res.ok) {
+      isAdmin = true;
+      closeLogin();
+      render();
+      alert('✅ Connexion réussie !');
+    } else {
+      const data = await res.json();
+      alert(data.error || 'Erreur');
+    }
+  } catch (e) {
+    console.error('Erreur login:', e);
+    alert('Erreur de connexion');
+  }
+}
+
+async function logout() {
+  try {
+    await fetch('/api/admin/logout', {
+      method: 'POST',
+      credentials: 'same-origin'
+    });
+    isAdmin = false;
+    render();
+    alert('👋 Déconnexion réussie');
+  } catch (e) {
+    console.error('Erreur logout:', e);
+  }
+}
+
+function showForm() {
+  editingProduct = null;
+  currentImageUrl = '';
+  currentVideoUrl = '';
+  document.getElementById('form-title').textContent = '➕ Nouveau produit';
+  document.getElementById('name').value = '';
+  document.getElementById('price').value = '';
+  document.getElementById('category').value = '';
+  document.getElementById('stock').value = '';
+  document.getElementById('description').value = '';
+  document.getElementById('file-input').value = '';
+  document.getElementById('file-status').innerHTML = '';
+  document.getElementById('form-modal').classList.add('show');
+}
+
+function editProduct(id) {
+  const product = products.find(p => p.id === id);
+  if (!product) return;
+  
+  editingProduct = product;
+  currentImageUrl = product.image_url || '';
+  currentVideoUrl = product.video_url || '';
+  
+  document.getElementById('form-title').textContent = '✏️ Modifier le produit';
+  document.getElementById('name').value = product.name;
+  document.getElementById('price').value = product.price;
+  document.getElementById('category').value = product.category || '';
+  document.getElementById('stock').value = product.stock;
+  document.getElementById('description').value = product.description || '';
+  document.getElementById('file-input').value = '';
+  document.getElementById('file-status').innerHTML = (currentImageUrl || currentVideoUrl) ? '<p style="color:green">✓ Fichier existant</p>' : '';
+  document.getElementById('form-modal').classList.add('show');
+}
+
+function closeForm() {
+  document.getElementById('form-modal').classList.remove('show');
+  editingProduct = null;
+}
+
+document.getElementById('file-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  
+  if (file.size > 10 * 1024 * 1024) {
+    alert('⚠️ Fichier trop volumineux (max 10MB)');
+    return;
+  }
+  
+  const fd = new FormData();
+  fd.append('file', file);
+  
+  document.getElementById('file-status').innerHTML = '<p>⏳ Upload en cours...</p>';
+  
+  try {
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'X-Telegram-Init-Data': tg?.initData || '' },
+      body: fd
+    });
+    const data = await res.json();
+    if (data.url) {
+      if (file.type.startsWith('video')) {
+        currentVideoUrl = data.url;
+        currentImageUrl = '';
+      } else {
+        currentImageUrl = data.url;
+        currentVideoUrl = '';
+      }
+      document.getElementById('file-status').innerHTML = '<p style="color:green">✅ Fichier uploadé !</p>';
+    } else {
+      alert(data.error || 'Erreur upload');
+      document.getElementById('file-status').innerHTML = '';
+    }
+  } catch (e) {
+    console.error('Erreur upload:', e);
+    alert('Erreur lors de l\'upload');
+    document.getElementById('file-status').innerHTML = '';
+  }
+});
+
+async function saveProduct() {
+  const name = document.getElementById('name').value;
+  const price = document.getElementById('price').value;
+  const category = document.getElementById('category').value;
+  const stock = document.getElementById('stock').value;
+  const description = document.getElementById('description').value;
+  
+  if (!name || !price) {
+    alert('⚠️ Nom et prix requis');
+    return;
+  }
+  
+  const data = {
+    name,
+    price: parseFloat(price),
+    category,
+    stock: parseInt(stock) || 0,
+    description,
+    image_url: currentImageUrl,
+    video_url: currentVideoUrl
+  };
+  
+  try {
+    const url = editingProduct ? `/api/admin/products/${editingProduct.id}` : '/api/admin/products';
+    const method = editingProduct ? 'PUT' : 'POST';
+    
+    const res = await fetch(url, {
+      method,
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Telegram-Init-Data': tg?.initData || ''
+      },
+      body: JSON.stringify(data)
+    });
+    
+    if (res.ok) {
+      closeForm();
+      await loadProducts();
+      render();
+      alert('✅ Produit sauvegardé !');
+    } else {
+      const err = await res.json();
+      alert(err.error || 'Erreur');
+    }
+  } catch (e) {
+    console.error('Erreur save:', e);
+    alert('Erreur lors de la sauvegarde');
+  }
+}
+
+async function deleteProduct(id) {
+  if (!confirm('🗑️ Supprimer ce produit ?')) return;
+  
+  try {
+    const res = await fetch(`/api/admin/products/${id}`, {
+      method: 'DELETE',
+      credentials: 'same-origin',
+      headers: { 'X-Telegram-Init-Data': tg?.initData || '' }
+    });
+    
+    if (res.ok) {
+      await loadProducts();
+      render();
+      alert('✅ Produit supprimé');
+    } else {
+      alert('Erreur lors de la suppression');
+    }
+  } catch (e) {
+    console.error('Erreur delete:', e);
+    alert('Erreur lors de la suppression');
+  }
+}
+
+// Fermer les modals en cliquant en dehors
+document.querySelectorAll('.modal').forEach(modal => {
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      modal.classList.remove('show');
+    }
+  });
+});
+
+// Init
+init();
 </script>
 </body>
 </html>

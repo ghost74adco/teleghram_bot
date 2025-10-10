@@ -1326,8 +1326,6 @@ async def error_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def setup_webapp_menu(application):
     """Configure le menu WebApp après le démarrage du bot"""
     try:
-        from telegram import MenuButtonWebApp, WebAppInfo
-        
         await application.bot.set_chat_menu_button(
             menu_button=MenuButtonWebApp(
                 text="🏴‍☠️ Carte du Pirate",
@@ -1347,13 +1345,8 @@ def main():
     
     # ConversationHandler
     conv_handler = ConversationHandler(
-    entry_points=[...],
-    states={...},
-    fallbacks=[...],
-    per_chat=True,
-    per_user=True,
-    per_message=True
-)
+        entry_points=[CommandHandler('start', start_command)],
+        states={
             LANGUE: [
                 CallbackQueryHandler(set_langue, pattern='^lang_')
             ],
@@ -1427,6 +1420,9 @@ if __name__ == '__main__':
         main()
     except KeyboardInterrupt:
         logger.info("🛑 Bot arrêté par l'utilisateur")
+    except Exception as e:
+        logger.error(f"❌ Erreur fatale: {e}", exc_info=True)
+        sys.exit(1)
     except Exception as e:
         logger.error(f"❌ Erreur fatale: {e}", exc_info=True)
         sys.exit(1)

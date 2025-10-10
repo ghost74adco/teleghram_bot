@@ -1365,7 +1365,7 @@ async def _setup_webapp_menu():
 
 # Lancement asynchrone de la configuration du menu (ne bloque pas le démarrage)
 from telegram.ext import Application
-application = Application.builder().token(BOT_TOKEN).build()
+application = Application.builder().token(TOKEN).build()
 
 try:
     application.run_async(_setup_webapp_menu())

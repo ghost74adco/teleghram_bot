@@ -1,8 +1,7 @@
-from flask import Flask, request, jsonify, abort, send_from_directory
+from flask import Flask, request, jsonify, abort
 from dotenv import load_dotenv
 from functools import wraps
-from werkzeug.utils import secure_filename
-import os, hmac, hashlib, json
+import os, hmac, hashlib, json, cloudinary, cloudinary.uploader
 
 # ==============================
 # CONFIGURATION
@@ -11,17 +10,20 @@ import os, hmac, hashlib, json
 load_dotenv('infos.env')
 
 app = Flask(__name__)
-
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'mon-super-secret')
+
 BOT_TOKEN = os.environ.get('TELEGRAM_TOKEN', '')
 ADMIN_USER_IDS = [int(i) for i in os.environ.get('ADMIN_USER_IDS', '').split(',') if i]
 
-UPLOAD_FOLDER = 'uploads'
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'mp4', 'mov'}
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
 PRODUCTS_FILE = 'products.json'
+
+# Configuration Cloudinary
+cloudinary.config(
+    cloud_name=os.environ.get('CLOUD_NAME'),
+    api_key=os.environ.get('CLOUD_API_KEY'),
+    api_secret=os.environ.get('CLOUD_API_SECRET'),
+    secure=True
+)
 
 # ==============================
 # FONCTIONS PRODUITS
@@ -78,11 +80,8 @@ def require_admin(f):
     return decorated
 
 # ==============================
-# UPLOAD
+# UPLOAD AVEC CLOUDINARY
 # ==============================
-
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @app.route('/api/upload', methods=['POST'])
 @require_admin
@@ -92,17 +91,17 @@ def upload_file():
     file = request.files['file']
     if file.filename == '':
         return jsonify({'error': 'Nom de fichier vide'}), 400
-    if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
-        file_url = f'/uploads/{filename}'
-        return jsonify({'url': file_url}), 200
-    return jsonify({'error': 'Format non autorisé'}), 400
 
-@app.route('/uploads/<path:filename>')
-def serve_upload(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+    try:
+        upload_result = cloudinary.uploader.upload(
+            file,
+            resource_type="auto",  # prend image ou vidéo
+            folder="catalogue"
+        )
+        file_url = upload_result.get('secure_url')
+        return jsonify({'url': file_url}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # ==============================
 # API PRODUITS

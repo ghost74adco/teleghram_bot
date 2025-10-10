@@ -1347,8 +1347,13 @@ def main():
     
     # ConversationHandler
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start_command)],
-        states={
+    entry_points=[...],
+    states={...},
+    fallbacks=[...],
+    per_chat=True,
+    per_user=True,
+    per_message=True
+)
             LANGUE: [
                 CallbackQueryHandler(set_langue, pattern='^lang_')
             ],

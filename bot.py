@@ -1364,6 +1364,7 @@ async def _setup_webapp_menu():
         logger.error(f"Erreur lors de la configuration du menu WebApp : {e}")
 
 # Lancement asynchrone de la configuration du menu (ne bloque pas le démarrage)
+from telegram.ext import Application
 try:
     application.run_async(_setup_webapp_menu())
 except Exception as e:

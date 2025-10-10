@@ -90,6 +90,7 @@ def require_admin(f):
     return decorated_function
 
 @app.route('/')
+@app.route('/catalogue')
 def home():
     html_content = """<!DOCTYPE html>
 <html lang="fr">

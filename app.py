@@ -6,13 +6,15 @@ import json
 from dotenv import load_dotenv
 from functools import wraps
 
+# Charger le fichier infos.env
 load_dotenv('infos.env')
+
 app = Flask(__name__)
 
-# Configuration de sécurité
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'votre-cle-secrete-a-changer')
-BOT_TOKEN = os.environ.get('BOT_TOKEN', '')
-ADMIN_USER_IDS = [int(id) for id in os.environ.get('ADMIN_USER_IDS', '').split(',') if id]
+# Configuration de sécurité - Adaptation à votre fichier infos.env
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'mon-super-secret-aleatoire-2024')
+BOT_TOKEN = os.environ.get('TELEGRAM_TOKEN', os.environ.get('BOT_TOKEN', ''))  # Support des deux noms
+ADMIN_USER_IDS = [int(id) for id in os.environ.get('ADMIN_USER_IDS', os.environ.get('ADMIN_ID', '')).split(',') if id]
 
 # Stockage des produits (remplacer par une base de données en production)
 products = [
@@ -22,7 +24,7 @@ products = [
         "price": 29.99,
         "description": "Description du produit 1",
         "category": "Électronique",
-        "image_url": "https://via.placeholder.com/400x300",
+        "image_url": "https://via.placeholder.com/400x300/667eea/ffffff?text=Produit+1",
         "video_url": "",
         "stock": 10
     },
@@ -32,7 +34,7 @@ products = [
         "price": 49.99,
         "description": "Description du produit 2",
         "category": "Vêtements",
-        "image_url": "https://via.placeholder.com/400x300",
+        "image_url": "https://via.placeholder.com/400x300/764ba2/ffffff?text=Produit+2",
         "video_url": "",
         "stock": 5
     }
@@ -41,6 +43,7 @@ products = [
 def verify_telegram_auth(init_data):
     """Vérifie l'authenticité des données Telegram WebApp"""
     if not BOT_TOKEN:
+        print("⚠️ BOT_TOKEN non configuré - mode développement")
         return False
     try:
         parsed_data = dict(item.split('=', 1) for item in init_data.split('&') if '=' in item)
@@ -52,7 +55,7 @@ def verify_telegram_auth(init_data):
         
         return hmac.compare_digest(calculated_hash, received_hash)
     except Exception as e:
-        print(f"Auth error: {e}")
+        print(f"❌ Erreur authentification: {e}")
         return False
 
 def is_admin(user_data):
@@ -60,9 +63,11 @@ def is_admin(user_data):
     try:
         user_info = json.loads(user_data)
         user_id = user_info.get('id')
-        return user_id in ADMIN_USER_IDS
+        is_admin_user = user_id in ADMIN_USER_IDS
+        print(f"🔍 Vérification admin - User ID: {user_id}, Admin IDs: {ADMIN_USER_IDS}, Est admin: {is_admin_user}")
+        return is_admin_user
     except Exception as e:
-        print(f"Admin check error: {e}")
+        print(f"❌ Erreur vérification admin: {e}")
         return False
 
 def require_admin(f):
@@ -73,19 +78,28 @@ def require_admin(f):
         
         # En développement, autoriser sans authentification si pas de BOT_TOKEN
         if not BOT_TOKEN:
+            print("⚠️ Mode développement - accès admin autorisé sans authentification")
             return f(*args, **kwargs)
         
-        if not init_data or not verify_telegram_auth(init_data):
-            abort(403, description="Unauthorized")
+        if not init_data:
+            print("❌ Pas de données Telegram Init Data")
+            abort(403, description="Unauthorized - No Telegram data")
+        
+        if not verify_telegram_auth(init_data):
+            print("❌ Authentification Telegram échouée")
+            abort(403, description="Unauthorized - Invalid Telegram data")
         
         try:
             parsed_data = dict(item.split('=', 1) for item in init_data.split('&') if '=' in item)
             user_data = parsed_data.get('user', '')
             if not is_admin(user_data):
+                print("❌ Utilisateur non autorisé (pas admin)")
                 abort(403, description="Admin access required")
-        except:
+        except Exception as e:
+            print(f"❌ Erreur lors de la vérification: {e}")
             abort(403, description="Invalid request")
         
+        print("✅ Accès admin autorisé")
         return f(*args, **kwargs)
     return decorated_function
 
@@ -132,39 +146,54 @@ def home():
                 });
 
                 useEffect(() => {
+                    console.log('🚀 App démarrée');
                     if (tg) {
+                        console.log('✅ Telegram WebApp détecté');
                         tg.ready();
                         tg.expand();
                         tg.BackButton.hide();
+                        console.log('📱 Init Data:', tg.initData ? 'Présent' : 'Absent');
+                    } else {
+                        console.log('⚠️ Telegram WebApp non disponible (mode navigateur?)');
                     }
                     loadProducts();
                     checkAdmin();
                 }, []);
 
-                const getHeaders = () => ({
-                    'Content-Type': 'application/json',
-                    'X-Telegram-Init-Data': tg?.initData || ''
-                });
+                const getHeaders = () => {
+                    const headers = {
+                        'Content-Type': 'application/json',
+                        'X-Telegram-Init-Data': tg?.initData || ''
+                    };
+                    console.log('📤 Headers:', headers['X-Telegram-Init-Data'] ? 'Init Data présent' : 'Init Data absent');
+                    return headers;
+                };
 
                 const loadProducts = async () => {
+                    console.log('📦 Chargement des produits...');
                     try {
                         const res = await fetch('/api/products');
                         const data = await res.json();
+                        console.log('✅ Produits chargés:', data.length);
                         setProducts(data);
                     } catch (err) {
-                        console.error('Erreur chargement:', err);
+                        console.error('❌ Erreur chargement:', err);
                     } finally {
                         setLoading(false);
                     }
                 };
 
                 const checkAdmin = async () => {
+                    console.log('🔍 Vérification droits admin...');
                     try {
                         const res = await fetch('/api/admin/check', {
                             headers: getHeaders()
                         });
-                        setIsAdmin(res.ok);
+                        const isAdminUser = res.ok;
+                        console.log(isAdminUser ? '✅ Utilisateur admin détecté' : '👤 Utilisateur standard');
+                        setIsAdmin(isAdminUser);
                     } catch (err) {
+                        console.log('👤 Pas d\'accès admin:', err.message);
                         setIsAdmin(false);
                     }
                 };
@@ -175,6 +204,7 @@ def home():
                         return;
                     }
 
+                    console.log('💾 Sauvegarde du produit...');
                     try {
                         const url = editingProduct 
                             ? `/api/admin/products/${editingProduct.id}`
@@ -189,6 +219,7 @@ def home():
                         });
 
                         if (res.ok) {
+                            console.log('✅ Produit sauvegardé');
                             await loadProducts();
                             setShowForm(false);
                             setEditingProduct(null);
@@ -203,9 +234,11 @@ def home():
                             }
                         } else {
                             const error = await res.text();
+                            console.error('❌ Erreur sauvegarde:', error);
                             alert('❌ Erreur: ' + error);
                         }
                     } catch (err) {
+                        console.error('❌ Exception:', err);
                         alert('❌ Erreur: ' + err.message);
                     }
                 };
@@ -214,6 +247,7 @@ def home():
                     const confirmed = window.confirm('Supprimer ce produit ?');
                     if (!confirmed) return;
                     
+                    console.log('🗑️ Suppression du produit', id);
                     try {
                         const res = await fetch(`/api/admin/products/${id}`, {
                             method: 'DELETE',
@@ -221,6 +255,7 @@ def home():
                         });
 
                         if (res.ok) {
+                            console.log('✅ Produit supprimé');
                             await loadProducts();
                             if (tg) {
                                 tg.showAlert('✅ Produit supprimé !');
@@ -229,11 +264,13 @@ def home():
                             }
                         }
                     } catch (err) {
+                        console.error('❌ Erreur suppression:', err);
                         alert('❌ Erreur: ' + err.message);
                     }
                 };
 
                 const handleEditProduct = (product) => {
+                    console.log('✏️ Édition du produit', product.id);
                     setEditingProduct(product);
                     setFormData({
                         name: product.name,
@@ -672,6 +709,7 @@ def add_product():
         "stock": int(data.get("stock", 0))
     }
     products.append(new_product)
+    print(f"✅ Produit ajouté: {new_product['name']}")
     return jsonify(new_product), 201
 
 @app.route('/api/admin/products/<int:product_id>', methods=['PUT'])
@@ -687,41 +725,4 @@ def update_product(product_id):
                 "price": float(data.get("price", product["price"])),
                 "description": data.get("description", product["description"]),
                 "category": data.get("category", product["category"]),
-                "image_url": data.get("image_url", product.get("image_url", "")),
-                "video_url": data.get("video_url", product.get("video_url", "")),
-                "stock": int(data.get("stock", product["stock"]))
-            })
-            return jsonify(product)
-    
-    return jsonify({"error": "Produit non trouvé"}), 404
-
-@app.route('/api/admin/products/<int:product_id>', methods=['DELETE'])
-@require_admin
-def delete_product(product_id):
-    """Admin uniquement - Supprimer un produit"""
-    global products
-    initial_length = len(products)
-    products = [p for p in products if p["id"] != product_id]
-    
-    if len(products) < initial_length:
-        return jsonify({"success": True})
-    return jsonify({"error": "Produit non trouvé"}), 404
-
-@app.route('/health')
-def health():
-    return jsonify({"status": "ok", "message": "Mini app is running"})
-
-@app.after_request
-def set_security_headers(response):
-    """Protection contre les attaques courantes"""
-    response.headers['X-Content-Type-Options'] = 'nosniff'
-    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
-    response.headers['X-XSS-Protection'] = '1; mode=block'
-    return response
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    print(f"🚀 Server starting on port {port}")
-    print(f"🔑 BOT_TOKEN configured: {'Yes' if BOT_TOKEN else 'No'}")
-    print(f"👤 Admin IDs: {ADMIN_USER_IDS if ADMIN_USER_IDS else 'None configured'}")
-    app.run(host='0.0.0.0', port=port, debug=False)
+                "image_

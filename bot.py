@@ -1318,40 +1318,14 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 # --- Gestion des erreurs globales ---
+# --- Gestion des erreurs globales ---
 async def error_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gestion des erreurs globales"""
     logger.error(f"Exception: {context.error}", exc_info=context.error)
 
-# --- Configuration du bot ---
-def main():
-    """Fonction principale"""
-    logger.info("🚀 Démarrage du bot...")
-    
-    application = Application.builder().token(TOKEN).build()
-    application.create_task(_setup_webapp_menu(application))
-
-
-# --- AJOUT : menu WebApp "Carte du Pirate" ---
-from telegram import MenuButtonWebApp, WebAppInfo
-
-# --- AJOUT : menu WebApp "Carte du Pirate" ---
-from telegram import MenuButtonWebApp, WebAppInfo
-
-async def _setup_webapp_menu(app):
-    try:
-        await app.bot.set_chat_menu_button(
-            menu_button=MenuButtonWebApp(
-                text="🏴‍☠️ Carte du Pirate",
-                web_app=WebAppInfo(url="https://carte-du-pirate.onrender.com")
-            )
-        )
-        logger.info("✅ Menu WebApp 'Carte du Pirate' configuré.")
-    except Exception as e:
-        logger.error(f"Erreur lors de la configuration du menu WebApp : {e}")
-# --- FIN AJOUT ---
-
-
-async def _setup_webapp_menu():
+# --- Configuration du menu WebApp ---
+async def setup_webapp_menu(application):
+    """Configure le menu WebApp après le démarrage du bot"""
     try:
         await application.bot.set_chat_menu_button(
             menu_button=MenuButtonWebApp(
@@ -1361,15 +1335,14 @@ async def _setup_webapp_menu():
         )
         logger.info("✅ Menu WebApp 'Carte du Pirate' configuré.")
     except Exception as e:
-        logger.error(f"Erreur lors de la configuration du menu WebApp : {e}")
+        logger.error(f"❌ Erreur configuration menu WebApp : {e}")
 
-# Lancement asynchrone de la configuration du menu (ne bloque pas le démarrage)
-try:
-    application.run_async(_setup_webapp_menu())
-except Exception as e:
-    logger.warning(f"Impossible d'exécuter application.run_async pour configurer le menu WebApp: {e}")
-# --- FIN AJOUT ---
-
+# --- Configuration du bot ---
+def main():
+    """Fonction principale"""
+    logger.info("🚀 Démarrage du bot...")
+    
+    application = Application.builder().token(TOKEN).build()
     
     # ConversationHandler
     conv_handler = ConversationHandler(
@@ -1402,12 +1375,12 @@ except Exception as e:
                 CallbackQueryHandler(cancel, pattern='^cancel')
             ],
             ADRESSE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_adresse)
+                MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_adresse),
+                CallbackQueryHandler(saisie_adresse, pattern='^back_to_address')
             ],
             LIVRAISON: [
                 CallbackQueryHandler(choix_livraison, pattern='^delivery_'),
-                CallbackQueryHandler(cancel, pattern='^cancel'),
-                CallbackQueryHandler(saisie_adresse, pattern='^back_to_address')
+                CallbackQueryHandler(cancel, pattern='^cancel')
             ],
             PAIEMENT: [
                 CallbackQueryHandler(choix_paiement, pattern='^payment_'),
@@ -1421,7 +1394,8 @@ except Exception as e:
         fallbacks=[
             CommandHandler('start', start_command),
             CallbackQueryHandler(cancel, pattern='^cancel')
-        ]
+        ],
+        per_message=False
     )
     
     application.add_handler(conv_handler)
@@ -1433,6 +1407,9 @@ except Exception as e:
     ))
     
     application.add_error_handler(error_callback)
+    
+    # Configuration du menu WebApp après l'initialisation
+    application.post_init = setup_webapp_menu
     
     logger.info("✅ Bot démarré avec succès!")
     application.run_polling(drop_pending_updates=True)

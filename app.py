@@ -2,6 +2,13 @@ from flask import Flask, request, jsonify, session
 from dotenv import load_dotenv
 from functools import wraps
 import os, json, hmac, hashlib, cloudinary, cloudinary.uploader
+import logging
+
+# ----------------------------
+# Configuration du logging
+# ----------------------------
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # ----------------------------
 # Configuration
@@ -10,19 +17,27 @@ load_dotenv('infos.env')
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'change_this_secret_key_in_production')
-app.config['SESSION_TYPE'] = 'filesystem'
+
+# Configuration simplifiée des sessions (utilise les cookies par défaut)
+app.config['SESSION_COOKIE_SECURE'] = False  # Mettre à True en production avec HTTPS
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN', os.environ.get('TELEGRAM_TOKEN', ''))
 ADMIN_USER_IDS = [int(i) for i in os.environ.get('ADMIN_USER_IDS', '').split(',') if i.strip()]
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
 
-# Cloudinary
-cloudinary.config(
-    cloud_name=os.environ.get('CLOUDINARY_CLOUD_NAME'),
-    api_key=os.environ.get('CLOUDINARY_API_KEY'),
-    api_secret=os.environ.get('CLOUDINARY_API_SECRET'),
-    secure=True
-)
+# Cloudinary - Configuration sécurisée
+try:
+    cloudinary.config(
+        cloud_name=os.environ.get('CLOUDINARY_CLOUD_NAME'),
+        api_key=os.environ.get('CLOUDINARY_API_KEY'),
+        api_secret=os.environ.get('CLOUDINARY_API_SECRET'),
+        secure=True
+    )
+    logger.info("✅ Cloudinary configuré")
+except Exception as e:
+    logger.error(f"⚠️ Erreur configuration Cloudinary: {e}")
 
 PRODUCTS_FILE = 'products.json'
 BACKGROUND_IMAGE = os.environ.get('BACKGROUND_IMAGE', '')
@@ -36,7 +51,7 @@ def load_products():
             with open(PRODUCTS_FILE, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception as e:
-            print(f"Erreur lors du chargement des produits: {e}")
+            logger.error(f"Erreur lors du chargement des produits: {e}")
             return []
     return []
 
@@ -45,7 +60,7 @@ def save_products(products):
         with open(PRODUCTS_FILE, 'w', encoding='utf-8') as f:
             json.dump(products, f, indent=2, ensure_ascii=False)
     except Exception as e:
-        print(f"Erreur lors de la sauvegarde des produits: {e}")
+        logger.error(f"Erreur lors de la sauvegarde des produits: {e}")
 
 products = load_products()
 
@@ -63,7 +78,7 @@ def verify_telegram_auth(init_data):
         calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
         return hmac.compare_digest(calculated_hash, received_hash)
     except Exception as e:
-        print(f"Erreur vérification Telegram: {e}")
+        logger.error(f"Erreur vérification Telegram: {e}")
         return False
 
 def is_admin_via_telegram(init_data):
@@ -73,7 +88,7 @@ def is_admin_via_telegram(init_data):
         user = json.loads(user_json)
         return int(user.get('id', -1)) in ADMIN_USER_IDS
     except Exception as e:
-        print(f"Erreur vérification admin Telegram: {e}")
+        logger.error(f"Erreur vérification admin Telegram: {e}")
         return False
 
 # ----------------------------
@@ -82,38 +97,64 @@ def is_admin_via_telegram(init_data):
 def require_admin(f):
     @wraps(f)
     def wrapped(*args, **kwargs):
-        if session.get('admin_logged_in'):
-            return f(*args, **kwargs)
-        init_data = request.headers.get('X-Telegram-Init-Data', '')
-        if init_data and verify_telegram_auth(init_data) and is_admin_via_telegram(init_data):
-            return f(*args, **kwargs)
-        return jsonify({'error': 'Non autorisé'}), 403
+        try:
+            if session.get('admin_logged_in'):
+                return f(*args, **kwargs)
+            init_data = request.headers.get('X-Telegram-Init-Data', '')
+            if init_data and verify_telegram_auth(init_data) and is_admin_via_telegram(init_data):
+                return f(*args, **kwargs)
+            return jsonify({'error': 'Non autorisé'}), 403
+        except Exception as e:
+            logger.error(f"Erreur dans require_admin: {e}")
+            return jsonify({'error': 'Erreur serveur'}), 500
     return wrapped
+
+# ----------------------------
+# Health check
+# ----------------------------
+@app.route('/health')
+def health():
+    return jsonify({'status': 'ok'}), 200
 
 # ----------------------------
 # Auth routes
 # ----------------------------
 @app.route('/api/admin/login', methods=['POST'])
 def api_login():
-    data = request.json or {}
-    if data.get('password') == ADMIN_PASSWORD:
-        session['admin_logged_in'] = True
-        return jsonify({'success': True})
-    return jsonify({'error': 'Mot de passe incorrect'}), 403
+    try:
+        data = request.json or {}
+        if data.get('password') == ADMIN_PASSWORD:
+            session['admin_logged_in'] = True
+            logger.info("✅ Connexion admin réussie")
+            return jsonify({'success': True})
+        logger.warning("⚠️ Tentative de connexion avec mot de passe incorrect")
+        return jsonify({'error': 'Mot de passe incorrect'}), 403
+    except Exception as e:
+        logger.error(f"Erreur login: {e}")
+        return jsonify({'error': 'Erreur serveur'}), 500
 
 @app.route('/api/admin/logout', methods=['POST'])
 def api_logout():
-    session.pop('admin_logged_in', None)
-    return jsonify({'success': True})
+    try:
+        session.pop('admin_logged_in', None)
+        logger.info("👋 Déconnexion admin")
+        return jsonify({'success': True})
+    except Exception as e:
+        logger.error(f"Erreur logout: {e}")
+        return jsonify({'error': 'Erreur serveur'}), 500
 
 @app.route('/api/admin/check', methods=['GET'])
 def api_check_admin():
-    if session.get('admin_logged_in'):
-        return jsonify({'admin': True})
-    init_data = request.headers.get('X-Telegram-Init-Data', '')
-    if init_data and verify_telegram_auth(init_data) and is_admin_via_telegram(init_data):
-        return jsonify({'admin': True})
-    return jsonify({'admin': False})
+    try:
+        if session.get('admin_logged_in'):
+            return jsonify({'admin': True})
+        init_data = request.headers.get('X-Telegram-Init-Data', '')
+        if init_data and verify_telegram_auth(init_data) and is_admin_via_telegram(init_data):
+            return jsonify({'admin': True})
+        return jsonify({'admin': False})
+    except Exception as e:
+        logger.error(f"Erreur check admin: {e}")
+        return jsonify({'admin': False})
 
 # ----------------------------
 # Upload Cloudinary
@@ -121,16 +162,22 @@ def api_check_admin():
 @app.route('/api/upload', methods=['POST'])
 @require_admin
 def upload_file():
-    if 'file' not in request.files:
-        return jsonify({'error': 'Aucun fichier reçu'}), 400
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'Nom de fichier vide'}), 400
     try:
-        result = cloudinary.uploader.upload(file, resource_type='auto', folder='catalogue')
+        if 'file' not in request.files:
+            return jsonify({'error': 'Aucun fichier reçu'}), 400
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'Nom de fichier vide'}), 400
+        
+        # Vérifier la configuration Cloudinary
+        if not os.environ.get('CLOUDINARY_CLOUD_NAME'):
+            return jsonify({'error': 'Cloudinary non configuré'}), 500
+        
+        result = cloudinary.uploader.upload(file, resource_type='auto', folder='catalogue', timeout=60)
+        logger.info(f"✅ Fichier uploadé: {result.get('secure_url')}")
         return jsonify({'url': result.get('secure_url')}), 200
     except Exception as e:
-        print(f"Erreur upload Cloudinary: {e}")
+        logger.error(f"Erreur upload Cloudinary: {e}")
         return jsonify({'error': str(e)}), 500
 
 # ----------------------------
@@ -138,15 +185,20 @@ def upload_file():
 # ----------------------------
 @app.route('/api/products', methods=['GET'])
 def get_products():
-    return jsonify(products)
+    try:
+        return jsonify(products)
+    except Exception as e:
+        logger.error(f"Erreur get products: {e}")
+        return jsonify({'error': 'Erreur serveur'}), 500
 
 @app.route('/api/admin/products', methods=['POST'])
 @require_admin
 def add_product():
-    data = request.json or {}
-    if not data.get('name') or (str(data.get('price', '')).strip() == ''):
-        return jsonify({'error': 'Nom et prix requis'}), 400
     try:
+        data = request.json or {}
+        if not data.get('name') or (str(data.get('price', '')).strip() == ''):
+            return jsonify({'error': 'Nom et prix requis'}), 400
+        
         new_product = {
             "id": max([p["id"] for p in products]) + 1 if products else 1,
             "name": data.get("name"),
@@ -159,18 +211,19 @@ def add_product():
         }
         products.append(new_product)
         save_products(products)
+        logger.info(f"✅ Produit ajouté: {new_product['name']}")
         return jsonify(new_product), 201
     except Exception as e:
-        print(f"Erreur ajout produit: {e}")
+        logger.error(f"Erreur ajout produit: {e}")
         return jsonify({'error': 'Erreur lors de l\'ajout du produit'}), 500
 
 @app.route('/api/admin/products/<int:pid>', methods=['PUT'])
 @require_admin
 def update_product(pid):
-    data = request.json or {}
-    for p in products:
-        if p['id'] == pid:
-            try:
+    try:
+        data = request.json or {}
+        for p in products:
+            if p['id'] == pid:
                 p.update({
                     "name": data.get("name", p["name"]),
                     "price": float(data.get("price", p["price"])),
@@ -181,22 +234,28 @@ def update_product(pid):
                     "stock": int(data.get("stock", p["stock"]))
                 })
                 save_products(products)
+                logger.info(f"✅ Produit modifié: {p['name']}")
                 return jsonify(p)
-            except Exception as e:
-                print(f"Erreur mise à jour produit: {e}")
-                return jsonify({'error': 'Erreur lors de la mise à jour'}), 500
-    return jsonify({'error': 'Produit non trouvé'}), 404
+        return jsonify({'error': 'Produit non trouvé'}), 404
+    except Exception as e:
+        logger.error(f"Erreur mise à jour produit: {e}")
+        return jsonify({'error': 'Erreur lors de la mise à jour'}), 500
 
 @app.route('/api/admin/products/<int:pid>', methods=['DELETE'])
 @require_admin
 def delete_product(pid):
     global products
-    before = len(products)
-    products = [p for p in products if p['id'] != pid]
-    if len(products) < before:
-        save_products(products)
-        return jsonify({'success': True})
-    return jsonify({'error': 'Produit non trouvé'}), 404
+    try:
+        before = len(products)
+        products = [p for p in products if p['id'] != pid]
+        if len(products) < before:
+            save_products(products)
+            logger.info(f"✅ Produit supprimé: ID {pid}")
+            return jsonify({'success': True})
+        return jsonify({'error': 'Produit non trouvé'}), 404
+    except Exception as e:
+        logger.error(f"Erreur suppression produit: {e}")
+        return jsonify({'error': 'Erreur serveur'}), 500
 
 # ----------------------------
 # Frontend HTML
@@ -311,6 +370,8 @@ input, textarea {
   border-radius: 12px;
   max-width: 400px;
   width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 .empty { text-align: center; padding: 60px 20px; }
 .loading { text-align: center; padding: 40px; font-size: 18px; }
@@ -366,10 +427,15 @@ if (tg) {
 
 async function init() {
   console.log('Init...');
-  await checkAdmin();
-  await loadProducts();
-  render();
-  console.log('Init terminé');
+  try {
+    await checkAdmin();
+    await loadProducts();
+    render();
+    console.log('Init terminé');
+  } catch (e) {
+    console.error('Erreur init:', e);
+    document.getElementById('content').innerHTML = '<div class="empty"><h2>❌ Erreur</h2><p>Impossible de charger l\'application</p></div>';
+  }
 }
 
 async function checkAdmin() {
@@ -390,11 +456,12 @@ async function checkAdmin() {
 async function loadProducts() {
   try {
     const res = await fetch('/api/products');
+    if (!res.ok) throw new Error('Erreur chargement');
     products = await res.json();
     console.log('Produits chargés:', products.length);
   } catch (e) {
     console.error('Erreur chargement:', e);
-    alert('Erreur lors du chargement des produits');
+    throw e;
   }
 }
 
@@ -650,12 +717,32 @@ console.log('=== SCRIPT END ===');
 @app.route('/')
 @app.route('/catalogue')
 def catalogue():
-    return get_html()
+    try:
+        return get_html()
+    except Exception as e:
+        logger.error(f"Erreur route catalogue: {e}")
+        return "Erreur serveur", 500
+
+# ----------------------------
+# Gestionnaire d'erreurs
+# ----------------------------
+@app.errorhandler(500)
+def internal_error(error):
+    logger.error(f"Erreur 500: {error}")
+    return jsonify({'error': 'Erreur serveur interne'}), 500
+
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({'error': 'Route non trouvée'}), 404
 
 # ----------------------------
 # Run
 # ----------------------------
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    print("🚀 Starting app on port", port)
+    logger.info(f"🚀 Starting app on port {port}")
+    logger.info(f"📁 Produits chargés: {len(products)}")
+    logger.info(f"🔑 Admin password set: {'✅' if ADMIN_PASSWORD != 'admin123' else '⚠️ Using default'}")
+    logger.info(f"☁️ Cloudinary configured: {'✅' if os.environ.get('CLOUDINARY_CLOUD_NAME') else '❌'}")
+    
     app.run(host='0.0.0.0', port=port, debug=False)

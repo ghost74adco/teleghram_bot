@@ -22,7 +22,7 @@ products = [
         "price": 29.99,
         "description": "Description du produit 1",
         "category": "Électronique",
-        "image_url": "",
+        "image_url": "https://via.placeholder.com/400x300",
         "video_url": "",
         "stock": 10
     },
@@ -32,7 +32,7 @@ products = [
         "price": 49.99,
         "description": "Description du produit 2",
         "category": "Vêtements",
-        "image_url": "",
+        "image_url": "https://via.placeholder.com/400x300",
         "video_url": "",
         "stock": 5
     }
@@ -40,8 +40,10 @@ products = [
 
 def verify_telegram_auth(init_data):
     """Vérifie l'authenticité des données Telegram WebApp"""
+    if not BOT_TOKEN:
+        return False
     try:
-        parsed_data = dict(item.split('=') for item in init_data.split('&'))
+        parsed_data = dict(item.split('=', 1) for item in init_data.split('&') if '=' in item)
         received_hash = parsed_data.pop('hash', '')
         
         data_check_string = '\n'.join(f"{k}={v}" for k, v in sorted(parsed_data.items()))
@@ -49,39 +51,40 @@ def verify_telegram_auth(init_data):
         calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
         
         return hmac.compare_digest(calculated_hash, received_hash)
-    except:
+    except Exception as e:
+        print(f"Auth error: {e}")
         return False
 
 def is_admin(user_data):
     """Vérifie si l'utilisateur est admin"""
     try:
-        user_id = json.loads(user_data).get('id')
+        user_info = json.loads(user_data)
+        user_id = user_info.get('id')
         return user_id in ADMIN_USER_IDS
-    except:
+    except Exception as e:
+        print(f"Admin check error: {e}")
         return False
-
-def require_auth(f):
-    """Décorateur pour vérifier l'authentification Telegram"""
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        init_data = request.headers.get('X-Telegram-Init-Data', '')
-        if not init_data or not verify_telegram_auth(init_data):
-            abort(403)
-        return f(*args, **kwargs)
-    return decorated_function
 
 def require_admin(f):
     """Décorateur pour vérifier les droits admin"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         init_data = request.headers.get('X-Telegram-Init-Data', '')
-        if not init_data or not verify_telegram_auth(init_data):
-            abort(403)
         
-        parsed_data = dict(item.split('=') for item in init_data.split('&'))
-        user_data = parsed_data.get('user', '')
-        if not is_admin(user_data):
-            abort(403)
+        # En développement, autoriser sans authentification si pas de BOT_TOKEN
+        if not BOT_TOKEN:
+            return f(*args, **kwargs)
+        
+        if not init_data or not verify_telegram_auth(init_data):
+            abort(403, description="Unauthorized")
+        
+        try:
+            parsed_data = dict(item.split('=', 1) for item in init_data.split('&') if '=' in item)
+            user_data = parsed_data.get('user', '')
+            if not is_admin(user_data):
+                abort(403, description="Admin access required")
+        except:
+            abort(403, description="Invalid request")
         
         return f(*args, **kwargs)
     return decorated_function
@@ -90,10 +93,11 @@ def require_admin(f):
 def home():
     return """
     <!DOCTYPE html>
-    <html>
+    <html lang="fr">
     <head>
+        <meta charset="UTF-8">
         <title>Catalogue Produits</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <script src="https://telegram.org/js/telegram-web-app.js"></script>
         <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
         <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -101,10 +105,12 @@ def home():
         <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { 
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
                 background: #f5f5f5;
+                overflow-x: hidden;
             }
             #root { min-height: 100vh; }
+            img { max-width: 100%; height: auto; }
         </style>
     </head>
     <body>
@@ -164,6 +170,11 @@ def home():
                 };
 
                 const handleSaveProduct = async () => {
+                    if (!formData.name || !formData.price) {
+                        alert('Le nom et le prix sont requis');
+                        return;
+                    }
+
                     try {
                         const url = editingProduct 
                             ? `/api/admin/products/${editingProduct.id}`
@@ -185,17 +196,23 @@ def home():
                                 name: '', price: '', description: '', category: '', 
                                 image_url: '', video_url: '', stock: ''
                             });
-                            tg?.showAlert('✅ Produit sauvegardé !');
+                            if (tg) {
+                                tg.showAlert('✅ Produit sauvegardé !');
+                            } else {
+                                alert('✅ Produit sauvegardé !');
+                            }
                         } else {
-                            tg?.showAlert('❌ Erreur lors de la sauvegarde');
+                            const error = await res.text();
+                            alert('❌ Erreur: ' + error);
                         }
                     } catch (err) {
-                        tg?.showAlert('❌ Erreur: ' + err.message);
+                        alert('❌ Erreur: ' + err.message);
                     }
                 };
 
                 const handleDeleteProduct = async (id) => {
-                    if (!confirm('Supprimer ce produit ?')) return;
+                    const confirmed = window.confirm('Supprimer ce produit ?');
+                    if (!confirmed) return;
                     
                     try {
                         const res = await fetch(`/api/admin/products/${id}`, {
@@ -205,10 +222,14 @@ def home():
 
                         if (res.ok) {
                             await loadProducts();
-                            tg?.showAlert('✅ Produit supprimé !');
+                            if (tg) {
+                                tg.showAlert('✅ Produit supprimé !');
+                            } else {
+                                alert('✅ Produit supprimé !');
+                            }
                         }
                     } catch (err) {
-                        tg?.showAlert('❌ Erreur: ' + err.message);
+                        alert('❌ Erreur: ' + err.message);
                     }
                 };
 
@@ -224,6 +245,7 @@ def home():
                         stock: product.stock
                     });
                     setShowForm(true);
+                    window.scrollTo(0, 0);
                 };
 
                 const categories = [...new Set(products.map(p => p.category))];
@@ -234,30 +256,32 @@ def home():
                             display: 'flex', 
                             justifyContent: 'center', 
                             alignItems: 'center', 
-                            minHeight: '100vh' 
+                            minHeight: '100vh',
+                            fontSize: '18px',
+                            color: '#666'
                         }}>
-                            <div style={{ fontSize: '20px', color: '#666' }}>Chargement...</div>
+                            ⏳ Chargement...
                         </div>
                     );
                 }
 
                 return (
-                    <div style={{ minHeight: '100vh', background: '#f5f5f5', paddingBottom: isAdmin ? '80px' : '20px' }}>
+                    <div style={{ minHeight: '100vh', background: '#f5f5f5', paddingBottom: '20px' }}>
                         {/* Header */}
                         <div style={{ 
-                            background: 'white', 
-                            boxShadow: '0 2px 10px rgba(0,0,0,0.1)', 
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
+                            boxShadow: '0 2px 10px rgba(0,0,0,0.15)', 
                             position: 'sticky', 
                             top: 0, 
                             zIndex: 10 
                         }}>
-                            <div style={{ padding: '16px', maxWidth: '800px', margin: '0 auto' }}>
-                                <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#2563EB' }}>
-                                    📱 Catalogue Produits
+                            <div style={{ padding: '20px 16px', maxWidth: '800px', margin: '0 auto' }}>
+                                <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: 'white', marginBottom: '4px' }}>
+                                    🛍️ Catalogue Produits
                                 </h1>
                                 {isAdmin && (
-                                    <div style={{ marginTop: '8px', fontSize: '12px', color: '#10B981' }}>
-                                        ✅ Mode Administrateur
+                                    <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.9)' }}>
+                                        ✅ Mode Administrateur activé
                                     </div>
                                 )}
                             </div>
@@ -277,14 +301,15 @@ def home():
                                     }}
                                     style={{
                                         width: '100%',
-                                        background: '#2563EB',
+                                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                                         color: 'white',
-                                        padding: '12px',
-                                        borderRadius: '8px',
+                                        padding: '14px',
+                                        borderRadius: '12px',
                                         border: 'none',
                                         fontSize: '16px',
                                         fontWeight: 'bold',
-                                        cursor: 'pointer'
+                                        cursor: 'pointer',
+                                        boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)'
                                     }}
                                 >
                                     ➕ Ajouter un produit
@@ -295,9 +320,14 @@ def home():
                         {/* Form (Admin only) */}
                         {isAdmin && showForm && (
                             <div style={{ padding: '16px', maxWidth: '800px', margin: '0 auto' }}>
-                                <div style={{ background: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
-                                    <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px' }}>
-                                        {editingProduct ? '✏️ Modifier' : '➕ Nouveau produit'}
+                                <div style={{ 
+                                    background: 'white', 
+                                    borderRadius: '16px', 
+                                    padding: '20px', 
+                                    boxShadow: '0 4px 16px rgba(0,0,0,0.1)' 
+                                }}>
+                                    <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '16px', color: '#333' }}>
+                                        {editingProduct ? '✏️ Modifier le produit' : '➕ Nouveau produit'}
                                     </h2>
                                     
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -306,7 +336,13 @@ def home():
                                             placeholder="Nom du produit *"
                                             value={formData.name}
                                             onChange={(e) => setFormData({...formData, name: e.target.value})}
-                                            style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '16px' }}
+                                            style={{ 
+                                                padding: '12px', 
+                                                borderRadius: '8px', 
+                                                border: '2px solid #e5e5e5', 
+                                                fontSize: '16px',
+                                                outline: 'none'
+                                            }}
                                         />
                                         <input
                                             type="number"
@@ -314,42 +350,80 @@ def home():
                                             placeholder="Prix (€) *"
                                             value={formData.price}
                                             onChange={(e) => setFormData({...formData, price: e.target.value})}
-                                            style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '16px' }}
+                                            style={{ 
+                                                padding: '12px', 
+                                                borderRadius: '8px', 
+                                                border: '2px solid #e5e5e5', 
+                                                fontSize: '16px',
+                                                outline: 'none'
+                                            }}
                                         />
                                         <input
                                             type="text"
                                             placeholder="Catégorie *"
                                             value={formData.category}
                                             onChange={(e) => setFormData({...formData, category: e.target.value})}
-                                            style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '16px' }}
+                                            style={{ 
+                                                padding: '12px', 
+                                                borderRadius: '8px', 
+                                                border: '2px solid #e5e5e5', 
+                                                fontSize: '16px',
+                                                outline: 'none'
+                                            }}
                                         />
                                         <input
                                             type="number"
                                             placeholder="Stock"
                                             value={formData.stock}
                                             onChange={(e) => setFormData({...formData, stock: e.target.value})}
-                                            style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '16px' }}
+                                            style={{ 
+                                                padding: '12px', 
+                                                borderRadius: '8px', 
+                                                border: '2px solid #e5e5e5', 
+                                                fontSize: '16px',
+                                                outline: 'none'
+                                            }}
                                         />
                                         <textarea
                                             placeholder="Description"
                                             value={formData.description}
                                             onChange={(e) => setFormData({...formData, description: e.target.value})}
                                             rows="3"
-                                            style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '16px', resize: 'vertical' }}
+                                            style={{ 
+                                                padding: '12px', 
+                                                borderRadius: '8px', 
+                                                border: '2px solid #e5e5e5', 
+                                                fontSize: '16px', 
+                                                resize: 'vertical',
+                                                outline: 'none',
+                                                fontFamily: 'inherit'
+                                            }}
                                         />
                                         <input
                                             type="url"
                                             placeholder="URL de l'image (https://...)"
                                             value={formData.image_url}
                                             onChange={(e) => setFormData({...formData, image_url: e.target.value})}
-                                            style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '16px' }}
+                                            style={{ 
+                                                padding: '12px', 
+                                                borderRadius: '8px', 
+                                                border: '2px solid #e5e5e5', 
+                                                fontSize: '16px',
+                                                outline: 'none'
+                                            }}
                                         />
                                         <input
                                             type="url"
                                             placeholder="URL de la vidéo (https://...)"
                                             value={formData.video_url}
                                             onChange={(e) => setFormData({...formData, video_url: e.target.value})}
-                                            style={{ padding: '12px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '16px' }}
+                                            style={{ 
+                                                padding: '12px', 
+                                                borderRadius: '8px', 
+                                                border: '2px solid #e5e5e5', 
+                                                fontSize: '16px',
+                                                outline: 'none'
+                                            }}
                                         />
 
                                         <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
@@ -359,7 +433,7 @@ def home():
                                                     flex: 1,
                                                     background: '#10B981',
                                                     color: 'white',
-                                                    padding: '12px',
+                                                    padding: '14px',
                                                     borderRadius: '8px',
                                                     border: 'none',
                                                     fontSize: '16px',
@@ -378,7 +452,7 @@ def home():
                                                     flex: 1,
                                                     background: '#6B7280',
                                                     color: 'white',
-                                                    padding: '12px',
+                                                    padding: '14px',
                                                     borderRadius: '8px',
                                                     border: 'none',
                                                     fontSize: '16px',
@@ -396,109 +470,166 @@ def home():
 
                         {/* Products List */}
                         <div style={{ padding: '16px', maxWidth: '800px', margin: '0 auto' }}>
-                            {categories.map(category => (
-                                <div key={category} style={{ marginBottom: '32px' }}>
-                                    <h2 style={{ 
-                                        fontSize: '20px', 
-                                        fontWeight: 'bold', 
-                                        marginBottom: '16px', 
-                                        color: '#1F2937',
-                                        borderBottom: '2px solid #2563EB',
-                                        paddingBottom: '8px'
-                                    }}>
-                                        {category}
-                                    </h2>
-                                    
-                                    {products.filter(p => p.category === category).map(product => (
-                                        <div key={product.id} style={{ 
-                                            background: 'white', 
-                                            borderRadius: '12px', 
-                                            marginBottom: '16px',
-                                            overflow: 'hidden',
-                                            boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                            {products.length === 0 ? (
+                                <div style={{ 
+                                    textAlign: 'center', 
+                                    padding: '60px 20px', 
+                                    color: '#666',
+                                    fontSize: '16px'
+                                }}>
+                                    📦 Aucun produit pour le moment
+                                    {isAdmin && <div style={{ marginTop: '12px', color: '#999' }}>Ajoutez votre premier produit !</div>}
+                                </div>
+                            ) : (
+                                categories.map(category => (
+                                    <div key={category} style={{ marginBottom: '32px' }}>
+                                        <h2 style={{ 
+                                            fontSize: '20px', 
+                                            fontWeight: 'bold', 
+                                            marginBottom: '16px', 
+                                            color: '#1F2937',
+                                            borderBottom: '3px solid #667eea',
+                                            paddingBottom: '8px'
                                         }}>
-                                            {/* Image/Video */}
-                                            {product.image_url ? (
-                                                <img 
-                                                    src={product.image_url} 
-                                                    alt={product.name}
-                                                    style={{ width: '100%', height: '200px', objectFit: 'cover' }}
-                                                />
-                                            ) : product.video_url ? (
-                                                <video 
-                                                    src={product.video_url}
-                                                    controls
-                                                    style={{ width: '100%', height: '200px', objectFit: 'cover', background: '#000' }}
-                                                />
-                                            ) : (
-                                                <div style={{ 
-                                                    height: '200px', 
-                                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    fontSize: '64px'
-                                                }}>
-                                                    📦
-                                                </div>
-                                            )}
+                                            {category}
+                                        </h2>
+                                        
+                                        {products.filter(p => p.category === category).map(product => (
+                                            <div key={product.id} style={{ 
+                                                background: 'white', 
+                                                borderRadius: '16px', 
+                                                marginBottom: '16px',
+                                                overflow: 'hidden',
+                                                boxShadow: '0 2px 12px rgba(0,0,0,0.08)'
+                                            }}>
+                                                {/* Image/Video */}
+                                                {product.image_url ? (
+                                                    <img 
+                                                        src={product.image_url} 
+                                                        alt={product.name}
+                                                        style={{ 
+                                                            width: '100%', 
+                                                            height: '220px', 
+                                                            objectFit: 'cover',
+                                                            display: 'block'
+                                                        }}
+                                                        onError={(e) => {
+                                                            e.target.style.display = 'none';
+                                                        }}
+                                                    />
+                                                ) : product.video_url ? (
+                                                    <video 
+                                                        src={product.video_url}
+                                                        controls
+                                                        style={{ 
+                                                            width: '100%', 
+                                                            height: '220px', 
+                                                            objectFit: 'cover', 
+                                                            background: '#000',
+                                                            display: 'block'
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <div style={{ 
+                                                        height: '220px', 
+                                                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        fontSize: '72px'
+                                                    }}>
+                                                        📦
+                                                    </div>
+                                                )}
 
-                                            <div style={{ padding: '16px' }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '8px' }}>
-                                                    <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#1F2937' }}>
-                                                        {product.name}
-                                                    </h3>
-                                                    {isAdmin && (
-                                                        <div style={{ display: 'flex', gap: '8px' }}>
-                                                            <button
-                                                                onClick={() => handleEditProduct(product)}
-                                                                style={{
-                                                                    padding: '6px 12px',
-                                                                    background: '#3B82F6',
-                                                                    color: 'white',
-                                                                    border: 'none',
-                                                                    borderRadius: '6px',
-                                                                    cursor: 'pointer',
-                                                                    fontSize: '14px'
-                                                                }}
-                                                            >
-                                                                ✏️
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleDeleteProduct(product.id)}
-                                                                style={{
-                                                                    padding: '6px 12px',
-                                                                    background: '#EF4444',
-                                                                    color: 'white',
-                                                                    border: 'none',
-                                                                    borderRadius: '6px',
-                                                                    cursor: 'pointer',
-                                                                    fontSize: '14px'
-                                                                }}
-                                                            >
-                                                                🗑️
-                                                            </button>
-                                                        </div>
+                                                <div style={{ padding: '16px' }}>
+                                                    <div style={{ 
+                                                        display: 'flex', 
+                                                        justifyContent: 'space-between', 
+                                                        alignItems: 'start', 
+                                                        marginBottom: '8px' 
+                                                    }}>
+                                                        <h3 style={{ 
+                                                            fontSize: '18px', 
+                                                            fontWeight: 'bold', 
+                                                            color: '#1F2937',
+                                                            flex: 1
+                                                        }}>
+                                                            {product.name}
+                                                        </h3>
+                                                        {isAdmin && (
+                                                            <div style={{ display: 'flex', gap: '6px', marginLeft: '8px' }}>
+                                                                <button
+                                                                    onClick={() => handleEditProduct(product)}
+                                                                    style={{
+                                                                        padding: '8px 12px',
+                                                                        background: '#3B82F6',
+                                                                        color: 'white',
+                                                                        border: 'none',
+                                                                        borderRadius: '6px',
+                                                                        cursor: 'pointer',
+                                                                        fontSize: '14px'
+                                                                    }}
+                                                                >
+                                                                    ✏️
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleDeleteProduct(product.id)}
+                                                                    style={{
+                                                                        padding: '8px 12px',
+                                                                        background: '#EF4444',
+                                                                        color: 'white',
+                                                                        border: 'none',
+                                                                        borderRadius: '6px',
+                                                                        cursor: 'pointer',
+                                                                        fontSize: '14px'
+                                                                    }}
+                                                                >
+                                                                    🗑️
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    {product.description && (
+                                                        <p style={{ 
+                                                            color: '#6B7280', 
+                                                            fontSize: '14px', 
+                                                            marginBottom: '12px',
+                                                            lineHeight: '1.5'
+                                                        }}>
+                                                            {product.description}
+                                                        </p>
                                                     )}
-                                                </div>
-                                                
-                                                <p style={{ color: '#6B7280', fontSize: '14px', marginBottom: '12px' }}>
-                                                    {product.description}
-                                                </p>
-                                                
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#2563EB' }}>
-                                                        {product.price.toFixed(2)} €
-                                                    </span>
-                                                    <span style={{ fontSize: '12px', color: '#6B7280' }}>
-                                                        Stock: {product.stock}
-                                                    </span>
+                                                    
+                                                    <div style={{ 
+                                                        display: 'flex', 
+                                                        justifyContent: 'space-between', 
+                                                        alignItems: 'center' 
+                                                    }}>
+                                                        <span style={{ 
+                                                            fontSize: '28px', 
+                                                            fontWeight: 'bold', 
+                                                            color: '#667eea' 
+                                                        }}>
+                                                            {parseFloat(product.price).toFixed(2)} €
+                                                        </span>
+                                                        <span style={{ 
+                                                            fontSize: '13px', 
+                                                            color: '#9CA3AF',
+                                                            background: '#F3F4F6',
+                                                            padding: '4px 12px',
+                                                            borderRadius: '12px'
+                                                        }}>
+                                                            Stock: {product.stock}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            ))}
+                                        ))}
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </div>
                 );
@@ -527,7 +658,6 @@ def add_product():
     """Admin uniquement - Ajouter un produit"""
     data = request.json
     
-    # Validation des données
     if not data.get('name') or not data.get('price'):
         return jsonify({"error": "Nom et prix requis"}), 400
     
@@ -581,15 +711,17 @@ def delete_product(product_id):
 def health():
     return jsonify({"status": "ok", "message": "Mini app is running"})
 
-# Protection contre les attaques courantes
 @app.after_request
 def set_security_headers(response):
+    """Protection contre les attaques courantes"""
     response.headers['X-Content-Type-Options'] = 'nosniff'
-    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
     response.headers['X-XSS-Protection'] = '1; mode=block'
-    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
     return response
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    print(f"🚀 Server starting on port {port}")
+    print(f"🔑 BOT_TOKEN configured: {'Yes' if BOT_TOKEN else 'No'}")
+    print(f"👤 Admin IDs: {ADMIN_USER_IDS if ADMIN_USER_IDS else 'None configured'}")
+    app.run(host='0.0.0.0', port=port, debug=False)

@@ -1322,18 +1322,10 @@ async def error_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gestion des erreurs globales"""
     logger.error(f"Exception: {context.error}", exc_info=context.error)
 
-# --- Configuration du bot ---
-def main():
-    """Fonction principale"""
-    logger.info("🚀 Démarrage du bot...")
-    
-    application = Application.builder().token(TOKEN).build()
-    application.create_task(_setup_webapp_menu(application))
-
-
 # --- AJOUT : menu WebApp "Carte du Pirate" ---
 from telegram import MenuButtonWebApp, WebAppInfo
 from telegram.ext import Application
+import asyncio
 
 # Création de l'application Telegram
 application = Application.builder().token(TOKEN).build()
@@ -1350,6 +1342,21 @@ async def _setup_webapp_menu():
         logger.info("✅ Menu WebApp 'Carte du Pirate' configuré.")
     except Exception as e:
         logger.error(f"Erreur lors de la configuration du menu WebApp : {e}")
+
+# Fonction principale
+def main():
+    """Fonction principale"""
+    logger.info("🚀 Démarrage du bot...")
+
+    # Lancement du setup du menu WebApp
+    try:
+        application.create_task(_setup_webapp_menu())
+    except Exception as e:
+        logger.warning(f"Impossible d'exécuter _setup_webapp_menu : {e}")
+
+    # Lancement du bot
+    application.run_polling()
+# --- FIN AJOUT ---
 
 # Démarrage du bot principal
 def main():

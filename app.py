@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, session
+from flask_cors import CORS
 from dotenv import load_dotenv
 from functools import wraps
 import os, json, hmac, hashlib, cloudinary, cloudinary.uploader

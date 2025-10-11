@@ -52,7 +52,13 @@ def save_products(products):
     with open(PRODUCTS_FILE, 'w', encoding='utf-8') as f:
         json.dump(products, f, indent=2, ensure_ascii=False)
 
-products = load_products()
+# Initialiser les produits au démarrage
+try:
+    products = load_products()
+    logger.info(f"✅ {len(products)} produits chargés")
+except Exception as e:
+    logger.error(f"❌ Erreur chargement produits: {e}")
+    products = []
 
 def require_admin(f):
     @wraps(f)

@@ -292,7 +292,7 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
 <meta charset="UTF-8">
 <title>Catalogue Produits</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://telegram.org/js/telegram-web-app.js" onerror="console.log('Telegram script non chargé')"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {

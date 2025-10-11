@@ -1,9 +1,11 @@
-from flask import Flask, request, jsonify, session
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 from functools import wraps
 import os, json, cloudinary, cloudinary.uploader
 import logging
+import secrets
+from datetime import datetime, timedelta
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -14,19 +16,13 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24).hex())
 CORS(app, supports_credentials=True, origins=['*'])
 
-app.config['SESSION_COOKIE_SECURE'] = True
-app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
-# Configuration du fond d'écran
-# Pour utiliser Cloudinary : uploadez l'image via l'admin, puis mettez l'URL ici
-# Pour le moment, utilisons une image de test
-BACKGROUND_IMAGE = 'https://res.cloudinary.com/dfhrrtzsd/image/upload/v1760118433/ChatGPT_Image_8_oct._2025_03_01_21_zm5zfy.png avec ce lien?'
+BACKGROUND_IMAGE = 'https://res.cloudinary.com/dfhrrtzsd/image/upload/v1760118433/ChatGPT_Image_8_oct._2025_03_01_21_zm5zfy.png'
 
-# Fonction pour obtenir l'URL de fond personnalisée
+# Stockage des tokens en mémoire (simple mais fonctionne)
+admin_tokens = {}
+
 def get_background_url():
-    # Vous pouvez stocker l'URL dans une variable d'environnement
     custom_bg = os.environ.get('BACKGROUND_URL')
     return custom_bg if custom_bg else BACKGROUND_IMAGE
 
@@ -73,12 +69,18 @@ except Exception as e:
 def require_admin(f):
     @wraps(f)
     def wrapped(*args, **kwargs):
-        try:
-            if session.get('admin_logged_in'):
-                return f(*args, **kwargs)
-        except:
-            pass
-        return jsonify({'error': 'Non autorisé'}), 403
+        token = request.headers.get('X-Admin-Token')
+        if not token or token not in admin_tokens:
+            logger.warning(f"Token invalide ou manquant: {token}")
+            return jsonify({'error': 'Non autorisé'}), 403
+        
+        # Vérifier l'expiration
+        token_data = admin_tokens[token]
+        if datetime.now() > token_data['expires']:
+            del admin_tokens[token]
+            return jsonify({'error': 'Session expirée'}), 403
+            
+        return f(*args, **kwargs)
     return wrapped
 
 @app.route('/')
@@ -200,8 +202,14 @@ def api_login():
     try:
         data = request.json or {}
         if data.get('password') == ADMIN_PASSWORD:
-            session['admin_logged_in'] = True
-            return jsonify({'success': True})
+            # Générer un token
+            token = secrets.token_urlsafe(32)
+            admin_tokens[token] = {
+                'created': datetime.now(),
+                'expires': datetime.now() + timedelta(hours=24)
+            }
+            logger.info(f"✅ Connexion admin réussie, token généré")
+            return jsonify({'success': True, 'token': token})
         return jsonify({'error': 'Mot de passe incorrect'}), 403
     except Exception as e:
         logger.error(f"Erreur login: {e}")
@@ -210,7 +218,9 @@ def api_login():
 @app.route('/api/admin/logout', methods=['POST'])
 def api_logout():
     try:
-        session.pop('admin_logged_in', None)
+        token = request.headers.get('X-Admin-Token')
+        if token and token in admin_tokens:
+            del admin_tokens[token]
         return jsonify({'success': True})
     except Exception as e:
         logger.error(f"Erreur logout: {e}")
@@ -219,7 +229,13 @@ def api_logout():
 @app.route('/api/admin/check', methods=['GET'])
 def api_check_admin():
     try:
-        is_admin = session.get('admin_logged_in', False)
+        token = request.headers.get('X-Admin-Token')
+        is_admin = token and token in admin_tokens
+        if is_admin:
+            # Vérifier expiration
+            if datetime.now() > admin_tokens[token]['expires']:
+                del admin_tokens[token]
+                is_admin = False
         return jsonify({'admin': is_admin}), 200
     except Exception as e:
         logger.error(f"Erreur check admin: {e}")
@@ -232,7 +248,9 @@ def upload_file():
         if 'file' not in request.files:
             return jsonify({'error': 'Aucun fichier'}), 400
         file = request.files['file']
+        logger.info(f"📤 Upload fichier: {file.filename}")
         result = cloudinary.uploader.upload(file, resource_type='auto', folder='catalogue', timeout=60)
+        logger.info(f"✅ Upload réussi: {result.get('secure_url')}")
         return jsonify({'url': result.get('secure_url')}), 200
     except Exception as e:
         logger.error(f"Erreur upload: {e}")
@@ -289,6 +307,7 @@ def update_product(pid):
                     "stock": int(data.get("stock", p["stock"]))
                 })
                 save_products(products)
+                logger.info(f"✅ Produit {pid} modifié")
                 return jsonify(p)
         return jsonify({'error': 'Produit non trouvé'}), 404
     except Exception as e:
@@ -481,7 +500,7 @@ input, textarea {{
 </div>
 
 <script>
-let isAdmin = false;
+let adminToken = localStorage.getItem('adminToken') || '';
 let products = [];
 let editingProduct = null;
 let currentImageUrl = '';
@@ -500,13 +519,21 @@ async function init() {{
 
 async function checkAdmin() {{
   try {{
-    const res = await fetch('/api/admin/check', {{ credentials: 'same-origin' }});
+    const res = await fetch('/api/admin/check', {{ 
+      headers: {{ 'X-Admin-Token': adminToken }}
+    }});
     if (!res.ok) throw new Error('Erreur check admin');
     const data = await res.json();
-    isAdmin = data.admin;
+    if (!data.admin) {{
+      adminToken = '';
+      localStorage.removeItem('adminToken');
+    }}
+    return data.admin;
   }} catch (e) {{
     console.error('Erreur checkAdmin:', e);
-    isAdmin = false;
+    adminToken = '';
+    localStorage.removeItem('adminToken');
+    return false;
   }}
 }}
 
@@ -526,7 +553,7 @@ function render() {{
   const adminControls = document.getElementById('admin-controls');
   const content = document.getElementById('content');
   
-  if (isAdmin) {{
+  if (adminToken) {{
     adminControls.innerHTML = '<span class="badge">Admin</span><button onclick="showForm()">➕ Ajouter</button><button onclick="logout()">Déconnexion</button>';
   }} else {{
     adminControls.innerHTML = '<button onclick="showLogin()">Mode Admin</button>';
@@ -544,7 +571,7 @@ function render() {{
         ${{p.description ? `<p>${{p.description}}</p>` : ''}}
         <p class="price">${{p.price}} €</p>
         <p>Stock : ${{p.stock}}</p>
-        ${{isAdmin ? `
+        ${{adminToken ? `
           <button onclick="editProduct(${{p.id}})">✏️ Modifier</button>
           <button class="delete" onclick="deleteProduct(${{p.id}})">🗑️ Supprimer</button>
         ` : ''}}
@@ -566,12 +593,13 @@ async function login() {{
   try {{
     const res = await fetch('/api/admin/login', {{
       method: 'POST',
-      credentials: 'same-origin',
       headers: {{ 'Content-Type': 'application/json' }},
       body: JSON.stringify({{ password }})
     }});
-    if (res.ok) {{
-      isAdmin = true;
+    const data = await res.json();
+    if (res.ok && data.token) {{
+      adminToken = data.token;
+      localStorage.setItem('adminToken', adminToken);
       closeLogin();
       render();
       alert('✅ Connecté');
@@ -584,8 +612,12 @@ async function login() {{
 }}
 
 async function logout() {{
-  await fetch('/api/admin/logout', {{ method: 'POST', credentials: 'same-origin' }});
-  isAdmin = false;
+  await fetch('/api/admin/logout', {{ 
+    method: 'POST',
+    headers: {{ 'X-Admin-Token': adminToken }}
+  }});
+  adminToken = '';
+  localStorage.removeItem('adminToken');
   render();
 }}
 
@@ -638,7 +670,7 @@ document.getElementById('file-input').addEventListener('change', async function(
   try {{
     const res = await fetch('/api/upload', {{
       method: 'POST',
-      credentials: 'same-origin',
+      headers: {{ 'X-Admin-Token': adminToken }},
       body: fd
     }});
     const data = await res.json();
@@ -652,11 +684,11 @@ document.getElementById('file-input').addEventListener('change', async function(
       }}
       document.getElementById('file-status').innerHTML = '<p style="color:green">✅ Uploadé</p>';
     }} else {{
-      alert('Erreur upload');
+      alert('Erreur upload: ' + (data.error || 'Erreur inconnue'));
       document.getElementById('file-status').innerHTML = '';
     }}
   }} catch (e) {{
-    alert('Erreur upload');
+    alert('Erreur upload: ' + e.message);
     document.getElementById('file-status').innerHTML = '';
   }}
 }});
@@ -686,8 +718,10 @@ async function saveProduct() {{
   try {{
     const res = await fetch(url, {{
       method,
-      credentials: 'same-origin',
-      headers: {{ 'Content-Type': 'application/json' }},
+      headers: {{ 
+        'Content-Type': 'application/json',
+        'X-Admin-Token': adminToken
+      }},
       body: JSON.stringify(data)
     }});
     
@@ -697,7 +731,8 @@ async function saveProduct() {{
       render();
       alert('✅ Sauvegardé');
     }} else {{
-      alert('Erreur sauvegarde');
+      const err = await res.json();
+      alert('Erreur sauvegarde: ' + (err.error || 'Erreur inconnue'));
     }}
   }} catch (e) {{
     alert('Erreur: ' + e.message);
@@ -710,7 +745,7 @@ async function deleteProduct(id) {{
   try {{
     const res = await fetch(`/api/admin/products/${{id}}`, {{
       method: 'DELETE',
-      credentials: 'same-origin'
+      headers: {{ 'X-Admin-Token': adminToken }}
     }});
     
     if (res.ok) {{

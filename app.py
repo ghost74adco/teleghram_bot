@@ -22,7 +22,7 @@ ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
 # Configuration du fond d'écran
 # Pour utiliser Cloudinary : uploadez l'image via l'admin, puis mettez l'URL ici
 # Pour le moment, utilisons une image de test
-BACKGROUND_IMAGE = 'https://photos.google.com/photo/AF1QipNfaBBn6i_ZuSq3xZJpWf2EGBXH4maSPmY8tlCG'
+BACKGROUND_IMAGE = 'https://res.cloudinary.com/dfhrrtzsd/image/upload/v1760118433/ChatGPT_Image_8_oct._2025_03_01_21_zm5zfy.png avec ce lien?'
 
 # Fonction pour obtenir l'URL de fond personnalisée
 def get_background_url():

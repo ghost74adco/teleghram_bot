@@ -32,6 +32,7 @@ except Exception as e:
     logger.error(f"⚠️ Erreur Cloudinary: {e}")
 
 PRODUCTS_FILE = 'products.json'
+BACKGROUND_IMAGE = 'https://res.cloudinary.com/dfhrrtzsd/image/upload/v1760118433/ChatGPT_Image_8_oct._2025_03_01_21_zm5zfy.png'
 
 def load_products():
     if os.path.exists(PRODUCTS_FILE):
@@ -58,44 +59,59 @@ def require_admin(f):
 
 @app.route('/')
 def index():
-    html = '''<!DOCTYPE html>
+    html = f'''<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
 <title>Carte du Pirate</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body {
+* {{ margin: 0; padding: 0; box-sizing: border-box; }}
+body {{
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+  background: url('{BACKGROUND_IMAGE}') center center fixed;
+  background-size: cover;
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 20px;
-}
-.container {
+  position: relative;
+}}
+body::before {{
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 1;
+}}
+.container {{
   text-align: center;
   color: white;
   max-width: 800px;
-}
-h1 {
+  position: relative;
+  z-index: 2;
+}}
+h1 {{
   font-size: 3.5em;
   margin-bottom: 30px;
-  text-shadow: 3px 3px 6px rgba(0,0,0,0.4);
+  text-shadow: 4px 4px 8px rgba(0,0,0,0.8);
   animation: float 3s ease-in-out infinite;
-}
-@keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
-}
-.subtitle {
+}}
+@keyframes float {{
+  0%, 100% {{ transform: translateY(0px); }}
+  50% {{ transform: translateY(-10px); }}
+}}
+.subtitle {{
   font-size: 1.3em;
   margin-bottom: 40px;
-  opacity: 0.9;
-}
-.btn {
+  opacity: 0.95;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+}}
+.btn {{
   display: inline-block;
   padding: 20px 50px;
   font-size: 1.5em;
@@ -107,23 +123,24 @@ h1 {
   font-weight: bold;
   transition: all 0.3s ease;
   margin: 10px;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-}
-.btn:hover {
+  box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+}}
+.btn:hover {{
   transform: scale(1.05) translateY(-5px);
-  box-shadow: 0 15px 40px rgba(212, 175, 55, 0.5);
-}
-.btn:active {
+  box-shadow: 0 15px 40px rgba(212, 175, 55, 0.6);
+}}
+.btn:active {{
   transform: scale(0.98);
-}
-.api-status {
+}}
+.api-status {{
   margin-top: 40px;
   padding: 15px;
-  background: rgba(255,255,255,0.1);
+  background: rgba(0,0,0,0.6);
   border-radius: 10px;
   font-size: 0.9em;
-}
-.status-badge {
+  backdrop-filter: blur(10px);
+}}
+.status-badge {{
   display: inline-block;
   padding: 5px 15px;
   background: #28a745;
@@ -131,7 +148,7 @@ h1 {
   border-radius: 20px;
   font-weight: bold;
   margin-top: 10px;
-}
+}}
 </style>
 </head>
 <body>
@@ -152,36 +169,36 @@ h1 {
 
 @app.route('/health')
 def health():
-    return jsonify({'status': 'ok'}), 200
+    return jsonify({{'status': 'ok'}}), 200
 
 @app.route('/api/admin/login', methods=['POST'])
 def api_login():
-    data = request.json or {}
+    data = request.json or {{}}
     if data.get('password') == ADMIN_PASSWORD:
         session['admin_logged_in'] = True
-        return jsonify({'success': True})
-    return jsonify({'error': 'Mot de passe incorrect'}), 403
+        return jsonify({{'success': True}})
+    return jsonify({{'error': 'Mot de passe incorrect'}}), 403
 
 @app.route('/api/admin/logout', methods=['POST'])
 def api_logout():
     session.pop('admin_logged_in', None)
-    return jsonify({'success': True})
+    return jsonify({{'success': True}})
 
 @app.route('/api/admin/check', methods=['GET'])
 def api_check_admin():
-    return jsonify({'admin': session.get('admin_logged_in', False)})
+    return jsonify({{'admin': session.get('admin_logged_in', False)}})
 
 @app.route('/api/upload', methods=['POST'])
 @require_admin
 def upload_file():
     try:
         if 'file' not in request.files:
-            return jsonify({'error': 'Aucun fichier'}), 400
+            return jsonify({{'error': 'Aucun fichier'}}), 400
         file = request.files['file']
         result = cloudinary.uploader.upload(file, resource_type='auto', folder='catalogue', timeout=60)
-        return jsonify({'url': result.get('secure_url')}), 200
+        return jsonify({{'url': result.get('secure_url')}}), 200
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({{'error': str(e)}}), 500
 
 @app.route('/api/products', methods=['GET'])
 def get_products():
@@ -191,11 +208,11 @@ def get_products():
 @require_admin
 def add_product():
     global products
-    data = request.json or {}
+    data = request.json or {{}}
     if not data.get('name') or not data.get('price'):
-        return jsonify({'error': 'Nom et prix requis'}), 400
+        return jsonify({{'error': 'Nom et prix requis'}}), 400
     
-    new_product = {
+    new_product = {{
         "id": max([p["id"] for p in products]) + 1 if products else 1,
         "name": data.get("name"),
         "price": float(data.get("price", 0)),
@@ -204,7 +221,7 @@ def add_product():
         "image_url": data.get("image_url", ""),
         "video_url": data.get("video_url", ""),
         "stock": int(data.get("stock", 0))
-    }
+    }}
     products.append(new_product)
     save_products(products)
     return jsonify(new_product), 201
@@ -212,10 +229,10 @@ def add_product():
 @app.route('/api/admin/products/<int:pid>', methods=['PUT'])
 @require_admin
 def update_product(pid):
-    data = request.json or {}
+    data = request.json or {{}}
     for p in products:
         if p['id'] == pid:
-            p.update({
+            p.update({{
                 "name": data.get("name", p["name"]),
                 "price": float(data.get("price", p["price"])),
                 "description": data.get("description", p["description"]),
@@ -223,10 +240,10 @@ def update_product(pid):
                 "image_url": data.get("image_url", p.get("image_url", "")),
                 "video_url": data.get("video_url", p.get("video_url", "")),
                 "stock": int(data.get("stock", p["stock"]))
-            })
+            }})
             save_products(products)
             return jsonify(p)
-    return jsonify({'error': 'Produit non trouvé'}), 404
+    return jsonify({{'error': 'Produit non trouvé'}}), 404
 
 @app.route('/api/admin/products/<int:pid>', methods=['DELETE'])
 @require_admin
@@ -236,44 +253,59 @@ def delete_product(pid):
     products = [p for p in products if p['id'] != pid]
     if len(products) < before:
         save_products(products)
-        return jsonify({'success': True})
-    return jsonify({'error': 'Produit non trouvé'}), 404
+        return jsonify({{'success': True}})
+    return jsonify({{'error': 'Produit non trouvé'}}), 404
 
 @app.route('/catalogue')
 def catalogue():
     logger.info("📄 Chargement catalogue")
-    html = '''<!DOCTYPE html>
+    html = f'''<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
 <title>Mon Catalogue</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body {
+* {{ margin: 0; padding: 0; box-sizing: border-box; }}
+body {{
   font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: url('{BACKGROUND_IMAGE}') center center fixed;
+  background-size: cover;
   min-height: 100vh;
   padding: 15px;
-}
-.container {
+  position: relative;
+}}
+body::before {{
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 0;
+}}
+.container {{
   max-width: 800px;
   margin: 0 auto;
-  background: white;
+  background: rgba(255, 255, 255, 0.95);
   border-radius: 12px;
   padding: 20px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-}
-.header {
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  position: relative;
+  z-index: 1;
+  backdrop-filter: blur(10px);
+}}
+.header {{
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
   flex-wrap: wrap;
   gap: 10px;
-}
-h1 { color: #333; font-size: 24px; }
-.back-btn {
+}}
+h1 {{ color: #333; font-size: 24px; }}
+.back-btn {{
   background: #6c757d;
   color: white;
   border: none;
@@ -283,9 +315,9 @@ h1 { color: #333; font-size: 24px; }
   font-weight: 600;
   text-decoration: none;
   display: inline-block;
-}
-.back-btn:hover { background: #5a6268; }
-button {
+}}
+.back-btn:hover {{ background: #5a6268; }}
+button {{
   background: #667eea;
   color: white;
   border: none;
@@ -294,36 +326,36 @@ button {
   cursor: pointer;
   font-weight: 600;
   margin: 5px;
-}
-button:hover { background: #5568d3; }
-button.delete { background: #e74c3c; }
-button.delete:hover { background: #c0392b; }
-input, textarea {
+}}
+button:hover {{ background: #5568d3; }}
+button.delete {{ background: #e74c3c; }}
+button.delete:hover {{ background: #c0392b; }}
+input, textarea {{
   width: 100%;
   padding: 12px;
   margin: 8px 0;
   border: 2px solid #ddd;
   border-radius: 6px;
   font-size: 14px;
-}
-.card {
+}}
+.card {{
   background: #f8f9fa;
   border-radius: 8px;
   padding: 15px;
   margin: 15px 0;
   border: 1px solid #e0e0e0;
-}
-.card img, .card video {
+}}
+.card img, .card video {{
   width: 100%;
   max-height: 250px;
   object-fit: cover;
   border-radius: 6px;
   margin-bottom: 10px;
-}
-.card h3 { color: #333; margin: 10px 0; }
-.card p { color: #666; margin: 5px 0; }
-.price { font-size: 22px; color: #27ae60; font-weight: bold; }
-.modal {
+}}
+.card h3 {{ color: #333; margin: 10px 0; }}
+.card p {{ color: #666; margin: 5px 0; }}
+.price {{ font-size: 22px; color: #27ae60; font-weight: bold; }}
+.modal {{
   display: none;
   position: fixed;
   top: 0;
@@ -334,9 +366,9 @@ input, textarea {
   align-items: center;
   justify-content: center;
   z-index: 1000;
-}
-.modal.show { display: flex; }
-.modal-content {
+}}
+.modal.show {{ display: flex; }}
+.modal-content {{
   background: white;
   padding: 30px;
   border-radius: 12px;
@@ -344,17 +376,17 @@ input, textarea {
   width: 90%;
   max-height: 90vh;
   overflow-y: auto;
-}
-.badge { 
+}}
+.badge {{ 
   background: #27ae60; 
   color: white; 
   padding: 5px 10px; 
   border-radius: 20px; 
   font-size: 12px; 
   font-weight: bold;
-}
-.loading { text-align: center; padding: 40px; color: #666; }
-.empty { text-align: center; padding: 60px 20px; color: #999; }
+}}
+.loading {{ text-align: center; padding: 40px; color: #666; }}
+.empty {{ text-align: center; padding: 60px 20px; color: #999; }}
 </style>
 </head>
 <body>
@@ -400,92 +432,92 @@ let editingProduct = null;
 let currentImageUrl = '';
 let currentVideoUrl = '';
 
-async function init() {
-  try {
+async function init() {{
+  try {{
     await checkAdmin();
     await loadProducts();
     render();
-  } catch (e) {
+  }} catch (e) {{
     console.error(e);
     document.getElementById('content').innerHTML = '<div class="empty">Erreur de chargement</div>';
-  }
-}
+  }}
+}}
 
-async function checkAdmin() {
-  const res = await fetch('/api/admin/check', { credentials: 'same-origin' });
+async function checkAdmin() {{
+  const res = await fetch('/api/admin/check', {{ credentials: 'same-origin' }});
   const data = await res.json();
   isAdmin = data.admin;
-}
+}}
 
-async function loadProducts() {
+async function loadProducts() {{
   const res = await fetch('/api/products');
   products = await res.json();
-}
+}}
 
-function render() {
+function render() {{
   const adminControls = document.getElementById('admin-controls');
   const content = document.getElementById('content');
   
-  if (isAdmin) {
+  if (isAdmin) {{
     adminControls.innerHTML = '<span class="badge">Admin</span><button onclick="showForm()">➕ Ajouter</button><button onclick="logout()">Déconnexion</button>';
-  } else {
+  }} else {{
     adminControls.innerHTML = '<button onclick="showLogin()">Mode Admin</button>';
-  }
+  }}
   
-  if (products.length === 0) {
+  if (products.length === 0) {{
     content.innerHTML = '<div class="empty"><h2>📦 Catalogue vide</h2></div>';
-  } else {
+  }} else {{
     content.innerHTML = products.map(p => `
       <div class="card">
-        ${p.image_url ? `<img src="${p.image_url}" alt="${p.name}">` : ''}
-        ${p.video_url ? `<video src="${p.video_url}" controls></video>` : ''}
-        <h3>${p.name}</h3>
-        ${p.category ? `<p><em>${p.category}</em></p>` : ''}
-        ${p.description ? `<p>${p.description}</p>` : ''}
-        <p class="price">${p.price} €</p>
-        <p>Stock : ${p.stock}</p>
-        ${isAdmin ? `
-          <button onclick="editProduct(${p.id})">✏️ Modifier</button>
-          <button class="delete" onclick="deleteProduct(${p.id})">🗑️ Supprimer</button>
-        ` : ''}
+        ${{p.image_url ? `<img src="${{p.image_url}}" alt="${{p.name}}">` : ''}}
+        ${{p.video_url ? `<video src="${{p.video_url}}" controls></video>` : ''}}
+        <h3>${{p.name}}</h3>
+        ${{p.category ? `<p><em>${{p.category}}</em></p>` : ''}}
+        ${{p.description ? `<p>${{p.description}}</p>` : ''}}
+        <p class="price">${{p.price}} €</p>
+        <p>Stock : ${{p.stock}}</p>
+        ${{isAdmin ? `
+          <button onclick="editProduct(${{p.id}})">✏️ Modifier</button>
+          <button class="delete" onclick="deleteProduct(${{p.id}})">🗑️ Supprimer</button>
+        ` : ''}}
       </div>
     `).join('');
-  }
-}
+  }}
+}}
 
-function showLogin() {
+function showLogin() {{
   document.getElementById('login-modal').classList.add('show');
-}
+}}
 
-function closeLogin() {
+function closeLogin() {{
   document.getElementById('login-modal').classList.remove('show');
-}
+}}
 
-async function login() {
+async function login() {{
   const password = document.getElementById('password-input').value;
-  const res = await fetch('/api/admin/login', {
+  const res = await fetch('/api/admin/login', {{
     method: 'POST',
     credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password })
-  });
-  if (res.ok) {
+    headers: {{ 'Content-Type': 'application/json' }},
+    body: JSON.stringify({{ password }})
+  }});
+  if (res.ok) {{
     isAdmin = true;
     closeLogin();
     render();
     alert('✅ Connecté');
-  } else {
+  }} else {{
     alert('❌ Mot de passe incorrect');
-  }
-}
+  }}
+}}
 
-async function logout() {
-  await fetch('/api/admin/logout', { method: 'POST', credentials: 'same-origin' });
+async function logout() {{
+  await fetch('/api/admin/logout', {{ method: 'POST', credentials: 'same-origin' }});
   isAdmin = false;
   render();
-}
+}}
 
-function showForm() {
+function showForm() {{
   editingProduct = null;
   currentImageUrl = '';
   currentVideoUrl = '';
@@ -498,9 +530,9 @@ function showForm() {
   document.getElementById('file-input').value = '';
   document.getElementById('file-status').innerHTML = '';
   document.getElementById('form-modal').classList.add('show');
-}
+}}
 
-function editProduct(id) {
+function editProduct(id) {{
   const product = products.find(p => p.id === id);
   if (!product) return;
   
@@ -516,13 +548,13 @@ function editProduct(id) {
   document.getElementById('description').value = product.description || '';
   document.getElementById('file-status').innerHTML = (currentImageUrl || currentVideoUrl) ? '<p style="color:green">✓ Fichier existant</p>' : '';
   document.getElementById('form-modal').classList.add('show');
-}
+}}
 
-function closeForm() {
+function closeForm() {{
   document.getElementById('form-modal').classList.remove('show');
-}
+}}
 
-document.getElementById('file-input').addEventListener('change', async function(e) {
+document.getElementById('file-input').addEventListener('change', async function(e) {{
   const file = e.target.files[0];
   if (!file) return;
   
@@ -531,42 +563,42 @@ document.getElementById('file-input').addEventListener('change', async function(
   
   document.getElementById('file-status').innerHTML = '<p>⏳ Upload...</p>';
   
-  try {
-    const res = await fetch('/api/upload', {
+  try {{
+    const res = await fetch('/api/upload', {{
       method: 'POST',
       credentials: 'same-origin',
       body: fd
-    });
+    }});
     const data = await res.json();
-    if (data.url) {
-      if (file.type.startsWith('video')) {
+    if (data.url) {{
+      if (file.type.startsWith('video')) {{
         currentVideoUrl = data.url;
         currentImageUrl = '';
-      } else {
+      }} else {{
         currentImageUrl = data.url;
         currentVideoUrl = '';
-      }
+      }}
       document.getElementById('file-status').innerHTML = '<p style="color:green">✅ Uploadé</p>';
-    } else {
+    }} else {{
       alert('Erreur upload');
       document.getElementById('file-status').innerHTML = '';
-    }
-  } catch (e) {
+    }}
+  }} catch (e) {{
     alert('Erreur upload');
     document.getElementById('file-status').innerHTML = '';
-  }
-});
+  }}
+}});
 
-async function saveProduct() {
+async function saveProduct() {{
   const name = document.getElementById('name').value;
   const price = document.getElementById('price').value;
   
-  if (!name || !price) {
+  if (!name || !price) {{
     alert('Nom et prix requis');
     return;
-  }
+  }}
   
-  const data = {
+  const data = {{
     name,
     price: parseFloat(price),
     category: document.getElementById('category').value,
@@ -574,48 +606,48 @@ async function saveProduct() {
     description: document.getElementById('description').value,
     image_url: currentImageUrl,
     video_url: currentVideoUrl
-  };
+  }};
   
-  const url = editingProduct ? `/api/admin/products/${editingProduct.id}` : '/api/admin/products';
+  const url = editingProduct ? `/api/admin/products/${{editingProduct.id}}` : '/api/admin/products';
   const method = editingProduct ? 'PUT' : 'POST';
   
-  const res = await fetch(url, {
+  const res = await fetch(url, {{
     method,
     credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {{ 'Content-Type': 'application/json' }},
     body: JSON.stringify(data)
-  });
+  }});
   
-  if (res.ok) {
+  if (res.ok) {{
     closeForm();
     await loadProducts();
     render();
     alert('✅ Sauvegardé');
-  } else {
+  }} else {{
     alert('Erreur');
-  }
-}
+  }}
+}}
 
-async function deleteProduct(id) {
+async function deleteProduct(id) {{
   if (!confirm('Supprimer ce produit ?')) return;
   
-  const res = await fetch(`/api/admin/products/${id}`, {
+  const res = await fetch(`/api/admin/products/${{id}}`, {{
     method: 'DELETE',
     credentials: 'same-origin'
-  });
+  }});
   
-  if (res.ok) {
+  if (res.ok) {{
     await loadProducts();
     render();
     alert('✅ Supprimé');
-  }
-}
+  }}
+}}
 
-document.querySelectorAll('.modal').forEach(modal => {
-  modal.addEventListener('click', e => {
+document.querySelectorAll('.modal').forEach(modal => {{
+  modal.addEventListener('click', e => {{
     if (e.target === modal) modal.classList.remove('show');
-  });
-});
+  }});
+}});
 
 init();
 </script>
@@ -625,5 +657,5 @@ init();
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    logger.info(f"🚀 Démarrage sur le port {port}")
+    logger.info(f"🚀 Démarrage sur le port {{port}}")
     app.run(host='0.0.0.0', port=port, debug=False)

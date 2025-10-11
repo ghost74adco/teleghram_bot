@@ -38,10 +38,15 @@ def load_products():
     if os.path.exists(PRODUCTS_FILE):
         try:
             with open(PRODUCTS_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except:
+                data = json.load(f)
+                return data if isinstance(data, list) else []
+        except Exception as e:
+            logger.warning(f"Erreur lecture products.json: {e}")
             return []
-    return []
+    else:
+        # Créer le fichier s'il n'existe pas
+        save_products([])
+        return []
 
 def save_products(products):
     with open(PRODUCTS_FILE, 'w', encoding='utf-8') as f:

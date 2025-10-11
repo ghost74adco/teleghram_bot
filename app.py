@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, session, render_template_string
+from flask import Flask, request, jsonify, session
 from flask_cors import CORS
 from dotenv import load_dotenv
 from functools import wraps
@@ -124,7 +124,7 @@ def health():
 
 @app.route('/')
 def index():
-    """Route simple et rapide"""
+    """Route racine - Info API"""
     return jsonify({
         'status': 'ok',
         'message': 'API Catalogue active',
@@ -283,10 +283,17 @@ def delete_product(pid):
         return jsonify({'error': 'Erreur serveur'}), 500
 
 # ----------------------------
-# Frontend HTML (OPTIMISÉ)
+# Frontend HTML - Page Catalogue
 # ----------------------------
-# Template HTML stocké comme constante pour éviter de le régénérer
-HTML_TEMPLATE = '''<!DOCTYPE html>
+@app.route('/catalogue')
+def catalogue():
+    """Route catalogue HTML"""
+    try:
+        logger.info("📄 Chargement page catalogue")
+        
+        bg_style = f"url('{BACKGROUND_IMAGE}') no-repeat center center fixed" if BACKGROUND_IMAGE else "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+        
+        html = f'''<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -294,16 +301,16 @@ HTML_TEMPLATE = '''<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script src="https://telegram.org/js/telegram-web-app.js" onerror="console.log('Telegram script non chargé')"></script>
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body {
+* {{ box-sizing: border-box; margin: 0; padding: 0; }}
+body {{
   font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
-  background: {{ bg_style }};
+  background: {bg_style};
   background-size: cover;
   color: #fff;
   min-height: 100vh;
   padding: 20px;
-}
-.container {
+}}
+.container {{
   background: rgba(0,0,0,0.7);
   backdrop-filter: blur(10px);
   border-radius: 16px;
@@ -311,17 +318,17 @@ body {
   max-width: 800px;
   margin: 0 auto;
   box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-}
-.header {
+}}
+.header {{
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
   flex-wrap: wrap;
   gap: 10px;
-}
-h1 { font-size: 24px; }
-button {
+}}
+h1 {{ font-size: 24px; }}
+button {{
   background: #ffcc00;
   color: #000;
   border: none;
@@ -332,48 +339,48 @@ button {
   margin-right: 5px;
   margin-bottom: 5px;
   transition: all 0.3s ease;
-}
-button:hover {
+}}
+button:hover {{
   background: #ffd633;
   transform: translateY(-2px);
-}
-button.secondary {
+}}
+button.secondary {{
   background: #666;
   color: #fff;
-}
-button.secondary:hover { background: #777; }
-input, textarea {
+}}
+button.secondary:hover {{ background: #777; }}
+input, textarea {{
   width: 100%;
   margin: 8px 0;
   padding: 10px;
   border-radius: 6px;
   border: 2px solid #ddd;
   font-size: 14px;
-}
-.card {
+}}
+.card {{
   background: rgba(255,255,255,0.95);
   color: #000;
   border-radius: 12px;
   margin: 15px 0;
   padding: 15px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-.card img, .card video {
+}}
+.card img, .card video {{
   width: 100%;
   max-height: 300px;
   object-fit: cover;
   border-radius: 8px;
   margin-bottom: 10px;
-}
-.badge {
+}}
+.badge {{
   background: #4CAF50;
   color: white;
   padding: 5px 12px;
   border-radius: 20px;
   font-size: 12px;
   font-weight: bold;
-}
-.modal {
+}}
+.modal {{
   position: fixed;
   top: 0;
   left: 0;
@@ -384,9 +391,9 @@ input, textarea {
   align-items: center;
   justify-content: center;
   z-index: 1000;
-}
-.modal.show { display: flex; }
-.modal-content {
+}}
+.modal.show {{ display: flex; }}
+.modal-content {{
   background: white;
   color: black;
   padding: 30px;
@@ -395,9 +402,9 @@ input, textarea {
   width: 90%;
   max-height: 90vh;
   overflow-y: auto;
-}
-.empty { text-align: center; padding: 60px 20px; }
-.loading { text-align: center; padding: 40px; font-size: 18px; }
+}}
+.empty {{ text-align: center; padding: 60px 20px; }}
+.loading {{ text-align: center; padding: 40px; font-size: 18px; }}
 </style>
 </head>
 <body>
@@ -434,6 +441,7 @@ input, textarea {
 </div>
 
 <script>
+console.log('=== DEBUT SCRIPT ===');
 const tg = window.Telegram && window.Telegram.WebApp;
 let isAdmin = false;
 let products = [];
@@ -441,55 +449,83 @@ let editingProduct = null;
 let currentImageUrl = '';
 let currentVideoUrl = '';
 
-if (tg) {
-  tg.ready();
-  tg.expand();
-}
+if (tg) {{
+  console.log('Telegram WebApp détecté');
+  try {{
+    tg.ready();
+    tg.expand();
+  }} catch (e) {{
+    console.log('Erreur Telegram init:', e);
+  }}
+}} else {{
+  console.log('Pas dans Telegram WebApp');
+}}
 
-async function init() {
-  try {
+async function init() {{
+  console.log('Init démarrage...');
+  try {{
+    console.log('1. Check admin...');
     await checkAdmin();
+    console.log('2. Load products...');
     await loadProducts();
+    console.log('3. Render...');
     render();
-  } catch (e) {
-    console.error('Erreur init:', e);
-    document.getElementById('content').innerHTML = '<div class="empty"><h2>❌ Erreur</h2><p>Impossible de charger</p></div>';
-  }
-}
+    console.log('✅ Init terminé');
+  }} catch (e) {{
+    console.error('❌ Erreur init:', e);
+    document.getElementById('content').innerHTML = '<div class="empty"><h2>❌ Erreur</h2><p>' + e.message + '</p></div>';
+  }}
+}}
 
-async function checkAdmin() {
-  try {
-    const res = await fetch('/api/admin/check', {
+async function checkAdmin() {{
+  try {{
+    const res = await fetch('/api/admin/check', {{
       credentials: 'same-origin',
-      headers: { 'X-Telegram-Init-Data': tg ? (tg.initData || '') : '' }
-    });
+      headers: {{ 'X-Telegram-Init-Data': tg ? (tg.initData || '') : '' }}
+    }});
+    if (!res.ok) throw new Error('Check admin failed: ' + res.status);
     const data = await res.json();
     isAdmin = data.admin;
-  } catch (e) {
+    console.log('Admin status:', isAdmin);
+  }} catch (e) {{
     console.error('Erreur check admin:', e);
     isAdmin = false;
-  }
-}
+  }}
+}}
 
-async function loadProducts() {
-  const res = await fetch('/api/products');
-  if (!res.ok) throw new Error('Erreur chargement');
-  products = await res.json();
-}
+async function loadProducts() {{
+  try {{
+    console.log('Fetching /api/products...');
+    const res = await fetch('/api/products', {{
+      method: 'GET',
+      headers: {{
+        'Accept': 'application/json'
+      }}
+    }});
+    console.log('Response status:', res.status);
+    if (!res.ok) throw new Error('Erreur chargement: ' + res.status);
+    products = await res.json();
+    console.log('Produits chargés:', products.length);
+  }} catch (e) {{
+    console.error('Erreur loadProducts:', e);
+    throw e;
+  }}
+}}
 
-function render() {
+function render() {{
+  console.log('Render...');
   const adminControls = document.getElementById('admin-controls');
   const content = document.getElementById('content');
   
-  if (isAdmin) {
+  if (isAdmin) {{
     adminControls.innerHTML = '<span class="badge">👑 Admin</span><button onclick="showForm()">➕ Ajouter</button><button class="secondary" onclick="logout()">🚪 Déconnexion</button>';
-  } else {
+  }} else {{
     adminControls.innerHTML = '<button onclick="showLogin()">🔑 Mode Admin</button>';
-  }
+  }}
   
-  if (products.length === 0) {
+  if (products.length === 0) {{
     content.innerHTML = '<div class="empty"><h2>📦 Catalogue vide</h2><p>Aucun produit disponible</p></div>';
-  } else {
+  }} else {{
     content.innerHTML = products.map(p => '<div class="card">' +
       (p.image_url ? '<img src="' + p.image_url + '" alt="' + p.name + '">' : '') +
       (p.video_url ? '<video src="' + p.video_url + '" controls></video>' : '') +
@@ -500,61 +536,61 @@ function render() {
       '<p><em>📦 Stock : ' + p.stock + '</em></p>' +
       (isAdmin ? '<button onclick="editProduct(' + p.id + ')">✏️ Modifier</button><button class="secondary" onclick="deleteProduct(' + p.id + ')">🗑️ Supprimer</button>' : '') +
       '</div>').join('');
-  }
-}
+  }}
+}}
 
-function showLogin() {
+function showLogin() {{
   document.getElementById('login-modal').classList.add('show');
-}
+}}
 
-function closeLogin() {
+function closeLogin() {{
   document.getElementById('login-modal').classList.remove('show');
   document.getElementById('password-input').value = '';
-}
+}}
 
-async function login() {
+async function login() {{
   const password = document.getElementById('password-input').value;
-  if (!password) {
+  if (!password) {{
     alert('Entrez un mot de passe');
     return;
-  }
-  try {
-    const res = await fetch('/api/admin/login', {
+  }}
+  try {{
+    const res = await fetch('/api/admin/login', {{
       method: 'POST',
       credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: password })
-    });
-    if (res.ok) {
+      headers: {{ 'Content-Type': 'application/json' }},
+      body: JSON.stringify({{ password: password }})
+    }});
+    if (res.ok) {{
       isAdmin = true;
       closeLogin();
       render();
       alert('✅ Connexion réussie !');
-    } else {
+    }} else {{
       const data = await res.json();
       alert(data.error || 'Erreur');
-    }
-  } catch (e) {
+    }}
+  }} catch (e) {{
     console.error('Erreur login:', e);
     alert('Erreur de connexion');
-  }
-}
+  }}
+}}
 
-async function logout() {
-  try {
-    await fetch('/api/admin/logout', {
+async function logout() {{
+  try {{
+    await fetch('/api/admin/logout', {{
       method: 'POST',
       credentials: 'same-origin'
-    });
+    }});
     isAdmin = false;
     render();
     alert('👋 Déconnexion réussie');
-  } catch (e) {
+  }} catch (e) {{
     console.error('Erreur logout:', e);
-  }
-}
+  }}
+}}
 
-function showForm() {
+function showForm() {{
   editingProduct = null;
   currentImageUrl = '';
   currentVideoUrl = '';
@@ -567,10 +603,10 @@ function showForm() {
   document.getElementById('file-input').value = '';
   document.getElementById('file-status').innerHTML = '';
   document.getElementById('form-modal').classList.add('show');
-}
+}}
 
-function editProduct(id) {
-  const product = products.find(function(p) { return p.id === id; });
+function editProduct(id) {{
+  const product = products.find(function(p) {{ return p.id === id; }});
   if (!product) return;
   
   editingProduct = product;
@@ -586,68 +622,68 @@ function editProduct(id) {
   document.getElementById('file-input').value = '';
   document.getElementById('file-status').innerHTML = (currentImageUrl || currentVideoUrl) ? '<p style="color:green">✓ Fichier existant</p>' : '';
   document.getElementById('form-modal').classList.add('show');
-}
+}}
 
-function closeForm() {
+function closeForm() {{
   document.getElementById('form-modal').classList.remove('show');
   editingProduct = null;
-}
+}}
 
-document.getElementById('file-input').addEventListener('change', async function(e) {
+document.getElementById('file-input').addEventListener('change', async function(e) {{
   const file = e.target.files[0];
   if (!file) return;
   
-  if (file.size > 10 * 1024 * 1024) {
+  if (file.size > 10 * 1024 * 1024) {{
     alert('⚠️ Fichier trop volumineux (max 10MB)');
     return;
-  }
+  }}
   
   const fd = new FormData();
   fd.append('file', file);
   
   document.getElementById('file-status').innerHTML = '<p>⏳ Upload en cours...</p>';
   
-  try {
-    const res = await fetch('/api/upload', {
+  try {{
+    const res = await fetch('/api/upload', {{
       method: 'POST',
       credentials: 'same-origin',
-      headers: { 'X-Telegram-Init-Data': tg ? (tg.initData || '') : '' },
+      headers: {{ 'X-Telegram-Init-Data': tg ? (tg.initData || '') : '' }},
       body: fd
-    });
+    }});
     const data = await res.json();
-    if (data.url) {
-      if (file.type.startsWith('video')) {
+    if (data.url) {{
+      if (file.type.startsWith('video')) {{
         currentVideoUrl = data.url;
         currentImageUrl = '';
-      } else {
+      }} else {{
         currentImageUrl = data.url;
         currentVideoUrl = '';
-      }
+      }}
       document.getElementById('file-status').innerHTML = '<p style="color:green">✅ Fichier uploadé !</p>';
-    } else {
+    }} else {{
       alert(data.error || 'Erreur upload');
       document.getElementById('file-status').innerHTML = '';
-    }
-  } catch (e) {
+    }}
+  }} catch (e) {{
     console.error('Erreur upload:', e);
     alert('Erreur lors de l\'upload');
     document.getElementById('file-status').innerHTML = '';
-  }
-});
+  }}
+}});
 
-async function saveProduct() {
+async function saveProduct() {{
   const name = document.getElementById('name').value;
   const price = document.getElementById('price').value;
   const category = document.getElementById('category').value;
   const stock = document.getElementById('stock').value;
   const description = document.getElementById('description').value;
   
-  if (!name || !price) {
+  if (!name || !price) {{
     alert('⚠️ Nom et prix requis');
     return;
-  }
+  }}
   
-  const data = {
+  const data = {{
     name: name,
     price: parseFloat(price),
     category: category,
@@ -655,81 +691,88 @@ async function saveProduct() {
     description: description,
     image_url: currentImageUrl,
     video_url: currentVideoUrl
-  };
+  }};
   
-  try {
+  try {{
     const url = editingProduct ? '/api/admin/products/' + editingProduct.id : '/api/admin/products';
     const method = editingProduct ? 'PUT' : 'POST';
     
-    const res = await fetch(url, {
+    const res = await fetch(url, {{
       method: method,
       credentials: 'same-origin',
-      headers: {
+      headers: {{
         'Content-Type': 'application/json',
         'X-Telegram-Init-Data': tg ? (tg.initData || '') : ''
-      },
+      }},
       body: JSON.stringify(data)
-    });
+    }});
     
-    if (res.ok) {
+    if (res.ok) {{
       closeForm();
       await loadProducts();
       render();
       alert('✅ Produit sauvegardé !');
-    } else {
+    }} else {{
       const err = await res.json();
       alert(err.error || 'Erreur');
-    }
-  } catch (e) {
+    }}
+  }} catch (e) {{
     console.error('Erreur save:', e);
     alert('Erreur lors de la sauvegarde');
-  }
-}
+  }}
+}}
 
-async function deleteProduct(id) {
+async function deleteProduct(id) {{
   if (!confirm('🗑️ Supprimer ce produit ?')) return;
   
-  try {
-    const res = await fetch('/api/admin/products/' + id, {
+  try {{
+    const res = await fetch('/api/admin/products/' + id, {{
       method: 'DELETE',
       credentials: 'same-origin',
-      headers: { 'X-Telegram-Init-Data': tg ? (tg.initData || '') : '' }
-    });
+      headers: {{ 'X-Telegram-Init-Data': tg ? (tg.initData || '') : '' }}
+    }});
     
-    if (res.ok) {
+    if (res.ok) {{
       await loadProducts();
       render();
       alert('✅ Produit supprimé');
-    } else {
+    }} else {{
       alert('Erreur lors de la suppression');
-    }
-  } catch (e) {
+    }}
+  }} catch (e) {{
     console.error('Erreur delete:', e);
     alert('Erreur lors de la suppression');
-  }
-}
+  }}
+}}
 
-document.querySelectorAll('.modal').forEach(function(modal) {
-  modal.addEventListener('click', function(e) {
-    if (e.target === modal) {
+document.querySelectorAll('.modal').forEach(function(modal) {{
+  modal.addEventListener('click', function(e) {{
+    if (e.target === modal) {{
       modal.classList.remove('show');
-    }
-  });
-});
+    }}
+  }});
+}});
 
-init();
+console.log('Appel de init()...');
+setTimeout(function() {{
+  const content = document.getElementById('content');
+  if (content && content.classList.contains('loading')) {{
+    console.error('⚠️ TIMEOUT: Init bloqué après 5 secondes');
+    content.innerHTML = '<div class="empty"><h2>⚠️ Timeout</h2><p>Le chargement prend trop de temps. Vérifiez la console (F12).</p></div>';
+  }}
+}}, 5000);
+
+init().catch(function(err) {{
+  console.error('Erreur fatale:', err);
+  document.getElementById('content').innerHTML = '<div class="empty"><h2>❌ Erreur</h2><p>' + err.message + '</p></div>';
+}});
+console.log('=== FIN SCRIPT ===');
 </script>
 </body>
 </html>'''
-
-@app.route('/catalogue')
-def catalogue():
-    """Route catalogue optimisée"""
-    try:
-        logger.info("📄 Chargement page catalogue")
-        bg_style = f"url('{BACKGROUND_IMAGE}') no-repeat center center fixed" if BACKGROUND_IMAGE else "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
-        html = HTML_TEMPLATE.replace('{{ bg_style }}', bg_style)
+        
         return html, 200
+        
     except Exception as e:
         logger.error(f"Erreur route catalogue: {e}")
         return "Erreur serveur", 500

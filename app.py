@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, session
+from flask import Flask, request, jsonify, session, render_template_string
 from flask_cors import CORS
 from dotenv import load_dotenv
 from functools import wraps
@@ -19,8 +19,11 @@ load_dotenv('infos.env')
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'change_this_secret_key_in_production')
 
-# Configuration simplifiée des sessions (utilise les cookies par défaut)
-app.config['SESSION_COOKIE_SECURE'] = False  # Mettre à True en production avec HTTPS
+# CORS corrigé pour permettre les requêtes
+CORS(app, supports_credentials=True, origins=['*'])
+
+# Configuration des sessions
+app.config['SESSION_COOKIE_SECURE'] = False  # True en production HTTPS
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
@@ -28,7 +31,7 @@ BOT_TOKEN = os.environ.get('BOT_TOKEN', os.environ.get('TELEGRAM_TOKEN', ''))
 ADMIN_USER_IDS = [int(i) for i in os.environ.get('ADMIN_USER_IDS', '').split(',') if i.strip()]
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
 
-# Cloudinary - Configuration sécurisée
+# Cloudinary
 try:
     cloudinary.config(
         cloud_name=os.environ.get('CLOUDINARY_CLOUD_NAME'),
@@ -63,7 +66,9 @@ def save_products(products):
     except Exception as e:
         logger.error(f"Erreur lors de la sauvegarde des produits: {e}")
 
+# Chargement initial des produits
 products = load_products()
+logger.info(f"📦 {len(products)} produits chargés au démarrage")
 
 # ----------------------------
 # Telegram WebApp verification
@@ -115,7 +120,20 @@ def require_admin(f):
 # ----------------------------
 @app.route('/health')
 def health():
-    return jsonify({'status': 'ok'}), 200
+    return jsonify({'status': 'ok', 'products': len(products)}), 200
+
+@app.route('/')
+def index():
+    """Route simple et rapide"""
+    return jsonify({
+        'status': 'ok',
+        'message': 'API Catalogue active',
+        'routes': {
+            'catalogue': '/catalogue',
+            'products': '/api/products',
+            'health': '/health'
+        }
+    }), 200
 
 # ----------------------------
 # Auth routes
@@ -170,11 +188,15 @@ def upload_file():
         if file.filename == '':
             return jsonify({'error': 'Nom de fichier vide'}), 400
         
-        # Vérifier la configuration Cloudinary
         if not os.environ.get('CLOUDINARY_CLOUD_NAME'):
             return jsonify({'error': 'Cloudinary non configuré'}), 500
         
-        result = cloudinary.uploader.upload(file, resource_type='auto', folder='catalogue', timeout=60)
+        result = cloudinary.uploader.upload(
+            file, 
+            resource_type='auto', 
+            folder='catalogue', 
+            timeout=60
+        )
         logger.info(f"✅ Fichier uploadé: {result.get('secure_url')}")
         return jsonify({'url': result.get('secure_url')}), 200
     except Exception as e:
@@ -187,6 +209,7 @@ def upload_file():
 @app.route('/api/products', methods=['GET'])
 def get_products():
     try:
+        logger.info(f"📦 Envoi de {len(products)} produits")
         return jsonify(products)
     except Exception as e:
         logger.error(f"Erreur get products: {e}")
@@ -195,6 +218,7 @@ def get_products():
 @app.route('/api/admin/products', methods=['POST'])
 @require_admin
 def add_product():
+    global products
     try:
         data = request.json or {}
         if not data.get('name') or (str(data.get('price', '')).strip() == ''):
@@ -259,12 +283,10 @@ def delete_product(pid):
         return jsonify({'error': 'Erreur serveur'}), 500
 
 # ----------------------------
-# Frontend HTML
+# Frontend HTML (OPTIMISÉ)
 # ----------------------------
-def get_html():
-    bg_style = f"url('{BACKGROUND_IMAGE}') no-repeat center center fixed" if BACKGROUND_IMAGE else "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
-    
-    return '''<!DOCTYPE html>
+# Template HTML stocké comme constante pour éviter de le régénérer
+HTML_TEMPLATE = '''<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -275,7 +297,7 @@ def get_html():
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
-  background: ''' + bg_style + ''';
+  background: {{ bg_style }};
   background-size: cover;
   color: #fff;
   min-height: 100vh;
@@ -412,7 +434,6 @@ input, textarea {
 </div>
 
 <script>
-console.log('=== SCRIPT START ===');
 const tg = window.Telegram && window.Telegram.WebApp;
 let isAdmin = false;
 let products = [];
@@ -421,21 +442,18 @@ let currentImageUrl = '';
 let currentVideoUrl = '';
 
 if (tg) {
-  console.log('Telegram WebApp détecté');
   tg.ready();
   tg.expand();
 }
 
 async function init() {
-  console.log('Init...');
   try {
     await checkAdmin();
     await loadProducts();
     render();
-    console.log('Init terminé');
   } catch (e) {
     console.error('Erreur init:', e);
-    document.getElementById('content').innerHTML = '<div class="empty"><h2>❌ Erreur</h2><p>Impossible de charger l\'application</p></div>';
+    document.getElementById('content').innerHTML = '<div class="empty"><h2>❌ Erreur</h2><p>Impossible de charger</p></div>';
   }
 }
 
@@ -447,7 +465,6 @@ async function checkAdmin() {
     });
     const data = await res.json();
     isAdmin = data.admin;
-    console.log('Admin:', isAdmin);
   } catch (e) {
     console.error('Erreur check admin:', e);
     isAdmin = false;
@@ -455,19 +472,12 @@ async function checkAdmin() {
 }
 
 async function loadProducts() {
-  try {
-    const res = await fetch('/api/products');
-    if (!res.ok) throw new Error('Erreur chargement');
-    products = await res.json();
-    console.log('Produits chargés:', products.length);
-  } catch (e) {
-    console.error('Erreur chargement:', e);
-    throw e;
-  }
+  const res = await fetch('/api/products');
+  if (!res.ok) throw new Error('Erreur chargement');
+  products = await res.json();
 }
 
 function render() {
-  console.log('Render...');
   const adminControls = document.getElementById('admin-controls');
   const content = document.getElementById('content');
   
@@ -491,7 +501,6 @@ function render() {
       (isAdmin ? '<button onclick="editProduct(' + p.id + ')">✏️ Modifier</button><button class="secondary" onclick="deleteProduct(' + p.id + ')">🗑️ Supprimer</button>' : '') +
       '</div>').join('');
   }
-  console.log('Render terminé');
 }
 
 function showLogin() {
@@ -708,18 +717,19 @@ document.querySelectorAll('.modal').forEach(function(modal) {
   });
 });
 
-console.log('Appel de init()...');
 init();
-console.log('=== SCRIPT END ===');
 </script>
 </body>
 </html>'''
 
-@app.route('/')
 @app.route('/catalogue')
 def catalogue():
+    """Route catalogue optimisée"""
     try:
-        return get_html()
+        logger.info("📄 Chargement page catalogue")
+        bg_style = f"url('{BACKGROUND_IMAGE}') no-repeat center center fixed" if BACKGROUND_IMAGE else "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+        html = HTML_TEMPLATE.replace('{{ bg_style }}', bg_style)
+        return html, 200
     except Exception as e:
         logger.error(f"Erreur route catalogue: {e}")
         return "Erreur serveur", 500
@@ -743,7 +753,7 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     logger.info(f"🚀 Starting app on port {port}")
     logger.info(f"📁 Produits chargés: {len(products)}")
-    logger.info(f"🔑 Admin password set: {'✅' if ADMIN_PASSWORD != 'admin123' else '⚠️ Using default'}")
-    logger.info(f"☁️ Cloudinary configured: {'✅' if os.environ.get('CLOUDINARY_CLOUD_NAME') else '❌'}")
+    logger.info(f"🔑 Admin password: {'✅' if ADMIN_PASSWORD != 'admin123' else '⚠️ default'}")
+    logger.info(f"☁️ Cloudinary: {'✅' if os.environ.get('CLOUDINARY_CLOUD_NAME') else '❌'}")
     
     app.run(host='0.0.0.0', port=port, debug=False)

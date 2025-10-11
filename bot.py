@@ -1329,7 +1329,7 @@ async def setup_webapp_menu(application):
         await application.bot.set_chat_menu_button(
             menu_button=MenuButtonWebApp(
                 text="🏴‍☠️ Carte du Pirate",
-                web_app=WebAppInfo(url="https://carte-du-pirate.onrender.com")
+                web_app=WebAppInfo(url="https://carte-du-pirate.onrender.com/catalogue")  # ✅ CORRIGÉ
             )
         )
         logger.info("✅ Menu WebApp 'Carte du Pirate' configuré.")

@@ -1,0 +1,32 @@
+[
+  {
+    "id": 1,
+    "name": "Produit Exemple 1",
+    "price": 29.99,
+    "description": "Description du premier produit",
+    "category": "Électronique",
+    "image_url": "",
+    "video_url": "",
+    "stock": 10
+  },
+  {
+    "id": 2,
+    "name": "Produit Exemple 2",
+    "price": 49.99,
+    "description": "Description du deuxième produit",
+    "category": "Accessoires",
+    "image_url": "",
+    "video_url": "",
+    "stock": 5
+  },
+  {
+    "id": 3,
+    "name": "Produit Exemple 3",
+    "price": 99.99,
+    "description": "Description du troisième produit premium",
+    "category": "Premium",
+    "image_url": "",
+    "video_url": "",
+    "stock": 3
+  }
+]

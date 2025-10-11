@@ -11,14 +11,15 @@ logger = logging.getLogger(__name__)
 load_dotenv('infos.env')
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'change_this_secret_key_in_production')
+app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24).hex())
 CORS(app, supports_credentials=True, origins=['*'])
 
-app.config['SESSION_COOKIE_SECURE'] = False
+app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
+BACKGROUND_IMAGE = 'https://res.cloudinary.com/dfhrrtzsd/image/upload/v1760118433/ChatGPT_Image_8_oct._2025_03_01_21_zm5zfy.png'
 
 try:
     cloudinary.config(
@@ -32,7 +33,6 @@ except Exception as e:
     logger.error(f"⚠️ Erreur Cloudinary: {e}")
 
 PRODUCTS_FILE = 'products.json'
-BACKGROUND_IMAGE = 'https://res.cloudinary.com/dfhrrtzsd/image/upload/v1760118433/ChatGPT_Image_8_oct._2025_03_01_21_zm5zfy.png'
 
 def load_products():
     if os.path.exists(PRODUCTS_FILE):
@@ -44,15 +44,16 @@ def load_products():
             logger.warning(f"Erreur lecture products.json: {e}")
             return []
     else:
-        # Créer le fichier s'il n'existe pas
         save_products([])
         return []
 
 def save_products(products):
-    with open(PRODUCTS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(products, f, indent=2, ensure_ascii=False)
+    try:
+        with open(PRODUCTS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(products, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"Erreur sauvegarde products: {e}")
 
-# Initialiser les produits au démarrage
 try:
     products = load_products()
     logger.info(f"✅ {len(products)} produits chargés")
@@ -63,8 +64,11 @@ except Exception as e:
 def require_admin(f):
     @wraps(f)
     def wrapped(*args, **kwargs):
-        if session.get('admin_logged_in'):
-            return f(*args, **kwargs)
+        try:
+            if session.get('admin_logged_in'):
+                return f(*args, **kwargs)
+        except:
+            pass
         return jsonify({'error': 'Non autorisé'}), 403
     return wrapped
 
@@ -180,36 +184,50 @@ h1 {{
 
 @app.route('/health')
 def health():
-    return jsonify({{'status': 'ok'}}), 200
+    return jsonify({'status': 'ok'}), 200
 
 @app.route('/api/admin/login', methods=['POST'])
 def api_login():
-    data = request.json or {{}}
-    if data.get('password') == ADMIN_PASSWORD:
-        session['admin_logged_in'] = True
-        return jsonify({{'success': True}})
-    return jsonify({{'error': 'Mot de passe incorrect'}}), 403
+    try:
+        data = request.json or {}
+        if data.get('password') == ADMIN_PASSWORD:
+            session['admin_logged_in'] = True
+            return jsonify({'success': True})
+        return jsonify({'error': 'Mot de passe incorrect'}), 403
+    except Exception as e:
+        logger.error(f"Erreur login: {e}")
+        return jsonify({'error': 'Erreur serveur'}), 500
 
 @app.route('/api/admin/logout', methods=['POST'])
 def api_logout():
-    session.pop('admin_logged_in', None)
-    return jsonify({{'success': True}})
+    try:
+        session.pop('admin_logged_in', None)
+        return jsonify({'success': True})
+    except Exception as e:
+        logger.error(f"Erreur logout: {e}")
+        return jsonify({'success': False}), 500
 
 @app.route('/api/admin/check', methods=['GET'])
 def api_check_admin():
-    return jsonify({{'admin': session.get('admin_logged_in', False)}})
+    try:
+        is_admin = session.get('admin_logged_in', False)
+        return jsonify({'admin': is_admin}), 200
+    except Exception as e:
+        logger.error(f"Erreur check admin: {e}")
+        return jsonify({'admin': False}), 200
 
 @app.route('/api/upload', methods=['POST'])
 @require_admin
 def upload_file():
     try:
         if 'file' not in request.files:
-            return jsonify({{'error': 'Aucun fichier'}}), 400
+            return jsonify({'error': 'Aucun fichier'}), 400
         file = request.files['file']
         result = cloudinary.uploader.upload(file, resource_type='auto', folder='catalogue', timeout=60)
-        return jsonify({{'url': result.get('secure_url')}}), 200
+        return jsonify({'url': result.get('secure_url')}), 200
     except Exception as e:
-        return jsonify({{'error': str(e)}}), 500
+        logger.error(f"Erreur upload: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/products', methods=['GET'])
 def get_products():
@@ -223,53 +241,65 @@ def get_products():
 @require_admin
 def add_product():
     global products
-    data = request.json or {{}}
-    if not data.get('name') or not data.get('price'):
-        return jsonify({{'error': 'Nom et prix requis'}}), 400
-    
-    new_product = {{
-        "id": max([p["id"] for p in products]) + 1 if products else 1,
-        "name": data.get("name"),
-        "price": float(data.get("price", 0)),
-        "description": data.get("description", ""),
-        "category": data.get("category", ""),
-        "image_url": data.get("image_url", ""),
-        "video_url": data.get("video_url", ""),
-        "stock": int(data.get("stock", 0))
-    }}
-    products.append(new_product)
-    save_products(products)
-    return jsonify(new_product), 201
+    try:
+        data = request.json or {}
+        if not data.get('name') or not data.get('price'):
+            return jsonify({'error': 'Nom et prix requis'}), 400
+        
+        new_product = {
+            "id": max([p["id"] for p in products]) + 1 if products else 1,
+            "name": data.get("name"),
+            "price": float(data.get("price", 0)),
+            "description": data.get("description", ""),
+            "category": data.get("category", ""),
+            "image_url": data.get("image_url", ""),
+            "video_url": data.get("video_url", ""),
+            "stock": int(data.get("stock", 0))
+        }
+        products.append(new_product)
+        save_products(products)
+        return jsonify(new_product), 201
+    except Exception as e:
+        logger.error(f"Erreur add product: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/products/<int:pid>', methods=['PUT'])
 @require_admin
 def update_product(pid):
-    data = request.json or {{}}
-    for p in products:
-        if p['id'] == pid:
-            p.update({{
-                "name": data.get("name", p["name"]),
-                "price": float(data.get("price", p["price"])),
-                "description": data.get("description", p["description"]),
-                "category": data.get("category", p["category"]),
-                "image_url": data.get("image_url", p.get("image_url", "")),
-                "video_url": data.get("video_url", p.get("video_url", "")),
-                "stock": int(data.get("stock", p["stock"]))
-            }})
-            save_products(products)
-            return jsonify(p)
-    return jsonify({{'error': 'Produit non trouvé'}}), 404
+    try:
+        data = request.json or {}
+        for p in products:
+            if p['id'] == pid:
+                p.update({
+                    "name": data.get("name", p["name"]),
+                    "price": float(data.get("price", p["price"])),
+                    "description": data.get("description", p["description"]),
+                    "category": data.get("category", p["category"]),
+                    "image_url": data.get("image_url", p.get("image_url", "")),
+                    "video_url": data.get("video_url", p.get("video_url", "")),
+                    "stock": int(data.get("stock", p["stock"]))
+                })
+                save_products(products)
+                return jsonify(p)
+        return jsonify({'error': 'Produit non trouvé'}), 404
+    except Exception as e:
+        logger.error(f"Erreur update product: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/products/<int:pid>', methods=['DELETE'])
 @require_admin
 def delete_product(pid):
     global products
-    before = len(products)
-    products = [p for p in products if p['id'] != pid]
-    if len(products) < before:
-        save_products(products)
-        return jsonify({{'success': True}})
-    return jsonify({{'error': 'Produit non trouvé'}}), 404
+    try:
+        before = len(products)
+        products = [p for p in products if p['id'] != pid]
+        if len(products) < before:
+            save_products(products)
+            return jsonify({'success': True})
+        return jsonify({'error': 'Produit non trouvé'}), 404
+    except Exception as e:
+        logger.error(f"Erreur delete product: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/catalogue')
 def catalogue():
@@ -402,6 +432,7 @@ input, textarea {{
 }}
 .loading {{ text-align: center; padding: 40px; color: #666; }}
 .empty {{ text-align: center; padding: 60px 20px; color: #999; }}
+.error {{ text-align: center; padding: 40px; color: #e74c3c; }}
 </style>
 </head>
 <body>
@@ -453,20 +484,33 @@ async function init() {{
     await loadProducts();
     render();
   }} catch (e) {{
-    console.error(e);
-    document.getElementById('content').innerHTML = '<div class="empty">Erreur de chargement</div>';
+    console.error('Erreur init:', e);
+    document.getElementById('content').innerHTML = '<div class="error">❌ Erreur de chargement: ' + e.message + '</div>';
   }}
 }}
 
 async function checkAdmin() {{
-  const res = await fetch('/api/admin/check', {{ credentials: 'same-origin' }});
-  const data = await res.json();
-  isAdmin = data.admin;
+  try {{
+    const res = await fetch('/api/admin/check', {{ credentials: 'same-origin' }});
+    if (!res.ok) throw new Error('Erreur check admin');
+    const data = await res.json();
+    isAdmin = data.admin;
+  }} catch (e) {{
+    console.error('Erreur checkAdmin:', e);
+    isAdmin = false;
+  }}
 }}
 
 async function loadProducts() {{
-  const res = await fetch('/api/products');
-  products = await res.json();
+  try {{
+    const res = await fetch('/api/products');
+    if (!res.ok) throw new Error('Erreur chargement produits');
+    products = await res.json();
+    console.log('Produits chargés:', products.length);
+  }} catch (e) {{
+    console.error('Erreur loadProducts:', e);
+    throw e;
+  }}
 }}
 
 function render() {{
@@ -480,7 +524,7 @@ function render() {{
   }}
   
   if (products.length === 0) {{
-    content.innerHTML = '<div class="empty"><h2>📦 Catalogue vide</h2></div>';
+    content.innerHTML = '<div class="empty"><h2>📦 Catalogue vide</h2><p>Aucun produit pour le moment</p></div>';
   }} else {{
     content.innerHTML = products.map(p => `
       <div class="card">
@@ -510,19 +554,23 @@ function closeLogin() {{
 
 async function login() {{
   const password = document.getElementById('password-input').value;
-  const res = await fetch('/api/admin/login', {{
-    method: 'POST',
-    credentials: 'same-origin',
-    headers: {{ 'Content-Type': 'application/json' }},
-    body: JSON.stringify({{ password }})
-  }});
-  if (res.ok) {{
-    isAdmin = true;
-    closeLogin();
-    render();
-    alert('✅ Connecté');
-  }} else {{
-    alert('❌ Mot de passe incorrect');
+  try {{
+    const res = await fetch('/api/admin/login', {{
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {{ 'Content-Type': 'application/json' }},
+      body: JSON.stringify({{ password }})
+    }});
+    if (res.ok) {{
+      isAdmin = true;
+      closeLogin();
+      render();
+      alert('✅ Connecté');
+    }} else {{
+      alert('❌ Mot de passe incorrect');
+    }}
+  }} catch (e) {{
+    alert('❌ Erreur de connexion');
   }}
 }}
 
@@ -626,35 +674,43 @@ async function saveProduct() {{
   const url = editingProduct ? `/api/admin/products/${{editingProduct.id}}` : '/api/admin/products';
   const method = editingProduct ? 'PUT' : 'POST';
   
-  const res = await fetch(url, {{
-    method,
-    credentials: 'same-origin',
-    headers: {{ 'Content-Type': 'application/json' }},
-    body: JSON.stringify(data)
-  }});
-  
-  if (res.ok) {{
-    closeForm();
-    await loadProducts();
-    render();
-    alert('✅ Sauvegardé');
-  }} else {{
-    alert('Erreur');
+  try {{
+    const res = await fetch(url, {{
+      method,
+      credentials: 'same-origin',
+      headers: {{ 'Content-Type': 'application/json' }},
+      body: JSON.stringify(data)
+    }});
+    
+    if (res.ok) {{
+      closeForm();
+      await loadProducts();
+      render();
+      alert('✅ Sauvegardé');
+    }} else {{
+      alert('Erreur sauvegarde');
+    }}
+  }} catch (e) {{
+    alert('Erreur: ' + e.message);
   }}
 }}
 
 async function deleteProduct(id) {{
   if (!confirm('Supprimer ce produit ?')) return;
   
-  const res = await fetch(`/api/admin/products/${{id}}`, {{
-    method: 'DELETE',
-    credentials: 'same-origin'
-  }});
-  
-  if (res.ok) {{
-    await loadProducts();
-    render();
-    alert('✅ Supprimé');
+  try {{
+    const res = await fetch(`/api/admin/products/${{id}}`, {{
+      method: 'DELETE',
+      credentials: 'same-origin'
+    }});
+    
+    if (res.ok) {{
+      await loadProducts();
+      render();
+      alert('✅ Supprimé');
+    }}
+  }} catch (e) {{
+    alert('Erreur suppression');
   }}
 }}
 
@@ -672,5 +728,5 @@ init();
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    logger.info(f"🚀 Démarrage sur le port {{port}}")
+    logger.info(f"🚀 Démarrage sur le port {port}")
     app.run(host='0.0.0.0', port=port, debug=False)

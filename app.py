@@ -213,7 +213,11 @@ def upload_file():
 
 @app.route('/api/products', methods=['GET'])
 def get_products():
-    return jsonify(products)
+    try:
+        return jsonify(products), 200
+    except Exception as e:
+        logger.error(f"Erreur GET products: {e}")
+        return jsonify([]), 200
 
 @app.route('/api/admin/products', methods=['POST'])
 @require_admin

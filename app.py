@@ -19,7 +19,16 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
-BACKGROUND_IMAGE = 'https://res.cloudinary.com/dfhrrtzsd/image/upload/v1760118433/ChatGPT_Image_8_oct._2025_03_01_21_zm5zfy.png'
+# Configuration du fond d'écran
+# Pour utiliser Cloudinary : uploadez l'image via l'admin, puis mettez l'URL ici
+# Pour le moment, utilisons une image de test
+BACKGROUND_IMAGE = 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=1920&q=80'
+
+# Fonction pour obtenir l'URL de fond personnalisée
+def get_background_url():
+    # Vous pouvez stocker l'URL dans une variable d'environnement
+    custom_bg = os.environ.get('BACKGROUND_URL')
+    return custom_bg if custom_bg else BACKGROUND_IMAGE
 
 try:
     cloudinary.config(

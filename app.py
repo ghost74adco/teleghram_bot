@@ -58,7 +58,97 @@ def require_admin(f):
 
 @app.route('/')
 def index():
-    return jsonify({'status': 'ok', 'message': 'API active'}), 200
+    html = '''<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Carte du Pirate</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.container {
+  text-align: center;
+  color: white;
+  max-width: 800px;
+}
+h1 {
+  font-size: 3.5em;
+  margin-bottom: 30px;
+  text-shadow: 3px 3px 6px rgba(0,0,0,0.4);
+  animation: float 3s ease-in-out infinite;
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+.subtitle {
+  font-size: 1.3em;
+  margin-bottom: 40px;
+  opacity: 0.9;
+}
+.btn {
+  display: inline-block;
+  padding: 20px 50px;
+  font-size: 1.5em;
+  background: linear-gradient(45deg, #d4af37, #f4e5a1);
+  border: 3px solid #8b7220;
+  border-radius: 15px;
+  color: #2c1810;
+  text-decoration: none;
+  font-weight: bold;
+  transition: all 0.3s ease;
+  margin: 10px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+.btn:hover {
+  transform: scale(1.05) translateY(-5px);
+  box-shadow: 0 15px 40px rgba(212, 175, 55, 0.5);
+}
+.btn:active {
+  transform: scale(0.98);
+}
+.api-status {
+  margin-top: 40px;
+  padding: 15px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 10px;
+  font-size: 0.9em;
+}
+.status-badge {
+  display: inline-block;
+  padding: 5px 15px;
+  background: #28a745;
+  color: white;
+  border-radius: 20px;
+  font-weight: bold;
+  margin-top: 10px;
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🏴‍☠️ Carte du Pirate 🏴‍☠️</h1>
+  <p class="subtitle">Votre boutique de trésors en ligne</p>
+  
+  <a href="/catalogue" class="btn">📦 Catalogue du Pirate</a>
+  
+  <div class="api-status">
+    <p>Système API</p>
+    <span class="status-badge">✅ Actif</span>
+  </div>
+</div>
+</body>
+</html>'''
+    return html, 200
 
 @app.route('/health')
 def health():
@@ -183,6 +273,18 @@ body {
   gap: 10px;
 }
 h1 { color: #333; font-size: 24px; }
+.back-btn {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-block;
+}
+.back-btn:hover { background: #5a6268; }
 button {
   background: #667eea;
   color: white;
@@ -258,7 +360,10 @@ input, textarea {
 <body>
 <div class="container">
   <div class="header">
-    <h1>🛍️ Mon Catalogue</h1>
+    <div>
+      <a href="/" class="back-btn">← Retour</a>
+      <h1 style="display: inline; margin-left: 15px;">🛍️ Mon Catalogue</h1>
+    </div>
     <div id="admin-controls"></div>
   </div>
   <div id="content" class="loading">Chargement...</div>

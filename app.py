@@ -35,7 +35,7 @@ CORS(app, supports_credentials=True, origins=['*'])
 ADMIN_PASSWORD_HASH = hashlib.sha256(os.environ.get('ADMIN_PASSWORD', 'changeme123').encode()).hexdigest()
 TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 TELEGRAM_ADMIN_ID = os.environ.get('TELEGRAM_ADMIN_ID')
-ADMIN_ADDRESS = os.environ.get('ADMIN_ADDRESS', 'Chamonix-Mont-Blanc, France')  # Adresse de départ pour calcul distance
+ADMIN_ADDRESS = os.environ.get('ADMIN_ADDRESS', 'Chamonix-Mont-Blanc, France')
 BACKGROUND_IMAGE = os.environ.get('BACKGROUND_URL', 'https://res.cloudinary.com/dfhrrtzsd/image/upload/v1760118433/ChatGPT_Image_8_oct._2025_03_01_21_zm5zfy.png')
 
 limiter = Limiter(app=app, key_func=get_remote_address, default_limits=["200 per day", "50 per hour"], storage_uri="memory://")
@@ -57,56 +57,15 @@ except Exception as e:
 
 PRODUCTS_FILE = 'products.json'
 ORDERS_FILE = 'orders.json'
-
-# Frais de livraison (comme dans bot.py)
 FRAIS_POSTAL = 10
 
 def calculate_delivery_fee(delivery_type: str, distance: float = 0, subtotal: float = 0) -> float:
-    """Calcule les frais de livraison (même logique que bot.py)"""
     if delivery_type == "postal":
         return FRAIS_POSTAL
     elif delivery_type == "express":
-        # 2€/km + 3% du montant total, arrondi à la dizaine supérieure
         base_fee = (distance * 2) + (subtotal * 0.03)
         return math.ceil(base_fee / 10) * 10
     return 0
-
-async def get_distance_between_addresses(address1: str, address2: str):
-    """
-    Calcule la distance entre deux adresses (comme dans bot.py)
-    Retourne (distance_km, success, error_message)
-    """
-    if not GEOPY_AVAILABLE:
-        logger.error("geopy n'est pas installé")
-        return (0, False, "Module de géolocalisation non disponible")
-    
-    try:
-        geolocator = Nominatim(user_agent="carte_du_pirate_webapp")
-        
-        # Géocoder les deux adresses
-        location1 = geolocator.geocode(address1, timeout=10)
-        location2 = geolocator.geocode(address2, timeout=10)
-        
-        if not location1:
-            return (0, False, f"Adresse de départ introuvable: {address1}")
-        
-        if not location2:
-            return (0, False, f"Adresse de livraison introuvable: {address2}")
-        
-        # Calculer la distance
-        coords1 = (location1.latitude, location1.longitude)
-        coords2 = (location2.latitude, location2.longitude)
-        
-        distance = geodesic(coords1, coords2).kilometers
-        distance_rounded = round(distance, 1)
-        
-        logger.info(f"Distance calculée: {distance_rounded} km entre {address1} et {address2}")
-        
-        return (distance_rounded, True, None)
-        
-    except Exception as e:
-        logger.error(f"Erreur calcul distance: {e}")
-        return (0, False, str(e))
 
 def load_json_file(filename, default=[]):
     if os.path.exists(filename):
@@ -207,13 +166,11 @@ products = load_json_file(PRODUCTS_FILE)
 orders = load_json_file(ORDERS_FILE)
 
 def send_telegram_notification(order_data):
-    """Envoie une notification Telegram avec bouton de validation (comme bot.py)"""
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_ADMIN_ID:
         logger.warning("Configuration Telegram manquante")
         return False
     
     try:
-        # Construction du message détaillé
         message = f"""🆕 *NOUVELLE COMMANDE #{order_data['order_number']}*
 
 👤 *Client:*
@@ -229,7 +186,6 @@ def send_telegram_notification(order_data):
         for item in order_data['items']:
             message += f"• {item['product_name']} x{item['quantity']} = {item['subtotal']}€\n"
         
-        # Informations de livraison
         shipping_type = order_data.get('shipping_type', 'N/A')
         delivery_fee = order_data.get('delivery_fee', 0)
         distance = order_data.get('distance_km', 0)
@@ -249,7 +205,6 @@ def send_telegram_notification(order_data):
         
         message += f"\n📅 {order_data['created_at']}"
         
-        # Bouton de validation
         keyboard = {
             "inline_keyboard": [[
                 {
@@ -316,10 +271,10 @@ def require_admin(f):
         return f(*args, **kwargs)
     return wrapped
 
-@app.route('/catalogue')
-def catalogue():
+@app.route('/')
+def index():
     try:
-        html = '''<!DOCTYPE html>
+        html = f'''<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -547,7 +502,6 @@ def delete_product(pid):
 
 @app.route('/api/calculate-distance', methods=['POST'])
 def calculate_distance():
-    """Calcule automatiquement la distance depuis l'adresse admin"""
     try:
         data = request.json or {}
         client_address = data.get('address', '').strip()
@@ -558,7 +512,6 @@ def calculate_distance():
         if not GEOPY_AVAILABLE:
             return jsonify({'error': 'Service de géolocalisation non disponible'}), 503
         
-        # Calcul de la distance (synchrone ici, pas besoin d'async dans Flask)
         try:
             geolocator = Nominatim(user_agent="carte_du_pirate_webapp")
             
@@ -601,13 +554,11 @@ def create_order():
     try:
         data = request.json or {}
         
-        # Validation des données
         if not data.get('items') or len(data.get('items', [])) == 0:
             return jsonify({'error': 'Panier vide'}), 400
         if not data.get('customer_name') or not data.get('customer_contact'):
             return jsonify({'error': 'Nom et contact requis'}), 400
         
-        # Calcul du sous-total et validation du stock
         total = 0
         order_items = []
         for item in data['items']:
@@ -626,13 +577,11 @@ def create_order():
                 'subtotal': item_total
             })
         
-        # Calcul des frais de livraison
         shipping_type = data.get('shipping_type', 'postal')
         distance = float(data.get('distance_km', 0))
         delivery_fee = calculate_delivery_fee(shipping_type, distance, total)
         final_total = total + delivery_fee
         
-        # Création de la commande
         order_id = max([o['id'] for o in orders]) + 1 if orders else 1
         new_order = {
             'id': order_id,
@@ -655,7 +604,6 @@ def create_order():
         orders.append(new_order)
         save_json_file(ORDERS_FILE, orders)
         
-        # Envoi de la notification Telegram
         send_telegram_notification(new_order)
         
         return jsonify({'success': True, 'order': new_order}), 201
@@ -692,7 +640,6 @@ def update_order_status(order_id):
 
 @app.route('/api/telegram/webhook', methods=['POST'])
 def telegram_webhook():
-    """Gère les callbacks Telegram pour la validation des commandes"""
     try:
         data = request.json
         
@@ -702,7 +649,6 @@ def telegram_webhook():
             if callback_data.startswith('webapp_validate_'):
                 order_id = int(callback_data.split('_')[2])
                 
-                # Mise à jour du statut de la commande
                 for order in orders:
                     if order['id'] == order_id:
                         order['status'] = 'delivered'
@@ -711,7 +657,6 @@ def telegram_webhook():
                 
                 save_json_file(ORDERS_FILE, orders)
                 
-                # Réponse au callback
                 callback_id = data['callback_query']['id']
                 url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/answerCallbackQuery"
                 requests.post(url, json={
@@ -719,7 +664,6 @@ def telegram_webhook():
                     "text": f"✅ Commande #{order_id} marquée comme livrée"
                 })
                 
-                # Modification du message
                 message_id = data['callback_query']['message']['message_id']
                 chat_id = data['callback_query']['message']['chat']['id']
                 url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/editMessageText"
@@ -978,7 +922,7 @@ input, textarea, select {
     <div id="express-info" style="display:none; margin: 15px 0; padding: 10px; background: #e3f2fd; border-radius: 6px;">
       <p style="margin:0; color:#1976d2;">
         <strong>ℹ️ Calcul automatique de distance</strong><br>
-        La distance sera calculée automatiquement depuis notre entrepôt jusqu'à votre adresse.
+        La distance sera calculée automatiquement depuis notre entrepôt jusqu\\'à votre adresse.
       </p>
     </div>
     <div id="distance-result" style="display:none; margin: 15px 0; padding: 10px; background: #e8f5e9; border-radius: 6px; border-left: 4px solid #4caf50;">
@@ -1116,7 +1060,7 @@ async function calculateDistance(address){
         <p style="margin:0 0 10px 0;"><strong>✅ Distance calculée: ${calculatedDistance} km</strong></p>
         <div style="font-size:14px; color:#666;">
           <div>• Distance: ${calculatedDistance} km × 2€ = ${distanceFee.toFixed(2)}€</div>
-          <div>• Pourcentage: ${subtotal.toFixed(2)}€ × 3% = ${percentFee.toFixed(2)}€</div>
+          <div>• Pourcentage: ${subtotal.toFixed(2)}€ × 3%% = ${percentFee.toFixed(2)}€</div>
           <div>• Total brut: ${rawTotal.toFixed(2)}€</div>
           <div style="font-weight:bold; color:#2e7d32;">• Arrondi dizaine sup.: ${finalFee}€</div>
         </div>
@@ -1133,760 +1077,6 @@ async function calculateDistance(address){
     distanceDetail.innerHTML='<p style="margin:0; color:#d32f2f;">❌ Erreur de connexion</p>';
     document.getElementById('shipping-type').value='';
   }
-}
-
-function updateShippingFee(){
-  updateCheckoutTotal();
-}
-
-function updateCheckoutTotal(){
-  const subtotal=getCartTotal();
-  const shippingFee=calculateShippingFee();
-  const total=subtotal+shippingFee;
-  
-  document.getElementById('checkout-total').innerHTML=`
-    <div>Sous-total: ${subtotal.toFixed(2)}€</div>
-    <div>Frais de port: ${shippingFee.toFixed(2)}€</div>
-    <h2>${total.toFixed(2)} €</h2>
-    <p>${getCartCount()} article(s)</p>
-  `;
-}
-
-function addToCart(productId){
-  const product=products.find(p=>p.id===productId);
-  if(!product)return;
-  const existing=cart.find(item=>item.product_id===productId);
-  if(existing){
-    if(existing.quantity<product.stock){
-      existing.quantity++;
-    }else{
-      alert('Stock insuffisant');
-      return;
-    }
-  }else{
-    cart.push({product_id:productId,quantity:1});
-  }
-  localStorage.setItem('cart',JSON.stringify(cart));
-  render();
-  alert('✅ Ajouté au panier');
-}
-
-function updateCartQuantity(productId,change){
-  const item=cart.find(i=>i.product_id===productId);
-  const product=products.find(p=>p.id===productId);
-  if(!item||!product)return;
-  const newQty=item.quantity+change;
-  if(newQty<=0){
-    cart=cart.filter(i=>i.product_id!==productId);
-  }else if(newQty<=product.stock){
-    item.quantity=newQty;
-  }else{
-    alert('Stock insuffisant');
-    return;
-  }
-  localStorage.setItem('cart',JSON.stringify(cart));
-  showCart();
-}
-
-function removeFromCart(productId){
-  cart=cart.filter(item=>item.product_id!==productId);
-  localStorage.setItem('cart',JSON.stringify(cart));
-  showCart();
-}
-
-function showCart(){
-  const modal=document.getElementById('cart-modal');
-  const itemsDiv=document.getElementById('cart-items');
-  const totalDiv=document.getElementById('cart-total');
-  if(cart.length===0){
-    itemsDiv.innerHTML='<p style="text-align:center;padding:40px;color:#999;">Panier vide</p>';
-    totalDiv.innerHTML='';
-  }else{
-    itemsDiv.innerHTML=cart.map(item=>{
-      const product=products.find(p=>p.id===item.product_id);
-      if(!product)return '';
-      return `<div class="cart-item"><div><strong>${product.name}</strong><br><span style="color:#27ae60;">${product.price}€</span> x ${item.quantity}</div><div><button onclick="updateCartQuantity(${item.product_id},-1)">-</button><span style="margin:0 10px;">${item.quantity}</span><button onclick="updateCartQuantity(${item.product_id},1)">+</button><button class="delete" onclick="removeFromCart(${item.product_id})">🗑️</button></div></div>`;
-    }).join('');
-    totalDiv.innerHTML=`<h2>${getCartTotal().toFixed(2)} €</h2><p>${getCartCount()} article(s)</p>`;
-  }
-  modal.classList.add('show');
-}
-
-function closeCart(){
-  document.getElementById('cart-modal').classList.remove('show');
-}
-
-function showCheckout(){
-  if(cart.length===0){
-    alert('Panier vide');
-    return;
-  }
-  document.getElementById('cart-modal').classList.remove('show');
-  updateCheckoutTotal();
-  document.getElementById('checkout-modal').classList.add('show');
-}
-
-function closeCheckout(){
-  document.getElementById('checkout-modal').classList.remove('show');
-  showCart();
-}
-
-async function submitOrder(){
-  const name=document.getElementById('customer-name').value.trim();
-  const contact=document.getElementById('customer-contact').value.trim();
-  const address=document.getElementById('customer-address').value.trim();
-  const shippingType=document.getElementById('shipping-type').value;
-  const notes=document.getElementById('customer-notes').value.trim();
-  const errorDiv=document.getElementById('checkout-error');
-  
-  if(!name||!contact){
-    errorDiv.textContent='Nom et contact requis';
-    return;
-  }
-  
-  if(!address||address.length<15){
-    errorDiv.textContent='Adresse complète requise (min 15 caractères)';
-    return;
-  }
-  
-  if(!shippingType){
-    errorDiv.textContent='Type de livraison requis';
-    return;
-  }
-  
-  if(shippingType==='express' && calculatedDistance<=0){
-    errorDiv.textContent='Distance non calculée. Veuillez sélectionner à nouveau le type de livraison Express.';
-    return;
-  }
-  
-  const orderData={
-    customer_name:name,
-    customer_contact:contact,
-    customer_address:address,
-    customer_notes:notes,
-    shipping_type:shippingType,
-    distance_km:shippingType==='express'?calculatedDistance:0,
-    items:cart
-  };
-  
-  try{
-    const res=await fetch('/api/orders',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(orderData)
-    });
-    const data=await res.json();
-    if(res.ok){
-      cart=[];
-      localStorage.removeItem('cart');
-      calculatedDistance=0;
-      document.getElementById('checkout-modal').classList.remove('show');
-      alert(`✅ Commande validée!\\n\\nNuméro: ${data.order.order_number}\\nTotal: ${data.order.total.toFixed(2)}€\\n\\nVous serez contacté!`);
-      render();
-    }else{
-      errorDiv.textContent=data.error||'Erreur';
-    }
-  }catch(e){
-    errorDiv.textContent='Erreur réseau';
-  }
-}
-
-function render(){
-  const adminControls=document.getElementById('admin-controls');
-  const content=document.getElementById('content');
-  const cartCount=getCartCount();
-  const cartBadge=cartCount>0?`<span class="badge cart">🛒 Panier<span class="cart-count">${cartCount}</span></span>`:'';
-  if(adminToken){
-    adminControls.innerHTML=`<span class="badge">Admin</span><button onclick="showForm()">➕ Ajouter</button><button onclick="logout()">Déconnexion</button>${cartBadge?`<button onclick="showCart()">${cartBadge}</button>`:''}`;
-  }else{
-    adminControls.innerHTML=`<button onclick="showLogin()">Mode Admin</button>${cartBadge?`<button onclick="showCart()">${cartBadge}</button>`:''}`;
-  }
-  if(products.length===0){
-    content.innerHTML='<div class="empty"><h2>📦 Catalogue vide</h2><p>Aucun produit</p></div>';
-  }else{
-    content.innerHTML=products.map(p=>`<div class="card">${p.image_url?`<img src="${p.image_url}" alt="${p.name}">`:''}${p.video_url?`<video src="${p.video_url}" controls></video>`:''}<h3>${p.name}</h3>${p.category?`<p><em>${p.category}</em></p>`:''}<p>${p.description||''}</p><p class="price">${p.price} €</p><p>Stock: ${p.stock}</p>${p.stock>0?`<button class="success" onclick="addToCart(${p.id})">🛒 Ajouter</button>`:'<p style="color:#e74c3c;">Rupture</p>'}${adminToken?`<button onclick="editProduct(${p.id})">✏️</button><button class="delete" onclick="deleteProduct(${p.id})">🗑️</button>`:''}</div>`).join('');
-  }
-}
-
-function showLogin(){
-  document.getElementById('login-modal').classList.add('show');
-  document.getElementById('login-error').textContent='';
-}
-
-function closeLogin(){
-  document.getElementById('login-modal').classList.remove('show');
-}
-
-async function login(){
-  const password=document.getElementById('password-input').value;
-  const errorDiv=document.getElementById('login-error');
-  try{
-    const res=await fetch('/api/admin/login',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({password})
-    });
-    const data=await res.json();
-    if(res.ok&&data.token){
-      adminToken=data.token;
-      sessionStorage.setItem('adminToken',adminToken);
-      closeLogin();
-      render();
-      alert('✅ Connecté');
-    }else{
-      errorDiv.textContent=data.error||'Erreur';
-    }
-  }catch(e){
-    errorDiv.textContent='Erreur réseau';
-  }
-}
-
-async function logout(){
-  await fetch('/api/admin/logout',{
-    method:'POST',
-    headers:{'X-Admin-Token':adminToken}
-  });
-  adminToken='';
-  sessionStorage.removeItem('adminToken');
-  render();
-}
-
-function showForm(){
-  editingProduct=null;
-  currentImageUrl='';
-  currentVideoUrl='';
-  document.getElementById('form-title').textContent='Nouveau produit';
-  document.getElementById('name').value='';
-  document.getElementById('price').value='';
-  document.getElementById('category').value='';
-  document.getElementById('stock').value='';
-  document.getElementById('description').value='';
-  document.getElementById('file-input').value='';
-  document.getElementById('file-status').innerHTML='';
-  document.getElementById('form-modal').classList.add('show');
-}
-
-function editProduct(id){
-  const product=products.find(p=>p.id===id);
-  if(!product)return;
-  editingProduct=product;
-  currentImageUrl=product.image_url||'';
-  currentVideoUrl=product.video_url||'';
-  document.getElementById('form-title').textContent='Modifier';
-  document.getElementById('name').value=product.name;
-  document.getElementById('price').value=product.price;
-  document.getElementById('category').value=product.category||'';
-  document.getElementById('stock').value=product.stock;
-  document.getElementById('description').value=product.description||'';
-  document.getElementById('file-status').innerHTML=(currentImageUrl||currentVideoUrl)?'<p style="color:green">✓ Fichier existant</p>':'';
-  document.getElementById('form-modal').classList.add('show');
-}
-
-function closeForm(){
-  document.getElementById('form-modal').classList.remove('show');
-}
-
-document.getElementById('file-input').addEventListener('change',async function(e){
-  const file=e.target.files[0];
-  if(!file)return;
-  const fd=new FormData();
-  fd.append('file',file);
-  document.getElementById('file-status').innerHTML='<p>⏳ Upload...</p>';
-  try{
-    const res=await fetch('/api/upload',{
-      method:'POST',
-      headers:{'X-Admin-Token':adminToken},
-      body:fd
-    });
-    const data=await res.json();
-    if(data.url){
-      if(file.type.startsWith('video')){
-        currentVideoUrl=data.url;
-        currentImageUrl='';
-      }else{
-        currentImageUrl=data.url;
-        currentVideoUrl='';
-      }
-      document.getElementById('file-status').innerHTML='<p style="color:green">✅ Uploadé</p>';
-    }else{
-      alert('Erreur upload');
-      document.getElementById('file-status').innerHTML='';
-    }
-  }catch(e){
-    alert('Erreur');
-    document.getElementById('file-status').innerHTML='';
-  }
-});
-
-async function saveProduct(){
-  const name=document.getElementById('name').value;
-  const price=document.getElementById('price').value;
-  if(!name||!price){
-    alert('Nom et prix requis');
-    return;
-  }
-  const data={
-    name,
-    price:parseFloat(price),
-    category:document.getElementById('category').value,
-    stock:parseInt(document.getElementById('stock').value)||0,
-    description:document.getElementById('description').value,
-    image_url:currentImageUrl,
-    video_url:currentVideoUrl
-  };
-  const url=editingProduct?`/api/admin/products/${editingProduct.id}`:'/api/admin/products';
-  const method=editingProduct?'PUT':'POST';
-  try{
-    const res=await fetch(url,{
-      method,
-      headers:{'Content-Type':'application/json','X-Admin-Token':adminToken},
-      body:JSON.stringify(data)
-    });
-    if(res.ok){
-      closeForm();
-      await loadProducts();
-      render();
-      alert('✅ Sauvegardé');
-    }else{
-      const err=await res.json();
-      alert('Erreur: '+(err.error||''));
-    }
-  }catch(e){
-    alert('Erreur');
-  }
-}
-
-async function deleteProduct(id){
-  if(!confirm('Supprimer?'))return;
-  try{
-    const res=await fetch(`/api/admin/products/${id}`,{
-      method:'DELETE',
-      headers:{'X-Admin-Token':adminToken}
-    });
-    if(res.ok){
-      await loadProducts();
-      render();
-      alert('✅ Supprimé');
-    }
-  }catch(e){
-    alert('Erreur');
-  }
-}
-
-document.querySelectorAll('.modal').forEach(modal=>{
-  modal.addEventListener('click',e=>{
-    if(e.target===modal)modal.classList.remove('show');
-  });
-});
-
-init();
-</script>
-</body>
-</html>''' % {'bg': BACKGROUND_IMAGE}
-        return html, 200
-    except Exception as e:
-        logger.error(f"Erreur route catalogue: {e}")
-        return "Erreur serveur", 500
-    try:
-        html = '''<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<title>Catalogue & Commandes</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body {
-  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-  background: url('%(bg)s') center center fixed;
-  background-size: cover;
-  min-height: 100vh;
-  padding: 15px;
-  position: relative;
-}
-body::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.3);
-  z-index: 0;
-}
-.container {
-  max-width: 800px;
-  margin: 0 auto;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-  position: relative;
-  z-index: 1;
-  backdrop-filter: blur(10px);
-}
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-h1 { color: #333; font-size: 24px; }
-.back-btn, button {
-  background: #6c757d;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 600;
-  text-decoration: none;
-  display: inline-block;
-  margin: 5px;
-}
-.back-btn:hover { background: #5a6268; }
-button { background: #667eea; }
-button:hover { background: #5568d3; }
-button.delete { background: #e74c3c; }
-button.delete:hover { background: #c0392b; }
-button.success { background: #27ae60; }
-button.success:hover { background: #229954; }
-input, textarea, select {
-  width: 100%%;
-  padding: 12px;
-  margin: 8px 0;
-  border: 2px solid #ddd;
-  border-radius: 6px;
-  font-size: 14px;
-}
-.card {
-  background: #f8f9fa;
-  border-radius: 8px;
-  padding: 15px;
-  margin: 15px 0;
-  border: 1px solid #e0e0e0;
-}
-.card img, .card video {
-  width: 100%%;
-  max-height: 250px;
-  object-fit: cover;
-  border-radius: 6px;
-  margin-bottom: 10px;
-}
-.card h3 { color: #333; margin: 10px 0; }
-.card p { color: #666; margin: 5px 0; }
-.price { font-size: 22px; color: #27ae60; font-weight: bold; }
-.modal {
-  display: none;
-  position: fixed;
-  top: 0; left: 0;
-  width: 100%%; height: 100%%;
-  background: rgba(0,0,0,0.7);
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-.modal.show { display: flex; }
-.modal-content {
-  background: white;
-  padding: 30px;
-  border-radius: 12px;
-  max-width: 500px;
-  width: 90%%;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-.badge {
-  background: #27ae60;
-  color: white;
-  padding: 5px 10px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: bold;
-}
-.badge.cart {
-  background: #667eea;
-  position: relative;
-  margin-left: 10px;
-}
-.cart-count {
-  position: absolute;
-  top: -8px;
-  right: -8px;
-  background: #e74c3c;
-  color: white;
-  border-radius: 50%%;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-}
-.cart-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  margin: 10px 0;
-}
-.total-section {
-  background: #667eea;
-  color: white;
-  padding: 20px;
-  border-radius: 8px;
-  margin: 20px 0;
-  text-align: center;
-}
-.total-section h2 {
-  font-size: 32px;
-  margin: 10px 0;
-}
-.loading, .empty, .error {
-  text-align: center;
-  padding: 40px;
-  color: #666;
-}
-.error { color: #e74c3c; }
-.form-group { margin: 15px 0; }
-.form-group label {
-  display: block;
-  font-weight: 600;
-  margin-bottom: 5px;
-  color: #333;
-}
-</style>
-</head>
-<body>
-<div class="container">
-  <div class="header">
-    <div>
-      <a href="/" class="back-btn">← Retour</a>
-      <h1 style="display: inline; margin-left: 15px;">🛒 Catalogue</h1>
-    </div>
-    <div id="admin-controls"></div>
-  </div>
-  <div id="content" class="loading">Chargement...</div>
-</div>
-<div id="login-modal" class="modal">
-  <div class="modal-content">
-    <h2>🔐 Connexion Admin</h2>
-    <input type="password" id="password-input" placeholder="Mot de passe">
-    <button onclick="login()">Se connecter</button>
-    <button onclick="closeLogin()">Annuler</button>
-    <div id="login-error" style="color:red;margin-top:10px;"></div>
-  </div>
-</div>
-<div id="form-modal" class="modal">
-  <div class="modal-content">
-    <h3 id="form-title">Nouveau produit</h3>
-    <input type="text" id="name" placeholder="Nom *">
-    <input type="number" id="price" step="0.01" placeholder="Prix (€) *">
-    <input type="text" id="category" placeholder="Catégorie">
-    <input type="number" id="stock" placeholder="Stock">
-    <textarea id="description" rows="3" placeholder="Description"></textarea>
-    <input type="file" id="file-input" accept="image/*,video/*">
-    <div id="file-status"></div>
-    <button onclick="saveProduct()">💾 Sauvegarder</button>
-    <button onclick="closeForm()">Annuler</button>
-  </div>
-</div>
-<div id="cart-modal" class="modal">
-  <div class="modal-content">
-    <h2>🛒 Mon Panier</h2>
-    <div id="cart-items"></div>
-    <div class="total-section" id="cart-total"></div>
-    <button class="success" onclick="showCheckout()">✅ Commander</button>
-    <button onclick="closeCart()">Continuer mes achats</button>
-  </div>
-</div>
-<div id="checkout-modal" class="modal">
-  <div class="modal-content">
-    <h2>📋 Finaliser la commande</h2>
-    <div class="form-group">
-      <label for="customer-name">Votre nom *</label>
-      <input type="text" id="customer-name" placeholder="Jean Dupont">
-    </div>
-    <div class="form-group">
-      <label for="customer-contact">Téléphone ou Email *</label>
-      <input type="text" id="customer-contact" placeholder="+33 6 12 34 56 78">
-    </div>
-    <div class="form-group">
-      <label for="customer-address">Adresse de livraison *</label>
-      <textarea id="customer-address" rows="3" placeholder="123 Rue de la Paix, 75001 Paris, France"></textarea>
-    </div>
-    <div class="form-group">
-      <label for="shipping-type">Type de livraison *</label>
-      <select id="shipping-type" onchange="handleShippingChange()">
-        <option value="">-- Sélectionner --</option>
-        <option value="postal">📦 Postale (+10€) - 3-5 jours</option>
-        <option value="express">⚡ Express (calculé automatiquement) - 24-48h</option>
-      </select>
-    </div>
-    <div id="express-info" style="display:none; margin: 15px 0; padding: 10px; background: #e3f2fd; border-radius: 6px;">
-      <p style="margin:0; color:#1976d2;">
-        <strong>ℹ️ Calcul automatique de distance</strong><br>
-        La distance sera calculée automatiquement depuis notre entrepôt jusqu'à votre adresse.
-      </p>
-    </div>
-    <div id="distance-result" style="display:none; margin: 15px 0; padding: 10px; background: #e8f5e9; border-radius: 6px; border-left: 4px solid #4caf50;">
-      <div id="distance-detail"></div>
-    </div>
-    <div class="form-group">
-      <label for="customer-notes">Notes ou instructions particulières</label>
-      <textarea id="customer-notes" rows="2" placeholder="Sonnez 2 fois, code portail: 1234..."></textarea>
-    </div>
-    <div class="total-section" id="checkout-total"></div>
-    <button class="success" onclick="submitOrder()">🚀 Valider la commande</button>
-    <button onclick="closeCheckout()">Retour au panier</button>
-    <div id="checkout-error" style="color:red;margin-top:10px;"></div>
-  </div>
-</div>
-<script>
-let adminToken=sessionStorage.getItem('adminToken')||'';
-let products=[];
-let cart=JSON.parse(localStorage.getItem('cart')||'[]');
-let editingProduct=null;
-let currentImageUrl='';
-let currentVideoUrl='';
-let calculatedDistance=0; // Distance calculée automatiquement
-
-async function init(){
-  try{
-    await checkAdmin();
-    await loadProducts();
-    render();
-  }catch(e){
-    document.getElementById('content').innerHTML='<div class="error">❌ Erreur</div>';
-  }
-}
-
-async function checkAdmin(){
-  try{
-    const res=await fetch('/api/admin/check',{headers:{'X-Admin-Token':adminToken}});
-    if(!res.ok)throw new Error('Erreur');
-    const data=await res.json();
-    if(!data.admin){
-      adminToken='';
-      sessionStorage.removeItem('adminToken');
-    }
-    return data.admin;
-  }catch(e){
-    adminToken='';
-    sessionStorage.removeItem('adminToken');
-    return false;
-  }
-}
-
-async function loadProducts(){
-  const res=await fetch('/api/products');
-  if(!res.ok)throw new Error('Erreur');
-  products=await res.json();
-}
-
-function getCartCount(){
-  return cart.reduce((sum,item)=>sum+item.quantity,0);
-}
-
-function getCartTotal(){
-  return cart.reduce((sum,item)=>{
-    const product=products.find(p=>p.id===item.product_id);
-    return sum+(product?product.price*item.quantity:0);
-  },0);
-}
-
-function calculateShippingFee(){
-  const shippingType=document.getElementById('shipping-type').value;
-  const subtotal=getCartTotal();
-  
-  if(shippingType==='postal'){
-    return 10;
-  }else if(shippingType==='express'){
-    if(calculatedDistance<=0)return 0;
-    const baseFee=(calculatedDistance*2)+(subtotal*0.03);
-    return Math.ceil(baseFee/10)*10;
-  }
-  return 0;
-}
-
-async function handleShippingChange(){
-  const shippingType=document.getElementById('shipping-type').value;
-  const expressInfo=document.getElementById('express-info');
-  const distanceResult=document.getElementById('distance-result');
-  
-  if(shippingType==='express'){
-    expressInfo.style.display='block';
-    
-    // Calculer automatiquement la distance
-    const address=document.getElementById('customer-address').value.trim();
-    
-    if(address.length>=15){
-      await calculateDistance(address);
-    }else{
-      distanceResult.style.display='none';
-      alert('Veuillez d\'abord entrer une adresse complète (min 15 caractères)');
-      document.getElementById('shipping-type').value='';
-    }
-  }else{
-    expressInfo.style.display='none';
-    distanceResult.style.display='none';
-    calculatedDistance=0;
-  }
-  
-  updateCheckoutTotal();
-}
-
-async function calculateDistance(address){
-  const distanceResult=document.getElementById('distance-result');
-  const distanceDetail=document.getElementById('distance-detail');
-  
-  try{
-    distanceDetail.innerHTML='<p style="margin:0; color:#666;">⏳ Calcul de la distance en cours...</p>';
-    distanceResult.style.display='block';
-    
-    const res=await fetch('/api/calculate-distance',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({address})
-    });
-    
-    const data=await res.json();
-    
-    if(res.ok && data.success){
-      calculatedDistance=data.distance_km;
-      
-      const subtotal=getCartTotal();
-      const distanceFee=calculatedDistance*2;
-      const percentFee=subtotal*0.03;
-      const rawTotal=distanceFee+percentFee;
-      const finalFee=Math.ceil(rawTotal/10)*10;
-      
-      distanceDetail.innerHTML=`
-        <p style="margin:0 0 10px 0;"><strong>✅ Distance calculée: ${calculatedDistance} km</strong></p>
-        <div style="font-size:14px; color:#666;">
-          <div>• Distance: ${calculatedDistance} km × 2€ = ${distanceFee.toFixed(2)}€</div>
-          <div>• Pourcentage: ${subtotal.toFixed(2)}€ × 3% = ${percentFee.toFixed(2)}€</div>
-          <div>• Total brut: ${rawTotal.toFixed(2)}€</div>
-          <div style="font-weight:bold; color:#2e7d32;">• Arrondi dizaine sup.: ${finalFee}€</div>
-        </div>
-      `;
-      
-      updateCheckoutTotal();
-    }else{
-      calculatedDistance=0;
-      distanceDetail.innerHTML=`<p style="margin:0; color:#d32f2f;">❌ ${data.error || 'Erreur de calcul'}</p>`;
-      document.getElementById('shipping-type').value='';
-    }
-  }catch(e){
-    calculatedDistance=0;
-    distanceDetail.innerHTML='<p style="margin:0; color:#d32f2f;">❌ Erreur de connexion</p>';
-    document.getElementById('shipping-type').value='';
-  }
-}
-
-function updateShippingFee(){
-  updateCheckoutTotal();
 }
 
 function updateCheckoutTotal(){

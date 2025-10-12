@@ -13,6 +13,15 @@ import json
 import math
 from datetime import datetime, timedelta
 
+# Géolocalisation
+try:
+    from geopy.geocoders import Nominatim
+    from geopy.distance import geodesic
+    GEOPY_AVAILABLE = True
+except ImportError:
+    GEOPY_AVAILABLE = False
+    logger.warning("⚠️ geopy non installé")
+
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
@@ -26,6 +35,7 @@ CORS(app, supports_credentials=True, origins=['*'])
 ADMIN_PASSWORD_HASH = hashlib.sha256(os.environ.get('ADMIN_PASSWORD', 'changeme123').encode()).hexdigest()
 TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 TELEGRAM_ADMIN_ID = os.environ.get('TELEGRAM_ADMIN_ID')
+ADMIN_ADDRESS = os.environ.get('ADMIN_ADDRESS', 'Chamonix-Mont-Blanc, France')  # Adresse de départ pour calcul distance
 BACKGROUND_IMAGE = os.environ.get('BACKGROUND_URL', 'https://res.cloudinary.com/dfhrrtzsd/image/upload/v1760118433/ChatGPT_Image_8_oct._2025_03_01_21_zm5zfy.png')
 
 limiter = Limiter(app=app, key_func=get_remote_address, default_limits=["200 per day", "50 per hour"], storage_uri="memory://")
@@ -60,6 +70,43 @@ def calculate_delivery_fee(delivery_type: str, distance: float = 0, subtotal: fl
         base_fee = (distance * 2) + (subtotal * 0.03)
         return math.ceil(base_fee / 10) * 10
     return 0
+
+async def get_distance_between_addresses(address1: str, address2: str):
+    """
+    Calcule la distance entre deux adresses (comme dans bot.py)
+    Retourne (distance_km, success, error_message)
+    """
+    if not GEOPY_AVAILABLE:
+        logger.error("geopy n'est pas installé")
+        return (0, False, "Module de géolocalisation non disponible")
+    
+    try:
+        geolocator = Nominatim(user_agent="carte_du_pirate_webapp")
+        
+        # Géocoder les deux adresses
+        location1 = geolocator.geocode(address1, timeout=10)
+        location2 = geolocator.geocode(address2, timeout=10)
+        
+        if not location1:
+            return (0, False, f"Adresse de départ introuvable: {address1}")
+        
+        if not location2:
+            return (0, False, f"Adresse de livraison introuvable: {address2}")
+        
+        # Calculer la distance
+        coords1 = (location1.latitude, location1.longitude)
+        coords2 = (location2.latitude, location2.longitude)
+        
+        distance = geodesic(coords1, coords2).kilometers
+        distance_rounded = round(distance, 1)
+        
+        logger.info(f"Distance calculée: {distance_rounded} km entre {address1} et {address2}")
+        
+        return (distance_rounded, True, None)
+        
+    except Exception as e:
+        logger.error(f"Erreur calcul distance: {e}")
+        return (0, False, str(e))
 
 def load_json_file(filename, default=[]):
     if os.path.exists(filename):
@@ -498,6 +545,55 @@ def delete_product(pid):
     except:
         return jsonify({'error': 'Erreur suppression'}), 500
 
+@app.route('/api/calculate-distance', methods=['POST'])
+def calculate_distance():
+    """Calcule automatiquement la distance depuis l'adresse admin"""
+    try:
+        data = request.json or {}
+        client_address = data.get('address', '').strip()
+        
+        if not client_address or len(client_address) < 15:
+            return jsonify({'error': 'Adresse invalide (min 15 caractères)'}), 400
+        
+        if not GEOPY_AVAILABLE:
+            return jsonify({'error': 'Service de géolocalisation non disponible'}), 503
+        
+        # Calcul de la distance (synchrone ici, pas besoin d'async dans Flask)
+        try:
+            geolocator = Nominatim(user_agent="carte_du_pirate_webapp")
+            
+            location1 = geolocator.geocode(ADMIN_ADDRESS, timeout=10)
+            location2 = geolocator.geocode(client_address, timeout=10)
+            
+            if not location1:
+                return jsonify({'error': f'Adresse de départ introuvable: {ADMIN_ADDRESS}'}), 400
+            
+            if not location2:
+                return jsonify({'error': 'Adresse de livraison introuvable. Vérifiez l\'adresse.'}), 400
+            
+            coords1 = (location1.latitude, location1.longitude)
+            coords2 = (location2.latitude, location2.longitude)
+            
+            distance = geodesic(coords1, coords2).kilometers
+            distance_rounded = round(distance, 1)
+            
+            logger.info(f"✅ Distance calculée: {distance_rounded} km")
+            
+            return jsonify({
+                'success': True,
+                'distance_km': distance_rounded,
+                'from': ADMIN_ADDRESS,
+                'to': client_address
+            }), 200
+            
+        except Exception as e:
+            logger.error(f"Erreur géolocalisation: {e}")
+            return jsonify({'error': f'Erreur de géolocalisation: {str(e)}'}), 500
+        
+    except Exception as e:
+        logger.error(f"Erreur calcul distance: {e}")
+        return jsonify({'error': 'Erreur serveur'}), 500
+
 @app.route('/api/orders', methods=['POST'])
 @limiter.limit("5 per hour")
 def create_order():
@@ -873,24 +969,24 @@ input, textarea, select {
     </div>
     <div class="form-group">
       <label for="shipping-type">Type de livraison *</label>
-      <select id="shipping-type" onchange="updateShippingFee()">
+      <select id="shipping-type" onchange="handleShippingChange()">
         <option value="">-- Sélectionner --</option>
         <option value="postal">📦 Postale (+10€) - 3-5 jours</option>
-        <option value="express">⚡ Express (calculé selon distance) - 24-48h</option>
+        <option value="express">⚡ Express (calculé automatiquement) - 24-48h</option>
       </select>
     </div>
-    <div id="express-distance" style="display:none;" class="form-group">
-      <label for="distance-km">Distance en km *</label>
-      <input type="number" id="distance-km" placeholder="50" min="1" max="500" onchange="updateShippingFee()">
-      <small style="color:#666;">Formule: (Distance × 2€) + (Sous-total × 3%), arrondi à la dizaine supérieure</small>
+    <div id="express-info" style="display:none; margin: 15px 0; padding: 10px; background: #e3f2fd; border-radius: 6px;">
+      <p style="margin:0; color:#1976d2;">
+        <strong>ℹ️ Calcul automatique de distance</strong><br>
+        La distance sera calculée automatiquement depuis notre entrepôt jusqu'à votre adresse.
+      </p>
+    </div>
+    <div id="distance-result" style="display:none; margin: 15px 0; padding: 10px; background: #e8f5e9; border-radius: 6px; border-left: 4px solid #4caf50;">
+      <div id="distance-detail"></div>
     </div>
     <div class="form-group">
       <label for="customer-notes">Notes ou instructions particulières</label>
       <textarea id="customer-notes" rows="2" placeholder="Sonnez 2 fois, code portail: 1234..."></textarea>
-    </div>
-    <div id="shipping-calculation" style="margin: 15px 0; padding: 10px; background: #f0f0f0; border-radius: 6px; display:none;">
-      <strong>Détail des frais de livraison:</strong>
-      <div id="shipping-detail"></div>
     </div>
     <div class="total-section" id="checkout-total"></div>
     <button class="success" onclick="submitOrder()">🚀 Valider la commande</button>
@@ -905,6 +1001,7 @@ let cart=JSON.parse(localStorage.getItem('cart')||'[]');
 let editingProduct=null;
 let currentImageUrl='';
 let currentVideoUrl='';
+let calculatedDistance=0; // Distance calculée automatiquement
 
 async function init(){
   try{
@@ -957,45 +1054,89 @@ function calculateShippingFee(){
   if(shippingType==='postal'){
     return 10;
   }else if(shippingType==='express'){
-    const distance=parseFloat(document.getElementById('distance-km').value)||0;
-    if(distance<=0)return 0;
-    const baseFee=(distance*2)+(subtotal*0.03);
+    if(calculatedDistance<=0)return 0;
+    const baseFee=(calculatedDistance*2)+(subtotal*0.03);
     return Math.ceil(baseFee/10)*10;
   }
   return 0;
 }
 
-function updateShippingFee(){
+async function handleShippingChange(){
   const shippingType=document.getElementById('shipping-type').value;
-  const expressDiv=document.getElementById('express-distance');
-  const calcDiv=document.getElementById('shipping-calculation');
-  const detailDiv=document.getElementById('shipping-detail');
+  const expressInfo=document.getElementById('express-info');
+  const distanceResult=document.getElementById('distance-result');
   
   if(shippingType==='express'){
-    expressDiv.style.display='block';
-    const distance=parseFloat(document.getElementById('distance-km').value)||0;
-    if(distance>0){
-      calcDiv.style.display='block';
+    expressInfo.style.display='block';
+    
+    // Calculer automatiquement la distance
+    const address=document.getElementById('customer-address').value.trim();
+    
+    if(address.length>=15){
+      await calculateDistance(address);
+    }else{
+      distanceResult.style.display='none';
+      alert('Veuillez d\'abord entrer une adresse complète (min 15 caractères)');
+      document.getElementById('shipping-type').value='';
+    }
+  }else{
+    expressInfo.style.display='none';
+    distanceResult.style.display='none';
+    calculatedDistance=0;
+  }
+  
+  updateCheckoutTotal();
+}
+
+async function calculateDistance(address){
+  const distanceResult=document.getElementById('distance-result');
+  const distanceDetail=document.getElementById('distance-detail');
+  
+  try{
+    distanceDetail.innerHTML='<p style="margin:0; color:#666;">⏳ Calcul de la distance en cours...</p>';
+    distanceResult.style.display='block';
+    
+    const res=await fetch('/api/calculate-distance',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({address})
+    });
+    
+    const data=await res.json();
+    
+    if(res.ok && data.success){
+      calculatedDistance=data.distance_km;
+      
       const subtotal=getCartTotal();
-      const distanceFee=distance*2;
+      const distanceFee=calculatedDistance*2;
       const percentFee=subtotal*0.03;
       const rawTotal=distanceFee+percentFee;
       const finalFee=Math.ceil(rawTotal/10)*10;
       
-      detailDiv.innerHTML=`
-        <div style="margin:5px 0;">• Distance: ${distance} km × 2€ = ${distanceFee.toFixed(2)}€</div>
-        <div style="margin:5px 0;">• Pourcentage: ${subtotal.toFixed(2)}€ × 3%% = ${percentFee.toFixed(2)}€</div>
-        <div style="margin:5px 0;">• Total brut: ${rawTotal.toFixed(2)}€</div>
-        <div style="margin:5px 0; font-weight:bold;">• Arrondi dizaine sup.: ${finalFee}€</div>
+      distanceDetail.innerHTML=`
+        <p style="margin:0 0 10px 0;"><strong>✅ Distance calculée: ${calculatedDistance} km</strong></p>
+        <div style="font-size:14px; color:#666;">
+          <div>• Distance: ${calculatedDistance} km × 2€ = ${distanceFee.toFixed(2)}€</div>
+          <div>• Pourcentage: ${subtotal.toFixed(2)}€ × 3% = ${percentFee.toFixed(2)}€</div>
+          <div>• Total brut: ${rawTotal.toFixed(2)}€</div>
+          <div style="font-weight:bold; color:#2e7d32;">• Arrondi dizaine sup.: ${finalFee}€</div>
+        </div>
       `;
+      
+      updateCheckoutTotal();
     }else{
-      calcDiv.style.display='none';
+      calculatedDistance=0;
+      distanceDetail.innerHTML=`<p style="margin:0; color:#d32f2f;">❌ ${data.error || 'Erreur de calcul'}</p>`;
+      document.getElementById('shipping-type').value='';
     }
-  }else{
-    expressDiv.style.display='none';
-    calcDiv.style.display='none';
+  }catch(e){
+    calculatedDistance=0;
+    distanceDetail.innerHTML='<p style="margin:0; color:#d32f2f;">❌ Erreur de connexion</p>';
+    document.getElementById('shipping-type').value='';
   }
-  
+}
+
+function updateShippingFee(){
   updateCheckoutTotal();
 }
 
@@ -1114,13 +1255,9 @@ async function submitOrder(){
     return;
   }
   
-  let distanceKm=0;
-  if(shippingType==='express'){
-    distanceKm=parseFloat(document.getElementById('distance-km').value)||0;
-    if(distanceKm<=0||distanceKm>500){
-      errorDiv.textContent='Distance invalide (entre 1 et 500 km)';
-      return;
-    }
+  if(shippingType==='express' && calculatedDistance<=0){
+    errorDiv.textContent='Distance non calculée. Veuillez sélectionner à nouveau le type de livraison Express.';
+    return;
   }
   
   const orderData={
@@ -1129,7 +1266,7 @@ async function submitOrder(){
     customer_address:address,
     customer_notes:notes,
     shipping_type:shippingType,
-    distance_km:distanceKm,
+    distance_km:shippingType==='express'?calculatedDistance:0,
     items:cart
   };
   
@@ -1143,8 +1280,9 @@ async function submitOrder(){
     if(res.ok){
       cart=[];
       localStorage.removeItem('cart');
+      calculatedDistance=0;
       document.getElementById('checkout-modal').classList.remove('show');
-      alert(`✅ Commande validée!\\n\\nNuméro: ${data.order.order_number}\\nTotal: ${data.order.total}€\\n\\nVous serez contacté!`);
+      alert(`✅ Commande validée!\\n\\nNuméro: ${data.order.order_number}\\nTotal: ${data.order.total.toFixed(2)}€\\n\\nVous serez contacté!`);
       render();
     }else{
       errorDiv.textContent=data.error||'Erreur';

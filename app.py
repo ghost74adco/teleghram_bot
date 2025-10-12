@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -49,8 +49,23 @@ def load_json_file(filename, default=[]):
     if os.path.exists(filename):
         try:
             with open(filename, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+                content = f.read().strip()
+                if not content:
+                    logger.warning(f"{filename} est vide, initialisation")
+                    save_json_file(filename, default)
+                    return default
+                data = json.loads(content)
                 return data if isinstance(data, list) else default
+        except json.JSONDecodeError as e:
+            logger.error(f"Erreur JSON dans {filename}: {e}")
+            try:
+                import shutil
+                shutil.copy(filename, f"{filename}.backup")
+                logger.warning(f"Backup créé")
+            except:
+                pass
+            save_json_file(filename, default)
+            return default
         except Exception as e:
             logger.warning(f"Erreur lecture {filename}: {e}")
             return default
@@ -69,18 +84,12 @@ products = load_json_file(PRODUCTS_FILE)
 orders = load_json_file(ORDERS_FILE)
 
 def send_telegram_message(text):
-    """Envoie un message à l'admin via Telegram"""
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_ADMIN_ID:
         logger.warning("Configuration Telegram manquante")
         return False
-    
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-        data = {
-            "chat_id": TELEGRAM_ADMIN_ID,
-            "text": text,
-            "parse_mode": "HTML"
-        }
+        data = {"chat_id": TELEGRAM_ADMIN_ID, "text": text, "parse_mode": "HTML"}
         response = requests.post(url, json=data, timeout=10)
         return response.status_code == 200
     except Exception as e:
@@ -93,7 +102,6 @@ def hash_password(password):
 def check_rate_limit(ip):
     if ip not in failed_login_attempts:
         failed_login_attempts[ip] = {'count': 0, 'blocked_until': None}
-    
     attempt = failed_login_attempts[ip]
     if attempt['blocked_until']:
         if datetime.now() < attempt['blocked_until']:
@@ -106,7 +114,6 @@ def check_rate_limit(ip):
 def register_failed_attempt(ip):
     if ip not in failed_login_attempts:
         failed_login_attempts[ip] = {'count': 0, 'blocked_until': None}
-    
     failed_login_attempts[ip]['count'] += 1
     if failed_login_attempts[ip]['count'] >= 5:
         failed_login_attempts[ip]['blocked_until'] = datetime.now() + timedelta(minutes=15)
@@ -119,7 +126,6 @@ def require_admin(f):
         token = request.headers.get('X-Admin-Token')
         if not token or token not in admin_tokens:
             return jsonify({'error': 'Non autorisé'}), 403
-        
         token_data = admin_tokens[token]
         if datetime.now() > token_data['expires']:
             del admin_tokens[token]
@@ -214,10 +220,7 @@ h1 {{
 
 @app.route('/health')
 def health():
-    try:
-        return jsonify({'status': 'ok'}), 200
-    except Exception as e:
-        return jsonify({'status': 'error'}), 500
+    return jsonify({'status': 'ok'}), 200
 
 @app.route('/api/admin/login', methods=['POST'])
 @limiter.limit("5 per 15 minutes")
@@ -227,10 +230,8 @@ def api_login():
         allowed, message = check_rate_limit(ip)
         if not allowed:
             return jsonify({'error': message}), 429
-        
         data = request.json or {}
         password_hash = hash_password(data.get('password', ''))
-        
         if password_hash == ADMIN_PASSWORD_HASH:
             token = secrets.token_urlsafe(32)
             admin_tokens[token] = {
@@ -241,13 +242,11 @@ def api_login():
             if ip in failed_login_attempts:
                 failed_login_attempts[ip]['count'] = 0
             return jsonify({'success': True, 'token': token})
-        
         blocked = register_failed_attempt(ip)
         if blocked:
             return jsonify({'error': 'Trop de tentatives. Compte bloqué 15 minutes.'}), 429
         return jsonify({'error': 'Mot de passe incorrect'}), 403
     except Exception as e:
-        logger.error(f"Erreur login")
         return jsonify({'error': 'Erreur serveur'}), 500
 
 @app.route('/api/admin/logout', methods=['POST'])
@@ -257,7 +256,7 @@ def api_logout():
         if token and token in admin_tokens:
             del admin_tokens[token]
         return jsonify({'success': True})
-    except Exception as e:
+    except:
         return jsonify({'success': False}), 500
 
 @app.route('/api/admin/check', methods=['GET'])
@@ -265,7 +264,6 @@ def api_check_admin():
     try:
         token = request.headers.get('X-Admin-Token')
         ip = get_remote_address()
-        
         is_admin = False
         if token and token in admin_tokens:
             if admin_tokens[token]['ip'] == ip:
@@ -276,7 +274,7 @@ def api_check_admin():
             else:
                 del admin_tokens[token]
         return jsonify({'admin': is_admin}), 200
-    except Exception as e:
+    except:
         return jsonify({'admin': False}), 200
 
 @app.route('/api/upload', methods=['POST'])
@@ -286,24 +284,22 @@ def upload_file():
     try:
         if 'file' not in request.files:
             return jsonify({'error': 'Aucun fichier'}), 400
-        
         file = request.files['file']
         file.seek(0, os.SEEK_END)
         file_length = file.tell()
         if file_length > 10 * 1024 * 1024:
             return jsonify({'error': 'Fichier trop gros (max 10MB)'}), 400
         file.seek(0)
-        
         result = cloudinary.uploader.upload(file, resource_type='auto', folder='catalogue', timeout=60)
         return jsonify({'url': result.get('secure_url')}), 200
-    except Exception as e:
+    except:
         return jsonify({'error': 'Erreur upload'}), 500
 
 @app.route('/api/products', methods=['GET'])
 def get_products():
     try:
         return jsonify(products), 200
-    except Exception as e:
+    except:
         return jsonify([]), 200
 
 @app.route('/api/admin/products', methods=['POST'])
@@ -314,7 +310,6 @@ def add_product():
         data = request.json or {}
         if not data.get('name') or not data.get('price'):
             return jsonify({'error': 'Nom et prix requis'}), 400
-        
         new_product = {
             "id": max([p["id"] for p in products]) + 1 if products else 1,
             "name": data.get("name"),
@@ -328,7 +323,7 @@ def add_product():
         products.append(new_product)
         save_json_file(PRODUCTS_FILE, products)
         return jsonify(new_product), 201
-    except Exception as e:
+    except:
         return jsonify({'error': 'Erreur création'}), 500
 
 @app.route('/api/admin/products/<int:pid>', methods=['PUT'])
@@ -350,7 +345,7 @@ def update_product(pid):
                 save_json_file(PRODUCTS_FILE, products)
                 return jsonify(p)
         return jsonify({'error': 'Produit non trouvé'}), 404
-    except Exception as e:
+    except:
         return jsonify({'error': 'Erreur modification'}), 500
 
 @app.route('/api/admin/products/<int:pid>', methods=['DELETE'])
@@ -364,38 +359,29 @@ def delete_product(pid):
             save_json_file(PRODUCTS_FILE, products)
             return jsonify({'success': True})
         return jsonify({'error': 'Produit non trouvé'}), 404
-    except Exception as e:
+    except:
         return jsonify({'error': 'Erreur suppression'}), 500
 
 @app.route('/api/orders', methods=['POST'])
 @limiter.limit("5 per hour")
 def create_order():
-    """Créer une nouvelle commande"""
     global orders
     try:
         data = request.json or {}
-        
-        # Validation
         if not data.get('items') or len(data.get('items', [])) == 0:
             return jsonify({'error': 'Panier vide'}), 400
-        
         if not data.get('customer_name') or not data.get('customer_contact'):
             return jsonify({'error': 'Nom et contact requis'}), 400
-        
-        # Calculer le total
         total = 0
         order_items = []
         for item in data['items']:
             product = next((p for p in products if p['id'] == item['product_id']), None)
             if not product:
                 return jsonify({'error': f'Produit {item["product_id"]} introuvable'}), 404
-            
             if product['stock'] < item['quantity']:
                 return jsonify({'error': f'Stock insuffisant pour {product["name"]}'}), 400
-            
             item_total = product['price'] * item['quantity']
             total += item_total
-            
             order_items.append({
                 'product_id': product['id'],
                 'product_name': product['name'],
@@ -403,8 +389,6 @@ def create_order():
                 'quantity': item['quantity'],
                 'subtotal': item_total
             })
-        
-        # Créer la commande
         order_id = max([o['id'] for o in orders]) + 1 if orders else 1
         new_order = {
             'id': order_id,
@@ -419,11 +403,8 @@ def create_order():
             'created_at': datetime.now().isoformat(),
             'updated_at': datetime.now().isoformat()
         }
-        
         orders.append(new_order)
         save_json_file(ORDERS_FILE, orders)
-        
-        # Envoyer notification Telegram à l'admin
         message = f"""🛒 <b>NOUVELLE COMMANDE #{new_order['order_number']}</b>
 
 👤 <b>Client:</b> {new_order['customer_name']}
@@ -434,21 +415,12 @@ def create_order():
 """
         for item in order_items:
             message += f"• {item['product_name']} x{item['quantity']} = {item['subtotal']}€\n"
-        
         message += f"\n💰 <b>TOTAL: {total}€</b>"
-        
         if new_order['customer_notes']:
             message += f"\n\n📝 <b>Notes:</b> {new_order['customer_notes']}"
-        
         message += f"\n\n⏰ {datetime.now().strftime('%d/%m/%Y à %H:%M')}"
-        
         send_telegram_message(message)
-        
-        return jsonify({
-            'success': True,
-            'order': new_order
-        }), 201
-        
+        return jsonify({'success': True, 'order': new_order}), 201
     except Exception as e:
         logger.error(f"Erreur création commande: {e}")
         return jsonify({'error': 'Erreur serveur'}), 500
@@ -456,32 +428,27 @@ def create_order():
 @app.route('/api/admin/orders', methods=['GET'])
 @require_admin
 def get_orders():
-    """Récupérer toutes les commandes (admin)"""
     try:
         return jsonify(orders), 200
-    except Exception as e:
+    except:
         return jsonify([]), 200
 
 @app.route('/api/admin/orders/<int:order_id>', methods=['PUT'])
 @require_admin
 def update_order_status(order_id):
-    """Mettre à jour le statut d'une commande"""
     try:
         data = request.json or {}
         new_status = data.get('status')
-        
         if new_status not in ['pending', 'confirmed', 'preparing', 'ready', 'delivered', 'cancelled']:
             return jsonify({'error': 'Statut invalide'}), 400
-        
         for order in orders:
             if order['id'] == order_id:
                 order['status'] = new_status
                 order['updated_at'] = datetime.now().isoformat()
                 save_json_file(ORDERS_FILE, orders)
                 return jsonify(order)
-        
         return jsonify({'error': 'Commande non trouvée'}), 404
-    except Exception as e:
+    except:
         return jsonify({'error': 'Erreur modification'}), 500
 
 @app.route('/catalogue')
@@ -543,9 +510,7 @@ h1 { color: #333; font-size: 24px; }
   margin: 5px;
 }
 .back-btn:hover { background: #5a6268; }
-button {
-  background: #667eea;
-}
+button { background: #667eea; }
 button:hover { background: #5568d3; }
 button.delete { background: #e74c3c; }
 button.delete:hover { background: #c0392b; }
@@ -596,12 +561,12 @@ input, textarea, select {
   max-height: 90vh;
   overflow-y: auto;
 }
-.badge { 
-  background: #27ae60; 
-  color: white; 
-  padding: 5px 10px; 
-  border-radius: 20px; 
-  font-size: 12px; 
+.badge {
+  background: #27ae60;
+  color: white;
+  padding: 5px 10px;
+  border-radius: 20px;
+  font-size: 12px;
   font-weight: bold;
 }
 .badge.cart {
@@ -622,23 +587,6 @@ input, textarea, select {
   align-items: center;
   justify-content: center;
   font-size: 10px;
-}
-.quantity-control {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 10px 0;
-}
-.quantity-control button {
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  font-size: 20px;
-}
-.quantity-control input {
-  width: 60px;
-  text-align: center;
-  margin: 0;
 }
 .cart-item {
   display: flex;
@@ -680,8 +628,6 @@ input, textarea, select {
   </div>
   <div id="content" class="loading">Chargement...</div>
 </div>
-
-<!-- Modals -->
 <div id="login-modal" class="modal">
   <div class="modal-content">
     <h2>🔐 Connexion Admin</h2>
@@ -691,7 +637,6 @@ input, textarea, select {
     <div id="login-error" style="color:red;margin-top:10px;"></div>
   </div>
 </div>
-
 <div id="form-modal" class="modal">
   <div class="modal-content">
     <h3 id="form-title">Nouveau produit</h3>
@@ -706,7 +651,6 @@ input, textarea, select {
     <button onclick="closeForm()">Annuler</button>
   </div>
 </div>
-
 <div id="cart-modal" class="modal">
   <div class="modal-content">
     <h2>🛒 Mon Panier</h2>
@@ -716,7 +660,6 @@ input, textarea, select {
     <button onclick="closeCart()">Continuer mes achats</button>
   </div>
 </div>
-
 <div id="checkout-modal" class="modal">
   <div class="modal-content">
     <h2>📝 Finaliser la commande</h2>
@@ -730,257 +673,8 @@ input, textarea, select {
     <div id="checkout-error" style="color:red;margin-top:10px;"></div>
   </div>
 </div>
-
 <script>
-let adminToken = sessionStorage.getItem('adminToken') || '';
-let products = [];
-let cart = JSON.parse(localStorage.getItem('cart') || '[]');
-let editingProduct = null;
-let currentImageUrl = '';
-let currentVideoUrl = '';
-
-async function init() {
-  try {
-    await checkAdmin();
-    await loadProducts();
-    render();
-  } catch (e) {
-    errorDiv.textContent = 'Erreur réseau';
-  }
-}
-
-function render() {
-  const adminControls = document.getElementById('admin-controls');
-  const content = document.getElementById('content');
-  
-  const cartCount = getCartCount();
-  const cartBadge = cartCount > 0 ? `<span class="badge cart">🛒 Panier<span class="cart-count">${cartCount}</span></span>` : '';
-  
-  if (adminToken) {
-    adminControls.innerHTML = `
-      <span class="badge">Admin</span>
-      <button onclick="showForm()">➕ Ajouter</button>
-      <button onclick="logout()">Déconnexion</button>
-      ${cartBadge ? `<button onclick="showCart()">${cartBadge}</button>` : ''}
-    `;
-  } else {
-    adminControls.innerHTML = `
-      <button onclick="showLogin()">Mode Admin</button>
-      ${cartBadge ? `<button onclick="showCart()">${cartBadge}</button>` : ''}
-    `;
-  }
-  
-  if (products.length === 0) {
-    content.innerHTML = '<div class="empty"><h2>📦 Catalogue vide</h2><p>Aucun produit</p></div>';
-  } else {
-    content.innerHTML = products.map(p => `
-      <div class="card">
-        ${p.image_url ? `<img src="${p.image_url}" alt="${p.name}">` : ''}
-        ${p.video_url ? `<video src="${p.video_url}" controls></video>` : ''}
-        <h3>${p.name}</h3>
-        ${p.category ? `<p><em>${p.category}</em></p>` : ''}
-        ${p.description ? `<p>${p.description}</p>` : ''}
-        <p class="price">${p.price} €</p>
-        <p>Stock : ${p.stock}</p>
-        ${p.stock > 0 ? `<button class="success" onclick="addToCart(${p.id})">🛒 Ajouter au panier</button>` : '<p style="color:#e74c3c;">Rupture de stock</p>'}
-        ${adminToken ? `
-          <button onclick="editProduct(${p.id})">✏️ Modifier</button>
-          <button class="delete" onclick="deleteProduct(${p.id})">🗑️ Supprimer</button>
-        ` : ''}
-      </div>
-    `).join('');
-  }
-}
-
-function showLogin() {
-  document.getElementById('login-modal').classList.add('show');
-  document.getElementById('login-error').textContent = '';
-}
-
-function closeLogin() {
-  document.getElementById('login-modal').classList.remove('show');
-}
-
-async function login() {
-  const password = document.getElementById('password-input').value;
-  const errorDiv = document.getElementById('login-error');
-  
-  try {
-    const res = await fetch('/api/admin/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password })
-    });
-    const data = await res.json();
-    
-    if (res.ok && data.token) {
-      adminToken = data.token;
-      sessionStorage.setItem('adminToken', adminToken);
-      closeLogin();
-      render();
-      alert('✅ Connecté');
-    } else {
-      errorDiv.textContent = data.error || 'Erreur de connexion';
-    }
-  } catch (e) {
-    errorDiv.textContent = 'Erreur réseau';
-  }
-}
-
-async function logout() {
-  await fetch('/api/admin/logout', { 
-    method: 'POST',
-    headers: { 'X-Admin-Token': adminToken }
-  });
-  adminToken = '';
-  sessionStorage.removeItem('adminToken');
-  render();
-}
-
-function showForm() {
-  editingProduct = null;
-  currentImageUrl = '';
-  currentVideoUrl = '';
-  document.getElementById('form-title').textContent = 'Nouveau produit';
-  document.getElementById('name').value = '';
-  document.getElementById('price').value = '';
-  document.getElementById('category').value = '';
-  document.getElementById('stock').value = '';
-  document.getElementById('description').value = '';
-  document.getElementById('file-input').value = '';
-  document.getElementById('file-status').innerHTML = '';
-  document.getElementById('form-modal').classList.add('show');
-}
-
-function editProduct(id) {
-  const product = products.find(p => p.id === id);
-  if (!product) return;
-  
-  editingProduct = product;
-  currentImageUrl = product.image_url || '';
-  currentVideoUrl = product.video_url || '';
-  
-  document.getElementById('form-title').textContent = 'Modifier le produit';
-  document.getElementById('name').value = product.name;
-  document.getElementById('price').value = product.price;
-  document.getElementById('category').value = product.category || '';
-  document.getElementById('stock').value = product.stock;
-  document.getElementById('description').value = product.description || '';
-  document.getElementById('file-status').innerHTML = (currentImageUrl || currentVideoUrl) ? '<p style="color:green">✓ Fichier existant</p>' : '';
-  document.getElementById('form-modal').classList.add('show');
-}
-
-function closeForm() {
-  document.getElementById('form-modal').classList.remove('show');
-}
-
-document.getElementById('file-input').addEventListener('change', async function(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  
-  const fd = new FormData();
-  fd.append('file', file);
-  
-  document.getElementById('file-status').innerHTML = '<p>⏳ Upload...</p>';
-  
-  try {
-    const res = await fetch('/api/upload', {
-      method: 'POST',
-      headers: { 'X-Admin-Token': adminToken },
-      body: fd
-    });
-    const data = await res.json();
-    if (data.url) {
-      if (file.type.startsWith('video')) {
-        currentVideoUrl = data.url;
-        currentImageUrl = '';
-      } else {
-        currentImageUrl = data.url;
-        currentVideoUrl = '';
-      }
-      document.getElementById('file-status').innerHTML = '<p style="color:green">✅ Uploadé</p>';
-    } else {
-      alert('Erreur upload: ' + (data.error || 'Erreur inconnue'));
-      document.getElementById('file-status').innerHTML = '';
-    }
-  } catch (e) {
-    alert('Erreur upload: ' + e.message);
-    document.getElementById('file-status').innerHTML = '';
-  }
-});
-
-async function saveProduct() {
-  const name = document.getElementById('name').value;
-  const price = document.getElementById('price').value;
-  
-  if (!name || !price) {
-    alert('Nom et prix requis');
-    return;
-  }
-  
-  const data = {
-    name,
-    price: parseFloat(price),
-    category: document.getElementById('category').value,
-    stock: parseInt(document.getElementById('stock').value) || 0,
-    description: document.getElementById('description').value,
-    image_url: currentImageUrl,
-    video_url: currentVideoUrl
-  };
-  
-  const url = editingProduct ? `/api/admin/products/${editingProduct.id}` : '/api/admin/products';
-  const method = editingProduct ? 'PUT' : 'POST';
-  
-  try {
-    const res = await fetch(url, {
-      method,
-      headers: { 
-        'Content-Type': 'application/json',
-        'X-Admin-Token': adminToken
-      },
-      body: JSON.stringify(data)
-    });
-    
-    if (res.ok) {
-      closeForm();
-      await loadProducts();
-      render();
-      alert('✅ Sauvegardé');
-    } else {
-      const err = await res.json();
-      alert('Erreur sauvegarde: ' + (err.error || 'Erreur inconnue'));
-    }
-  } catch (e) {
-    alert('Erreur: ' + e.message);
-  }
-}
-
-async function deleteProduct(id) {
-  if (!confirm('Supprimer ce produit ?')) return;
-  
-  try {
-    const res = await fetch(`/api/admin/products/${id}`, {
-      method: 'DELETE',
-      headers: { 'X-Admin-Token': adminToken }
-    });
-    
-    if (res.ok) {
-      await loadProducts();
-      render();
-      alert('✅ Supprimé');
-    }
-  } catch (e) {
-    alert('Erreur suppression');
-  }
-}
-
-document.querySelectorAll('.modal').forEach(modal => {
-  modal.addEventListener('click', e => {
-    if (e.target === modal) modal.classList.remove('show');
-  });
-});
-
-init();
+let adminToken=sessionStorage.getItem('adminToken')||'';let products=[];let cart=JSON.parse(localStorage.getItem('cart')||'[]');let editingProduct=null;let currentImageUrl='';let currentVideoUrl='';async function init(){try{await checkAdmin();await loadProducts();render()}catch(e){document.getElementById('content').innerHTML='<div class="error">❌ Erreur</div>'}}async function checkAdmin(){try{const res=await fetch('/api/admin/check',{headers:{'X-Admin-Token':adminToken}});if(!res.ok)throw new Error('Erreur');const data=await res.json();if(!data.admin){adminToken='';sessionStorage.removeItem('adminToken')}return data.admin}catch(e){adminToken='';sessionStorage.removeItem('adminToken');return false}}async function loadProducts(){const res=await fetch('/api/products');if(!res.ok)throw new Error('Erreur');products=await res.json()}function getCartCount(){return cart.reduce((sum,item)=>sum+item.quantity,0)}function getCartTotal(){return cart.reduce((sum,item)=>{const product=products.find(p=>p.id===item.product_id);return sum+(product?product.price*item.quantity:0)},0)}function addToCart(productId){const product=products.find(p=>p.id===productId);if(!product)return;const existing=cart.find(item=>item.product_id===productId);if(existing){if(existing.quantity<product.stock){existing.quantity++}else{alert('Stock insuffisant');return}}else{cart.push({product_id:productId,quantity:1})}localStorage.setItem('cart',JSON.stringify(cart));render();alert('✅ Ajouté au panier')}function updateCartQuantity(productId,change){const item=cart.find(i=>i.product_id===productId);const product=products.find(p=>p.id===productId);if(!item||!product)return;const newQty=item.quantity+change;if(newQty<=0){cart=cart.filter(i=>i.product_id!==productId)}else if(newQty<=product.stock){item.quantity=newQty}else{alert('Stock insuffisant');return}localStorage.setItem('cart',JSON.stringify(cart));showCart()}function removeFromCart(productId){cart=cart.filter(item=>item.product_id!==productId);localStorage.setItem('cart',JSON.stringify(cart));showCart()}function showCart(){const modal=document.getElementById('cart-modal');const itemsDiv=document.getElementById('cart-items');const totalDiv=document.getElementById('cart-total');if(cart.length===0){itemsDiv.innerHTML='<p style="text-align:center;padding:40px;color:#999;">Panier vide</p>';totalDiv.innerHTML=''}else{itemsDiv.innerHTML=cart.map(item=>{const product=products.find(p=>p.id===item.product_id);if(!product)return '';return `<div class="cart-item"><div><strong>${product.name}</strong><br><span style="color:#27ae60;">${product.price}€</span> x ${item.quantity}</div><div><button onclick="updateCartQuantity(${item.product_id},-1)">-</button><span style="margin:0 10px;">${item.quantity}</span><button onclick="updateCartQuantity(${item.product_id},1)">+</button><button class="delete" onclick="removeFromCart(${item.product_id})">🗑️</button></div></div>`}).join('');totalDiv.innerHTML=`<h2>${getCartTotal().toFixed(2)} €</h2><p>${getCartCount()} article(s)</p>`}modal.classList.add('show')}function closeCart(){document.getElementById('cart-modal').classList.remove('show')}function showCheckout(){if(cart.length===0){alert('Panier vide');return}document.getElementById('cart-modal').classList.remove('show');document.getElementById('checkout-total').innerHTML=`<h2>${getCartTotal().toFixed(2)} €</h2><p>${getCartCount()} article(s)</p>`;document.getElementById('checkout-modal').classList.add('show')}function closeCheckout(){document.getElementById('checkout-modal').classList.remove('show');showCart()}async function submitOrder(){const name=document.getElementById('customer-name').value.trim();const contact=document.getElementById('customer-contact').value.trim();const address=document.getElementById('customer-address').value.trim();const notes=document.getElementById('customer-notes').value.trim();const errorDiv=document.getElementById('checkout-error');if(!name||!contact){errorDiv.textContent='Nom et contact requis';return}const orderData={customer_name:name,customer_contact:contact,customer_address:address,customer_notes:notes,items:cart};try{const res=await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(orderData)});const data=await res.json();if(res.ok){cart=[];localStorage.removeItem('cart');document.getElementById('checkout-modal').classList.remove('show');alert(`✅ Commande validée!\\n\\nNuméro: ${data.order.order_number}\\nTotal: ${data.order.total}€\\n\\nVous serez contacté!`);render()}else{errorDiv.textContent=data.error||'Erreur'}}catch(e){errorDiv.textContent='Erreur réseau'}}function render(){const adminControls=document.getElementById('admin-controls');const content=document.getElementById('content');const cartCount=getCartCount();const cartBadge=cartCount>0?`<span class="badge cart">🛒 Panier<span class="cart-count">${cartCount}</span></span>`:'';if(adminToken){adminControls.innerHTML=`<span class="badge">Admin</span><button onclick="showForm()">➕ Ajouter</button><button onclick="logout()">Déconnexion</button>${cartBadge?`<button onclick="showCart()">${cartBadge}</button>`:''}`}else{adminControls.innerHTML=`<button onclick="showLogin()">Mode Admin</button>${cartBadge?`<button onclick="showCart()">${cartBadge}</button>`:''}`}if(products.length===0){content.innerHTML='<div class="empty"><h2>📦 Catalogue vide</h2><p>Aucun produit</p></div>'}else{content.innerHTML=products.map(p=>`<div class="card">${p.image_url?`<img src="${p.image_url}" alt="${p.name}">`:''}${p.video_url?`<video src="${p.video_url}" controls></video>`:''}<h3>${p.name}</h3>${p.category?`<p><em>${p.category}</em></p>`:''}<p>${p.description||''}</p><p class="price">${p.price} €</p><p>Stock: ${p.stock}</p>${p.stock>0?`<button class="success" onclick="addToCart(${p.id})">🛒 Ajouter</button>`:'<p style="color:#e74c3c;">Rupture</p>'}${adminToken?`<button onclick="editProduct(${p.id})">✏️</button><button class="delete" onclick="deleteProduct(${p.id})">🗑️</button>`:''}</div>`).join('')}}function showLogin(){document.getElementById('login-modal').classList.add('show');document.getElementById('login-error').textContent=''}function closeLogin(){document.getElementById('login-modal').classList.remove('show')}async function login(){const password=document.getElementById('password-input').value;const errorDiv=document.getElementById('login-error');try{const res=await fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password})});const data=await res.json();if(res.ok&&data.token){adminToken=data.token;sessionStorage.setItem('adminToken',adminToken);closeLogin();render();alert('✅ Connecté')}else{errorDiv.textContent=data.error||'Erreur'}}catch(e){errorDiv.textContent='Erreur réseau'}}async function logout(){await fetch('/api/admin/logout',{method:'POST',headers:{'X-Admin-Token':adminToken}});adminToken='';sessionStorage.removeItem('adminToken');render()}function showForm(){editingProduct=null;currentImageUrl='';currentVideoUrl='';document.getElementById('form-title').textContent='Nouveau produit';document.getElementById('name').value='';document.getElementById('price').value='';document.getElementById('category').value='';document.getElementById('stock').value='';document.getElementById('description').value='';document.getElementById('file-input').value='';document.getElementById('file-status').innerHTML='';document.getElementById('form-modal').classList.add('show')}function editProduct(id){const product=products.find(p=>p.id===id);if(!product)return;editingProduct=product;currentImageUrl=product.image_url||'';currentVideoUrl=product.video_url||'';document.getElementById('form-title').textContent='Modifier';document.getElementById('name').value=product.name;document.getElementById('price').value=product.price;document.getElementById('category').value=product.category||'';document.getElementById('stock').value=product.stock;document.getElementById('description').value=product.description||'';document.getElementById('file-status').innerHTML=(currentImageUrl||currentVideoUrl)?'<p style="color:green">✓ Fichier existant</p>':'';document.getElementById('form-modal').classList.add('show')}function closeForm(){document.getElementById('form-modal').classList.remove('show')}document.getElementById('file-input').addEventListener('change',async function(e){const file=e.target.files[0];if(!file)return;const fd=new FormData();fd.append('file',file);document.getElementById('file-status').innerHTML='<p>⏳ Upload...</p>';try{const res=await fetch('/api/upload',{method:'POST',headers:{'X-Admin-Token':adminToken},body:fd});const data=await res.json();if(data.url){if(file.type.startsWith('video')){currentVideoUrl=data.url;currentImageUrl=''}else{currentImageUrl=data.url;currentVideoUrl=''}document.getElementById('file-status').innerHTML='<p style="color:green">✅ Uploadé</p>'}else{alert('Erreur upload');document.getElementById('file-status').innerHTML=''}}catch(e){alert('Erreur');document.getElementById('file-status').innerHTML=''}});async function saveProduct(){const name=document.getElementById('name').value;const price=document.getElementById('price').value;if(!name||!price){alert('Nom et prix requis');return}const data={name,price:parseFloat(price),category:document.getElementById('category').value,stock:parseInt(document.getElementById('stock').value)||0,description:document.getElementById('description').value,image_url:currentImageUrl,video_url:currentVideoUrl};const url=editingProduct?`/api/admin/products/${editingProduct.id}`:'/api/admin/products';const method=editingProduct?'PUT':'POST';try{const res=await fetch(url,{method,headers:{'Content-Type':'application/json','X-Admin-Token':adminToken},body:JSON.stringify(data)});if(res.ok){closeForm();await loadProducts();render();alert('✅ Sauvegardé')}else{const err=await res.json();alert('Erreur: '+(err.error||''))}}catch(e){alert('Erreur')}}async function deleteProduct(id){if(!confirm('Supprimer?'))return;try{const res=await fetch(`/api/admin/products/${id}`,{method:'DELETE',headers:{'X-Admin-Token':adminToken}});if(res.ok){await loadProducts();render();alert('✅ Supprimé')}}catch(e){alert('Erreur')}}document.querySelectorAll('.modal').forEach(modal=>{modal.addEventListener('click',e=>{if(e.target===modal)modal.classList.remove('show')})});init();
 </script>
 </body>
 </html>''' % {'bg': BACKGROUND_IMAGE}
@@ -988,198 +682,6 @@ init();
     except Exception as e:
         logger.error(f"Erreur route catalogue: {e}")
         return "Erreur serveur", 500
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    logger.warning(f"Démarrage sur le port {port}")
-    app.run(host='0.0.0.0', port=port, debug=False)
-    console.error('Erreur init:', e);
-    document.getElementById('content').innerHTML = '<div class="error">❌ Erreur de chargement</div>';
-  }
-}
-
-async function checkAdmin() {
-  try {
-    const res = await fetch('/api/admin/check', { 
-      headers: { 'X-Admin-Token': adminToken }
-    });
-    if (!res.ok) throw new Error('Erreur check admin');
-    const data = await res.json();
-    if (!data.admin) {
-      adminToken = '';
-      sessionStorage.removeItem('adminToken');
-    }
-    return data.admin;
-  } catch (e) {
-    adminToken = '';
-    sessionStorage.removeItem('adminToken');
-    return false;
-  }
-}
-
-async function loadProducts() {
-  try {
-    const res = await fetch('/api/products');
-    if (!res.ok) throw new Error('Erreur chargement produits');
-    products = await res.json();
-  } catch (e) {
-    throw e;
-  }
-}
-
-function getCartCount() {
-  return cart.reduce((sum, item) => sum + item.quantity, 0);
-}
-
-function getCartTotal() {
-  return cart.reduce((sum, item) => {
-    const product = products.find(p => p.id === item.product_id);
-    return sum + (product ? product.price * item.quantity : 0);
-  }, 0);
-}
-
-function addToCart(productId) {
-  const product = products.find(p => p.id === productId);
-  if (!product) return;
-  
-  const existing = cart.find(item => item.product_id === productId);
-  if (existing) {
-    if (existing.quantity < product.stock) {
-      existing.quantity++;
-    } else {
-      alert('Stock insuffisant');
-      return;
-    }
-  } else {
-    cart.push({ product_id: productId, quantity: 1 });
-  }
-  
-  localStorage.setItem('cart', JSON.stringify(cart));
-  render();
-  alert('✅ Ajouté au panier');
-}
-
-function updateCartQuantity(productId, change) {
-  const item = cart.find(i => i.product_id === productId);
-  const product = products.find(p => p.id === productId);
-  
-  if (!item || !product) return;
-  
-  const newQty = item.quantity + change;
-  
-  if (newQty <= 0) {
-    cart = cart.filter(i => i.product_id !== productId);
-  } else if (newQty <= product.stock) {
-    item.quantity = newQty;
-  } else {
-    alert('Stock insuffisant');
-    return;
-  }
-  
-  localStorage.setItem('cart', JSON.stringify(cart));
-  showCart();
-}
-
-function removeFromCart(productId) {
-  cart = cart.filter(item => item.product_id !== productId);
-  localStorage.setItem('cart', JSON.stringify(cart));
-  showCart();
-}
-
-function showCart() {
-  const modal = document.getElementById('cart-modal');
-  const itemsDiv = document.getElementById('cart-items');
-  const totalDiv = document.getElementById('cart-total');
-  
-  if (cart.length === 0) {
-    itemsDiv.innerHTML = '<p style="text-align:center;padding:40px;color:#999;">Votre panier est vide</p>';
-    totalDiv.innerHTML = '';
-  } else {
-    itemsDiv.innerHTML = cart.map(item => {
-      const product = products.find(p => p.id === item.product_id);
-      if (!product) return '';
-      
-      return `
-        <div class="cart-item">
-          <div>
-            <strong>${product.name}</strong><br>
-            <span style="color:#27ae60;">${product.price}€</span> x ${item.quantity}
-          </div>
-          <div>
-            <button onclick="updateCartQuantity(${item.product_id}, -1)">-</button>
-            <span style="margin:0 10px;">${item.quantity}</span>
-            <button onclick="updateCartQuantity(${item.product_id}, 1)">+</button>
-            <button class="delete" onclick="removeFromCart(${item.product_id})">🗑️</button>
-          </div>
-        </div>
-      `;
-    }).join('');
-    
-    totalDiv.innerHTML = `<h2>${getCartTotal().toFixed(2)} €</h2><p>${getCartCount()} article(s)</p>`;
-  }
-  
-  modal.classList.add('show');
-}
-
-function closeCart() {
-  document.getElementById('cart-modal').classList.remove('show');
-}
-
-function showCheckout() {
-  if (cart.length === 0) {
-    alert('Votre panier est vide');
-    return;
-  }
-  
-  document.getElementById('cart-modal').classList.remove('show');
-  document.getElementById('checkout-total').innerHTML = `<h2>${getCartTotal().toFixed(2)} €</h2><p>${getCartCount()} article(s)</p>`;
-  document.getElementById('checkout-modal').classList.add('show');
-}
-
-function closeCheckout() {
-  document.getElementById('checkout-modal').classList.remove('show');
-  showCart();
-}
-
-async function submitOrder() {
-  const name = document.getElementById('customer-name').value.trim();
-  const contact = document.getElementById('customer-contact').value.trim();
-  const address = document.getElementById('customer-address').value.trim();
-  const notes = document.getElementById('customer-notes').value.trim();
-  const errorDiv = document.getElementById('checkout-error');
-  
-  if (!name || !contact) {
-    errorDiv.textContent = 'Nom et contact sont requis';
-    return;
-  }
-  
-  const orderData = {
-    customer_name: name,
-    customer_contact: contact,
-    customer_address: address,
-    customer_notes: notes,
-    items: cart
-  };
-  
-  try {
-    const res = await fetch('/api/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(orderData)
-    });
-    
-    const data = await res.json();
-    
-    if (res.ok) {
-      cart = [];
-      localStorage.removeItem('cart');
-      document.getElementById('checkout-modal').classList.remove('show');
-      alert(`✅ Commande validée !\\n\\nNuméro: ${data.order.order_number}\\nTotal: ${data.order.total}€\\n\\nVous serez contacté rapidement !`);
-      render();
-    } else {
-      errorDiv.textContent = data.error || 'Erreur lors de la commande';
-    }
-  } catch (e) {
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

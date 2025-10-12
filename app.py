@@ -4,11 +4,114 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 from functools import wraps
-import os, json, cloudinary, cloudinary.uploader
+import os, cloudinary, cloudinary.uploader
 import logging
 import secrets
 import hashlib
 import requests
+#!/usr/bin/env python3
+"""
+Script pour valider et réparer products.json
+Ajoutez ce code temporairement dans app.py ou créez un fichier séparé
+"""
+
+import json
+
+def validate_and_fix_json():
+    """Valide et répare le fichier products.json"""
+    
+    filename = 'products.json'
+    
+    print(f"🔍 Lecture de {filename}...")
+    
+    try:
+        with open(filename, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        print(f"📄 Contenu du fichier ({len(content)} caractères)")
+        print("=" * 50)
+        print(content[:500])  # Afficher les 500 premiers caractères
+        print("=" * 50)
+        
+        # Essayer de parser
+        data = json.loads(content)
+        
+        # Vérifier que c'est bien une liste
+        if not isinstance(data, list):
+            print("⚠️ Le fichier ne contient pas une liste JSON")
+            print(f"Type trouvé: {type(data)}")
+            return False
+        
+        print(f"✅ JSON valide avec {len(data)} produit(s)")
+        
+        # Afficher chaque produit
+        for i, product in enumerate(data):
+            print(f"\nProduit {i+1}:")
+            print(f"  - ID: {product.get('id')}")
+            print(f"  - Nom: {product.get('name')}")
+            print(f"  - Prix: {product.get('price')}€")
+            print(f"  - Stock: {product.get('stock')}")
+        
+        return True
+        
+    except json.JSONDecodeError as e:
+        print(f"❌ Erreur JSON: {e}")
+        print(f"   Ligne {e.lineno}, colonne {e.colno}")
+        print(f"   Position caractère: {e.pos}")
+        
+        # Afficher le contexte de l'erreur
+        lines = content.split('\n')
+        if e.lineno <= len(lines):
+            print(f"\n📍 Ligne problématique:")
+            start = max(0, e.lineno - 3)
+            end = min(len(lines), e.lineno + 2)
+            for i in range(start, end):
+                marker = ">>> " if i == e.lineno - 1 else "    "
+                print(f"{marker}{i+1}: {lines[i]}")
+        
+        return False
+    
+    except FileNotFoundError:
+        print(f"❌ Fichier {filename} introuvable")
+        return False
+    
+    except Exception as e:
+        print(f"❌ Erreur inattendue: {e}")
+        return False
+
+
+def show_json_structure():
+    """Affiche la structure attendue du JSON"""
+    print("\n📋 Structure JSON attendue:")
+    print("=" * 50)
+    example = [
+        {
+            "id": 1,
+            "name": "Nom du produit",
+            "price": 19.99,
+            "description": "Description du produit",
+            "category": "Catégorie",
+            "image_url": "https://...",
+            "video_url": "",
+            "stock": 10
+        }
+    ]
+    print(json.dumps(example, indent=2, ensure_ascii=False))
+    print("=" * 50)
+
+
+if __name__ == '__main__':
+    print("🔧 Validation du fichier products.json\n")
+    
+    valid = validate_and_fix_json()
+    
+    if not valid:
+        show_json_structure()
+        print("\n💡 Conseils:")
+        print("  1. Vérifiez qu'il n'y a pas de virgule en trop")
+        print("  2. Vérifiez que toutes les accolades {} et crochets [] sont bien fermés")
+        print("  3. Vérifiez que les chaînes sont entre guillemets doubles \"\"")
+        print("  4. Pas de virgule après le dernier élément d'un tableau ou objet")
 from datetime import datetime, timedelta
 
 logging.basicConfig(level=logging.WARNING)

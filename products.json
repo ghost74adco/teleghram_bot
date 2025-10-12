@@ -1,3 +1,4 @@
+[
   {
     "id": 1,
     "name": "🍀🚬 (Prix au Gramme)",
@@ -30,7 +31,7 @@
   },
   {
     "id": 4,
-    "name": "💊  Punisher (Prix pour une pillule)",
+    "name": "💊 Punisher (Prix pour une pillule)",
     "price": 10.0,
     "description": "Exta Pills",
     "category": "💊",
@@ -68,3 +69,4 @@
     "video_url": "",
     "stock": 3
   }
+]

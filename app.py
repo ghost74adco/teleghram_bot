@@ -298,455 +298,34 @@ def require_admin(f):
         return f(*args, **kwargs)
     return wrapped
 
-@app.route('/')
-def index():
-    try:
-        html = f'''<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<title>Carte du Pirate</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>
-* {{ margin: 0; padding: 0; box-sizing: border-box; }}
-body {{
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: url('{BACKGROUND_IMAGE}') center center fixed;
-  background-size: cover;
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  position: relative;
-}}
-body::before {{
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
-  z-index: 1;
-}}
-.container {{
-  text-align: center;
-  color: white;
-  max-width: 800px;
-  position: relative;
-  z-index: 2;
-}}
-h1 {{
-  font-size: 3.5em;
-  margin-bottom: 30px;
-  text-shadow: 4px 4px 8px rgba(0,0,0,0.8);
-  animation: float 3s ease-in-out infinite;
-}}
-@keyframes float {{
-  0%, 100% {{ transform: translateY(0px); }}
-  50% {{ transform: translateY(-10px); }}
-}}
-.subtitle {{
-  font-size: 1.3em;
-  margin-bottom: 40px;
-  opacity: 0.95;
-  text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
-}}
-.btn {{
-  display: inline-block;
-  padding: 20px 50px;
-  font-size: 1.5em;
-  background: linear-gradient(45deg, #d4af37, #f4e5a1);
-  border: 3px solid #8b7220;
-  border-radius: 15px;
-  color: #2c1810;
-  text-decoration: none;
-  font-weight: bold;
-  transition: all 0.3s ease;
-  margin: 10px;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-}}
-.btn:hover {{
-  transform: scale(1.05) translateY(-5px);
-  box-shadow: 0 15px 40px rgba(212, 175, 55, 0.6);
-}}
-</style>
-</head>
-<body>
-<div class="container">
-  <h1>🏴‍☠️ Carte du Pirate 🏴‍☠️</h1>
-  <p class="subtitle">Votre boutique de trésors en ligne</p>
-  <a href="/catalogue" class="btn">📦 Catalogue & Commandes</a>
-</div>
-</body>
-</html>'''
-        return html, 200
-    except Exception as e:
-        logger.error(f"Erreur route index: {e}")
-        return "Erreur serveur", 500
-
-@app.route('/health')
-def health():
-    return jsonify({'status': 'ok'}), 200
-
-@app.route('/api/admin/login', methods=['POST'])
-@limiter.limit("5 per 15 minutes")
-def api_login():
-    try:
-        ip = get_remote_address()
-        allowed, message = check_rate_limit(ip)
-        if not allowed:
-            return jsonify({'error': message}), 429
-        data = request.json or {}
-        password_hash = hash_password(data.get('password', ''))
-        if password_hash == ADMIN_PASSWORD_HASH:
-            token = secrets.token_urlsafe(32)
-            admin_tokens[token] = {
-                'created': datetime.now(),
-                'expires': datetime.now() + timedelta(hours=12),
-                'ip': ip
-            }
-            if ip in failed_login_attempts:
-                failed_login_attempts[ip]['count'] = 0
-            return jsonify({'success': True, 'token': token})
-        blocked = register_failed_attempt(ip)
-        if blocked:
-            return jsonify({'error': 'Trop de tentatives. Compte bloqué 15 minutes.'}), 429
-        return jsonify({'error': 'Mot de passe incorrect'}), 403
-    except Exception as e:
-        return jsonify({'error': 'Erreur serveur'}), 500
-
-@app.route('/api/admin/logout', methods=['POST'])
-def api_logout():
-    try:
-        token = request.headers.get('X-Admin-Token')
-        if token and token in admin_tokens:
-            del admin_tokens[token]
-        return jsonify({'success': True})
-    except:
-        return jsonify({'success': False}), 500
-
-@app.route('/api/admin/check', methods=['GET'])
-def api_check_admin():
-    try:
-        token = request.headers.get('X-Admin-Token')
-        ip = get_remote_address()
-        is_admin = False
-        if token and token in admin_tokens:
-            if admin_tokens[token]['ip'] == ip:
-                if datetime.now() <= admin_tokens[token]['expires']:
-                    is_admin = True
-                else:
-                    del admin_tokens[token]
-            else:
-                del admin_tokens[token]
-        return jsonify({'admin': is_admin}), 200
-    except:
-        return jsonify({'admin': False}), 200
-
-@app.route('/api/upload', methods=['POST'])
-@require_admin
-@limiter.limit("10 per hour")
-def upload_file():
-    try:
-        if 'file' not in request.files:
-            return jsonify({'error': 'Aucun fichier'}), 400
-        file = request.files['file']
-        file.seek(0, os.SEEK_END)
-        file_length = file.tell()
-        if file_length > 10 * 1024 * 1024:
-            return jsonify({'error': 'Fichier trop gros (max 10MB)'}), 400
-        file.seek(0)
-        result = cloudinary.uploader.upload(file, resource_type='auto', folder='catalogue', timeout=60)
-        return jsonify({'url': result.get('secure_url')}), 200
-    except:
-        return jsonify({'error': 'Erreur upload'}), 500
-
-@app.route('/api/products', methods=['GET'])
-def get_products():
-    try:
-        return jsonify(products), 200
-    except:
-        return jsonify([]), 200
-
-@app.route('/api/admin/products', methods=['POST'])
-@require_admin
-def add_product():
-    global products
-    try:
-        data = request.json or {}
-        if not data.get('name') or not data.get('price'):
-            return jsonify({'error': 'Nom et prix requis'}), 400
-        new_product = {
-            "id": max([p["id"] for p in products]) + 1 if products else 1,
-            "name": data.get("name"),
-            "price": float(data.get("price", 0)),
-            "description": data.get("description", ""),
-            "category": data.get("category", ""),
-            "image_url": data.get("image_url", ""),
-            "video_url": data.get("video_url", ""),
-            "stock": int(data.get("stock", 0))
-        }
-        products.append(new_product)
-        save_json_file(PRODUCTS_FILE, products)
-        return jsonify(new_product), 201
-    except:
-        return jsonify({'error': 'Erreur création'}), 500
-
-@app.route('/api/admin/products/<int:pid>', methods=['PUT'])
-@require_admin
-def update_product(pid):
-    try:
-        data = request.json or {}
-        for p in products:
-            if p['id'] == pid:
-                p.update({
-                    "name": data.get("name", p["name"]),
-                    "price": float(data.get("price", p["price"])),
-                    "description": data.get("description", p["description"]),
-                    "category": data.get("category", p["category"]),
-                    "image_url": data.get("image_url", p.get("image_url", "")),
-                    "video_url": data.get("video_url", p.get("video_url", "")),
-                    "stock": int(data.get("stock", p["stock"]))
-                })
-                save_json_file(PRODUCTS_FILE, products)
-                return jsonify(p)
-        return jsonify({'error': 'Produit non trouvé'}), 404
-    except:
-        return jsonify({'error': 'Erreur modification'}), 500
-
-@app.route('/api/admin/products/<int:pid>', methods=['DELETE'])
-@require_admin
-def delete_product(pid):
-    global products
-    try:
-        before = len(products)
-        products = [p for p in products if p['id'] != pid]
-        if len(products) < before:
-            save_json_file(PRODUCTS_FILE, products)
-            return jsonify({'success': True})
-        return jsonify({'error': 'Produit non trouvé'}), 404
-    except:
-        return jsonify({'error': 'Erreur suppression'}), 500
-
-@app.route('/api/calculate-distance', methods=['POST'])
-def calculate_distance():
-    try:
-        data = request.json or {}
-        client_address = data.get('address', '').strip()
-        
-        if not client_address or len(client_address) < 15:
-            return jsonify({'error': 'Adresse invalide (min 15 caractères)'}), 400
-        
-        if not GEOPY_AVAILABLE:
-            return jsonify({'error': 'Service de géolocalisation non disponible'}), 503
-        
-        try:
-            geolocator = Nominatim(user_agent="carte_du_pirate_webapp")
-            
-            location1 = geolocator.geocode(ADMIN_ADDRESS, timeout=10)
-            location2 = geolocator.geocode(client_address, timeout=10)
-            
-            if not location1:
-                return jsonify({'error': f'Adresse de départ introuvable: {ADMIN_ADDRESS}'}), 400
-            
-            if not location2:
-                return jsonify({'error': 'Adresse de livraison introuvable. Vérifiez l\'adresse.'}), 400
-            
-            coords1 = (location1.latitude, location1.longitude)
-            coords2 = (location2.latitude, location2.longitude)
-            
-            distance = geodesic(coords1, coords2).kilometers
-            distance_rounded = round(distance, 1)
-            
-            logger.info(f"✅ Distance calculée: {distance_rounded} km")
-            
-            return jsonify({
-                'success': True,
-                'distance_km': distance_rounded,
-                'from': ADMIN_ADDRESS,
-                'to': client_address
-            }), 200
-            
-        except Exception as e:
-            logger.error(f"Erreur géolocalisation: {e}")
-            return jsonify({'error': f'Erreur de géolocalisation: {str(e)}'}), 500
-        
-    except Exception as e:
-        logger.error(f"Erreur calcul distance: {e}")
-        return jsonify({'error': 'Erreur serveur'}), 500
-
-@app.route('/api/orders', methods=['POST'])
-@limiter.limit("5 per hour")
-def create_order():
-    global orders
-    try:
-        data = request.json or {}
-        
-        logger.warning(f"📥 Nouvelle commande reçue depuis le site web")
-        
-        if not data.get('items') or len(data.get('items', [])) == 0:
-            return jsonify({'error': 'Panier vide'}), 400
-        if not data.get('customer_name') or not data.get('customer_contact'):
-            return jsonify({'error': 'Nom et contact requis'}), 400
-        
-        total = 0
-        order_items = []
-        for item in data['items']:
-            product = next((p for p in products if p['id'] == item['product_id']), None)
-            if not product:
-                return jsonify({'error': f'Produit {item["product_id"]} introuvable'}), 404
-            if product['stock'] < item['quantity']:
-                return jsonify({'error': f'Stock insuffisant pour {product["name"]}'}), 400
-            item_total = product['price'] * item['quantity']
-            total += item_total
-            order_items.append({
-                'product_id': product['id'],
-                'product_name': product['name'],
-                'price': product['price'],
-                'quantity': item['quantity'],
-                'subtotal': item_total
-            })
-        
-        shipping_type = data.get('shipping_type', 'postal')
-        distance = float(data.get('distance_km', 0))
-        delivery_fee = calculate_delivery_fee(shipping_type, distance, total)
-        final_total = total + delivery_fee
-        
-        order_id = max([o['id'] for o in orders]) + 1 if orders else 1
-        new_order = {
-            'id': order_id,
-            'order_number': f"CMD-{order_id:05d}",
-            'customer_name': data['customer_name'],
-            'customer_contact': data['customer_contact'],
-            'customer_address': data.get('customer_address', ''),
-            'customer_notes': data.get('customer_notes', ''),
-            'items': order_items,
-            'subtotal': total,
-            'shipping_type': shipping_type,
-            'distance_km': distance,
-            'delivery_fee': delivery_fee,
-            'total': final_total,
-            'status': 'pending',
-            'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        }
-        
-        orders.append(new_order)
-        save_json_file(ORDERS_FILE, orders)
-        
-        logger.warning(f"✅ Commande #{new_order['order_number']} créée avec succès")
-        logger.warning(f"📞 Envoi notification Telegram...")
-        
-        # Envoi de la notification Telegram
-        telegram_sent = send_telegram_notification(new_order)
-        
-        if telegram_sent:
-            logger.warning(f"✅ Notification Telegram envoyée")
-        else:
-            logger.error(f"❌ Échec envoi notification Telegram")
-        
-        return jsonify({'success': True, 'order': new_order}), 201
-        
-    except Exception as e:
-        logger.error(f"❌ Erreur création commande: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return jsonify({'error': 'Erreur serveur'}), 500
-
-@app.route('/api/admin/orders', methods=['GET'])
-@require_admin
-def get_orders():
-    try:
-        return jsonify(orders), 200
-    except:
-        return jsonify([]), 200
-
-@app.route('/api/admin/orders/<int:order_id>', methods=['PUT'])
-@require_admin
-def update_order_status(order_id):
-    try:
-        data = request.json or {}
-        new_status = data.get('status')
-        if new_status not in ['pending', 'confirmed', 'preparing', 'ready', 'delivered', 'cancelled']:
-            return jsonify({'error': 'Statut invalide'}), 400
-        for order in orders:
-            if order['id'] == order_id:
-                order['status'] = new_status
-                order['updated_at'] = datetime.now().isoformat()
-                save_json_file(ORDERS_FILE, orders)
-                return jsonify(order)
-        return jsonify({'error': 'Commande non trouvée'}), 404
-    except:
-        return jsonify({'error': 'Erreur modification'}), 500
-
-@app.route('/api/telegram/webhook', methods=['POST'])
-def telegram_webhook():
-    try:
-        data = request.json
-        
-        if 'callback_query' in data:
-            callback_data = data['callback_query']['data']
-            
-            if callback_data.startswith('webapp_validate_'):
-                order_id = int(callback_data.split('_')[2])
-                
-                for order in orders:
-                    if order['id'] == order_id:
-                        order['status'] = 'delivered'
-                        order['delivered_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                        break
-                
-                save_json_file(ORDERS_FILE, orders)
-                
-                callback_id = data['callback_query']['id']
-                url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/answerCallbackQuery"
-                requests.post(url, json={
-                    "callback_query_id": callback_id,
-                    "text": f"✅ Commande #{order_id} marquée comme livrée"
-                })
-                
-                message_id = data['callback_query']['message']['message_id']
-                chat_id = data['callback_query']['message']['chat']['id']
-                url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/editMessageText"
-                requests.post(url, json={
-                    "chat_id": chat_id,
-                    "message_id": message_id,
-                    "text": data['callback_query']['message']['text'] + "\n\n✅ *COMMANDE LIVRÉE*",
-                    "parse_mode": "Markdown"
-                })
-        
-        return jsonify({'ok': True})
-        
-    except Exception as e:
-        logger.error(f"Erreur webhook Telegram: {e}")
-        return jsonify({'error': str(e)}), 500
-
 @app.route('/catalogue')
 def catalogue():
     try:
-        html = '''<!DOCTYPE html>
+        # Utilisation de triple quotes et échappement correct
+        html = f'''<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
 <title>Catalogue & Commandes</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body {
+* {{ margin: 0; padding: 0; box-sizing: border-box; }}
+body {{
   font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-  background: url('%(bg)s') center center fixed;
+  background: url('{BACKGROUND_IMAGE}') center center fixed;
   background-size: cover;
   min-height: 100vh;
   padding: 15px;
   position: relative;
-}
-body::before {
+}}
+body::before {{
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
   background: rgba(0, 0, 0, 0.3);
   z-index: 0;
-}
-.container {
+}}
+.container {{
   max-width: 800px;
   margin: 0 auto;
   background: rgba(255, 255, 255, 0.95);
@@ -756,17 +335,17 @@ body::before {
   position: relative;
   z-index: 1;
   backdrop-filter: blur(10px);
-}
-.header {
+}}
+.header {{
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
   flex-wrap: wrap;
   gap: 10px;
-}
-h1 { color: #333; font-size: 24px; }
-.back-btn, button {
+}}
+h1 {{ color: #333; font-size: 24px; }}
+.back-btn, button {{
   background: #6c757d;
   color: white;
   border: none;
@@ -777,87 +356,87 @@ h1 { color: #333; font-size: 24px; }
   text-decoration: none;
   display: inline-block;
   margin: 5px;
-}
-.back-btn:hover { background: #5a6268; }
-button { background: #667eea; }
-button:hover { background: #5568d3; }
-button.delete { background: #e74c3c; }
-button.delete:hover { background: #c0392b; }
-button.success { background: #27ae60; }
-button.success:hover { background: #229954; }
-input, textarea, select {
-  width: 100%%;
+}}
+.back-btn:hover {{ background: #5a6268; }}
+button {{ background: #667eea; }}
+button:hover {{ background: #5568d3; }}
+button.delete {{ background: #e74c3c; }}
+button.delete:hover {{ background: #c0392b; }}
+button.success {{ background: #27ae60; }}
+button.success:hover {{ background: #229954; }}
+input, textarea, select {{
+  width: 100%;
   padding: 12px;
   margin: 8px 0;
   border: 2px solid #ddd;
   border-radius: 6px;
   font-size: 14px;
-}
-.card {
+}}
+.card {{
   background: #f8f9fa;
   border-radius: 8px;
   padding: 15px;
   margin: 15px 0;
   border: 1px solid #e0e0e0;
-}
-.card img, .card video {
-  width: 100%%;
+}}
+.card img, .card video {{
+  width: 100%;
   max-height: 250px;
   object-fit: cover;
   border-radius: 6px;
   margin-bottom: 10px;
-}
-.card h3 { color: #333; margin: 10px 0; }
-.card p { color: #666; margin: 5px 0; }
-.price { font-size: 22px; color: #27ae60; font-weight: bold; }
-.modal {
+}}
+.card h3 {{ color: #333; margin: 10px 0; }}
+.card p {{ color: #666; margin: 5px 0; }}
+.price {{ font-size: 22px; color: #27ae60; font-weight: bold; }}
+.modal {{
   display: none;
   position: fixed;
   top: 0; left: 0;
-  width: 100%%; height: 100%%;
+  width: 100%; height: 100%;
   background: rgba(0,0,0,0.7);
   align-items: center;
   justify-content: center;
   z-index: 1000;
-}
-.modal.show { display: flex; }
-.modal-content {
+}}
+.modal.show {{ display: flex; }}
+.modal-content {{
   background: white;
   padding: 30px;
   border-radius: 12px;
   max-width: 500px;
-  width: 90%%;
+  width: 90%;
   max-height: 90vh;
   overflow-y: auto;
-}
-.badge {
+}}
+.badge {{
   background: #27ae60;
   color: white;
   padding: 5px 10px;
   border-radius: 20px;
   font-size: 12px;
   font-weight: bold;
-}
-.badge.cart {
+}}
+.badge.cart {{
   background: #667eea;
   position: relative;
   margin-left: 10px;
-}
-.cart-count {
+}}
+.cart-count {{
   position: absolute;
   top: -8px;
   right: -8px;
   background: #e74c3c;
   color: white;
-  border-radius: 50%%;
+  border-radius: 50%;
   width: 20px;
   height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 10px;
-}
-.cart-item {
+}}
+.cart-item {{
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -865,32 +444,32 @@ input, textarea, select {
   background: #f8f9fa;
   border-radius: 8px;
   margin: 10px 0;
-}
-.total-section {
+}}
+.total-section {{
   background: #667eea;
   color: white;
   padding: 20px;
   border-radius: 8px;
   margin: 20px 0;
   text-align: center;
-}
-.total-section h2 {
+}}
+.total-section h2 {{
   font-size: 32px;
   margin: 10px 0;
-}
-.loading, .empty, .error {
+}}
+.loading, .empty, .error {{
   text-align: center;
   padding: 40px;
   color: #666;
-}
-.error { color: #e74c3c; }
-.form-group { margin: 15px 0; }
-.form-group label {
+}}
+.error {{ color: #e74c3c; }}
+.form-group {{ margin: 15px 0; }}
+.form-group label {{
   display: block;
   font-weight: 600;
   margin-bottom: 5px;
   color: #333;
-}
+}}
 </style>
 </head>
 <body>
@@ -956,21 +535,21 @@ input, textarea, select {
       <select id="shipping-type" onchange="handleShippingChange()">
         <option value="">-- Sélectionner --</option>
         <option value="postal">📦 Livraison postale : 48H à 72H (10€)</option>
-        <option value="express">⚡ Livraison Express : livraison à l'adresse de votre choix à l'heure de votre choix (30 minutes minimum après la commande si livreur disponible)</option>
+        <option value="express">⚡ Livraison Express : livraison à votre adresse (30 min minimum)</option>
       </select>
     </div>
     <div id="express-info" style="display:none; margin: 15px 0; padding: 10px; background: #e3f2fd; border-radius: 6px;">
       <p style="margin:0; color:#1976d2;">
         <strong>ℹ️ Calcul automatique de distance</strong><br>
-        La distance sera calculée automatiquement depuis notre entrepôt jusqu\\'à votre adresse.
+        La distance sera calculée automatiquement depuis notre entrepôt.
       </p>
     </div>
     <div id="distance-result" style="display:none; margin: 15px 0; padding: 10px; background: #e8f5e9; border-radius: 6px; border-left: 4px solid #4caf50;">
       <div id="distance-detail"></div>
     </div>
     <div class="form-group">
-      <label for="customer-notes">Notes ou instructions particulières</label>
-      <textarea id="customer-notes" rows="2" placeholder="Sonnez 2 fois, code portail: 1234..."></textarea>
+      <label for="customer-notes">Notes ou instructions</label>
+      <textarea id="customer-notes" rows="2" placeholder="Sonnez 2 fois, code: 1234..."></textarea>
     </div>
     <div class="total-section" id="checkout-total"></div>
     <button class="success" onclick="submitOrder()">🚀 Valider la commande</button>
@@ -987,219 +566,219 @@ let currentImageUrl='';
 let currentVideoUrl='';
 let calculatedDistance=0;
 
-async function init(){
-  try{
+async function init(){{
+  try{{
     await checkAdmin();
     await loadProducts();
     render();
-  }catch(e){
+  }}catch(e){{
     document.getElementById('content').innerHTML='<div class="error">❌ Erreur</div>';
-  }
-}
+  }}
+}}
 
-async function checkAdmin(){
-  try{
-    const res=await fetch('/api/admin/check',{headers:{'X-Admin-Token':adminToken}});
+async function checkAdmin(){{
+  try{{
+    const res=await fetch('/api/admin/check',{{headers:{{'X-Admin-Token':adminToken}}}});
     if(!res.ok)throw new Error('Erreur');
     const data=await res.json();
-    if(!data.admin){
+    if(!data.admin){{
       adminToken='';
       sessionStorage.removeItem('adminToken');
-    }
+    }}
     return data.admin;
-  }catch(e){
+  }}catch(e){{
     adminToken='';
     sessionStorage.removeItem('adminToken');
     return false;
-  }
-}
+  }}
+}}
 
-async function loadProducts(){
+async function loadProducts(){{
   const res=await fetch('/api/products');
   if(!res.ok)throw new Error('Erreur');
   products=await res.json();
-}
+}}
 
-function getCartCount(){
+function getCartCount(){{
   return cart.reduce((sum,item)=>sum+item.quantity,0);
-}
+}}
 
-function getCartTotal(){
-  return cart.reduce((sum,item)=>{
+function getCartTotal(){{
+  return cart.reduce((sum,item)=>{{
     const product=products.find(p=>p.id===item.product_id);
     return sum+(product?product.price*item.quantity:0);
-  },0);
-}
+  }},0);
+}}
 
-function calculateShippingFee(){
+function calculateShippingFee(){{
   const shippingType=document.getElementById('shipping-type').value;
   const subtotal=getCartTotal();
   
-  if(shippingType==='postal'){
+  if(shippingType==='postal'){{
     return 10;
-  }else if(shippingType==='express'){
+  }}else if(shippingType==='express'){{
     if(calculatedDistance<=0)return 0;
     const baseFee=(calculatedDistance*2)+(subtotal*0.03);
     return Math.ceil(baseFee/10)*10;
-  }
+  }}
   return 0;
-}
+}}
 
-async function handleShippingChange(){
+async function handleShippingChange(){{
   const shippingType=document.getElementById('shipping-type').value;
   const expressInfo=document.getElementById('express-info');
   const distanceResult=document.getElementById('distance-result');
   
-  if(shippingType==='express'){
+  if(shippingType==='express'){{
     expressInfo.style.display='block';
     
     const address=document.getElementById('customer-address').value.trim();
     
-    if(address.length>=15){
+    if(address.length>=15){{
       await calculateDistance(address);
-    }else{
+    }}else{{
       distanceResult.style.display='none';
-      alert('Veuillez d\\'abord entrer une adresse complète (min 15 caractères)');
+      alert('Veuillez entrer une adresse complète (min 15 caractères)');
       document.getElementById('shipping-type').value='';
-    }
-  }else{
+    }}
+  }}else{{
     expressInfo.style.display='none';
     distanceResult.style.display='none';
     calculatedDistance=0;
-  }
+  }}
   
   updateCheckoutTotal();
-}
+}}
 
-async function calculateDistance(address){
+async function calculateDistance(address){{
   const distanceResult=document.getElementById('distance-result');
   const distanceDetail=document.getElementById('distance-detail');
   
-  try{
-    distanceDetail.innerHTML='<p style="margin:0; color:#666;">⏳ Calcul de la distance en cours...</p>';
+  try{{
+    distanceDetail.innerHTML='<p style="margin:0; color:#666;">⏳ Calcul en cours...</p>';
     distanceResult.style.display='block';
     
-    const res=await fetch('/api/calculate-distance',{
+    const res=await fetch('/api/calculate-distance',{{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({address})
-    });
+      headers:{{'Content-Type':'application/json'}},
+      body:JSON.stringify({{address}})
+    }});
     
     const data=await res.json();
     
-    if(res.ok && data.success){
+    if(res.ok && data.success){{
       calculatedDistance=data.distance_km;
       
       distanceDetail.innerHTML=`
-        <p style="margin:0; color:#2e7d32;"><strong>✅ Distance calculée avec succès</strong></p>
+        <p style="margin:0; color:#2e7d32;"><strong>✅ Distance: ${{calculatedDistance}} km</strong></p>
       `;
       
       updateCheckoutTotal();
-    }else{
+    }}else{{
       calculatedDistance=0;
-      distanceDetail.innerHTML=`<p style="margin:0; color:#d32f2f;">❌ ${data.error || 'Erreur de calcul'}</p>`;
+      distanceDetail.innerHTML=`<p style="margin:0; color:#d32f2f;">❌ ${{data.error || 'Erreur'}}</p>`;
       document.getElementById('shipping-type').value='';
-    }
-  }catch(e){
+    }}
+  }}catch(e){{
     calculatedDistance=0;
-    distanceDetail.innerHTML='<p style="margin:0; color:#d32f2f;">❌ Erreur de connexion</p>';
+    distanceDetail.innerHTML='<p style="margin:0; color:#d32f2f;">❌ Erreur connexion</p>';
     document.getElementById('shipping-type').value='';
-  }
-}
+  }}
+}}
 
-function updateCheckoutTotal(){
+function updateCheckoutTotal(){{
   const subtotal=getCartTotal();
   const shippingFee=calculateShippingFee();
   const total=subtotal+shippingFee;
   
   document.getElementById('checkout-total').innerHTML=`
-    <div>Sous-total: ${subtotal.toFixed(2)}€</div>
-    <div>Frais de livraison: ${shippingFee.toFixed(2)}€</div>
-    <h2>${total.toFixed(2)} €</h2>
-    <p>${getCartCount()} article(s)</p>
+    <div>Sous-total: ${{subtotal.toFixed(2)}}€</div>
+    <div>Livraison: ${{shippingFee.toFixed(2)}}€</div>
+    <h2>${{total.toFixed(2)}} €</h2>
+    <p>${{getCartCount()}} article(s)</p>
   `;
-}
+}}
 
-function addToCart(productId){
+function addToCart(productId){{
   const product=products.find(p=>p.id===productId);
   if(!product)return;
   const existing=cart.find(item=>item.product_id===productId);
-  if(existing){
-    if(existing.quantity<product.stock){
+  if(existing){{
+    if(existing.quantity<product.stock){{
       existing.quantity++;
-    }else{
+    }}else{{
       alert('Stock insuffisant');
       return;
-    }
-  }else{
-    cart.push({product_id:productId,quantity:1});
-  }
+    }}
+  }}else{{
+    cart.push({{product_id:productId,quantity:1}});
+  }}
   localStorage.setItem('cart',JSON.stringify(cart));
   render();
   alert('✅ Ajouté au panier');
-}
+}}
 
-function updateCartQuantity(productId,change){
+function updateCartQuantity(productId,change){{
   const item=cart.find(i=>i.product_id===productId);
   const product=products.find(p=>p.id===productId);
   if(!item||!product)return;
   const newQty=item.quantity+change;
-  if(newQty<=0){
+  if(newQty<=0){{
     cart=cart.filter(i=>i.product_id!==productId);
-  }else if(newQty<=product.stock){
+  }}else if(newQty<=product.stock){{
     item.quantity=newQty;
-  }else{
+  }}else{{
     alert('Stock insuffisant');
     return;
-  }
+  }}
   localStorage.setItem('cart',JSON.stringify(cart));
   showCart();
-}
+}}
 
-function removeFromCart(productId){
+function removeFromCart(productId){{
   cart=cart.filter(item=>item.product_id!==productId);
   localStorage.setItem('cart',JSON.stringify(cart));
   showCart();
-}
+}}
 
-function showCart(){
+function showCart(){{
   const modal=document.getElementById('cart-modal');
   const itemsDiv=document.getElementById('cart-items');
   const totalDiv=document.getElementById('cart-total');
-  if(cart.length===0){
+  if(cart.length===0){{
     itemsDiv.innerHTML='<p style="text-align:center;padding:40px;color:#999;">Panier vide</p>';
     totalDiv.innerHTML='';
-  }else{
-    itemsDiv.innerHTML=cart.map(item=>{
+  }}else{{
+    itemsDiv.innerHTML=cart.map(item=>{{
       const product=products.find(p=>p.id===item.product_id);
       if(!product)return '';
-      return `<div class="cart-item"><div><strong>${product.name}</strong><br><span style="color:#27ae60;">${product.price}€</span> x ${item.quantity}</div><div><button onclick="updateCartQuantity(${item.product_id},-1)">-</button><span style="margin:0 10px;">${item.quantity}</span><button onclick="updateCartQuantity(${item.product_id},1)">+</button><button class="delete" onclick="removeFromCart(${item.product_id})">🗑️</button></div></div>`;
-    }).join('');
-    totalDiv.innerHTML=`<h2>${getCartTotal().toFixed(2)} €</h2><p>${getCartCount()} article(s)</p>`;
-  }
+      return `<div class="cart-item"><div><strong>${{product.name}}</strong><br><span style="color:#27ae60;">${{product.price}}€</span> x ${{item.quantity}}</div><div><button onclick="updateCartQuantity(${{item.product_id}},-1)">-</button><span style="margin:0 10px;">${{item.quantity}}</span><button onclick="updateCartQuantity(${{item.product_id}},1)">+</button><button class="delete" onclick="removeFromCart(${{item.product_id}})">🗑️</button></div></div>`;
+    }}).join('');
+    totalDiv.innerHTML=`<h2>${{getCartTotal().toFixed(2)}} €</h2><p>${{getCartCount()}} article(s)</p>`;
+  }}
   modal.classList.add('show');
-}
+}}
 
-function closeCart(){
+function closeCart(){{
   document.getElementById('cart-modal').classList.remove('show');
-}
+}}
 
-function showCheckout(){
-  if(cart.length===0){
+function showCheckout(){{
+  if(cart.length===0){{
     alert('Panier vide');
     return;
-  }
+  }}
   document.getElementById('cart-modal').classList.remove('show');
   updateCheckoutTotal();
   document.getElementById('checkout-modal').classList.add('show');
-}
+}}
 
-function closeCheckout(){
+function closeCheckout(){{
   document.getElementById('checkout-modal').classList.remove('show');
   showCart();
-}
+}}
 
-async function submitOrder(){
+async function submitOrder(){{
   const name=document.getElementById('customer-name').value.trim();
   const contact=document.getElementById('customer-contact').value.trim();
   const address=document.getElementById('customer-address').value.trim();
@@ -1207,27 +786,27 @@ async function submitOrder(){
   const notes=document.getElementById('customer-notes').value.trim();
   const errorDiv=document.getElementById('checkout-error');
   
-  if(!name||!contact){
+  if(!name||!contact){{
     errorDiv.textContent='Nom et contact requis';
     return;
-  }
+  }}
   
-  if(!address||address.length<15){
+  if(!address||address.length<15){{
     errorDiv.textContent='Adresse complète requise (min 15 caractères)';
     return;
-  }
+  }}
   
-  if(!shippingType){
+  if(!shippingType){{
     errorDiv.textContent='Type de livraison requis';
     return;
-  }
+  }}
   
-  if(shippingType==='express' && calculatedDistance<=0){
-    errorDiv.textContent='Distance non calculée. Veuillez sélectionner à nouveau le type de livraison Express.';
+  if(shippingType==='express' && calculatedDistance<=0){{
+    errorDiv.textContent='Distance non calculée';
     return;
-  }
+  }}
   
-  const orderData={
+  const orderData={{
     customer_name:name,
     customer_contact:contact,
     customer_address:address,
@@ -1235,91 +814,91 @@ async function submitOrder(){
     shipping_type:shippingType,
     distance_km:shippingType==='express'?calculatedDistance:0,
     items:cart
-  };
+  }};
   
-  try{
-    const res=await fetch('/api/orders',{
+  try{{
+    const res=await fetch('/api/orders',{{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:{{'Content-Type':'application/json'}},
       body:JSON.stringify(orderData)
-    });
+    }});
     const data=await res.json();
-    if(res.ok){
+    if(res.ok){{
       cart=[];
       localStorage.removeItem('cart');
       calculatedDistance=0;
       document.getElementById('checkout-modal').classList.remove('show');
-      alert(`✅ Commande validée!\\n\\nNuméro: ${data.order.order_number}\\nTotal: ${data.order.total.toFixed(2)}€\\n\\nVous serez contacté!`);
+      alert(`✅ Commande ${{data.order.order_number}}\\nTotal: ${{data.order.total.toFixed(2)}}€\\n\\nVous serez contacté!`);
       render();
-    }else{
+    }}else{{
       errorDiv.textContent=data.error||'Erreur';
-    }
-  }catch(e){
+    }}
+  }}catch(e){{
     errorDiv.textContent='Erreur réseau';
-  }
-}
+  }}
+}}
 
-function render(){
+function render(){{
   const adminControls=document.getElementById('admin-controls');
   const content=document.getElementById('content');
   const cartCount=getCartCount();
-  const cartBadge=cartCount>0?`<span class="badge cart">🛒 Panier<span class="cart-count">${cartCount}</span></span>`:'';
-  if(adminToken){
-    adminControls.innerHTML=`<span class="badge">Admin</span><button onclick="showForm()">➕ Ajouter</button><button onclick="logout()">Déconnexion</button>${cartBadge?`<button onclick="showCart()">${cartBadge}</button>`:''}`;
-  }else{
-    adminControls.innerHTML=`<button onclick="showLogin()">Mode Admin</button>${cartBadge?`<button onclick="showCart()">${cartBadge}</button>`:''}`;
-  }
-  if(products.length===0){
-    content.innerHTML='<div class="empty"><h2>📦 Catalogue vide</h2><p>Aucun produit</p></div>';
-  }else{
-    content.innerHTML=products.map(p=>`<div class="card">${p.image_url?`<img src="${p.image_url}" alt="${p.name}">`:''}${p.video_url?`<video src="${p.video_url}" controls></video>`:''}<h3>${p.name}</h3>${p.category?`<p><em>${p.category}</em></p>`:''}<p>${p.description||''}</p><p class="price">${p.price} €</p><p>Stock: ${p.stock}</p>${p.stock>0?`<button class="success" onclick="addToCart(${p.id})">🛒 Ajouter</button>`:'<p style="color:#e74c3c;">Rupture</p>'}${adminToken?`<button onclick="editProduct(${p.id})">✏️</button><button class="delete" onclick="deleteProduct(${p.id})">🗑️</button>`:''}</div>`).join('');
-  }
-}
+  const cartBadge=cartCount>0?`<span class="badge cart">🛒<span class="cart-count">${{cartCount}}</span></span>`:'';
+  if(adminToken){{
+    adminControls.innerHTML=`<span class="badge">Admin</span><button onclick="showForm()">➕</button><button onclick="logout()">Déconnexion</button>${{cartBadge?`<button onclick="showCart()">${{cartBadge}}</button>`:''}}}`;
+  }}else{{
+    adminControls.innerHTML=`<button onclick="showLogin()">Admin</button>${{cartBadge?`<button onclick="showCart()">${{cartBadge}}</button>`:''}}}`;
+  }}
+  if(products.length===0){{
+    content.innerHTML='<div class="empty"><h2>📦 Catalogue vide</h2></div>';
+  }}else{{
+    content.innerHTML=products.map(p=>`<div class="card">${{p.image_url?`<img src="${{p.image_url}}" alt="${{p.name}}">`:''}}}${{p.video_url?`<video src="${{p.video_url}}" controls></video>`:''}}<h3>${{p.name}}</h3>${{p.category?`<p><em>${{p.category}}</em></p>`:''}}<p>${{p.description||''}}</p><p class="price">${{p.price}} €</p><p>Stock: ${{p.stock}}</p>${{p.stock>0?`<button class="success" onclick="addToCart(${{p.id}})">🛒</button>`:'<p style="color:#e74c3c;">Rupture</p>'}}}${{adminToken?`<button onclick="editProduct(${{p.id}})">✏️</button><button class="delete" onclick="deleteProduct(${{p.id}})">🗑️</button>`:''}}</div>`).join('');
+  }}
+}}
 
-function showLogin(){
+function showLogin(){{
   document.getElementById('login-modal').classList.add('show');
   document.getElementById('login-error').textContent='';
-}
+}}
 
-function closeLogin(){
+function closeLogin(){{
   document.getElementById('login-modal').classList.remove('show');
-}
+}}
 
-async function login(){
+async function login(){{
   const password=document.getElementById('password-input').value;
   const errorDiv=document.getElementById('login-error');
-  try{
-    const res=await fetch('/api/admin/login',{
+  try{{
+    const res=await fetch('/api/admin/login',{{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({password})
-    });
+      headers:{{'Content-Type':'application/json'}},
+      body:JSON.stringify({{password}})
+    }});
     const data=await res.json();
-    if(res.ok&&data.token){
+    if(res.ok&&data.token){{
       adminToken=data.token;
       sessionStorage.setItem('adminToken',adminToken);
       closeLogin();
       render();
       alert('✅ Connecté');
-    }else{
+    }}else{{
       errorDiv.textContent=data.error||'Erreur';
-    }
-  }catch(e){
+    }}
+  }}catch(e){{
     errorDiv.textContent='Erreur réseau';
-  }
-}
+  }}
+}}
 
-async function logout(){
-  await fetch('/api/admin/logout',{
+async function logout(){{
+  await fetch('/api/admin/logout',{{
     method:'POST',
-    headers:{'X-Admin-Token':adminToken}
-  });
+    headers:{{'X-Admin-Token':adminToken}}
+  }});
   adminToken='';
   sessionStorage.removeItem('adminToken');
   render();
-}
+}}
 
-function showForm(){
+function showForm(){{
   editingProduct=null;
   currentImageUrl='';
   currentVideoUrl='';
@@ -1332,9 +911,9 @@ function showForm(){
   document.getElementById('file-input').value='';
   document.getElementById('file-status').innerHTML='';
   document.getElementById('form-modal').classList.add('show');
-}
+}}
 
-function editProduct(id){
+function editProduct(id){{
   const product=products.find(p=>p.id===id);
   if(!product)return;
   editingProduct=product;
@@ -1348,52 +927,52 @@ function editProduct(id){
   document.getElementById('description').value=product.description||'';
   document.getElementById('file-status').innerHTML=(currentImageUrl||currentVideoUrl)?'<p style="color:green">✓ Fichier existant</p>':'';
   document.getElementById('form-modal').classList.add('show');
-}
+}}
 
-function closeForm(){
+function closeForm(){{
   document.getElementById('form-modal').classList.remove('show');
-}
+}}
 
-document.getElementById('file-input').addEventListener('change',async function(e){
+document.getElementById('file-input').addEventListener('change',async function(e){{
   const file=e.target.files[0];
   if(!file)return;
   const fd=new FormData();
   fd.append('file',file);
   document.getElementById('file-status').innerHTML='<p>⏳ Upload...</p>';
-  try{
-    const res=await fetch('/api/upload',{
+  try{{
+    const res=await fetch('/api/upload',{{
       method:'POST',
-      headers:{'X-Admin-Token':adminToken},
+      headers:{{'X-Admin-Token':adminToken}},
       body:fd
-    });
+    }});
     const data=await res.json();
-    if(data.url){
-      if(file.type.startsWith('video')){
+    if(data.url){{
+      if(file.type.startsWith('video')){{
         currentVideoUrl=data.url;
         currentImageUrl='';
-      }else{
+      }}else{{
         currentImageUrl=data.url;
         currentVideoUrl='';
-      }
+      }}
       document.getElementById('file-status').innerHTML='<p style="color:green">✅ Uploadé</p>';
-    }else{
+    }}else{{
       alert('Erreur upload');
       document.getElementById('file-status').innerHTML='';
-    }
-  }catch(e){
+    }}
+  }}catch(e){{
     alert('Erreur');
     document.getElementById('file-status').innerHTML='';
-  }
-});
+  }}
+}});
 
-async function saveProduct(){
+async function saveProduct(){{
   const name=document.getElementById('name').value;
   const price=document.getElementById('price').value;
-  if(!name||!price){
+  if(!name||!price){{
     alert('Nom et prix requis');
     return;
-  }
-  const data={
+  }}
+  const data={{
     name,
     price:parseFloat(price),
     category:document.getElementById('category').value,
@@ -1401,59 +980,61 @@ async function saveProduct(){
     description:document.getElementById('description').value,
     image_url:currentImageUrl,
     video_url:currentVideoUrl
-  };
-  const url=editingProduct?`/api/admin/products/${editingProduct.id}`:'/api/admin/products';
+  }};
+  const url=editingProduct?`/api/admin/products/${{editingProduct.id}}`:'/api/admin/products';
   const method=editingProduct?'PUT':'POST';
-  try{
-    const res=await fetch(url,{
+  try{{
+    const res=await fetch(url,{{
       method,
-      headers:{'Content-Type':'application/json','X-Admin-Token':adminToken},
+      headers:{{'Content-Type':'application/json','X-Admin-Token':adminToken}},
       body:JSON.stringify(data)
-    });
-    if(res.ok){
+    }});
+    if(res.ok){{
       closeForm();
       await loadProducts();
       render();
       alert('✅ Sauvegardé');
-    }else{
+    }}else{{
       const err=await res.json();
       alert('Erreur: '+(err.error||''));
-    }
-  }catch(e){
+    }}
+  }}catch(e){{
     alert('Erreur');
-  }
-}
+  }}
+}}
 
-async function deleteProduct(id){
+async function deleteProduct(id){{
   if(!confirm('Supprimer?'))return;
-  try{
-    const res=await fetch(`/api/admin/products/${id}`,{
+  try{{
+    const res=await fetch(`/api/admin/products/${{id}}`,{{
       method:'DELETE',
-      headers:{'X-Admin-Token':adminToken}
-    });
-    if(res.ok){
+      headers:{{'X-Admin-Token':adminToken}}
+    }});
+    if(res.ok){{
       await loadProducts();
       render();
       alert('✅ Supprimé');
-    }
-  }catch(e){
+    }}
+  }}catch(e){{
     alert('Erreur');
-  }
-}
+  }}
+}}
 
-document.querySelectorAll('.modal').forEach(modal=>{
-  modal.addEventListener('click',e=>{
+document.querySelectorAll('.modal').forEach(modal=>{{
+  modal.addEventListener('click',e=>{{
     if(e.target===modal)modal.classList.remove('show');
-  });
-});
+  }});
+}});
 
 init();
 </script>
 </body>
-</html>''' % {'bg': BACKGROUND_IMAGE}
+</html>'''
         return html, 200
     except Exception as e:
         logger.error(f"Erreur route catalogue: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return "Erreur serveur", 500
 
 if __name__ == '__main__':

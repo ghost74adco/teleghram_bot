@@ -166,12 +166,15 @@ products = load_json_file(PRODUCTS_FILE)
 orders = load_json_file(ORDERS_FILE)
 
 def send_telegram_notification(order_data):
+    """Envoie une notification Telegram pour une nouvelle commande"""
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_ADMIN_ID:
-        logger.warning("Configuration Telegram manquante")
+        logger.error("❌ Configuration Telegram manquante - BOT_TOKEN ou ADMIN_ID non défini")
         return False
     
     try:
-        message = f"""🆕 *NOUVELLE COMMANDE #{order_data['order_number']}*
+        logger.warning(f"📤 Envoi notification Telegram pour commande #{order_data['order_number']}")
+        
+        message = f"""🆕 *NOUVELLE COMMANDE WEB #{order_data['order_number']}*
 
 👤 *Client:*
 • Nom: {order_data['customer_name']}
@@ -184,26 +187,29 @@ def send_telegram_notification(order_data):
         message += "\n📦 *Articles:*\n"
         
         for item in order_data['items']:
-            message += f"• {item['product_name']} x{item['quantity']} = {item['subtotal']}€\n"
+            message += f"• {item['product_name']} x{item['quantity']} = {item['subtotal']:.2f}€\n"
         
         shipping_type = order_data.get('shipping_type', 'N/A')
         delivery_fee = order_data.get('delivery_fee', 0)
         distance = order_data.get('distance_km', 0)
         
-        message += f"\n💵 *Sous-total:* {order_data['subtotal']}€\n"
+        message += f"\n💵 *Sous-total:* {order_data['subtotal']:.2f}€\n"
         
         if shipping_type == 'postal':
-            message += f"📦 *Livraison:* ✉️📭 Postale (+{FRAIS_POSTAL}€)\n"
+            message += f"📦 *Livraison:* ✉️ Postale 48-72H (+{FRAIS_POSTAL}€)\n"
         elif shipping_type == 'express':
-            message += f"📦 *Livraison:* 🎁⚡ Express ({distance} km)\n"
-            message += f"💶 *Frais de port:* {delivery_fee}€\n"
+            message += f"📦 *Livraison:* ⚡ Express à domicile\n"
+            message += f"💶 *Frais de livraison:* {delivery_fee:.2f}€\n"
+        else:
+            message += f"📦 *Livraison:* {shipping_type}\n"
         
-        message += f"\n💰 *TOTAL: {order_data['total']}€*\n"
+        message += f"\n💰 *TOTAL: {order_data['total']:.2f}€*\n"
         
         if order_data.get('customer_notes'):
             message += f"\n📝 *Notes:* {order_data['customer_notes']}\n"
         
         message += f"\n📅 {order_data['created_at']}"
+        message += f"\n🌐 Source: Site Web"
         
         keyboard = {
             "inline_keyboard": [[
@@ -222,16 +228,26 @@ def send_telegram_notification(order_data):
             "reply_markup": json.dumps(keyboard)
         }
         
+        logger.warning(f"🔄 Envoi vers Telegram API...")
         response = requests.post(url, json=payload, timeout=10)
+        
         if response.status_code == 200:
-            logger.warning(f"✅ Notification Telegram envoyée pour commande #{order_data['order_number']}")
+            logger.warning(f"✅ Notification Telegram envoyée avec succès pour commande #{order_data['order_number']}")
             return True
         else:
-            logger.error(f"Erreur Telegram: {response.text}")
+            logger.error(f"❌ Erreur Telegram HTTP {response.status_code}: {response.text}")
             return False
             
+    except requests.exceptions.Timeout:
+        logger.error(f"⏱️ Timeout lors de l'envoi Telegram")
+        return False
+    except requests.exceptions.RequestException as e:
+        logger.error(f"🌐 Erreur réseau Telegram: {str(e)}")
+        return False
     except Exception as e:
-        logger.error(f"Erreur envoi Telegram: {str(e)}")
+        logger.error(f"❌ Erreur inattendue envoi Telegram: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return False
 
 def hash_password(password):
@@ -554,6 +570,8 @@ def create_order():
     try:
         data = request.json or {}
         
+        logger.warning(f"📥 Nouvelle commande reçue depuis le site web")
+        
         if not data.get('items') or len(data.get('items', [])) == 0:
             return jsonify({'error': 'Panier vide'}), 400
         if not data.get('customer_name') or not data.get('customer_contact'):
@@ -604,12 +622,23 @@ def create_order():
         orders.append(new_order)
         save_json_file(ORDERS_FILE, orders)
         
-        send_telegram_notification(new_order)
+        logger.warning(f"✅ Commande #{new_order['order_number']} créée avec succès")
+        logger.warning(f"📞 Envoi notification Telegram...")
+        
+        # Envoi de la notification Telegram
+        telegram_sent = send_telegram_notification(new_order)
+        
+        if telegram_sent:
+            logger.warning(f"✅ Notification Telegram envoyée")
+        else:
+            logger.error(f"❌ Échec envoi notification Telegram")
         
         return jsonify({'success': True, 'order': new_order}), 201
         
     except Exception as e:
-        logger.error(f"Erreur création commande: {e}")
+        logger.error(f"❌ Erreur création commande: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({'error': 'Erreur serveur'}), 500
 
 @app.route('/api/admin/orders', methods=['GET'])
@@ -915,8 +944,8 @@ input, textarea, select {
       <label for="shipping-type">Type de livraison *</label>
       <select id="shipping-type" onchange="handleShippingChange()">
         <option value="">-- Sélectionner --</option>
-        <option value="postal">📦 Postale (+10€) - 3-5 jours</option>
-        <option value="express">⚡ Express (calculé automatiquement) - 24-48h</option>
+        <option value="postal">📦 Livraison postale : 48H à 72H (10€)</option>
+        <option value="express">⚡ Livraison Express : livraison à l'adresse de votre choix à l'heure de votre choix (30 minutes minimum après la commande si livreur disponible)</option>
       </select>
     </div>
     <div id="express-info" style="display:none; margin: 15px 0; padding: 10px; background: #e3f2fd; border-radius: 6px;">
@@ -1050,20 +1079,8 @@ async function calculateDistance(address){
     if(res.ok && data.success){
       calculatedDistance=data.distance_km;
       
-      const subtotal=getCartTotal();
-      const distanceFee=calculatedDistance*2;
-      const percentFee=subtotal*0.03;
-      const rawTotal=distanceFee+percentFee;
-      const finalFee=Math.ceil(rawTotal/10)*10;
-      
       distanceDetail.innerHTML=`
-        <p style="margin:0 0 10px 0;"><strong>✅ Distance calculée: ${calculatedDistance} km</strong></p>
-        <div style="font-size:14px; color:#666;">
-          <div>• Distance: ${calculatedDistance} km × 2€ = ${distanceFee.toFixed(2)}€</div>
-          <div>• Pourcentage: ${subtotal.toFixed(2)}€ × 3%% = ${percentFee.toFixed(2)}€</div>
-          <div>• Total brut: ${rawTotal.toFixed(2)}€</div>
-          <div style="font-weight:bold; color:#2e7d32;">• Arrondi dizaine sup.: ${finalFee}€</div>
-        </div>
+        <p style="margin:0; color:#2e7d32;"><strong>✅ Distance calculée avec succès</strong></p>
       `;
       
       updateCheckoutTotal();
@@ -1086,7 +1103,7 @@ function updateCheckoutTotal(){
   
   document.getElementById('checkout-total').innerHTML=`
     <div>Sous-total: ${subtotal.toFixed(2)}€</div>
-    <div>Frais de port: ${shippingFee.toFixed(2)}€</div>
+    <div>Frais de livraison: ${shippingFee.toFixed(2)}€</div>
     <h2>${total.toFixed(2)} €</h2>
     <p>${getCartCount()} article(s)</p>
   `;

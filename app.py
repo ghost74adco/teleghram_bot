@@ -316,10 +316,10 @@ def require_admin(f):
         return f(*args, **kwargs)
     return wrapped
 
-@app.route('/')
-def index():
+@app.route('/catalogue')
+def catalogue():
     try:
-        html = f'''<!DOCTYPE html>
+        html = '''<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">

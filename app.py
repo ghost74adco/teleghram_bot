@@ -587,26 +587,36 @@ def update_order_status(order_id):
     except:
         return jsonify({'error': 'Erreur modification'}), 500
 
-@app.route('/api/telegram/webhook', methods=['POST'])
+@app.route('/api/telegram/webhook', methods=['POST', 'GET'])
 def telegram_webhook():
     try:
+        # Log pour debugging
+        if request.method == 'GET':
+            logger.warning("⚠️ GET request sur webhook - vérifiez la configuration")
+            return jsonify({'status': 'Webhook actif', 'method': 'GET'}), 200
+        
         data = request.json
-        logger.warning(f"📨 Webhook Telegram reçu")
+        logger.warning(f"📨 Webhook Telegram reçu: {json.dumps(data, indent=2)}")
         
         if 'callback_query' in data:
             callback_data = data['callback_query']['data']
             callback_id = data['callback_query']['id']
             
-            # ÉTAPE 1: Répondre IMMÉDIATEMENT au callback
+            logger.warning(f"🔔 Callback reçu: {callback_data}, ID: {callback_id}")
+            
+            # ÉTAPE 1: Répondre IMMÉDIATEMENT au callback (CRITIQUE!)
             try:
                 url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/answerCallbackQuery"
+                logger.warning(f"📤 Envoi answerCallbackQuery vers {url}")
                 answer_response = requests.post(url, json={
                     "callback_query_id": callback_id,
-                    "text": "⏳ Traitement..."
+                    "text": "⏳ Traitement en cours..."
                 }, timeout=5)
-                logger.warning(f"✅ Callback answer envoyé ({answer_response.status_code})")
+                logger.warning(f"✅ Callback answer envoyé (status: {answer_response.status_code}, response: {answer_response.text})")
             except Exception as e:
                 logger.error(f"❌ Erreur answer callback: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
             
             # ÉTAPE 2: Traiter la commande
             if callback_data.startswith('webapp_validate_'):

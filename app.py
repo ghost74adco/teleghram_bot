@@ -33,10 +33,10 @@ CORS(app, supports_credentials=True, origins=['*'])
 
 # Configuration
 ADMIN_PASSWORD_HASH = hashlib.sha256(os.environ.get('ADMIN_PASSWORD', 'changeme123').encode()).hexdigest()
-TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
-TELEGRAM_ADMIN_ID = os.environ.get('TELEGRAM_ADMIN_ID')
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN') or os.environ.get('BOT_TOKEN') or os.environ.get('TELEGRAM_TOKEN')
+TELEGRAM_ADMIN_ID = os.environ.get('TELEGRAM_ADMIN_ID') or os.environ.get('ADMIN_ID')
 ADMIN_ADDRESS = os.environ.get('ADMIN_ADDRESS', 'Chamonix-Mont-Blanc, France')
-BACKGROUND_IMAGE = os.environ.get('BACKGROUND_URL', 'https://res.cloudinary.com/dfhrrtzsd/image/upload/v1760118433/ChatGPT_Image_8_oct._2025_03_01_21_zm5zfy.png')
+BACKGROUND_IMAGE = os.environ.get('BACKGROUND_URL') or os.environ.get('BACKGROUND_IMAGE', 'https://res.cloudinary.com/dfhrrtzsd/image/upload/v1760118433/ChatGPT_Image_8_oct._2025_03_01_21_zm5zfy.png')
 
 limiter = Limiter(app=app, key_func=get_remote_address, default_limits=["200 per day", "50 per hour"], storage_uri="memory://")
 
@@ -46,14 +46,14 @@ failed_login_attempts = {}
 # Configuration Cloudinary
 try:
     cloudinary.config(
-        cloud_name=os.environ.get('CLOUDINARY_CLOUD_NAME'),
-        api_key=os.environ.get('CLOUDINARY_API_KEY'),
-        api_secret=os.environ.get('CLOUDINARY_API_SECRET'),
+        cloud_name=os.environ.get('CLOUDINARY_CLOUD_NAME') or os.environ.get('CLOUD_NAME'),
+        api_key=os.environ.get('CLOUDINARY_API_KEY') or os.environ.get('CLOUD_API_KEY'),
+        api_secret=os.environ.get('CLOUDINARY_API_SECRET') or os.environ.get('CLOUD_API_SECRET'),
         secure=True
     )
-    logger.warning("Cloudinary configuré")
+    logger.warning("✅ Cloudinary configuré")
 except Exception as e:
-    logger.error(f"Erreur Cloudinary: {e}")
+    logger.error(f"❌ Erreur Cloudinary: {e}")
 
 PRODUCTS_FILE = 'products.json'
 ORDERS_FILE = 'orders.json'
@@ -161,6 +161,17 @@ def ensure_valid_json_files():
 logger.warning("🔍 Vérification des fichiers JSON...")
 ensure_valid_json_files()
 logger.warning("✅ Vérification terminée")
+
+# Affichage de la configuration au démarrage
+logger.warning("=" * 50)
+logger.warning("🔧 CONFIGURATION DE L'APPLICATION")
+logger.warning("=" * 50)
+logger.warning(f"📱 TELEGRAM_BOT_TOKEN: {'✅ Configuré' if TELEGRAM_BOT_TOKEN else '❌ Manquant'}")
+logger.warning(f"👤 TELEGRAM_ADMIN_ID: {'✅ Configuré (' + TELEGRAM_ADMIN_ID + ')' if TELEGRAM_ADMIN_ID else '❌ Manquant'}")
+logger.warning(f"🔑 ADMIN_PASSWORD: {'✅ Configuré' if os.environ.get('ADMIN_PASSWORD') else '❌ Manquant'}")
+logger.warning(f"📍 ADMIN_ADDRESS: {ADMIN_ADDRESS}")
+logger.warning(f"☁️ CLOUDINARY: {'✅ Configuré' if os.environ.get('CLOUD_NAME') or os.environ.get('CLOUDINARY_CLOUD_NAME') else '❌ Manquant'}")
+logger.warning("=" * 50)
 
 products = load_json_file(PRODUCTS_FILE)
 orders = load_json_file(ORDERS_FILE)

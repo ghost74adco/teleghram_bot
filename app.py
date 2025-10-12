@@ -108,6 +108,56 @@ logger.warning(f"👤 TELEGRAM_ADMIN_ID: {'✅ Configuré (' + TELEGRAM_ADMIN_ID
 logger.warning(f"📍 ADMIN_ADDRESS: {ADMIN_ADDRESS}")
 logger.warning("=" * 50)
 
+# Configuration automatique du webhook Telegram
+def setup_telegram_webhook():
+    if not TELEGRAM_BOT_TOKEN:
+        logger.error("❌ TELEGRAM_BOT_TOKEN manquant - webhook non configuré")
+        return False
+    
+    try:
+        webhook_url = os.environ.get('WEBHOOK_URL', 'https://carte-du-pirate.onrender.com') + '/api/telegram/webhook'
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setWebhook"
+        
+        logger.warning(f"🔧 Configuration du webhook Telegram: {webhook_url}")
+        
+        response = requests.post(url, json={"url": webhook_url}, timeout=10)
+        
+        if response.status_code == 200:
+            result = response.json()
+            if result.get('ok'):
+                logger.warning(f"✅ Webhook Telegram configuré avec succès")
+                
+                # Vérification
+                info_response = requests.get(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getWebhookInfo", timeout=10)
+                if info_response.status_code == 200:
+                    info = info_response.json()
+                    logger.warning(f"📡 Webhook info: {json.dumps(info.get('result', {}), indent=2)}")
+                
+                return True
+            else:
+                logger.error(f"❌ Erreur configuration webhook: {result}")
+                return False
+        else:
+            logger.error(f"❌ Erreur HTTP {response.status_code}: {response.text}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"❌ Erreur configuration webhook: {e}")
+        return False
+
+# Configurer le webhook au démarrage (avec un petit délai pour laisser le serveur démarrer)
+if TELEGRAM_BOT_TOKEN:
+    import threading
+    def delayed_webhook_setup():
+        import time
+        time.sleep(5)  # Attendre 5 secondes après le démarrage
+        setup_telegram_webhook()
+    
+    webhook_thread = threading.Thread(target=delayed_webhook_setup, daemon=True)
+    webhook_thread.start()
+
+logger.warning("=" * 50)
+
 products = load_json_file(PRODUCTS_FILE)
 orders = load_json_file(ORDERS_FILE)
 
@@ -595,30 +645,68 @@ def telegram_webhook():
             logger.warning("⚠️ GET request sur webhook - vérifiez la configuration")
             return jsonify({'status': 'Webhook actif', 'method': 'GET'}), 200
         
+        # Log de TOUTES les données reçues
+        raw_data = request.get_data(as_text=True)
+        logger.warning(f"📨 RAW DATA REÇU: {raw_data}")
+        
         data = request.json
-        logger.warning(f"📨 Webhook Telegram reçu: {json.dumps(data, indent=2)}")
+        logger.warning(f"📨 JSON PARSÉ: {json.dumps(data, indent=2)}")
         
         if 'callback_query' in data:
-            callback_data = data['callback_query']['data']
-            callback_id = data['callback_query']['id']
+            callback_query = data['callback_query']
+            callback_data = callback_query.get('data', '')
+            callback_id = callback_query.get('id', '')
             
-            logger.warning(f"🔔 Callback reçu: {callback_data}, ID: {callback_id}")
+            logger.warning(f"🔔 CALLBACK DÉTECTÉ!")
+            logger.warning(f"   - Callback ID: {callback_id}")
+            logger.warning(f"   - Callback Data: {callback_data}")
             
-            # ÉTAPE 1: Répondre IMMÉDIATEMENT au callback (CRITIQUE!)
+            # RÉPONSE IMMÉDIATE ET SYNCHRONE (CRITIQUE!)
+            if not TELEGRAM_BOT_TOKEN:
+                logger.error("❌ TELEGRAM_BOT_TOKEN manquant!")
+                return jsonify({'ok': True}), 200
+            
+            # Construire l'URL
+            answer_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/answerCallbackQuery"
+            logger.warning(f"📤 URL answerCallback: {answer_url}")
+            
+            # Payload
+            answer_payload = {
+                "callback_query_id": callback_id,
+                "text": "⏳ Traitement en cours...",
+                "show_alert": False
+            }
+            logger.warning(f"📦 Payload: {json.dumps(answer_payload)}")
+            
+            # APPEL IMMÉDIAT
             try:
-                url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/answerCallbackQuery"
-                logger.warning(f"📤 Envoi answerCallbackQuery vers {url}")
-                answer_response = requests.post(url, json={
-                    "callback_query_id": callback_id,
-                    "text": "⏳ Traitement en cours..."
-                }, timeout=5)
-                logger.warning(f"✅ Callback answer envoyé (status: {answer_response.status_code}, response: {answer_response.text})")
+                logger.warning("🚀 ENVOI answerCallbackQuery MAINTENANT...")
+                answer_response = requests.post(
+                    answer_url, 
+                    json=answer_payload, 
+                    timeout=10
+                )
+                logger.warning(f"📥 RÉPONSE reçue:")
+                logger.warning(f"   - Status: {answer_response.status_code}")
+                logger.warning(f"   - Body: {answer_response.text}")
+                
+                if answer_response.status_code != 200:
+                    logger.error(f"❌ ERREUR HTTP {answer_response.status_code}")
+                else:
+                    response_json = answer_response.json()
+                    if response_json.get('ok'):
+                        logger.warning(f"✅ answerCallbackQuery RÉUSSI!")
+                    else:
+                        logger.error(f"❌ Telegram a répondu NOK: {response_json}")
+                        
+            except requests.exceptions.Timeout:
+                logger.error(f"⏱️ TIMEOUT lors de answerCallbackQuery")
             except Exception as e:
-                logger.error(f"❌ Erreur answer callback: {e}")
+                logger.error(f"❌ EXCEPTION answerCallbackQuery: {e}")
                 import traceback
                 logger.error(traceback.format_exc())
             
-            # ÉTAPE 2: Traiter la commande
+            # Traiter la validation de commande
             if callback_data.startswith('webapp_validate_'):
                 try:
                     order_id = int(callback_data.split('_')[2])
@@ -636,20 +724,21 @@ def telegram_webhook():
                     if order_found:
                         save_json_file(ORDERS_FILE, orders)
                         
-                        # ÉTAPE 3: Éditer le message
+                        # Éditer le message
                         try:
-                            message_id = data['callback_query']['message']['message_id']
-                            chat_id = data['callback_query']['message']['chat']['id']
-                            original_text = data['callback_query']['message']['text']
+                            message_id = callback_query.get('message', {}).get('message_id')
+                            chat_id = callback_query.get('message', {}).get('chat', {}).get('id')
+                            original_text = callback_query.get('message', {}).get('text', '')
                             
-                            url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/editMessageText"
-                            edit_response = requests.post(url, json={
-                                "chat_id": chat_id,
-                                "message_id": message_id,
-                                "text": original_text + "\n\n✅ *COMMANDE LIVRÉE*",
-                                "parse_mode": "Markdown"
-                            }, timeout=5)
-                            logger.warning(f"✅ Message mis à jour ({edit_response.status_code})")
+                            if message_id and chat_id:
+                                edit_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/editMessageText"
+                                edit_response = requests.post(edit_url, json={
+                                    "chat_id": chat_id,
+                                    "message_id": message_id,
+                                    "text": original_text + "\n\n✅ *COMMANDE LIVRÉE*",
+                                    "parse_mode": "Markdown"
+                                }, timeout=5)
+                                logger.warning(f"✅ Message édité ({edit_response.status_code})")
                         except Exception as e:
                             logger.error(f"❌ Erreur édition message: {e}")
                     else:
@@ -659,11 +748,17 @@ def telegram_webhook():
                     logger.error(f"❌ Erreur traitement: {e}")
                     import traceback
                     logger.error(traceback.format_exc())
+        else:
+            logger.warning("⚠️ Pas de callback_query dans les données")
         
+        # TOUJOURS retourner 200 OK
         return jsonify({'ok': True}), 200
         
     except Exception as e:
-        logger.error(f"❌ Erreur webhook: {e}")
+        logger.error(f"❌ ERREUR GLOBALE webhook: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        # TOUJOURS retourner 200 même en cas d'erreur
         return jsonify({'ok': True}), 200
 
 @app.route('/catalogue')

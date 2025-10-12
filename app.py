@@ -129,7 +129,8 @@ def require_admin(f):
 
 @app.route('/')
 def index():
-    html = f'''<!DOCTYPE html>
+    try:
+        html = f'''<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -206,11 +207,287 @@ h1 {{
 </div>
 </body>
 </html>'''
+        return html, 200
+    except Exception as e:
+        logger.error(f"Erreur route index: {e}")
+        return "Erreur serveur", 500
+
+@app.route('/health')
+def health():
+    try:
+        return jsonify({'status': 'ok'}), 200
+    except Exception as e:
+        return jsonify({'status': 'error'}), 500
+
+@app.route('/api/admin/login', methods=['POST'])
+@limiter.limit("5 per 15 minutes")
+def api_login():
+    try:
+        ip = get_remote_address()
+        allowed, message = check_rate_limit(ip)
+        if not allowed:
+            return jsonify({'error': message}), 429
+        
+        data = request.json or {}
+        password_hash = hash_password(data.get('password', ''))
+        
+        if password_hash == ADMIN_PASSWORD_HASH:
+            token = secrets.token_urlsafe(32)
+            admin_tokens[token] = {
+                'created': datetime.now(),
+                'expires': datetime.now() + timedelta(hours=12),
+                'ip': ip
+            }
+            if ip in failed_login_attempts:
+                failed_login_attempts[ip]['count'] = 0
+            return jsonify({'success': True, 'token': token})
+        
+        blocked = register_failed_attempt(ip)
+        if blocked:
+            return jsonify({'error': 'Trop de tentatives. Compte bloqué 15 minutes.'}), 429
+        return jsonify({'error': 'Mot de passe incorrect'}), 403
+    except Exception as e:
+        logger.error(f"Erreur login")
+        return jsonify({'error': 'Erreur serveur'}), 500
+
+@app.route('/api/admin/logout', methods=['POST'])
+def api_logout():
+    try:
+        token = request.headers.get('X-Admin-Token')
+        if token and token in admin_tokens:
+            del admin_tokens[token]
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False}), 500
+
+@app.route('/api/admin/check', methods=['GET'])
+def api_check_admin():
+    try:
+        token = request.headers.get('X-Admin-Token')
+        ip = get_remote_address()
+        
+        is_admin = False
+        if token and token in admin_tokens:
+            if admin_tokens[token]['ip'] == ip:
+                if datetime.now() <= admin_tokens[token]['expires']:
+                    is_admin = True
+                else:
+                    del admin_tokens[token]
+            else:
+                del admin_tokens[token]
+        return jsonify({'admin': is_admin}), 200
+    except Exception as e:
+        return jsonify({'admin': False}), 200
+
+@app.route('/api/upload', methods=['POST'])
+@require_admin
+@limiter.limit("10 per hour")
+def upload_file():
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'Aucun fichier'}), 400
+        
+        file = request.files['file']
+        file.seek(0, os.SEEK_END)
+        file_length = file.tell()
+        if file_length > 10 * 1024 * 1024:
+            return jsonify({'error': 'Fichier trop gros (max 10MB)'}), 400
+        file.seek(0)
+        
+        result = cloudinary.uploader.upload(file, resource_type='auto', folder='catalogue', timeout=60)
+        return jsonify({'url': result.get('secure_url')}), 200
+    except Exception as e:
+        return jsonify({'error': 'Erreur upload'}), 500
+
+@app.route('/api/products', methods=['GET'])
+def get_products():
+    try:
+        return jsonify(products), 200
+    except Exception as e:
+        return jsonify([]), 200
+
+@app.route('/api/admin/products', methods=['POST'])
+@require_admin
+def add_product():
+    global products
+    try:
+        data = request.json or {}
+        if not data.get('name') or not data.get('price'):
+            return jsonify({'error': 'Nom et prix requis'}), 400
+        
+        new_product = {
+            "id": max([p["id"] for p in products]) + 1 if products else 1,
+            "name": data.get("name"),
+            "price": float(data.get("price", 0)),
+            "description": data.get("description", ""),
+            "category": data.get("category", ""),
+            "image_url": data.get("image_url", ""),
+            "video_url": data.get("video_url", ""),
+            "stock": int(data.get("stock", 0))
+        }
+        products.append(new_product)
+        save_json_file(PRODUCTS_FILE, products)
+        return jsonify(new_product), 201
+    except Exception as e:
+        return jsonify({'error': 'Erreur création'}), 500
+
+@app.route('/api/admin/products/<int:pid>', methods=['PUT'])
+@require_admin
+def update_product(pid):
+    try:
+        data = request.json or {}
+        for p in products:
+            if p['id'] == pid:
+                p.update({
+                    "name": data.get("name", p["name"]),
+                    "price": float(data.get("price", p["price"])),
+                    "description": data.get("description", p["description"]),
+                    "category": data.get("category", p["category"]),
+                    "image_url": data.get("image_url", p.get("image_url", "")),
+                    "video_url": data.get("video_url", p.get("video_url", "")),
+                    "stock": int(data.get("stock", p["stock"]))
+                })
+                save_json_file(PRODUCTS_FILE, products)
+                return jsonify(p)
+        return jsonify({'error': 'Produit non trouvé'}), 404
+    except Exception as e:
+        return jsonify({'error': 'Erreur modification'}), 500
+
+@app.route('/api/admin/products/<int:pid>', methods=['DELETE'])
+@require_admin
+def delete_product(pid):
+    global products
+    try:
+        before = len(products)
+        products = [p for p in products if p['id'] != pid]
+        if len(products) < before:
+            save_json_file(PRODUCTS_FILE, products)
+            return jsonify({'success': True})
+        return jsonify({'error': 'Produit non trouvé'}), 404
+    except Exception as e:
+        return jsonify({'error': 'Erreur suppression'}), 500
+
+@app.route('/api/orders', methods=['POST'])
+@limiter.limit("5 per hour")
+def create_order():
+    """Créer une nouvelle commande"""
+    global orders
+    try:
+        data = request.json or {}
+        
+        # Validation
+        if not data.get('items') or len(data.get('items', [])) == 0:
+            return jsonify({'error': 'Panier vide'}), 400
+        
+        if not data.get('customer_name') or not data.get('customer_contact'):
+            return jsonify({'error': 'Nom et contact requis'}), 400
+        
+        # Calculer le total
+        total = 0
+        order_items = []
+        for item in data['items']:
+            product = next((p for p in products if p['id'] == item['product_id']), None)
+            if not product:
+                return jsonify({'error': f'Produit {item["product_id"]} introuvable'}), 404
+            
+            if product['stock'] < item['quantity']:
+                return jsonify({'error': f'Stock insuffisant pour {product["name"]}'}), 400
+            
+            item_total = product['price'] * item['quantity']
+            total += item_total
+            
+            order_items.append({
+                'product_id': product['id'],
+                'product_name': product['name'],
+                'price': product['price'],
+                'quantity': item['quantity'],
+                'subtotal': item_total
+            })
+        
+        # Créer la commande
+        order_id = max([o['id'] for o in orders]) + 1 if orders else 1
+        new_order = {
+            'id': order_id,
+            'order_number': f"CMD-{order_id:05d}",
+            'customer_name': data['customer_name'],
+            'customer_contact': data['customer_contact'],
+            'customer_address': data.get('customer_address', ''),
+            'customer_notes': data.get('customer_notes', ''),
+            'items': order_items,
+            'total': total,
+            'status': 'pending',
+            'created_at': datetime.now().isoformat(),
+            'updated_at': datetime.now().isoformat()
+        }
+        
+        orders.append(new_order)
+        save_json_file(ORDERS_FILE, orders)
+        
+        # Envoyer notification Telegram à l'admin
+        message = f"""🛒 <b>NOUVELLE COMMANDE #{new_order['order_number']}</b>
+
+👤 <b>Client:</b> {new_order['customer_name']}
+📞 <b>Contact:</b> {new_order['customer_contact']}
+📍 <b>Adresse:</b> {new_order['customer_address'] or 'Non spécifiée'}
+
+📦 <b>Articles:</b>
+"""
+        for item in order_items:
+            message += f"• {item['product_name']} x{item['quantity']} = {item['subtotal']}€\n"
+        
+        message += f"\n💰 <b>TOTAL: {total}€</b>"
+        
+        if new_order['customer_notes']:
+            message += f"\n\n📝 <b>Notes:</b> {new_order['customer_notes']}"
+        
+        message += f"\n\n⏰ {datetime.now().strftime('%d/%m/%Y à %H:%M')}"
+        
+        send_telegram_message(message)
+        
+        return jsonify({
+            'success': True,
+            'order': new_order
+        }), 201
+        
+    except Exception as e:
+        logger.error(f"Erreur création commande: {e}")
+        return jsonify({'error': 'Erreur serveur'}), 500
+
+@app.route('/api/admin/orders', methods=['GET'])
+@require_admin
+def get_orders():
+    """Récupérer toutes les commandes (admin)"""
+    try:
+        return jsonify(orders), 200
+    except Exception as e:
+        return jsonify([]), 200
+
+@app.route('/api/admin/orders/<int:order_id>', methods=['PUT'])
+@require_admin
+def update_order_status(order_id):
+    """Mettre à jour le statut d'une commande"""
+    try:
+        data = request.json or {}
+        new_status = data.get('status')
+        
+        if new_status not in ['pending', 'confirmed', 'preparing', 'ready', 'delivered', 'cancelled']:
+            return jsonify({'error': 'Statut invalide'}), 400
+        
+        for order in orders:
+            if order['id'] == order_id:
+                order['status'] = new_status
+                order['updated_at'] = datetime.now().isoformat()
+                save_json_file(ORDERS_FILE, orders)
+                return jsonify(order)
+        
+        return jsonify({'error': 'Commande non trouvée'}), 404
+    except Exception as e:
+        return jsonify({'error': 'Erreur modification'}), 500
 
 @app.route('/catalogue')
 def catalogue():
-    # HTML avec système de commande intégré
-    html = '''<!DOCTYPE html>
+    try:
+        html = '''<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -468,193 +745,6 @@ async function init() {
     await loadProducts();
     render();
   } catch (e) {
-    console.error('Erreur init:', e);
-    document.getElementById('content').innerHTML = '<div class="error">❌ Erreur de chargement</div>';
-  }
-}
-
-async function checkAdmin() {
-  try {
-    const res = await fetch('/api/admin/check', { 
-      headers: { 'X-Admin-Token': adminToken }
-    });
-    if (!res.ok) throw new Error('Erreur check admin');
-    const data = await res.json();
-    if (!data.admin) {
-      adminToken = '';
-      sessionStorage.removeItem('adminToken');
-    }
-    return data.admin;
-  } catch (e) {
-    adminToken = '';
-    sessionStorage.removeItem('adminToken');
-    return false;
-  }
-}
-
-async function loadProducts() {
-  try {
-    const res = await fetch('/api/products');
-    if (!res.ok) throw new Error('Erreur chargement produits');
-    products = await res.json();
-  } catch (e) {
-    throw e;
-  }
-}
-
-function getCartCount() {
-  return cart.reduce((sum, item) => sum + item.quantity, 0);
-}
-
-function getCartTotal() {
-  return cart.reduce((sum, item) => {
-    const product = products.find(p => p.id === item.product_id);
-    return sum + (product ? product.price * item.quantity : 0);
-  }, 0);
-}
-
-function addToCart(productId) {
-  const product = products.find(p => p.id === productId);
-  if (!product) return;
-  
-  const existing = cart.find(item => item.product_id === productId);
-  if (existing) {
-    if (existing.quantity < product.stock) {
-      existing.quantity++;
-    } else {
-      alert('Stock insuffisant');
-      return;
-    }
-  } else {
-    cart.push({ product_id: productId, quantity: 1 });
-  }
-  
-  localStorage.setItem('cart', JSON.stringify(cart));
-  render();
-  alert('✅ Ajouté au panier');
-}
-
-function updateCartQuantity(productId, change) {
-  const item = cart.find(i => i.product_id === productId);
-  const product = products.find(p => p.id === productId);
-  
-  if (!item || !product) return;
-  
-  const newQty = item.quantity + change;
-  
-  if (newQty <= 0) {
-    cart = cart.filter(i => i.product_id !== productId);
-  } else if (newQty <= product.stock) {
-    item.quantity = newQty;
-  } else {
-    alert('Stock insuffisant');
-    return;
-  }
-  
-  localStorage.setItem('cart', JSON.stringify(cart));
-  showCart();
-}
-
-function removeFromCart(productId) {
-  cart = cart.filter(item => item.product_id !== productId);
-  localStorage.setItem('cart', JSON.stringify(cart));
-  showCart();
-}
-
-function showCart() {
-  const modal = document.getElementById('cart-modal');
-  const itemsDiv = document.getElementById('cart-items');
-  const totalDiv = document.getElementById('cart-total');
-  
-  if (cart.length === 0) {
-    itemsDiv.innerHTML = '<p style="text-align:center;padding:40px;color:#999;">Votre panier est vide</p>';
-    totalDiv.innerHTML = '';
-  } else {
-    itemsDiv.innerHTML = cart.map(item => {
-      const product = products.find(p => p.id === item.product_id);
-      if (!product) return '';
-      
-      return `
-        <div class="cart-item">
-          <div>
-            <strong>${product.name}</strong><br>
-            <span style="color:#27ae60;">${product.price}€</span> x ${item.quantity}
-          </div>
-          <div>
-            <button onclick="updateCartQuantity(${item.product_id}, -1)">-</button>
-            <span style="margin:0 10px;">${item.quantity}</span>
-            <button onclick="updateCartQuantity(${item.product_id}, 1)">+</button>
-            <button class="delete" onclick="removeFromCart(${item.product_id})">🗑️</button>
-          </div>
-        </div>
-      `;
-    }).join('');
-    
-    totalDiv.innerHTML = `<h2>${getCartTotal().toFixed(2)} €</h2><p>${getCartCount()} article(s)</p>`;
-  }
-  
-  modal.classList.add('show');
-}
-
-function closeCart() {
-  document.getElementById('cart-modal').classList.remove('show');
-}
-
-function showCheckout() {
-  if (cart.length === 0) {
-    alert('Votre panier est vide');
-    return;
-  }
-  
-  document.getElementById('cart-modal').classList.remove('show');
-  document.getElementById('checkout-total').innerHTML = `<h2>${getCartTotal().toFixed(2)} €</h2><p>${getCartCount()} article(s)</p>`;
-  document.getElementById('checkout-modal').classList.add('show');
-}
-
-function closeCheckout() {
-  document.getElementById('checkout-modal').classList.remove('show');
-  showCart();
-}
-
-async function submitOrder() {
-  const name = document.getElementById('customer-name').value.trim();
-  const contact = document.getElementById('customer-contact').value.trim();
-  const address = document.getElementById('customer-address').value.trim();
-  const notes = document.getElementById('customer-notes').value.trim();
-  const errorDiv = document.getElementById('checkout-error');
-  
-  if (!name || !contact) {
-    errorDiv.textContent = 'Nom et contact sont requis';
-    return;
-  }
-  
-  const orderData = {
-    customer_name: name,
-    customer_contact: contact,
-    customer_address: address,
-    customer_notes: notes,
-    items: cart
-  };
-  
-  try {
-    const res = await fetch('/api/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(orderData)
-    });
-    
-    const data = await res.json();
-    
-    if (res.ok) {
-      cart = [];
-      localStorage.removeItem('cart');
-      document.getElementById('checkout-modal').classList.remove('show');
-      alert(`✅ Commande validée !\\n\\nNuméro: ${data.order.order_number}\\nTotal: ${data.order.total}€\\n\\nVous serez contacté rapidement !`);
-      render();
-    } else {
-      errorDiv.textContent = data.error || 'Erreur lors de la commande';
-    }
-  } catch (e) {
     errorDiv.textContent = 'Erreur réseau';
   }
 }
@@ -894,8 +984,202 @@ init();
 </script>
 </body>
 </html>''' % {'bg': BACKGROUND_IMAGE}
-    return html, 200
+        return html, 200
+    except Exception as e:
+        logger.error(f"Erreur route catalogue: {e}")
+        return "Erreur serveur", 500
 
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    logger.warning(f"Démarrage sur le port {port}")
+    app.run(host='0.0.0.0', port=port, debug=False)
+    console.error('Erreur init:', e);
+    document.getElementById('content').innerHTML = '<div class="error">❌ Erreur de chargement</div>';
+  }
+}
+
+async function checkAdmin() {
+  try {
+    const res = await fetch('/api/admin/check', { 
+      headers: { 'X-Admin-Token': adminToken }
+    });
+    if (!res.ok) throw new Error('Erreur check admin');
+    const data = await res.json();
+    if (!data.admin) {
+      adminToken = '';
+      sessionStorage.removeItem('adminToken');
+    }
+    return data.admin;
+  } catch (e) {
+    adminToken = '';
+    sessionStorage.removeItem('adminToken');
+    return false;
+  }
+}
+
+async function loadProducts() {
+  try {
+    const res = await fetch('/api/products');
+    if (!res.ok) throw new Error('Erreur chargement produits');
+    products = await res.json();
+  } catch (e) {
+    throw e;
+  }
+}
+
+function getCartCount() {
+  return cart.reduce((sum, item) => sum + item.quantity, 0);
+}
+
+function getCartTotal() {
+  return cart.reduce((sum, item) => {
+    const product = products.find(p => p.id === item.product_id);
+    return sum + (product ? product.price * item.quantity : 0);
+  }, 0);
+}
+
+function addToCart(productId) {
+  const product = products.find(p => p.id === productId);
+  if (!product) return;
+  
+  const existing = cart.find(item => item.product_id === productId);
+  if (existing) {
+    if (existing.quantity < product.stock) {
+      existing.quantity++;
+    } else {
+      alert('Stock insuffisant');
+      return;
+    }
+  } else {
+    cart.push({ product_id: productId, quantity: 1 });
+  }
+  
+  localStorage.setItem('cart', JSON.stringify(cart));
+  render();
+  alert('✅ Ajouté au panier');
+}
+
+function updateCartQuantity(productId, change) {
+  const item = cart.find(i => i.product_id === productId);
+  const product = products.find(p => p.id === productId);
+  
+  if (!item || !product) return;
+  
+  const newQty = item.quantity + change;
+  
+  if (newQty <= 0) {
+    cart = cart.filter(i => i.product_id !== productId);
+  } else if (newQty <= product.stock) {
+    item.quantity = newQty;
+  } else {
+    alert('Stock insuffisant');
+    return;
+  }
+  
+  localStorage.setItem('cart', JSON.stringify(cart));
+  showCart();
+}
+
+function removeFromCart(productId) {
+  cart = cart.filter(item => item.product_id !== productId);
+  localStorage.setItem('cart', JSON.stringify(cart));
+  showCart();
+}
+
+function showCart() {
+  const modal = document.getElementById('cart-modal');
+  const itemsDiv = document.getElementById('cart-items');
+  const totalDiv = document.getElementById('cart-total');
+  
+  if (cart.length === 0) {
+    itemsDiv.innerHTML = '<p style="text-align:center;padding:40px;color:#999;">Votre panier est vide</p>';
+    totalDiv.innerHTML = '';
+  } else {
+    itemsDiv.innerHTML = cart.map(item => {
+      const product = products.find(p => p.id === item.product_id);
+      if (!product) return '';
+      
+      return `
+        <div class="cart-item">
+          <div>
+            <strong>${product.name}</strong><br>
+            <span style="color:#27ae60;">${product.price}€</span> x ${item.quantity}
+          </div>
+          <div>
+            <button onclick="updateCartQuantity(${item.product_id}, -1)">-</button>
+            <span style="margin:0 10px;">${item.quantity}</span>
+            <button onclick="updateCartQuantity(${item.product_id}, 1)">+</button>
+            <button class="delete" onclick="removeFromCart(${item.product_id})">🗑️</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+    
+    totalDiv.innerHTML = `<h2>${getCartTotal().toFixed(2)} €</h2><p>${getCartCount()} article(s)</p>`;
+  }
+  
+  modal.classList.add('show');
+}
+
+function closeCart() {
+  document.getElementById('cart-modal').classList.remove('show');
+}
+
+function showCheckout() {
+  if (cart.length === 0) {
+    alert('Votre panier est vide');
+    return;
+  }
+  
+  document.getElementById('cart-modal').classList.remove('show');
+  document.getElementById('checkout-total').innerHTML = `<h2>${getCartTotal().toFixed(2)} €</h2><p>${getCartCount()} article(s)</p>`;
+  document.getElementById('checkout-modal').classList.add('show');
+}
+
+function closeCheckout() {
+  document.getElementById('checkout-modal').classList.remove('show');
+  showCart();
+}
+
+async function submitOrder() {
+  const name = document.getElementById('customer-name').value.trim();
+  const contact = document.getElementById('customer-contact').value.trim();
+  const address = document.getElementById('customer-address').value.trim();
+  const notes = document.getElementById('customer-notes').value.trim();
+  const errorDiv = document.getElementById('checkout-error');
+  
+  if (!name || !contact) {
+    errorDiv.textContent = 'Nom et contact sont requis';
+    return;
+  }
+  
+  const orderData = {
+    customer_name: name,
+    customer_contact: contact,
+    customer_address: address,
+    customer_notes: notes,
+    items: cart
+  };
+  
+  try {
+    const res = await fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(orderData)
+    });
+    
+    const data = await res.json();
+    
+    if (res.ok) {
+      cart = [];
+      localStorage.removeItem('cart');
+      document.getElementById('checkout-modal').classList.remove('show');
+      alert(`✅ Commande validée !\\n\\nNuméro: ${data.order.order_number}\\nTotal: ${data.order.total}€\\n\\nVous serez contacté rapidement !`);
+      render();
+    } else {
+      errorDiv.textContent = data.error || 'Erreur lors de la commande';
+    }
+  } catch (e) {
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

@@ -1,5 +1,4 @@
 python-telegram-bot==20.3
-python-dotenv
 geopy==2.4.1
 werkzeug
 Flask==3.0.0
@@ -9,3 +8,6 @@ cloudinary==1.36.0
 gunicorn==21.2.0
 flask-limiter==3.5.0
 requests==2.31.0
+flask-limiter==3.5.0
+python-dotenv==1.0.0
+geopy==2.4.1

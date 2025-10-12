@@ -1,30 +1,47 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 from functools import wraps
 import os, json, cloudinary, cloudinary.uploader
 import logging
 import secrets
+import hashlib
 from datetime import datetime, timedelta
 
-logging.basicConfig(level=logging.INFO)
+# Configuration logs - REDUIRE les infos sensibles
+logging.basicConfig(level=logging.WARNING)  # Changé de INFO à WARNING
 logger = logging.getLogger(__name__)
 
 load_dotenv('infos.env')
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24).hex())
-CORS(app, supports_credentials=True, origins=['*'])
+app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
+CORS(app, supports_credentials=True, origins=[
+    'https://carte-du-pirate.onrender.com',  # UNIQUEMENT votre domaine
+    'http://localhost:5000'  # Pour dev local
+])
 
-ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
-BACKGROUND_IMAGE = 'https://res.cloudinary.com/dfhrrtzsd/image/upload/v1760118433/ChatGPT_Image_8_oct._2025_03_01_21_zm5zfy.png'
+# Hash du mot de passe (plus sécurisé que texte clair)
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
 
-# Stockage des tokens en mémoire (simple mais fonctionne)
+# Stocker le HASH au lieu du mot de passe
+ADMIN_PASSWORD_HASH = hash_password(os.environ.get('ADMIN_PASSWORD', 'changeme123'))
+BACKGROUND_IMAGE = os.environ.get('BACKGROUND_URL', 'https://res.cloudinary.com/dfhrrtzsd/image/upload/v1760118433/ChatGPT_Image_8_oct._2025_03_01_21_zm5zfy.png')
+
+# Rate limiting pour éviter les attaques
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://"
+)
+
+# Stockage des tokens (toujours en mémoire mais avec plus de sécurité)
 admin_tokens = {}
-
-def get_background_url():
-    custom_bg = os.environ.get('BACKGROUND_URL')
-    return custom_bg if custom_bg else BACKGROUND_IMAGE
+failed_login_attempts = {}
 
 try:
     cloudinary.config(
@@ -33,9 +50,9 @@ try:
         api_secret=os.environ.get('CLOUDINARY_API_SECRET'),
         secure=True
     )
-    logger.info("✅ Cloudinary configuré")
+    logger.warning("Cloudinary configuré")
 except Exception as e:
-    logger.error(f"⚠️ Erreur Cloudinary: {e}")
+    logger.error(f"Erreur Cloudinary: {e}")
 
 PRODUCTS_FILE = 'products.json'
 
@@ -46,7 +63,7 @@ def load_products():
                 data = json.load(f)
                 return data if isinstance(data, list) else []
         except Exception as e:
-            logger.warning(f"Erreur lecture products.json: {e}")
+            logger.warning(f"Erreur lecture products.json")
             return []
     else:
         save_products([])
@@ -57,13 +74,13 @@ def save_products(products):
         with open(PRODUCTS_FILE, 'w', encoding='utf-8') as f:
             json.dump(products, f, indent=2, ensure_ascii=False)
     except Exception as e:
-        logger.error(f"Erreur sauvegarde products: {e}")
+        logger.error(f"Erreur sauvegarde products")
 
 try:
     products = load_products()
-    logger.info(f"✅ {len(products)} produits chargés")
+    logger.warning(f"{len(products)} produits chargés")
 except Exception as e:
-    logger.error(f"❌ Erreur chargement produits: {e}")
+    logger.error(f"Erreur chargement produits")
     products = []
 
 def require_admin(f):
@@ -71,10 +88,9 @@ def require_admin(f):
     def wrapped(*args, **kwargs):
         token = request.headers.get('X-Admin-Token')
         if not token or token not in admin_tokens:
-            logger.warning(f"Token invalide ou manquant: {token}")
+            # PAS de logs détaillés pour éviter l'exposition
             return jsonify({'error': 'Non autorisé'}), 403
         
-        # Vérifier l'expiration
         token_data = admin_tokens[token]
         if datetime.now() > token_data['expires']:
             del admin_tokens[token]
@@ -82,6 +98,35 @@ def require_admin(f):
             
         return f(*args, **kwargs)
     return wrapped
+
+# Fonction anti brute-force
+def check_rate_limit(ip):
+    if ip not in failed_login_attempts:
+        failed_login_attempts[ip] = {'count': 0, 'blocked_until': None}
+    
+    attempt = failed_login_attempts[ip]
+    
+    # Si bloqué, vérifier si le blocage est expiré
+    if attempt['blocked_until']:
+        if datetime.now() < attempt['blocked_until']:
+            return False, "Trop de tentatives. Réessayez dans 15 minutes."
+        else:
+            attempt['count'] = 0
+            attempt['blocked_until'] = None
+    
+    return True, None
+
+def register_failed_attempt(ip):
+    if ip not in failed_login_attempts:
+        failed_login_attempts[ip] = {'count': 0, 'blocked_until': None}
+    
+    failed_login_attempts[ip]['count'] += 1
+    
+    # Bloquer après 5 tentatives
+    if failed_login_attempts[ip]['count'] >= 5:
+        failed_login_attempts[ip]['blocked_until'] = datetime.now() + timedelta(minutes=15)
+        return True
+    return False
 
 @app.route('/')
 def index():
@@ -107,10 +152,7 @@ body {{
 body::before {{
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  top: 0; left: 0; right: 0; bottom: 0;
   background: rgba(0, 0, 0, 0.4);
   z-index: 1;
 }}
@@ -155,39 +197,13 @@ h1 {{
   transform: scale(1.05) translateY(-5px);
   box-shadow: 0 15px 40px rgba(212, 175, 55, 0.6);
 }}
-.btn:active {{
-  transform: scale(0.98);
-}}
-.api-status {{
-  margin-top: 40px;
-  padding: 15px;
-  background: rgba(0,0,0,0.6);
-  border-radius: 10px;
-  font-size: 0.9em;
-  backdrop-filter: blur(10px);
-}}
-.status-badge {{
-  display: inline-block;
-  padding: 5px 15px;
-  background: #28a745;
-  color: white;
-  border-radius: 20px;
-  font-weight: bold;
-  margin-top: 10px;
-}}
 </style>
 </head>
 <body>
 <div class="container">
   <h1>🏴‍☠️ Carte du Pirate 🏴‍☠️</h1>
   <p class="subtitle">Votre boutique de trésors en ligne</p>
-  
-  <a href="/catalogue" class="btn">📦 Catalogue du Pirate</a>
-  
-  <div class="api-status">
-    <p>Système API</p>
-    <span class="status-badge">✅ Actif</span>
-  </div>
+  <a href="/catalogue" class="btn">📦 Catalogue</a>
 </div>
 </body>
 </html>'''
@@ -198,21 +214,43 @@ def health():
     return jsonify({'status': 'ok'}), 200
 
 @app.route('/api/admin/login', methods=['POST'])
+@limiter.limit("5 per 15 minutes")  # Max 5 tentatives en 15 min
 def api_login():
     try:
+        ip = get_remote_address()
+        
+        # Vérifier rate limit
+        allowed, message = check_rate_limit(ip)
+        if not allowed:
+            return jsonify({'error': message}), 429
+        
         data = request.json or {}
-        if data.get('password') == ADMIN_PASSWORD:
-            # Générer un token
+        password_hash = hash_password(data.get('password', ''))
+        
+        if password_hash == ADMIN_PASSWORD_HASH:
+            # Générer un token sécurisé
             token = secrets.token_urlsafe(32)
             admin_tokens[token] = {
                 'created': datetime.now(),
-                'expires': datetime.now() + timedelta(hours=24)
+                'expires': datetime.now() + timedelta(hours=12),  # Réduit à 12h
+                'ip': ip  # Associer le token à l'IP
             }
-            logger.info(f"✅ Connexion admin réussie, token généré")
+            
+            # Reset failed attempts
+            if ip in failed_login_attempts:
+                failed_login_attempts[ip]['count'] = 0
+            
+            # PAS de log détaillé
             return jsonify({'success': True, 'token': token})
+        
+        # Tentative échouée
+        blocked = register_failed_attempt(ip)
+        if blocked:
+            return jsonify({'error': 'Trop de tentatives. Compte bloqué 15 minutes.'}), 429
+        
         return jsonify({'error': 'Mot de passe incorrect'}), 403
     except Exception as e:
-        logger.error(f"Erreur login: {e}")
+        logger.error(f"Erreur login")
         return jsonify({'error': 'Erreur serveur'}), 500
 
 @app.route('/api/admin/logout', methods=['POST'])
@@ -223,45 +261,62 @@ def api_logout():
             del admin_tokens[token]
         return jsonify({'success': True})
     except Exception as e:
-        logger.error(f"Erreur logout: {e}")
         return jsonify({'success': False}), 500
 
 @app.route('/api/admin/check', methods=['GET'])
 def api_check_admin():
     try:
         token = request.headers.get('X-Admin-Token')
-        is_admin = token and token in admin_tokens
-        if is_admin:
-            # Vérifier expiration
-            if datetime.now() > admin_tokens[token]['expires']:
+        ip = get_remote_address()
+        
+        is_admin = False
+        if token and token in admin_tokens:
+            # Vérifier que l'IP correspond
+            if admin_tokens[token]['ip'] == ip:
+                if datetime.now() <= admin_tokens[token]['expires']:
+                    is_admin = True
+                else:
+                    del admin_tokens[token]
+            else:
+                # IP différente = token volé potentiellement
                 del admin_tokens[token]
-                is_admin = False
+        
         return jsonify({'admin': is_admin}), 200
     except Exception as e:
-        logger.error(f"Erreur check admin: {e}")
         return jsonify({'admin': False}), 200
 
 @app.route('/api/upload', methods=['POST'])
 @require_admin
+@limiter.limit("10 per hour")  # Max 10 uploads/heure
 def upload_file():
     try:
         if 'file' not in request.files:
             return jsonify({'error': 'Aucun fichier'}), 400
+        
         file = request.files['file']
-        logger.info(f"📤 Upload fichier: {file.filename}")
-        result = cloudinary.uploader.upload(file, resource_type='auto', folder='catalogue', timeout=60)
-        logger.info(f"✅ Upload réussi: {result.get('secure_url')}")
+        
+        # Limiter la taille (10 MB)
+        file.seek(0, os.SEEK_END)
+        file_length = file.tell()
+        if file_length > 10 * 1024 * 1024:
+            return jsonify({'error': 'Fichier trop gros (max 10MB)'}), 400
+        file.seek(0)
+        
+        result = cloudinary.uploader.upload(
+            file, 
+            resource_type='auto', 
+            folder='catalogue', 
+            timeout=60
+        )
         return jsonify({'url': result.get('secure_url')}), 200
     except Exception as e:
-        logger.error(f"Erreur upload: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erreur upload'}), 500
 
 @app.route('/api/products', methods=['GET'])
 def get_products():
     try:
         return jsonify(products), 200
     except Exception as e:
-        logger.error(f"Erreur GET products: {e}")
         return jsonify([]), 200
 
 @app.route('/api/admin/products', methods=['POST'])
@@ -287,8 +342,7 @@ def add_product():
         save_products(products)
         return jsonify(new_product), 201
     except Exception as e:
-        logger.error(f"Erreur add product: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erreur création'}), 500
 
 @app.route('/api/admin/products/<int:pid>', methods=['PUT'])
 @require_admin
@@ -307,12 +361,10 @@ def update_product(pid):
                     "stock": int(data.get("stock", p["stock"]))
                 })
                 save_products(products)
-                logger.info(f"✅ Produit {pid} modifié")
                 return jsonify(p)
         return jsonify({'error': 'Produit non trouvé'}), 404
     except Exception as e:
-        logger.error(f"Erreur update product: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erreur modification'}), 500
 
 @app.route('/api/admin/products/<int:pid>', methods=['DELETE'])
 @require_admin
@@ -326,12 +378,11 @@ def delete_product(pid):
             return jsonify({'success': True})
         return jsonify({'error': 'Produit non trouvé'}), 404
     except Exception as e:
-        logger.error(f"Erreur delete product: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Erreur suppression'}), 500
 
 @app.route('/catalogue')
 def catalogue():
-    logger.info("📄 Chargement catalogue")
+    # MEME HTML mais avec sessionStorage au lieu de localStorage
     html = f'''<!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -351,10 +402,7 @@ body {{
 body::before {{
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  top: 0; left: 0; right: 0; bottom: 0;
   background: rgba(0, 0, 0, 0.3);
   z-index: 0;
 }}
@@ -431,10 +479,8 @@ input, textarea {{
 .modal {{
   display: none;
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
   background: rgba(0,0,0,0.7);
   align-items: center;
   justify-content: center;
@@ -481,6 +527,7 @@ input, textarea {{
     <input type="password" id="password-input" placeholder="Mot de passe">
     <button onclick="login()">Se connecter</button>
     <button onclick="closeLogin()">Annuler</button>
+    <div id="login-error" style="color:red;margin-top:10px;"></div>
   </div>
 </div>
 
@@ -500,7 +547,8 @@ input, textarea {{
 </div>
 
 <script>
-let adminToken = localStorage.getItem('adminToken') || '';
+// CHANGEMENT: sessionStorage au lieu de localStorage (effacé à la fermeture)
+let adminToken = sessionStorage.getItem('adminToken') || '';
 let products = [];
 let editingProduct = null;
 let currentImageUrl = '';
@@ -513,7 +561,7 @@ async function init() {{
     render();
   }} catch (e) {{
     console.error('Erreur init:', e);
-    document.getElementById('content').innerHTML = '<div class="error">❌ Erreur de chargement: ' + e.message + '</div>';
+    document.getElementById('content').innerHTML = '<div class="error">❌ Erreur de chargement</div>';
   }}
 }}
 
@@ -526,13 +574,12 @@ async function checkAdmin() {{
     const data = await res.json();
     if (!data.admin) {{
       adminToken = '';
-      localStorage.removeItem('adminToken');
+      sessionStorage.removeItem('adminToken');
     }}
     return data.admin;
   }} catch (e) {{
-    console.error('Erreur checkAdmin:', e);
     adminToken = '';
-    localStorage.removeItem('adminToken');
+    sessionStorage.removeItem('adminToken');
     return false;
   }}
 }}
@@ -542,9 +589,7 @@ async function loadProducts() {{
     const res = await fetch('/api/products');
     if (!res.ok) throw new Error('Erreur chargement produits');
     products = await res.json();
-    console.log('Produits chargés:', products.length);
   }} catch (e) {{
-    console.error('Erreur loadProducts:', e);
     throw e;
   }}
 }}
@@ -560,7 +605,7 @@ function render() {{
   }}
   
   if (products.length === 0) {{
-    content.innerHTML = '<div class="empty"><h2>📦 Catalogue vide</h2><p>Aucun produit pour le moment</p></div>';
+    content.innerHTML = '<div class="empty"><h2>📦 Catalogue vide</h2><p>Aucun produit</p></div>';
   }} else {{
     content.innerHTML = products.map(p => `
       <div class="card">
@@ -582,6 +627,7 @@ function render() {{
 
 function showLogin() {{
   document.getElementById('login-modal').classList.add('show');
+  document.getElementById('login-error').textContent = '';
 }}
 
 function closeLogin() {{
@@ -590,6 +636,8 @@ function closeLogin() {{
 
 async function login() {{
   const password = document.getElementById('password-input').value;
+  const errorDiv = document.getElementById('login-error');
+  
   try {{
     const res = await fetch('/api/admin/login', {{
       method: 'POST',
@@ -597,17 +645,18 @@ async function login() {{
       body: JSON.stringify({{ password }})
     }});
     const data = await res.json();
+    
     if (res.ok && data.token) {{
       adminToken = data.token;
-      localStorage.setItem('adminToken', adminToken);
+      sessionStorage.setItem('adminToken', adminToken);
       closeLogin();
       render();
       alert('✅ Connecté');
     }} else {{
-      alert('❌ Mot de passe incorrect');
+      errorDiv.textContent = data.error || 'Erreur de connexion';
     }}
   }} catch (e) {{
-    alert('❌ Erreur de connexion');
+    errorDiv.textContent = 'Erreur réseau';
   }}
 }}
 
@@ -617,7 +666,7 @@ async function logout() {{
     headers: {{ 'X-Admin-Token': adminToken }}
   }});
   adminToken = '';
-  localStorage.removeItem('adminToken');
+  sessionStorage.removeItem('adminToken');
   render();
 }}
 
@@ -772,5 +821,5 @@ init();
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    logger.info(f"🚀 Démarrage sur le port {port}")
+    logger.warning(f"Démarrage sur le port {port}")
     app.run(host='0.0.0.0', port=port, debug=False)

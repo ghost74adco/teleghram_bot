@@ -13,6 +13,14 @@ import json
 import math
 from datetime import datetime, timedelta
 
+# Google Sheets
+try:
+    from google.oauth2.service_account import Credentials
+    from googleapiclient.discovery import build
+    GOOGLE_SHEETS_AVAILABLE = True
+except ImportError:
+    GOOGLE_SHEETS_AVAILABLE = False
+
 # Géolocalisation
 try:
     from geopy.geocoders import Nominatim
@@ -36,6 +44,12 @@ TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN') or os.environ.get('BOT
 TELEGRAM_ADMIN_ID = os.environ.get('TELEGRAM_ADMIN_ID') or os.environ.get('ADMIN_ID')
 ADMIN_ADDRESS = os.environ.get('ADMIN_ADDRESS', 'Chamonix-Mont-Blanc, France')
 BACKGROUND_IMAGE = os.environ.get('BACKGROUND_URL') or os.environ.get('BACKGROUND_IMAGE', 'https://res.cloudinary.com/dfhrrtzsd/image/upload/v1760118433/ChatGPT_Image_8_oct._2025_03_01_21_zm5zfy.png')
+
+# Google Sheets Configuration
+GOOGLE_SHEETS_ENABLED = False
+SPREADSHEET_ID = os.environ.get('GOOGLE_SPREADSHEET_ID', '')
+GOOGLE_CREDENTIALS_JSON = os.environ.get('GOOGLE_CREDENTIALS_JSON', '')
+sheets_service = None
 
 limiter = Limiter(app=app, key_func=get_remote_address, default_limits=["200 per day", "50 per hour"], storage_uri="memory://")
 
@@ -108,26 +122,242 @@ logger.warning(f"👤 TELEGRAM_ADMIN_ID: {'✅ Configuré (' + TELEGRAM_ADMIN_ID
 logger.warning(f"📍 ADMIN_ADDRESS: {ADMIN_ADDRESS}")
 logger.warning("=" * 50)
 
+products = load_json_file(PRODUCTS_FILE)
+orders = load_json_file(ORDERS_FILE)
+
+# ==================== GOOGLE SHEETS FUNCTIONS ====================
+
+def init_google_sheets():
+    global sheets_service, GOOGLE_SHEETS_ENABLED
+    
+    if not GOOGLE_SHEETS_AVAILABLE:
+        logger.warning("⚠️ google-api-python-client non installé")
+        return False
+    
+    if not SPREADSHEET_ID or not GOOGLE_CREDENTIALS_JSON:
+        logger.warning("⚠️ Google Sheets non configuré - fonctionnalité désactivée")
+        return False
+    
+    try:
+        creds_dict = json.loads(GOOGLE_CREDENTIALS_JSON)
+        credentials = Credentials.from_service_account_info(
+            creds_dict,
+            scopes=['https://www.googleapis.com/auth/spreadsheets']
+        )
+        
+        sheets_service = build('sheets', 'v4', credentials=credentials)
+        GOOGLE_SHEETS_ENABLED = True
+        logger.warning("✅ Google Sheets API initialisée")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur initialisation Google Sheets: {e}")
+        return False
+
+def sync_products_from_sheets():
+    """Récupère les produits depuis Google Sheets et met à jour products.json"""
+    if not GOOGLE_SHEETS_ENABLED:
+        return False
+    
+    try:
+        result = sheets_service.spreadsheets().values().get(
+            spreadsheetId=SPREADSHEET_ID,
+            range='Catalogue!A2:H1000'
+        ).execute()
+        
+        values = result.get('values', [])
+        
+        if not values:
+            logger.warning("⚠️ Aucune donnée dans la feuille Catalogue")
+            return False
+        
+        updated_products = []
+        for row in values:
+            if len(row) < 3:
+                continue
+            
+            try:
+                product = {
+                    "id": int(row[0]) if row[0] else 0,
+                    "name": row[1] if len(row) > 1 else "",
+                    "price": float(row[2]) if len(row) > 2 else 0,
+                    "description": row[3] if len(row) > 3 else "",
+                    "category": row[4] if len(row) > 4 else "",
+                    "image_url": row[5] if len(row) > 5 else "",
+                    "video_url": row[6] if len(row) > 6 else "",
+                    "stock": int(row[7]) if len(row) > 7 else 0
+                }
+                
+                if product["id"] > 0 and product["name"]:
+                    updated_products.append(product)
+                    
+            except (ValueError, IndexError) as e:
+                logger.warning(f"⚠️ Ligne ignorée: {row}")
+                continue
+        
+        global products
+        products = updated_products
+        save_json_file(PRODUCTS_FILE, products)
+        
+        logger.warning(f"✅ {len(products)} produits synchronisés depuis Google Sheets")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur sync depuis Sheets: {e}")
+        return False
+
+def sync_products_to_sheets():
+    """Écrit les produits de products.json vers Google Sheets"""
+    if not GOOGLE_SHEETS_ENABLED:
+        return False
+    
+    try:
+        values = [["ID", "Nom", "Prix (€)", "Description", "Catégorie", "Image URL", "Video URL", "Stock"]]
+        
+        for product in products:
+            values.append([
+                product.get("id", ""),
+                product.get("name", ""),
+                product.get("price", 0),
+                product.get("description", ""),
+                product.get("category", ""),
+                product.get("image_url", ""),
+                product.get("video_url", ""),
+                product.get("stock", 0)
+            ])
+        
+        body = {'values': values}
+        sheets_service.spreadsheets().values().update(
+            spreadsheetId=SPREADSHEET_ID,
+            range='Catalogue!A1:H1000',
+            valueInputOption='RAW',
+            body=body
+        ).execute()
+        
+        logger.warning(f"✅ {len(products)} produits écrits dans Google Sheets")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur sync vers Sheets: {e}")
+        return False
+
+def log_sale_to_sheets(order_data):
+    """Enregistre une commande dans la feuille Ventes"""
+    if not GOOGLE_SHEETS_ENABLED:
+        return False
+    
+    try:
+        rows = []
+        
+        for item in order_data['items']:
+            row = [
+                order_data['created_at'],
+                order_data['order_number'],
+                order_data['customer_name'],
+                item['product_id'],
+                item['product_name'],
+                item['quantity'],
+                item['price'],
+                item['subtotal'],
+                order_data['shipping_type'],
+                order_data['total'],
+                order_data['status']
+            ]
+            rows.append(row)
+        
+        body = {'values': rows}
+        sheets_service.spreadsheets().values().append(
+            spreadsheetId=SPREADSHEET_ID,
+            range='Ventes!A:K',
+            valueInputOption='RAW',
+            insertDataOption='INSERT_ROWS',
+            body=body
+        ).execute()
+        
+        logger.warning(f"✅ Vente {order_data['order_number']} enregistrée dans Sheets")
+        
+        update_stock_in_sheets(order_data['items'])
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur log vente Sheets: {e}")
+        return False
+
+def update_stock_in_sheets(items):
+    """Met à jour les stocks dans la feuille Catalogue après une vente"""
+    if not GOOGLE_SHEETS_ENABLED:
+        return False
+    
+    try:
+        result = sheets_service.spreadsheets().values().get(
+            spreadsheetId=SPREADSHEET_ID,
+            range='Catalogue!A2:H1000'
+        ).execute()
+        
+        values = result.get('values', [])
+        
+        updates = []
+        for i, row in enumerate(values):
+            if len(row) < 8:
+                continue
+            
+            product_id = int(row[0]) if row[0] else 0
+            
+            for item in items:
+                if item['product_id'] == product_id:
+                    current_stock = int(row[7]) if row[7] else 0
+                    new_stock = max(0, current_stock - item['quantity'])
+                    
+                    updates.append({
+                        'range': f'Catalogue!H{i+2}',
+                        'values': [[new_stock]]
+                    })
+        
+        if updates:
+            body = {'data': updates, 'valueInputOption': 'RAW'}
+            sheets_service.spreadsheets().values().batchUpdate(
+                spreadsheetId=SPREADSHEET_ID,
+                body=body
+            ).execute()
+            
+            logger.warning(f"✅ Stocks mis à jour dans Sheets ({len(updates)} produits)")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur mise à jour stock Sheets: {e}")
+        return False
+
+# Initialiser Google Sheets
+logger.warning("📊 Initialisation Google Sheets...")
+init_google_sheets()
+
+if GOOGLE_SHEETS_ENABLED:
+    logger.warning("🔄 Synchronisation initiale depuis Google Sheets...")
+    sync_products_from_sheets()
+
+logger.warning("=" * 50)
+
 # Configuration automatique du webhook Telegram
 def setup_telegram_webhook():
     if not TELEGRAM_BOT_TOKEN:
-        logger.error("❌ TELEGRAM_BOT_TOKEN manquant - webhook non configuré")
+        logger.error("❌ TELEGRAM_BOT_TOKEN manquant")
         return False
     
     try:
         webhook_url = os.environ.get('WEBHOOK_URL', 'https://carte-du-pirate.onrender.com') + '/api/telegram/webhook'
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setWebhook"
         
-        logger.warning(f"🔧 Configuration du webhook Telegram: {webhook_url}")
+        logger.warning(f"🔧 Configuration webhook: {webhook_url}")
         
         response = requests.post(url, json={"url": webhook_url}, timeout=10)
         
         if response.status_code == 200:
             result = response.json()
             if result.get('ok'):
-                logger.warning(f"✅ Webhook Telegram configuré avec succès")
+                logger.warning(f"✅ Webhook Telegram configuré")
                 
-                # Vérification
                 info_response = requests.get(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getWebhookInfo", timeout=10)
                 if info_response.status_code == 200:
                     info = info_response.json()
@@ -135,31 +365,25 @@ def setup_telegram_webhook():
                 
                 return True
             else:
-                logger.error(f"❌ Erreur configuration webhook: {result}")
+                logger.error(f"❌ Erreur webhook: {result}")
                 return False
         else:
-            logger.error(f"❌ Erreur HTTP {response.status_code}: {response.text}")
+            logger.error(f"❌ HTTP {response.status_code}: {response.text}")
             return False
             
     except Exception as e:
-        logger.error(f"❌ Erreur configuration webhook: {e}")
+        logger.error(f"❌ Erreur webhook: {e}")
         return False
 
-# Configurer le webhook au démarrage (avec un petit délai pour laisser le serveur démarrer)
 if TELEGRAM_BOT_TOKEN:
     import threading
     def delayed_webhook_setup():
         import time
-        time.sleep(5)  # Attendre 5 secondes après le démarrage
+        time.sleep(5)
         setup_telegram_webhook()
     
     webhook_thread = threading.Thread(target=delayed_webhook_setup, daemon=True)
     webhook_thread.start()
-
-logger.warning("=" * 50)
-
-products = load_json_file(PRODUCTS_FILE)
-orders = load_json_file(ORDERS_FILE)
 
 def send_telegram_notification(order_data):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_ADMIN_ID:
@@ -258,13 +482,313 @@ def require_admin(f):
     def wrapped(*args, **kwargs):
         token = request.headers.get('X-Admin-Token')
         if not token or token not in admin_tokens:
-            return jsonify({'error': 'Non autorisé'}), 403
+            return jsonify({'error': 'Erreur serveur'}), 500
+        
+    except Exception as e:
+        logger.error(f"Erreur calcul distance: {e}")
+        return jsonify({'error': 'Erreur serveur'}), 500
+
+@app.route('/api/orders', methods=['POST'])
+@limiter.limit("5 per hour")
+def create_order():
+    global orders
+    try:
+        data = request.json or {}
+        
+        logger.warning(f"📥 Nouvelle commande reçue")
+        
+        if not data.get('items') or len(data.get('items', [])) == 0:
+            return jsonify({'error': 'Panier vide'}), 400
+        if not data.get('customer_name') or not data.get('customer_contact'):
+            return jsonify({'error': 'Nom et contact requis'}), 400
+        
+        total = 0
+        order_items = []
+        for item in data['items']:
+            product = next((p for p in products if p['id'] == item['product_id']), None)
+            if not product:
+                return jsonify({'error': f'Produit {item["product_id"]} introuvable'}), 404
+            if product['stock'] < item['quantity']:
+                return jsonify({'error': f'Stock insuffisant pour {product["name"]}'}), 400
+            item_total = product['price'] * item['quantity']
+            total += item_total
+            order_items.append({
+                'product_id': product['id'],
+                'product_name': product['name'],
+                'price': product['price'],
+                'quantity': item['quantity'],
+                'subtotal': item_total
+            })
+        
+        shipping_type = data.get('shipping_type', 'postal')
+        distance = float(data.get('distance_km', 0))
+        delivery_fee = calculate_delivery_fee(shipping_type, distance, total)
+        final_total = total + delivery_fee
+        
+        order_id = max([o['id'] for o in orders]) + 1 if orders else 1
+        new_order = {
+            'id': order_id,
+            'order_number': f"CMD-{order_id:05d}",
+            'customer_name': data['customer_name'],
+            'customer_contact': data['customer_contact'],
+            'customer_address': data.get('customer_address', ''),
+            'customer_notes': data.get('customer_notes', ''),
+            'items': order_items,
+            'subtotal': total,
+            'shipping_type': shipping_type,
+            'distance_km': distance,
+            'delivery_fee': delivery_fee,
+            'total': final_total,
+            'status': 'pending',
+            'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+        
+        orders.append(new_order)
+        save_json_file(ORDERS_FILE, orders)
+        
+        logger.warning(f"✅ Commande #{new_order['order_number']} créée")
+        
+        # Enregistrer dans Google Sheets
+        if GOOGLE_SHEETS_ENABLED:
+            log_sale_to_sheets(new_order)
+        
+        telegram_sent = send_telegram_notification(new_order)
+        
+        if telegram_sent:
+            logger.warning(f"✅ Notification Telegram envoyée")
+        else:
+            logger.error(f"❌ Échec notification Telegram")
+        
+        return jsonify({'success': True, 'order': new_order}), 201
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur création commande: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({'error': 'Erreur serveur'}), 500
+
+@app.route('/api/admin/orders', methods=['GET'])
+@require_admin
+def get_orders():
+    try:
+        return jsonify(orders), 200
+    except:
+        return jsonify([]), 200
+
+@app.route('/api/admin/orders/<int:order_id>', methods=['PUT'])
+@require_admin
+def update_order_status(order_id):
+    try:
+        data = request.json or {}
+        new_status = data.get('status')
+        if new_status not in ['pending', 'confirmed', 'preparing', 'ready', 'delivered', 'cancelled']:
+            return jsonify({'error': 'Statut invalide'}), 400
+        for order in orders:
+            if order['id'] == order_id:
+                order['status'] = new_status
+                order['updated_at'] = datetime.now().isoformat()
+                save_json_file(ORDERS_FILE, orders)
+                return jsonify(order)
+        return jsonify({'error': 'Commande non trouvée'}), 404
+    except:
+        return jsonify({'error': 'Erreur modification'}), 500
+
+@app.route('/api/telegram/webhook', methods=['POST', 'GET'])
+def telegram_webhook():
+    try:
+        if request.method == 'GET':
+            logger.warning("⚠️ GET request sur webhook")
+            return jsonify({'status': 'Webhook actif', 'method': 'GET'}), 200
+        
+        raw_data = request.get_data(as_text=True)
+        logger.warning(f"📨 RAW DATA: {raw_data}")
+        
+        data = request.json
+        logger.warning(f"📨 JSON: {json.dumps(data, indent=2)}")
+        
+        if 'callback_query' in data:
+            callback_query = data['callback_query']
+            callback_data = callback_query.get('data', '')
+            callback_id = callback_query.get('id', '')
+            
+            logger.warning(f"🔔 CALLBACK!")
+            logger.warning(f"   - ID: {callback_id}")
+            logger.warning(f"   - Data: {callback_data}")
+            
+            if not TELEGRAM_BOT_TOKEN:
+                logger.error("❌ TELEGRAM_BOT_TOKEN manquant!")
+                return jsonify({'ok': True}), 200
+            
+            answer_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/answerCallbackQuery"
+            logger.warning(f"📤 URL: {answer_url}")
+            
+            answer_payload = {
+                "callback_query_id": callback_id,
+                "text": "⏳ Traitement...",
+                "show_alert": False
+            }
+            logger.warning(f"📦 Payload: {json.dumps(answer_payload)}")
+            
+            try:
+                logger.warning("🚀 ENVOI answerCallbackQuery...")
+                answer_response = requests.post(
+                    answer_url, 
+                    json=answer_payload, 
+                    timeout=10
+                )
+                logger.warning(f"📥 RÉPONSE:")
+                logger.warning(f"   - Status: {answer_response.status_code}")
+                logger.warning(f"   - Body: {answer_response.text}")
+                
+                if answer_response.status_code != 200:
+                    logger.error(f"❌ ERREUR HTTP {answer_response.status_code}")
+                else:
+                    response_json = answer_response.json()
+                    if response_json.get('ok'):
+                        logger.warning(f"✅ answerCallbackQuery RÉUSSI!")
+                    else:
+                        logger.error(f"❌ Telegram NOK: {response_json}")
+                        
+            except requests.exceptions.Timeout:
+                logger.error(f"⏱️ TIMEOUT answerCallbackQuery")
+            except Exception as e:
+                logger.error(f"❌ EXCEPTION: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+            
+            if callback_data.startswith('webapp_validate_'):
+                try:
+                    order_id = int(callback_data.split('_')[2])
+                    logger.warning(f"🔄 Validation commande #{order_id}")
+                    
+                    order_found = False
+                    for order in orders:
+                        if order['id'] == order_id:
+                            order['status'] = 'delivered'
+                            order['delivered_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                            order_found = True
+                            logger.warning(f"✅ Commande #{order_id} livrée")
+                            break
+                    
+                    if order_found:
+                        save_json_file(ORDERS_FILE, orders)
+                        
+                        try:
+                            message_id = callback_query.get('message', {}).get('message_id')
+                            chat_id = callback_query.get('message', {}).get('chat', {}).get('id')
+                            original_text = callback_query.get('message', {}).get('text', '')
+                            
+                            if message_id and chat_id:
+                                edit_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/editMessageText"
+                                edit_response = requests.post(edit_url, json={
+                                    "chat_id": chat_id,
+                                    "message_id": message_id,
+                                    "text": original_text + "\n\n✅ *COMMANDE LIVRÉE*",
+                                    "parse_mode": "Markdown"
+                                }, timeout=5)
+                                logger.warning(f"✅ Message édité ({edit_response.status_code})")
+                        except Exception as e:
+                            logger.error(f"❌ Erreur édition: {e}")
+                    else:
+                        logger.error(f"❌ Commande #{order_id} non trouvée")
+                        
+                except Exception as e:
+                    logger.error(f"❌ Erreur traitement: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+        else:
+            logger.warning("⚠️ Pas de callback_query")
+        
+        return jsonify({'ok': True}), 200
+        
+    except Exception as e:
+        logger.error(f"❌ ERREUR GLOBALE: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({'ok': True}), 200
+
+# ==================== GOOGLE SHEETS ROUTES ====================
+
+@app.route('/api/admin/sync-from-sheets', methods=['POST'])
+@require_admin
+def api_sync_from_sheets():
+    """Synchronise les produits depuis Google Sheets"""
+    try:
+        if not GOOGLE_SHEETS_ENABLED:
+            return jsonify({'error': 'Google Sheets non configuré'}), 503
+        
+        success = sync_products_from_sheets()
+        
+        if success:
+            return jsonify({
+                'success': True, 
+                'message': f'{len(products)} produits synchronisés',
+                'products': products
+            }), 200
+        else:
+            return jsonify({'error': 'Échec synchronisation'}), 500
+            
+    except Exception as e:
+        logger.error(f"Erreur API sync from sheets: {e}")
+        return jsonify({'error': 'Erreur serveur'}), 500
+
+@app.route('/api/admin/sync-to-sheets', methods=['POST'])
+@require_admin
+def api_sync_to_sheets():
+    """Synchronise les produits vers Google Sheets"""
+    try:
+        if not GOOGLE_SHEETS_ENABLED:
+            return jsonify({'error': 'Google Sheets non configuré'}), 503
+        
+        success = sync_products_to_sheets()
+        
+        if success:
+            return jsonify({
+                'success': True, 
+                'message': f'{len(products)} produits synchronisés vers Sheets'
+            }), 200
+        else:
+            return jsonify({'error': 'Échec synchronisation'}), 500
+            
+    except Exception as e:
+        logger.error(f"Erreur API sync to sheets: {e}")
+        return jsonify({'error': 'Erreur serveur'}), 500
+
+@app.route('/api/admin/sheets-status', methods=['GET'])
+@require_admin
+def api_sheets_status():
+    """Retourne le statut de Google Sheets"""
+    return jsonify({
+        'enabled': GOOGLE_SHEETS_ENABLED,
+        'spreadsheet_id': SPREADSHEET_ID if GOOGLE_SHEETS_ENABLED else None
+    }), 200
+
+@app.route('/catalogue')
+def catalogue():
+    try:
+        with open('catalogue.html', 'r', encoding='utf-8') as f:
+            html = f.read()
+            html = html.replace('{{BACKGROUND_IMAGE}}', BACKGROUND_IMAGE)
+            return html, 200
+    except FileNotFoundError:
+        return "Fichier catalogue.html introuvable", 404
+    except Exception as e:
+        logger.error(f"Erreur route catalogue: {e}")
+        return "Erreur serveur", 500
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    logger.warning(f"Démarrage sur le port {port}")
+    app.run(host='0.0.0.0', port=port, debug=False)Non autorisé'}), 403
         token_data = admin_tokens[token]
         if datetime.now() > token_data['expires']:
             del admin_tokens[token]
             return jsonify({'error': 'Session expirée'}), 403
         return f(*args, **kwargs)
     return wrapped
+
+# ==================== ROUTES ====================
 
 @app.route('/')
 def index():
@@ -533,248 +1057,4 @@ def calculate_distance():
         
     except Exception as e:
         logger.error(f"Erreur calcul distance: {e}")
-        return jsonify({'error': 'Erreur serveur'}), 500
-
-@app.route('/api/orders', methods=['POST'])
-@limiter.limit("5 per hour")
-def create_order():
-    global orders
-    try:
-        data = request.json or {}
-        
-        logger.warning(f"📥 Nouvelle commande reçue")
-        
-        if not data.get('items') or len(data.get('items', [])) == 0:
-            return jsonify({'error': 'Panier vide'}), 400
-        if not data.get('customer_name') or not data.get('customer_contact'):
-            return jsonify({'error': 'Nom et contact requis'}), 400
-        
-        total = 0
-        order_items = []
-        for item in data['items']:
-            product = next((p for p in products if p['id'] == item['product_id']), None)
-            if not product:
-                return jsonify({'error': f'Produit {item["product_id"]} introuvable'}), 404
-            if product['stock'] < item['quantity']:
-                return jsonify({'error': f'Stock insuffisant pour {product["name"]}'}), 400
-            item_total = product['price'] * item['quantity']
-            total += item_total
-            order_items.append({
-                'product_id': product['id'],
-                'product_name': product['name'],
-                'price': product['price'],
-                'quantity': item['quantity'],
-                'subtotal': item_total
-            })
-        
-        shipping_type = data.get('shipping_type', 'postal')
-        distance = float(data.get('distance_km', 0))
-        delivery_fee = calculate_delivery_fee(shipping_type, distance, total)
-        final_total = total + delivery_fee
-        
-        order_id = max([o['id'] for o in orders]) + 1 if orders else 1
-        new_order = {
-            'id': order_id,
-            'order_number': f"CMD-{order_id:05d}",
-            'customer_name': data['customer_name'],
-            'customer_contact': data['customer_contact'],
-            'customer_address': data.get('customer_address', ''),
-            'customer_notes': data.get('customer_notes', ''),
-            'items': order_items,
-            'subtotal': total,
-            'shipping_type': shipping_type,
-            'distance_km': distance,
-            'delivery_fee': delivery_fee,
-            'total': final_total,
-            'status': 'pending',
-            'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        }
-        
-        orders.append(new_order)
-        save_json_file(ORDERS_FILE, orders)
-        
-        logger.warning(f"✅ Commande #{new_order['order_number']} créée")
-        
-        telegram_sent = send_telegram_notification(new_order)
-        
-        if telegram_sent:
-            logger.warning(f"✅ Notification Telegram envoyée")
-        else:
-            logger.error(f"❌ Échec notification Telegram")
-        
-        return jsonify({'success': True, 'order': new_order}), 201
-        
-    except Exception as e:
-        logger.error(f"❌ Erreur création commande: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return jsonify({'error': 'Erreur serveur'}), 500
-
-@app.route('/api/admin/orders', methods=['GET'])
-@require_admin
-def get_orders():
-    try:
-        return jsonify(orders), 200
-    except:
-        return jsonify([]), 200
-
-@app.route('/api/admin/orders/<int:order_id>', methods=['PUT'])
-@require_admin
-def update_order_status(order_id):
-    try:
-        data = request.json or {}
-        new_status = data.get('status')
-        if new_status not in ['pending', 'confirmed', 'preparing', 'ready', 'delivered', 'cancelled']:
-            return jsonify({'error': 'Statut invalide'}), 400
-        for order in orders:
-            if order['id'] == order_id:
-                order['status'] = new_status
-                order['updated_at'] = datetime.now().isoformat()
-                save_json_file(ORDERS_FILE, orders)
-                return jsonify(order)
-        return jsonify({'error': 'Commande non trouvée'}), 404
-    except:
-        return jsonify({'error': 'Erreur modification'}), 500
-
-@app.route('/api/telegram/webhook', methods=['POST', 'GET'])
-def telegram_webhook():
-    try:
-        # Log pour debugging
-        if request.method == 'GET':
-            logger.warning("⚠️ GET request sur webhook - vérifiez la configuration")
-            return jsonify({'status': 'Webhook actif', 'method': 'GET'}), 200
-        
-        # Log de TOUTES les données reçues
-        raw_data = request.get_data(as_text=True)
-        logger.warning(f"📨 RAW DATA REÇU: {raw_data}")
-        
-        data = request.json
-        logger.warning(f"📨 JSON PARSÉ: {json.dumps(data, indent=2)}")
-        
-        if 'callback_query' in data:
-            callback_query = data['callback_query']
-            callback_data = callback_query.get('data', '')
-            callback_id = callback_query.get('id', '')
-            
-            logger.warning(f"🔔 CALLBACK DÉTECTÉ!")
-            logger.warning(f"   - Callback ID: {callback_id}")
-            logger.warning(f"   - Callback Data: {callback_data}")
-            
-            # RÉPONSE IMMÉDIATE ET SYNCHRONE (CRITIQUE!)
-            if not TELEGRAM_BOT_TOKEN:
-                logger.error("❌ TELEGRAM_BOT_TOKEN manquant!")
-                return jsonify({'ok': True}), 200
-            
-            # Construire l'URL
-            answer_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/answerCallbackQuery"
-            logger.warning(f"📤 URL answerCallback: {answer_url}")
-            
-            # Payload
-            answer_payload = {
-                "callback_query_id": callback_id,
-                "text": "⏳ Traitement en cours...",
-                "show_alert": False
-            }
-            logger.warning(f"📦 Payload: {json.dumps(answer_payload)}")
-            
-            # APPEL IMMÉDIAT
-            try:
-                logger.warning("🚀 ENVOI answerCallbackQuery MAINTENANT...")
-                answer_response = requests.post(
-                    answer_url, 
-                    json=answer_payload, 
-                    timeout=10
-                )
-                logger.warning(f"📥 RÉPONSE reçue:")
-                logger.warning(f"   - Status: {answer_response.status_code}")
-                logger.warning(f"   - Body: {answer_response.text}")
-                
-                if answer_response.status_code != 200:
-                    logger.error(f"❌ ERREUR HTTP {answer_response.status_code}")
-                else:
-                    response_json = answer_response.json()
-                    if response_json.get('ok'):
-                        logger.warning(f"✅ answerCallbackQuery RÉUSSI!")
-                    else:
-                        logger.error(f"❌ Telegram a répondu NOK: {response_json}")
-                        
-            except requests.exceptions.Timeout:
-                logger.error(f"⏱️ TIMEOUT lors de answerCallbackQuery")
-            except Exception as e:
-                logger.error(f"❌ EXCEPTION answerCallbackQuery: {e}")
-                import traceback
-                logger.error(traceback.format_exc())
-            
-            # Traiter la validation de commande
-            if callback_data.startswith('webapp_validate_'):
-                try:
-                    order_id = int(callback_data.split('_')[2])
-                    logger.warning(f"🔄 Validation commande #{order_id}")
-                    
-                    order_found = False
-                    for order in orders:
-                        if order['id'] == order_id:
-                            order['status'] = 'delivered'
-                            order['delivered_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                            order_found = True
-                            logger.warning(f"✅ Commande #{order_id} livrée")
-                            break
-                    
-                    if order_found:
-                        save_json_file(ORDERS_FILE, orders)
-                        
-                        # Éditer le message
-                        try:
-                            message_id = callback_query.get('message', {}).get('message_id')
-                            chat_id = callback_query.get('message', {}).get('chat', {}).get('id')
-                            original_text = callback_query.get('message', {}).get('text', '')
-                            
-                            if message_id and chat_id:
-                                edit_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/editMessageText"
-                                edit_response = requests.post(edit_url, json={
-                                    "chat_id": chat_id,
-                                    "message_id": message_id,
-                                    "text": original_text + "\n\n✅ *COMMANDE LIVRÉE*",
-                                    "parse_mode": "Markdown"
-                                }, timeout=5)
-                                logger.warning(f"✅ Message édité ({edit_response.status_code})")
-                        except Exception as e:
-                            logger.error(f"❌ Erreur édition message: {e}")
-                    else:
-                        logger.error(f"❌ Commande #{order_id} non trouvée")
-                        
-                except Exception as e:
-                    logger.error(f"❌ Erreur traitement: {e}")
-                    import traceback
-                    logger.error(traceback.format_exc())
-        else:
-            logger.warning("⚠️ Pas de callback_query dans les données")
-        
-        # TOUJOURS retourner 200 OK
-        return jsonify({'ok': True}), 200
-        
-    except Exception as e:
-        logger.error(f"❌ ERREUR GLOBALE webhook: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        # TOUJOURS retourner 200 même en cas d'erreur
-        return jsonify({'ok': True}), 200
-
-@app.route('/catalogue')
-def catalogue():
-    try:
-        with open('catalogue.html', 'r', encoding='utf-8') as f:
-            html = f.read()
-            html = html.replace('{{BACKGROUND_IMAGE}}', BACKGROUND_IMAGE)
-            return html, 200
-    except FileNotFoundError:
-        return "Fichier catalogue.html introuvable", 404
-    except Exception as e:
-        logger.error(f"Erreur route catalogue: {e}")
-        return "Erreur serveur", 500
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    logger.warning(f"Démarrage sur le port {port}")
-    app.run(host='0.0.0.0', port=port, debug=False)
+        return jsonify({'error': '

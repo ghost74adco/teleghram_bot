@@ -12,6 +12,8 @@ import requests
 import json
 import math
 from datetime import datetime, timedelta
+import asyncio
+from telegram import Update
 
 # Google Sheets
 try:
@@ -119,11 +121,21 @@ logger.warning("🔧 CONFIGURATION DE L'APPLICATION")
 logger.warning("=" * 50)
 logger.warning(f"📱 TELEGRAM_BOT_TOKEN: {'✅ Configuré' if TELEGRAM_BOT_TOKEN else '❌ Manquant'}")
 logger.warning(f"👤 TELEGRAM_ADMIN_ID: {'✅ Configuré (' + TELEGRAM_ADMIN_ID + ')' if TELEGRAM_ADMIN_ID else '❌ Manquant'}")
-logger.warning(f"📍 ADMIN_ADDRESS: {ADMIN_ADDRESS}")
+logger.warning(f"🏠 ADMIN_ADDRESS: {ADMIN_ADDRESS}")
 logger.warning("=" * 50)
 
 products = load_json_file(PRODUCTS_FILE)
 orders = load_json_file(ORDERS_FILE)
+
+# ==================== IMPORT DU BOT ====================
+
+try:
+    from bot import bot_application
+    BOT_AVAILABLE = True
+    logger.warning("✅ Bot Telegram importé avec succès")
+except Exception as e:
+    BOT_AVAILABLE = False
+    logger.error(f"❌ Erreur import bot: {e}")
 
 # ==================== GOOGLE SHEETS FUNCTIONS ====================
 
@@ -339,6 +351,8 @@ if GOOGLE_SHEETS_ENABLED:
 
 logger.warning("=" * 50)
 
+# ==================== TELEGRAM WEBHOOK FUNCTIONS ====================
+
 def send_telegram_notification(order_data):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_ADMIN_ID:
         logger.error("❌ Configuration Telegram manquante")
@@ -352,7 +366,7 @@ def send_telegram_notification(order_data):
 👤 *Client:*
 • Nom: {order_data['customer_name']}
 • Contact: {order_data['customer_contact']}
-• 📍 Adresse: {order_data.get('customer_address', '')}
+• 🏠 Adresse: {order_data.get('customer_address', '')}
 
 📦 *Articles:*
 """
@@ -407,6 +421,50 @@ def send_telegram_notification(order_data):
         logger.error(f"❌ Erreur envoi Telegram: {str(e)}")
         return False
 
+def configure_telegram_webhook():
+    """Configure le webhook Telegram au démarrage de Flask"""
+    if not TELEGRAM_BOT_TOKEN:
+        logger.error("❌ TELEGRAM_BOT_TOKEN manquant")
+        return False
+    
+    webhook_url = os.environ.get('WEBHOOK_URL', 'https://carte-du-pirate.onrender.com')
+    full_webhook_url = f"{webhook_url}/api/telegram/bot/{TELEGRAM_BOT_TOKEN}"
+    
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setWebhook"
+        
+        logger.warning(f"🔧 Configuration webhook: {full_webhook_url}")
+        
+        response = requests.post(url, json={"url": full_webhook_url}, timeout=10)
+        
+        if response.status_code == 200:
+            result = response.json()
+            if result.get('ok'):
+                logger.warning(f"✅ Webhook Telegram configuré")
+                
+                # Vérifier la configuration
+                info_response = requests.get(
+                    f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getWebhookInfo", 
+                    timeout=10
+                )
+                if info_response.status_code == 200:
+                    info = info_response.json()
+                    logger.warning(f"📡 Webhook info: {json.dumps(info.get('result', {}), indent=2)}")
+                
+                return True
+            else:
+                logger.error(f"❌ Erreur webhook: {result}")
+                return False
+        else:
+            logger.error(f"❌ HTTP {response.status_code}: {response.text}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"❌ Erreur webhook: {e}")
+        return False
+
+# ==================== UTILITY FUNCTIONS ====================
+
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
@@ -436,11 +494,350 @@ def require_admin(f):
     def wrapped(*args, **kwargs):
         token = request.headers.get('X-Admin-Token')
         if not token or token not in admin_tokens:
-            return jsonify({'error': 'Erreur serveur'}), 500
+            return jsonify({'error': 'Non autorisé'}), 403
+        token_data = admin_tokens[token]
+        if datetime.now() > token_data['expires']:
+            del admin_tokens[token]
+            return jsonify({'error': 'Session expirée'}), 403
+        return f(*args, **kwargs)
+    return wrapped
+
+# ==================== ROUTES ====================
+
+@app.route('/')
+def index():
+    try:
+        html = f'''<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Carte du Pirate</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+* {{ margin: 0; padding: 0; box-sizing: border-box; }}
+body {{
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: url('{BACKGROUND_IMAGE}') center center fixed;
+  background-size: cover;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  position: relative;
+}}
+body::before {{
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 1;
+}}
+.container {{
+  text-align: center;
+  color: white;
+  max-width: 800px;
+  position: relative;
+  z-index: 2;
+}}
+h1 {{
+  font-size: 3.5em;
+  margin-bottom: 30px;
+  text-shadow: 4px 4px 8px rgba(0,0,0,0.8);
+}}
+.subtitle {{
+  font-size: 1.3em;
+  margin-bottom: 40px;
+  opacity: 0.95;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+}}
+.btn {{
+  display: inline-block;
+  padding: 20px 50px;
+  font-size: 1.5em;
+  background: linear-gradient(45deg, #d4af37, #f4e5a1);
+  border: 3px solid #8b7220;
+  border-radius: 15px;
+  color: #2c1810;
+  text-decoration: none;
+  font-weight: bold;
+  transition: all 0.3s ease;
+  margin: 10px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+}}
+.btn:hover {{
+  transform: scale(1.05) translateY(-5px);
+  box-shadow: 0 15px 40px rgba(212, 175, 55, 0.6);
+}}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🏴‍☠️ Carte du Pirate 🏴‍☠️</h1>
+  <p class="subtitle">Votre boutique de trésors en ligne</p>
+  <a href="/catalogue" class="btn">📦 Catalogue & Commandes</a>
+</div>
+</body>
+</html>'''
+        return html, 200
+    except Exception as e:
+        logger.error(f"Erreur route index: {e}")
+        return "Erreur serveur", 500
+
+@app.route('/health')
+def health():
+    return jsonify({'status': 'ok'}), 200
+
+@app.route('/catalogue')
+def catalogue():
+    try:
+        with open('catalogue.html', 'r', encoding='utf-8') as f:
+            html = f.read()
+            html = html.replace('{{BACKGROUND_IMAGE}}', BACKGROUND_IMAGE)
+            return html, 200
+    except FileNotFoundError:
+        return "Fichier catalogue.html introuvable", 404
+    except Exception as e:
+        logger.error(f"Erreur route catalogue: {e}")
+        return "Erreur serveur", 500
+
+# ==================== TELEGRAM WEBHOOK ROUTES ====================
+
+@app.route('/api/telegram/bot/<path:token>', methods=['POST'])
+def telegram_bot_webhook(token):
+    """Route webhook principale pour le bot Telegram"""
+    try:
+        # Vérifier le token
+        if token != TELEGRAM_BOT_TOKEN:
+            logger.warning(f"⚠️ Token invalide: {token}")
+            return jsonify({'error': 'Unauthorized'}), 403
+        
+        if not BOT_AVAILABLE:
+            logger.error("❌ Bot non disponible")
+            return jsonify({'error': 'Bot not available'}), 503
+        
+        # Récupérer les données
+        data = request.get_json()
+        logger.warning(f"📨 Webhook reçu: {json.dumps(data, indent=2)}")
+        
+        # Créer l'Update Telegram
+        update = Update.de_json(data, bot_application.bot)
+        
+        # Traiter l'update de manière asynchrone
+        asyncio.run(bot_application.process_update(update))
+        
+        logger.warning("✅ Update traité avec succès")
+        return jsonify({'ok': True}), 200
         
     except Exception as e:
-        logger.error(f"Erreur calcul distance: {e}")
+        logger.error(f"❌ Erreur webhook bot: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({'ok': True}), 200  # Toujours retourner 200 à Telegram
+
+@app.route('/api/telegram/webapp-callback', methods=['POST'])
+def telegram_webapp_callback():
+    """Gère UNIQUEMENT les validations de commandes webapp"""
+    try:
+        data = request.json
+        logger.warning(f"📨 Webhook webapp: {json.dumps(data, indent=2)}")
+        
+        if 'callback_query' not in data:
+            logger.warning("⚠️ Pas de callback_query - ignoré")
+            return jsonify({'ok': True}), 200
+        
+        callback_query = data['callback_query']
+        callback_data = callback_query.get('data', '')
+        callback_id = callback_query.get('id', '')
+        
+        # Répondre immédiatement au callback
+        if TELEGRAM_BOT_TOKEN:
+            try:
+                answer_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/answerCallbackQuery"
+                requests.post(answer_url, json={
+                    "callback_query_id": callback_id,
+                    "text": "✅ Traitement..."
+                }, timeout=5)
+            except Exception as e:
+                logger.error(f"Erreur answerCallbackQuery: {e}")
+        
+        # Traiter UNIQUEMENT les validations webapp
+        if not callback_data.startswith('webapp_validate_'):
+            logger.warning(f"⚠️ Callback non-webapp ignoré: {callback_data}")
+            return jsonify({'ok': True}), 200
+        
+        # Valider la commande
+        try:
+            order_id = int(callback_data.split('_')[2])
+            logger.warning(f"📦 Validation commande webapp #{order_id}")
+            
+            order_found = False
+            for order in orders:
+                if order['id'] == order_id:
+                    order['status'] = 'delivered'
+                    order['delivered_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    order_found = True
+                    break
+            
+            if order_found:
+                save_json_file(ORDERS_FILE, orders)
+                
+                # Éditer le message Telegram
+                message_id = callback_query.get('message', {}).get('message_id')
+                chat_id = callback_query.get('message', {}).get('chat', {}).get('id')
+                original_text = callback_query.get('message', {}).get('text', '')
+                
+                if message_id and chat_id and TELEGRAM_BOT_TOKEN:
+                    edit_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/editMessageText"
+                    requests.post(edit_url, json={
+                        "chat_id": chat_id,
+                        "message_id": message_id,
+                        "text": original_text + "\n\n✅ *COMMANDE LIVRÉE*",
+                        "parse_mode": "Markdown"
+                    }, timeout=5)
+                
+                logger.warning(f"✅ Commande #{order_id} validée")
+            else:
+                logger.error(f"❌ Commande #{order_id} introuvable")
+                
+        except Exception as e:
+            logger.error(f"❌ Erreur validation: {e}")
+        
+        return jsonify({'ok': True}), 200
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur webhook webapp: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({'ok': True}), 200
+
+# ==================== ADMIN ROUTES ====================
+
+@app.route('/api/admin/login', methods=['POST'])
+@limiter.limit("5 per 15 minutes")
+def api_login():
+    try:
+        ip = get_remote_address()
+        allowed, message = check_rate_limit(ip)
+        if not allowed:
+            return jsonify({'error': message}), 429
+        data = request.json or {}
+        password_hash = hash_password(data.get('password', ''))
+        if password_hash == ADMIN_PASSWORD_HASH:
+            token = secrets.token_urlsafe(32)
+            admin_tokens[token] = {
+                'created': datetime.now(),
+                'expires': datetime.now() + timedelta(hours=12),
+                'ip': ip
+            }
+            if ip in failed_login_attempts:
+                failed_login_attempts[ip]['count'] = 0
+            return jsonify({'success': True, 'token': token})
+        blocked = register_failed_attempt(ip)
+        if blocked:
+            return jsonify({'error': 'Trop de tentatives. Compte bloqué 15 minutes.'}), 429
+        return jsonify({'error': 'Mot de passe incorrect'}), 403
+    except Exception as e:
         return jsonify({'error': 'Erreur serveur'}), 500
+
+@app.route('/api/admin/logout', methods=['POST'])
+def api_logout():
+    try:
+        token = request.headers.get('X-Admin-Token')
+        if token and token in admin_tokens:
+            del admin_tokens[token]
+        return jsonify({'success': True})
+    except:
+        return jsonify({'success': False}), 500
+
+@app.route('/api/admin/check', methods=['GET'])
+def api_check_admin():
+    try:
+        token = request.headers.get('X-Admin-Token')
+        ip = get_remote_address()
+        is_admin = False
+        if token and token in admin_tokens:
+            if admin_tokens[token]['ip'] == ip:
+                if datetime.now() <= admin_tokens[token]['expires']:
+                    is_admin = True
+                else:
+                    del admin_tokens[token]
+            else:
+                del admin_tokens[token]
+        return jsonify({'admin': is_admin}), 200
+    except:
+        return jsonify({'admin': False}), 200
+
+# ==================== PRODUCT ROUTES ====================
+
+@app.route('/api/products', methods=['GET'])
+def get_products():
+    try:
+        return jsonify(products), 200
+    except:
+        return jsonify([]), 200
+
+@app.route('/api/admin/products', methods=['POST'])
+@require_admin
+def add_product():
+    global products
+    try:
+        data = request.json or {}
+        if not data.get('name') or not data.get('price'):
+            return jsonify({'error': 'Nom et prix requis'}), 400
+        new_product = {
+            "id": max([p["id"] for p in products]) + 1 if products else 1,
+            "name": data.get("name"),
+            "price": float(data.get("price", 0)),
+            "description": data.get("description", ""),
+            "category": data.get("category", ""),
+            "image_url": data.get("image_url", ""),
+            "video_url": data.get("video_url", ""),
+            "stock": int(data.get("stock", 0))
+        }
+        products.append(new_product)
+        save_json_file(PRODUCTS_FILE, products)
+        return jsonify(new_product), 201
+    except:
+        return jsonify({'error': 'Erreur création'}), 500
+
+@app.route('/api/admin/products/<int:pid>', methods=['PUT'])
+@require_admin
+def update_product(pid):
+    try:
+        data = request.json or {}
+        for p in products:
+            if p['id'] == pid:
+                p.update({
+                    "name": data.get("name", p["name"]),
+                    "price": float(data.get("price", p["price"])),
+                    "description": data.get("description", p["description"]),
+                    "category": data.get("category", p["category"]),
+                    "image_url": data.get("image_url", p.get("image_url", "")),
+                    "video_url": data.get("video_url", p.get("video_url", "")),
+                    "stock": int(data.get("stock", p["stock"]))
+                })
+                save_json_file(PRODUCTS_FILE, products)
+                return jsonify(p)
+        return jsonify({'error': 'Produit non trouvé'}), 404
+    except:
+        return jsonify({'error': 'Erreur modification'}), 500
+
+@app.route('/api/admin/products/<int:pid>', methods=['DELETE'])
+@require_admin
+def delete_product(pid):
+    global products
+    try:
+        before = len(products)
+        products = [p for p in products if p['id'] != pid]
+        if len(products) < before:
+            save_json_file(PRODUCTS_FILE, products)
+            return jsonify({'success': True})
+        return jsonify({'error': 'Produit non trouvé'}), 404
+    except:
+        return jsonify({'error': 'Erreur suppression'}), 500
+
+# ==================== ORDER ROUTES ====================
 
 @app.route('/api/orders', methods=['POST'])
 @limiter.limit("5 per hour")
@@ -548,169 +945,72 @@ def update_order_status(order_id):
     except:
         return jsonify({'error': 'Erreur modification'}), 500
 
-@app.route('/api/telegram/webapp-callback', methods=['POST'])
-def telegram_webapp_callback():
-    """Gère UNIQUEMENT les validations de commandes webapp"""
+# ==================== UPLOAD ROUTE ====================
+
+@app.route('/api/upload', methods=['POST'])
+@require_admin
+@limiter.limit("10 per hour")
+def upload_file():
     try:
-        data = request.json
-        logger.warning(f"📨 Webhook webapp: {json.dumps(data, indent=2)}")
+        if 'file' not in request.files:
+            return jsonify({'error': 'Aucun fichier'}), 400
+        file = request.files['file']
+        file.seek(0, os.SEEK_END)
+        file_length = file.tell()
+        if file_length > 10 * 1024 * 1024:
+            return jsonify({'error': 'Fichier trop gros (max 10MB)'}), 400
+        file.seek(0)
+        result = cloudinary.uploader.upload(file, resource_type='auto', folder='catalogue', timeout=60)
+        return jsonify({'url': result.get('secure_url')}), 200
+    except:
+        return jsonify({'error': 'Erreur upload'}), 500
+
+# ==================== GEOLOCATION ROUTE ====================
+
+@app.route('/api/calculate-distance', methods=['POST'])
+def calculate_distance():
+    try:
+        data = request.json or {}
+        client_address = data.get('address', '').strip()
         
-        if 'callback_query' not in data:
-            logger.warning("⚠️ Pas de callback_query - ignoré")
-            return jsonify({'ok': True}), 200
+        if not client_address or len(client_address) < 15:
+            return jsonify({'error': 'Adresse invalide (min 15 caractères)'}), 400
         
-        callback_query = data['callback_query']
-        callback_data = callback_query.get('data', '')
-        callback_id = callback_query.get('id', '')
+        if not GEOPY_AVAILABLE:
+            return jsonify({'error': 'Service de géolocalisation non disponible'}), 503
         
-        # Répondre immédiatement au callback
-        if TELEGRAM_BOT_TOKEN:
-            try:
-                answer_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/answerCallbackQuery"
-                requests.post(answer_url, json={
-                    "callback_query_id": callback_id,
-                    "text": "✅ Traitement..."
-                }, timeout=5)
-            except Exception as e:
-                logger.error(f"Erreur answerCallbackQuery: {e}")
-        
-        # Traiter UNIQUEMENT les validations webapp
-        if not callback_data.startswith('webapp_validate_'):
-            logger.warning(f"⚠️ Callback non-webapp ignoré: {callback_data}")
-            return jsonify({'ok': True}), 200
-        
-        # Valider la commande
         try:
-            order_id = int(callback_data.split('_')[2])
-            logger.warning(f"📦 Validation commande webapp #{order_id}")
+            geolocator = Nominatim(user_agent="carte_du_pirate_webapp")
             
-            order_found = False
-            for order in orders:
-                if order['id'] == order_id:
-                    order['status'] = 'delivered'
-                    order['delivered_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    order_found = True
-                    break
+            location1 = geolocator.geocode(ADMIN_ADDRESS, timeout=10)
+            location2 = geolocator.geocode(client_address, timeout=10)
             
-            if order_found:
-                save_json_file(ORDERS_FILE, orders)
-                
-                # Éditer le message Telegram
-                message_id = callback_query.get('message', {}).get('message_id')
-                chat_id = callback_query.get('message', {}).get('chat', {}).get('id')
-                original_text = callback_query.get('message', {}).get('text', '')
-                
-                if message_id and chat_id and TELEGRAM_BOT_TOKEN:
-                    edit_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/editMessageText"
-                    requests.post(edit_url, json={
-                        "chat_id": chat_id,
-                        "message_id": message_id,
-                        "text": original_text + "\n\n✅ *COMMANDE LIVRÉE*",
-                        "parse_mode": "Markdown"
-                    }, timeout=5)
-                
-                logger.warning(f"✅ Commande #{order_id} validée")
-            else:
-                logger.error(f"❌ Commande #{order_id} introuvable")
-                
+            if not location1:
+                return jsonify({'error': f'Adresse de départ introuvable'}), 400
+            
+            if not location2:
+                return jsonify({'error': 'Adresse de livraison introuvable'}), 400
+            
+            coords1 = (location1.latitude, location1.longitude)
+            coords2 = (location2.latitude, location2.longitude)
+            
+            distance = geodesic(coords1, coords2).kilometers
+            distance_rounded = round(distance, 1)
+            
+            return jsonify({
+                'success': True,
+                'distance_km': distance_rounded,
+                'from': ADMIN_ADDRESS,
+                'to': client_address
+            }), 200
+            
         except Exception as e:
-            logger.error(f"❌ Erreur validation: {e}")
-        
-        return jsonify({'ok': True}), 200
-        
-    except Exception as e:
-        logger.error(f"❌ Erreur webhook webapp: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return jsonify({'ok': True}), 200
-            
-            answer_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/answerCallbackQuery"
-            logger.warning(f"📤 URL: {answer_url}")
-            
-            answer_payload = {
-                "callback_query_id": callback_id,
-                "text": "⏳ Traitement...",
-                "show_alert": False
-            }
-            logger.warning(f"📦 Payload: {json.dumps(answer_payload)}")
-            
-            try:
-                logger.warning("🚀 ENVOI answerCallbackQuery...")
-                answer_response = requests.post(
-                    answer_url, 
-                    json=answer_payload, 
-                    timeout=10
-                )
-                logger.warning(f"📥 RÉPONSE:")
-                logger.warning(f"   - Status: {answer_response.status_code}")
-                logger.warning(f"   - Body: {answer_response.text}")
-                
-                if answer_response.status_code != 200:
-                    logger.error(f"❌ ERREUR HTTP {answer_response.status_code}")
-                else:
-                    response_json = answer_response.json()
-                    if response_json.get('ok'):
-                        logger.warning(f"✅ answerCallbackQuery RÉUSSI!")
-                    else:
-                        logger.error(f"❌ Telegram NOK: {response_json}")
-                        
-            except requests.exceptions.Timeout:
-                logger.error(f"⏱️ TIMEOUT answerCallbackQuery")
-            except Exception as e:
-                logger.error(f"❌ EXCEPTION: {e}")
-                import traceback
-                logger.error(traceback.format_exc())
-            
-            if callback_data.startswith('webapp_validate_'):
-                try:
-                    order_id = int(callback_data.split('_')[2])
-                    logger.warning(f"🔄 Validation commande #{order_id}")
-                    
-                    order_found = False
-                    for order in orders:
-                        if order['id'] == order_id:
-                            order['status'] = 'delivered'
-                            order['delivered_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                            order_found = True
-                            logger.warning(f"✅ Commande #{order_id} livrée")
-                            break
-                    
-                    if order_found:
-                        save_json_file(ORDERS_FILE, orders)
-                        
-                        try:
-                            message_id = callback_query.get('message', {}).get('message_id')
-                            chat_id = callback_query.get('message', {}).get('chat', {}).get('id')
-                            original_text = callback_query.get('message', {}).get('text', '')
-                            
-                            if message_id and chat_id:
-                                edit_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/editMessageText"
-                                edit_response = requests.post(edit_url, json={
-                                    "chat_id": chat_id,
-                                    "message_id": message_id,
-                                    "text": original_text + "\n\n✅ *COMMANDE LIVRÉE*",
-                                    "parse_mode": "Markdown"
-                                }, timeout=5)
-                                logger.warning(f"✅ Message édité ({edit_response.status_code})")
-                        except Exception as e:
-                            logger.error(f"❌ Erreur édition: {e}")
-                    else:
-                        logger.error(f"❌ Commande #{order_id} non trouvée")
-                        
-                except Exception as e:
-                    logger.error(f"❌ Erreur traitement: {e}")
-                    import traceback
-                    logger.error(traceback.format_exc())
-        else:
-            logger.warning("⚠️ Pas de callback_query")
-        
-        return jsonify({'ok': True}), 200
+            logger.error(f"Erreur géolocalisation: {e}")
+            return jsonify({'error': f'Erreur de géolocalisation'}), 500
         
     except Exception as e:
-        logger.error(f"❌ ERREUR GLOBALE: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return jsonify({'ok': True}), 200
+        logger.error(f"Erreur calcul distance: {e}")
+        return jsonify({'error': 'Erreur serveur'}), 500
 
 # ==================== GOOGLE SHEETS ROUTES ====================
 
@@ -768,297 +1068,22 @@ def api_sheets_status():
         'spreadsheet_id': SPREADSHEET_ID if GOOGLE_SHEETS_ENABLED else None
     }), 200
 
-@app.route('/catalogue')
-def catalogue():
-    try:
-        with open('catalogue.html', 'r', encoding='utf-8') as f:
-            html = f.read()
-            html = html.replace('{{BACKGROUND_IMAGE}}', BACKGROUND_IMAGE)
-            return html, 200
-    except FileNotFoundError:
-        return "Fichier catalogue.html introuvable", 404
-    except Exception as e:
-        logger.error(f"Erreur route catalogue: {e}")
-        return "Erreur serveur", 500
+# ==================== WEBHOOK CONFIGURATION ====================
+
+# Configurer le webhook après un délai
+if TELEGRAM_BOT_TOKEN and BOT_AVAILABLE:
+    import threading
+    def delayed_webhook_setup():
+        import time
+        time.sleep(5)
+        configure_telegram_webhook()
+    
+    webhook_thread = threading.Thread(target=delayed_webhook_setup, daemon=True)
+    webhook_thread.start()
+
+# ==================== MAIN ====================
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    logger.warning(f"Démarrage sur le port {port}")
-    app.run(host='0.0.0.0', port=port, debug=False)Non autorisé'}), 403
-        token_data = admin_tokens[token]
-        if datetime.now() > token_data['expires']:
-            del admin_tokens[token]
-            return jsonify({'error': 'Session expirée'}), 403
-        return f(*args, **kwargs)
-    return wrapped
-
-# ==================== ROUTES ====================
-
-@app.route('/')
-def index():
-    try:
-        html = f'''<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<title>Carte du Pirate</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>
-* {{ margin: 0; padding: 0; box-sizing: border-box; }}
-body {{
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: url('{BACKGROUND_IMAGE}') center center fixed;
-  background-size: cover;
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  position: relative;
-}}
-body::before {{
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
-  z-index: 1;
-}}
-.container {{
-  text-align: center;
-  color: white;
-  max-width: 800px;
-  position: relative;
-  z-index: 2;
-}}
-h1 {{
-  font-size: 3.5em;
-  margin-bottom: 30px;
-  text-shadow: 4px 4px 8px rgba(0,0,0,0.8);
-}}
-.subtitle {{
-  font-size: 1.3em;
-  margin-bottom: 40px;
-  opacity: 0.95;
-  text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
-}}
-.btn {{
-  display: inline-block;
-  padding: 20px 50px;
-  font-size: 1.5em;
-  background: linear-gradient(45deg, #d4af37, #f4e5a1);
-  border: 3px solid #8b7220;
-  border-radius: 15px;
-  color: #2c1810;
-  text-decoration: none;
-  font-weight: bold;
-  transition: all 0.3s ease;
-  margin: 10px;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-}}
-.btn:hover {{
-  transform: scale(1.05) translateY(-5px);
-  box-shadow: 0 15px 40px rgba(212, 175, 55, 0.6);
-}}
-</style>
-</head>
-<body>
-<div class="container">
-  <h1>🏴‍☠️ Carte du Pirate 🏴‍☠️</h1>
-  <p class="subtitle">Votre boutique de trésors en ligne</p>
-  <a href="/catalogue" class="btn">📦 Catalogue & Commandes</a>
-</div>
-</body>
-</html>'''
-        return html, 200
-    except Exception as e:
-        logger.error(f"Erreur route index: {e}")
-        return "Erreur serveur", 500
-
-@app.route('/health')
-def health():
-    return jsonify({'status': 'ok'}), 200
-
-@app.route('/api/admin/login', methods=['POST'])
-@limiter.limit("5 per 15 minutes")
-def api_login():
-    try:
-        ip = get_remote_address()
-        allowed, message = check_rate_limit(ip)
-        if not allowed:
-            return jsonify({'error': message}), 429
-        data = request.json or {}
-        password_hash = hash_password(data.get('password', ''))
-        if password_hash == ADMIN_PASSWORD_HASH:
-            token = secrets.token_urlsafe(32)
-            admin_tokens[token] = {
-                'created': datetime.now(),
-                'expires': datetime.now() + timedelta(hours=12),
-                'ip': ip
-            }
-            if ip in failed_login_attempts:
-                failed_login_attempts[ip]['count'] = 0
-            return jsonify({'success': True, 'token': token})
-        blocked = register_failed_attempt(ip)
-        if blocked:
-            return jsonify({'error': 'Trop de tentatives. Compte bloqué 15 minutes.'}), 429
-        return jsonify({'error': 'Mot de passe incorrect'}), 403
-    except Exception as e:
-        return jsonify({'error': 'Erreur serveur'}), 500
-
-@app.route('/api/admin/logout', methods=['POST'])
-def api_logout():
-    try:
-        token = request.headers.get('X-Admin-Token')
-        if token and token in admin_tokens:
-            del admin_tokens[token]
-        return jsonify({'success': True})
-    except:
-        return jsonify({'success': False}), 500
-
-@app.route('/api/admin/check', methods=['GET'])
-def api_check_admin():
-    try:
-        token = request.headers.get('X-Admin-Token')
-        ip = get_remote_address()
-        is_admin = False
-        if token and token in admin_tokens:
-            if admin_tokens[token]['ip'] == ip:
-                if datetime.now() <= admin_tokens[token]['expires']:
-                    is_admin = True
-                else:
-                    del admin_tokens[token]
-            else:
-                del admin_tokens[token]
-        return jsonify({'admin': is_admin}), 200
-    except:
-        return jsonify({'admin': False}), 200
-
-@app.route('/api/upload', methods=['POST'])
-@require_admin
-@limiter.limit("10 per hour")
-def upload_file():
-    try:
-        if 'file' not in request.files:
-            return jsonify({'error': 'Aucun fichier'}), 400
-        file = request.files['file']
-        file.seek(0, os.SEEK_END)
-        file_length = file.tell()
-        if file_length > 10 * 1024 * 1024:
-            return jsonify({'error': 'Fichier trop gros (max 10MB)'}), 400
-        file.seek(0)
-        result = cloudinary.uploader.upload(file, resource_type='auto', folder='catalogue', timeout=60)
-        return jsonify({'url': result.get('secure_url')}), 200
-    except:
-        return jsonify({'error': 'Erreur upload'}), 500
-
-@app.route('/api/products', methods=['GET'])
-def get_products():
-    try:
-        return jsonify(products), 200
-    except:
-        return jsonify([]), 200
-
-@app.route('/api/admin/products', methods=['POST'])
-@require_admin
-def add_product():
-    global products
-    try:
-        data = request.json or {}
-        if not data.get('name') or not data.get('price'):
-            return jsonify({'error': 'Nom et prix requis'}), 400
-        new_product = {
-            "id": max([p["id"] for p in products]) + 1 if products else 1,
-            "name": data.get("name"),
-            "price": float(data.get("price", 0)),
-            "description": data.get("description", ""),
-            "category": data.get("category", ""),
-            "image_url": data.get("image_url", ""),
-            "video_url": data.get("video_url", ""),
-            "stock": int(data.get("stock", 0))
-        }
-        products.append(new_product)
-        save_json_file(PRODUCTS_FILE, products)
-        return jsonify(new_product), 201
-    except:
-        return jsonify({'error': 'Erreur création'}), 500
-
-@app.route('/api/admin/products/<int:pid>', methods=['PUT'])
-@require_admin
-def update_product(pid):
-    try:
-        data = request.json or {}
-        for p in products:
-            if p['id'] == pid:
-                p.update({
-                    "name": data.get("name", p["name"]),
-                    "price": float(data.get("price", p["price"])),
-                    "description": data.get("description", p["description"]),
-                    "category": data.get("category", p["category"]),
-                    "image_url": data.get("image_url", p.get("image_url", "")),
-                    "video_url": data.get("video_url", p.get("video_url", "")),
-                    "stock": int(data.get("stock", p["stock"]))
-                })
-                save_json_file(PRODUCTS_FILE, products)
-                return jsonify(p)
-        return jsonify({'error': 'Produit non trouvé'}), 404
-    except:
-        return jsonify({'error': 'Erreur modification'}), 500
-
-@app.route('/api/admin/products/<int:pid>', methods=['DELETE'])
-@require_admin
-def delete_product(pid):
-    global products
-    try:
-        before = len(products)
-        products = [p for p in products if p['id'] != pid]
-        if len(products) < before:
-            save_json_file(PRODUCTS_FILE, products)
-            return jsonify({'success': True})
-        return jsonify({'error': 'Produit non trouvé'}), 404
-    except:
-        return jsonify({'error': 'Erreur suppression'}), 500
-
-@app.route('/api/calculate-distance', methods=['POST'])
-def calculate_distance():
-    try:
-        data = request.json or {}
-        client_address = data.get('address', '').strip()
-        
-        if not client_address or len(client_address) < 15:
-            return jsonify({'error': 'Adresse invalide (min 15 caractères)'}), 400
-        
-        if not GEOPY_AVAILABLE:
-            return jsonify({'error': 'Service de géolocalisation non disponible'}), 503
-        
-        try:
-            geolocator = Nominatim(user_agent="carte_du_pirate_webapp")
-            
-            location1 = geolocator.geocode(ADMIN_ADDRESS, timeout=10)
-            location2 = geolocator.geocode(client_address, timeout=10)
-            
-            if not location1:
-                return jsonify({'error': f'Adresse de départ introuvable'}), 400
-            
-            if not location2:
-                return jsonify({'error': 'Adresse de livraison introuvable'}), 400
-            
-            coords1 = (location1.latitude, location1.longitude)
-            coords2 = (location2.latitude, location2.longitude)
-            
-            distance = geodesic(coords1, coords2).kilometers
-            distance_rounded = round(distance, 1)
-            
-            return jsonify({
-                'success': True,
-                'distance_km': distance_rounded,
-                'from': ADMIN_ADDRESS,
-                'to': client_address
-            }), 200
-            
-        except Exception as e:
-            logger.error(f"Erreur géolocalisation: {e}")
-            return jsonify({'error': f'Erreur de géolocalisation'}), 500
-        
-    except Exception as e:
-        logger.error(f"Erreur calcul distance: {e}")
-        return jsonify({'error': '
+    logger.warning(f"🚀 Démarrage sur le port {port}")
+    app.run(host='0.0.0.0', port=port, debug=False)

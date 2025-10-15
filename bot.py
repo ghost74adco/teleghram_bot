@@ -78,6 +78,9 @@ except ImportError:
 USE_WHITELIST = False
 AUTHORIZED_USERS = []
 
+# ✅ NOUVELLE OPTION : Suppression automatique des messages
+AUTO_DELETE_MESSAGES = True  # Mettre False pour désactiver
+
 user_message_timestamps = defaultdict(list)
 MAX_MESSAGES_PER_MINUTE = 15
 RATE_LIMIT_WINDOW = 60
@@ -211,6 +214,32 @@ def check_session_timeout(user_data: dict) -> bool:
 def update_last_activity(user_data: dict):
     user_data['last_activity'] = datetime.now()
 
+async def delete_user_message(update: Update):
+    """Supprime le message de l'utilisateur"""
+    if AUTO_DELETE_MESSAGES and update.message:
+        try:
+            await update.message.delete()
+            logger.debug(f"Message utilisateur {update.message.message_id} supprimé")
+        except Exception as e:
+            logger.debug(f"Impossible de supprimer message utilisateur: {e}")
+
+async def delete_last_bot_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
+    """Supprime le dernier message du bot"""
+    if AUTO_DELETE_MESSAGES and 'last_bot_message_id' in context.user_data:
+        try:
+            await context.bot.delete_message(
+                chat_id=chat_id,
+                message_id=context.user_data['last_bot_message_id']
+            )
+            logger.debug(f"Message bot {context.user_data['last_bot_message_id']} supprimé")
+        except Exception as e:
+            logger.debug(f"Impossible de supprimer message bot: {e}")
+
+def save_bot_message_id(context: ContextTypes.DEFAULT_TYPE, message_id: int):
+    """Sauvegarde l'ID du dernier message du bot"""
+    if AUTO_DELETE_MESSAGES:
+        context.user_data['last_bot_message_id'] = message_id
+
 def calculate_delivery_fee(delivery_type: str, distance: int = 0, subtotal: float = 0) -> float:
     if delivery_type == "postal":
         return FRAIS_POSTAL
@@ -339,11 +368,18 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")]
     ]
     
-    await update.message.reply_text(
+    # Supprimer le message /start de l'utilisateur
+    await delete_user_message(update)
+    
+    # Envoyer le nouveau message
+    sent_message = await update.message.reply_text(
         welcome_text,
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
+    
+    # Sauvegarder l'ID du message du bot
+    save_bot_message_id(context, sent_message.message_id)
     
     return LANGUE
 

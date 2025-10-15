@@ -428,7 +428,7 @@ def configure_telegram_webhook():
         return False
     
     webhook_url = os.environ.get('WEBHOOK_URL', 'https://carte-du-pirate.onrender.com')
-    full_webhook_url = f"{webhook_url}/api/telegram/bot/{TELEGRAM_BOT_TOKEN}"
+    full_webhook_url = f"{webhook_url}/telegram/bot/{TELEGRAM_BOT_TOKEN}"
     
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setWebhook"
@@ -603,7 +603,7 @@ def catalogue():
 
 # ==================== TELEGRAM WEBHOOK ROUTES ====================
 
-@app.route('/api/telegram/bot/<path:token>', methods=['POST'])
+@app.route('/telegram/bot/<path:token>', methods=['POST'])
 def telegram_bot_webhook(token):
     """Route webhook principale pour le bot Telegram"""
     try:

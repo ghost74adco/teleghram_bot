@@ -1384,4 +1384,10 @@ async def choix_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
         ]
         
-        await query.message.edit_text(
+        await query.message.edit_text(Ah ! J'ai trouvé le problème !
+
+pythonawait query.message.edit_text(
+    tr(context.user_data, "choose_payment"),
+    reply_markup=InlineKeyboardMarkup(keyboard),
+    parse_mode='Markdown'
+)

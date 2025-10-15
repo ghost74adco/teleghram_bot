@@ -34,7 +34,6 @@ def validate_environment():
     if missing:
         msg = f"❌ Variables manquantes: {', '.join(missing)}"
         logger.error(msg)
-        # NE PAS QUITTER si importé par app.py
         if __name__ == '__main__':
             sys.exit(1)
         else:
@@ -60,14 +59,13 @@ def validate_environment():
     logger.info("✅ Configuration validée")
     return True
 
-# Valider seulement si exécuté directement
+# Valider et charger les variables
 if validate_environment():
     TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
     ADMIN_ID = int(os.getenv("ADMIN_ID"))
     CRYPTO_WALLET = os.getenv("CRYPTO_WALLET", "")
     ADMIN_ADDRESS = os.getenv("ADMIN_ADDRESS", "Chamonix-Mont-Blanc, France")
 else:
-    # Valeurs par défaut si validation échoue (pour import par app.py)
     TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
     ADMIN_ID = int(os.getenv("ADMIN_ID", "0")) if os.getenv("ADMIN_ID") else 0
     CRYPTO_WALLET = os.getenv("CRYPTO_WALLET", "")
@@ -80,7 +78,6 @@ from telegram.ext import (
     ConversationHandler, MessageHandler, CommandHandler, filters
 )
 from telegram.error import NetworkError, TimedOut, Conflict
-import asyncio
 
 # --- Imports pour géolocalisation ---
 try:
@@ -94,14 +91,11 @@ except ImportError:
 # --- Configuration ---
 USE_WHITELIST = False
 AUTHORIZED_USERS = []
-
-# ✅ NOUVELLE OPTION : Suppression automatique des messages
-AUTO_DELETE_MESSAGES = True  # Mettre False pour désactiver
+AUTO_DELETE_MESSAGES = True
 
 user_message_timestamps = defaultdict(list)
 MAX_MESSAGES_PER_MINUTE = 15
 RATE_LIMIT_WINDOW = 60
-
 SESSION_TIMEOUT_MINUTES = 30
 MAX_QUANTITY_PER_PRODUCT = 100
 FRAIS_POSTAL = 10
@@ -148,7 +142,7 @@ PRIX_CH = {
     "🪨 4MMC": 70
 }
 
-# Traductions (version abrégée pour l'espace)
+# Traductions
 TRANSLATIONS = {
     "fr": {
         "welcome": "🌿 *BIENVENUE* 🌿\n\n⚠️ *IMPORTANT :*\nToutes les conversations doivent être établies en *ÉCHANGE SECRET*.\n\n🙏 *Merci* 💪💚",
@@ -232,28 +226,23 @@ def update_last_activity(user_data: dict):
     user_data['last_activity'] = datetime.now()
 
 async def delete_user_message(update: Update):
-    """Supprime le message de l'utilisateur"""
     if AUTO_DELETE_MESSAGES and update.message:
         try:
             await update.message.delete()
-            logger.debug(f"Message utilisateur {update.message.message_id} supprimé")
         except Exception as e:
             logger.debug(f"Impossible de supprimer message utilisateur: {e}")
 
 async def delete_last_bot_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
-    """Supprime le dernier message du bot"""
     if AUTO_DELETE_MESSAGES and 'last_bot_message_id' in context.user_data:
         try:
             await context.bot.delete_message(
                 chat_id=chat_id,
                 message_id=context.user_data['last_bot_message_id']
             )
-            logger.debug(f"Message bot {context.user_data['last_bot_message_id']} supprimé")
         except Exception as e:
             logger.debug(f"Impossible de supprimer message bot: {e}")
 
 def save_bot_message_id(context: ContextTypes.DEFAULT_TYPE, message_id: int):
-    """Sauvegarde l'ID du dernier message du bot"""
     if AUTO_DELETE_MESSAGES:
         context.user_data['last_bot_message_id'] = message_id
 
@@ -372,11 +361,23 @@ def error_handler(func):
             return ConversationHandler.END
     return wrapper
 
-@security_check
 @error_handler
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /start - point d'entrée du bot"""
+    # Réinitialiser complètement les données utilisateur
     context.user_data.clear()
     update_last_activity(context.user_data)
+    
+    # Vérifier l'autorisation
+    user_id = update.effective_user.id
+    if not is_authorized(user_id):
+        logger.warning(f"Utilisateur non autorisé: {user_id}")
+        return ConversationHandler.END
+    
+    # Vérifier le rate limit
+    if not check_rate_limit(user_id):
+        logger.warning(f"Rate limit dépassé pour: {user_id}")
+        return
     
     welcome_text = "🌍 *Choisissez votre langue / Select your language*"
     
@@ -397,6 +398,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Sauvegarder l'ID du message du bot
     save_bot_message_id(context, sent_message.message_id)
+    
+    logger.info(f"✅ /start exécuté pour user {user_id}")
     
     return LANGUE
 
@@ -440,7 +443,7 @@ async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         text = tr(context.user_data, "choose_country")
     elif query.data == "price_menu":
-        text = "🏴‍☠️ *CARTE DU PIRATE*\n\n🇫🇷 France: Coco 80€, Pills 10€\n🇨🇭 Suisse: Coco 100€, Pills 15€"
+        text = "🏴‍☠️ *CARTE DU PIRATE*\n\n🇫🇷 *France:*\n❄️ Coco: 80€/g\n💊 Pills: 10€\n🫒 Hash: 7€/g\n🍀 Weed: 10€/g\n🪨 MDMA/4MMC: 50€/g\n\n🇨🇭 *Suisse:*\n❄️ Coco: 100€/g\n💊 Pills: 15€\n🫒 Hash: 8€/g\n🍀 Weed: 12€/g\n🪨 MDMA/4MMC: 70€/g"
         keyboard = [
             [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")]
         ]
@@ -459,11 +462,11 @@ async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['cart'] = []
     
     keyboard = [
-        [InlineKeyboardButton("❄️", callback_data="product_snow")],
-        [InlineKeyboardButton("💊", callback_data="product_pill")],
-        [InlineKeyboardButton("🫒", callback_data="product_olive")],
-        [InlineKeyboardButton("🍀", callback_data="product_clover")],
-        [InlineKeyboardButton("🪨", callback_data="product_rock")]
+        [InlineKeyboardButton("❄️ COCO", callback_data="product_snow")],
+        [InlineKeyboardButton("💊 Pills", callback_data="product_pill")],
+        [InlineKeyboardButton("🫒 Hash", callback_data="product_olive")],
+        [InlineKeyboardButton("🍀 Weed", callback_data="product_clover")],
+        [InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")]
     ]
     
     await query.message.edit_text(
@@ -493,11 +496,28 @@ async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown'
         )
         return PILL_SUBCATEGORY
+    elif product_code == "rock":
+        keyboard = [
+            [InlineKeyboardButton("🪨 MDMA", callback_data="rock_mdma")],
+            [InlineKeyboardButton("🪨 4MMC", callback_data="rock_fourmmc")]
+        ]
+        await query.message.edit_text(
+            tr(context.user_data, "choose_rock_type"),
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        return ROCK_SUBCATEGORY
     
-    product_emoji = PRODUCT_MAP.get(product_code, product_code)
-    context.user_data['current_product'] = product_emoji
+    # Produits directs
+    product_names = {
+        "snow": "❄️ Coco",
+        "olive": "🫒 Hash",
+        "clover": "🍀 Weed"
+    }
     
-    text = f"✅ Produit : {product_emoji}\n\n{tr(context.user_data, 'enter_quantity')}"
+    context.user_data['current_product'] = product_names.get(product_code, product_code)
+    
+    text = f"✅ Produit : {context.user_data['current_product']}\n\n{tr(context.user_data, 'enter_quantity')}"
     await query.message.edit_text(text, parse_mode='Markdown')
     
     return QUANTITE
@@ -519,13 +539,25 @@ async def choix_pill_subcategory(update: Update, context: ContextTypes.DEFAULT_T
 
 @security_check
 @error_handler
+async def choix_rock_subcategory(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    rock_type = query.data.replace("rock_", "")
+    product_name = ROCK_SUBCATEGORIES.get(rock_type, "🪨")
+    context.user_data['current_product'] = product_name
+    
+    text = f"✅ Produit : {product_name}\n\n{tr(context.user_data, 'enter_quantity')}"
+    await query.message.edit_text(text, parse_mode='Markdown')
+    
+    return QUANTITE
+
+@security_check
+@error_handler
 async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
     qty = sanitize_input(update.message.text, max_length=10)
     
-    # Supprimer le message de l'utilisateur
     await delete_user_message(update)
-    
-    # Supprimer le dernier message du bot
     await delete_last_bot_message(context, update.effective_chat.id)
     
     if not qty.isdigit():
@@ -569,8 +601,11 @@ async def cart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if query.data == "add_more":
         keyboard = [
-            [InlineKeyboardButton("❄️", callback_data="product_snow")],
-            [InlineKeyboardButton("💊", callback_data="product_pill")]
+            [InlineKeyboardButton("❄️ COCO", callback_data="product_snow")],
+            [InlineKeyboardButton("💊 Pills", callback_data="product_pill")],
+            [InlineKeyboardButton("🫒 Hash", callback_data="product_olive")],
+            [InlineKeyboardButton("🍀 Weed", callback_data="product_clover")],
+            [InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")]
         ]
         await query.message.edit_text(
             tr(context.user_data, "choose_product"),
@@ -595,10 +630,7 @@ async def saisie_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     address = sanitize_input(update.message.text, max_length=300)
     
-    # Supprimer le message de l'utilisateur
     await delete_user_message(update)
-    
-    # Supprimer le dernier message du bot
     await delete_last_bot_message(context, update.effective_chat.id)
     
     if len(address) < 15:
@@ -802,6 +834,9 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         context.user_data.clear()
         return ConversationHandler.END
+    
+    elif query.data == "cancel":
+        return await cancel(update, context)
 
 @security_check
 @error_handler
@@ -909,6 +944,9 @@ def main():
             PILL_SUBCATEGORY: [
                 CallbackQueryHandler(choix_pill_subcategory, pattern='^pill_')
             ],
+            ROCK_SUBCATEGORY: [
+                CallbackQueryHandler(choix_rock_subcategory, pattern='^rock_')
+            ],
             QUANTITE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_quantite)
             ],
@@ -926,8 +964,7 @@ def main():
                 CallbackQueryHandler(choix_paiement, pattern='^payment_')
             ],
             CONFIRMATION: [
-                CallbackQueryHandler(confirmation, pattern='^confirm_order'),
-                CallbackQueryHandler(cancel, pattern='^cancel')
+                CallbackQueryHandler(confirmation, pattern='^(confirm_order|cancel)')
             ]
         },
         fallbacks=[
@@ -957,7 +994,12 @@ def main():
 bot_application = main()
 
 import asyncio
-asyncio.run(setup_webapp_menu(bot_application))
+try:
+    asyncio.run(setup_webapp_menu(bot_application))
+except RuntimeError:
+    # Si l'event loop existe déjà (cas de l'import par app.py)
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(setup_webapp_menu(bot_application))
 
 if __name__ == '__main__':
     logger.info("⚠️ Ce fichier ne doit pas être exécuté directement")

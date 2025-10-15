@@ -138,6 +138,71 @@ def calculate_delivery_fee(delivery_type: str, distance: int = 0, subtotal: floa
 async def get_distance_between_addresses(address1: str, address2: str) -> tuple:
     if not GEOPY_AVAILABLE: return (0, False, "Géolocalisation non disponible")
     try:
+        current_text = query.message.text
+        await query.message.edit_text(current_text + "\n\n✅ *VALIDÉE*", parse_mode='Markdown')
+        await context.bot.send_message(chat_id=client_id, text=f"✅ *Livraison confirmée !*\n\n📋 `{order_id}`\n\nMerci ! 💚", parse_mode='Markdown')
+    except Exception as e:
+        logger.error(f"Validation: {e}")
+    
+    await query.answer("✅ Validé!", show_alert=True)
+
+@error_handler
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    await query.message.edit_text(tr(context.user_data, "order_cancelled"), parse_mode='Markdown')
+    context.user_data.clear()
+    return ConversationHandler.END
+
+async def error_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.error(f"Exception: {context.error}", exc_info=context.error)
+
+def main():
+    logger.info("🤖 Configuration du bot...")
+    
+    application = Application.builder().token(TOKEN).build()
+    
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler('start', start_command)],
+        states={
+            LANGUE: [CallbackQueryHandler(set_langue, pattern='^lang_')],
+            PAYS: [
+                CallbackQueryHandler(menu_navigation, pattern='^(start_order|price_menu)'),
+                CallbackQueryHandler(choix_pays, pattern='^country_')
+            ],
+            PRODUIT: [CallbackQueryHandler(choix_produit, pattern='^product_')],
+            PILL_SUBCATEGORY: [CallbackQueryHandler(choix_pill_subcategory, pattern='^pill_')],
+            ROCK_SUBCATEGORY: [CallbackQueryHandler(choix_rock_subcategory, pattern='^rock_')],
+            QUANTITE: [MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_quantite)],
+            CART_MENU: [CallbackQueryHandler(cart_menu, pattern='^(add_more|proceed_checkout)')],
+            ADRESSE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_adresse),
+                CallbackQueryHandler(saisie_adresse, pattern='^back_to_address')
+            ],
+            LIVRAISON: [CallbackQueryHandler(choix_livraison, pattern='^delivery_')],
+            PAIEMENT: [CallbackQueryHandler(choix_paiement, pattern='^payment_')],
+            CONFIRMATION: [CallbackQueryHandler(confirmation, pattern='^(confirm_order|cancel)')]
+        },
+        fallbacks=[CommandHandler('start', start_command), CallbackQueryHandler(cancel, pattern='^cancel')],
+        per_chat=True,
+        per_user=True,
+        per_message=False
+    )
+    
+    application.add_handler(conv_handler)
+    application.add_handler(CallbackQueryHandler(admin_validation_livraison, pattern='^admin_validate_'))
+    application.add_error_handler(error_callback)
+    
+    logger.info("✅ Bot configuré avec succès")
+    return application
+
+bot_application = main()
+logger.info("✅ Bot prêt à être importé par app.py")
+
+if __name__ == '__main__':
+    logger.warning("⚠️ N'exécutez pas bot.py directement")
+    logger.warning("👉 Utilisez: python app.py")
+    sys.exit(0)
         geolocator = Nominatim(user_agent="telegram_shop_bot")
         loc1, loc2 = geolocator.geocode(address1, timeout=10), geolocator.geocode(address2, timeout=10)
         if not loc1 or not loc2: return (0, False, "Adresse introuvable")
@@ -155,14 +220,17 @@ def calculate_total(cart, country, delivery_type: str = None, distance: int = 0)
 
 def format_cart(cart, user_data):
     if not cart: return ""
-    return f"\n{tr(user_data, 'cart_title')}\n" + "".join(f"• {item['produit']} x {item['quantite']}\n" for item in cart)
+    cart_title = tr(user_data, 'cart_title')
+    items_text = "".join([f"• {item['produit']} x {item['quantite']}\n" for item in cart])
+    return f"\n{cart_title}\n{items_text}"
 
 def save_order_to_csv(order_data: dict):
     csv_path = Path(__file__).parent / "orders.csv"
     try:
+        file_exists = csv_path.exists()
         with open(csv_path, 'a', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=['date', 'order_id', 'user_id', 'username', 'first_name', 'products', 'country', 'address', 'delivery_type', 'distance_km', 'payment_method', 'subtotal', 'delivery_fee', 'total', 'status'])
-            if not csv_path.exists(): writer.writeheader()
+            if not file_exists: writer.writeheader()
             writer.writerow(order_data)
         return True
     except Exception as e:
@@ -265,7 +333,10 @@ async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     product_names = {"snow": "❄️ Coco", "olive": "🫒 Hash", "clover": "🍀 Weed"}
     context.user_data['current_product'] = product_names.get(product_code, product_code)
-    await query.message.edit_text(f"✅ Produit : {context.user_data['current_product']}\n\n{tr(context.user_data, 'enter_quantity')}", parse_mode='Markdown')
+    
+    product_name = context.user_data['current_product']
+    quantity_text = tr(context.user_data, 'enter_quantity')
+    await query.message.edit_text(f"✅ Produit : {product_name}\n\n{quantity_text}", parse_mode='Markdown')
     return QUANTITE
 
 @error_handler
@@ -274,7 +345,10 @@ async def choix_pill_subcategory(update: Update, context: ContextTypes.DEFAULT_T
     await query.answer()
     update_last_activity(context.user_data)
     context.user_data['current_product'] = PILL_SUBCATEGORIES.get(query.data.replace("pill_", ""), "💊")
-    await query.message.edit_text(f"✅ Produit : {context.user_data['current_product']}\n\n{tr(context.user_data, 'enter_quantity')}", parse_mode='Markdown')
+    
+    product_name = context.user_data['current_product']
+    quantity_text = tr(context.user_data, 'enter_quantity')
+    await query.message.edit_text(f"✅ Produit : {product_name}\n\n{quantity_text}", parse_mode='Markdown')
     return QUANTITE
 
 @error_handler
@@ -283,7 +357,10 @@ async def choix_rock_subcategory(update: Update, context: ContextTypes.DEFAULT_T
     await query.answer()
     update_last_activity(context.user_data)
     context.user_data['current_product'] = ROCK_SUBCATEGORIES.get(query.data.replace("rock_", ""), "🪨")
-    await query.message.edit_text(f"✅ Produit : {context.user_data['current_product']}\n\n{tr(context.user_data, 'enter_quantity')}", parse_mode='Markdown')
+    
+    product_name = context.user_data['current_product']
+    quantity_text = tr(context.user_data, 'enter_quantity')
+    await query.message.edit_text(f"✅ Produit : {product_name}\n\n{quantity_text}", parse_mode='Markdown')
     return QUANTITE
 
 @error_handler
@@ -373,7 +450,17 @@ async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     total, subtotal, delivery_fee = calculate_total(context.user_data['cart'], context.user_data['pays'], context.user_data['livraison'], context.user_data.get('distance', 0))
     
-    summary = f"{tr(context.user_data, 'order_summary')}\n\n{format_cart(context.user_data['cart'], context.user_data)}\n{tr(context.user_data, 'subtotal')} {subtotal}€\n{tr(context.user_data, 'delivery_fee')} {delivery_fee}€\n{tr(context.user_data, 'total')} *{total}€*\n\n📍 {context.user_data['adresse']}\n📦 {context.user_data['livraison'].title()}\n💳 {context.user_data['paiement'].title()}"
+    cart_text = format_cart(context.user_data['cart'], context.user_data)
+    subtotal_text = tr(context.user_data, 'subtotal')
+    delivery_text = tr(context.user_data, 'delivery_fee')
+    total_text = tr(context.user_data, 'total')
+    
+    address = context.user_data['adresse']
+    livraison = context.user_data['livraison'].title()
+    paiement = context.user_data['paiement'].title()
+    
+    summary = f"{tr(context.user_data, 'order_summary')}\n\n{cart_text}\n{subtotal_text} {subtotal}€\n{delivery_text} {delivery_fee}€\n{total_text} *{total}€*\n\n📍 {address}\n📦 {livraison}\n💳 {paiement}"
+    
     keyboard = [[InlineKeyboardButton(tr(context.user_data, "confirm"), callback_data="confirm_order")], [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]]
     await query.message.edit_text(summary, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return CONFIRMATION
@@ -389,17 +476,29 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         order_id = f"ORD-{datetime.now().strftime('%Y%m%d%H%M%S')}-{user.id}"
         
         order_data = {
-            'date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'order_id': order_id, 'user_id': user.id, 'username': user.username or "N/A", 'first_name': user.first_name or "N/A",
+            'date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 
+            'order_id': order_id, 
+            'user_id': user.id, 
+            'username': user.username or "N/A", 
+            'first_name': user.first_name or "N/A",
             'products': "; ".join([f"{item['produit']} x{item['quantite']}" for item in context.user_data['cart']]),
-            'country': context.user_data['pays'], 'address': context.user_data['adresse'], 'delivery_type': context.user_data['livraison'],
+            'country': context.user_data['pays'], 
+            'address': context.user_data['adresse'], 
+            'delivery_type': context.user_data['livraison'],
             'distance_km': context.user_data.get('distance', 0) if context.user_data['livraison'] == "express" else 0,
-            'payment_method': context.user_data['paiement'], 'subtotal': f"{subtotal:.2f}", 'delivery_fee': f"{delivery_fee:.2f}", 'total': f"{total:.2f}", 'status': 'En attente'
+            'payment_method': context.user_data['paiement'], 
+            'subtotal': f"{subtotal:.2f}", 
+            'delivery_fee': f"{delivery_fee:.2f}", 
+            'total': f"{total:.2f}", 
+            'status': 'En attente'
         }
         save_order_to_csv(order_data)
         
         user_first = user.first_name or "N/A"
         user_username = f" (@{user.username})" if user.username else ""
-        admin_message = f"🆕 *COMMANDE*\n\n📋 `{order_id}`\n👤 {user_first}{user_username}\n\n{format_cart(context.user_data['cart'], context.user_data)}\n💰 *Total: {total}€*"
+        cart_formatted = format_cart(context.user_data['cart'], context.user_data)
+        
+        admin_message = f"🆕 *COMMANDE*\n\n📋 `{order_id}`\n👤 {user_first}{user_username}\n\n{cart_formatted}\n💰 *Total: {total}€*"
         admin_keyboard = [[InlineKeyboardButton("✅ Valider", callback_data=f"admin_validate_{order_id}_{user.id}")]]
         
         try:
@@ -407,7 +506,8 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.error(f"Admin: {e}")
         
-        await query.message.edit_text(tr(context.user_data, "order_confirmed") + f"\n\n📋 `{order_id}`\n💰 {total:.2f}€", parse_mode='Markdown')
+        confirmation_msg = tr(context.user_data, "order_confirmed") + f"\n\n📋 `{order_id}`\n💰 {total:.2f}€"
+        await query.message.edit_text(confirmation_msg, parse_mode='Markdown')
         context.user_data.clear()
         return ConversationHandler.END
     
@@ -428,67 +528,3 @@ async def admin_validation_livraison(update: Update, context: ContextTypes.DEFAU
     client_id = int(data_parts[-1])
     
     try:
-        await query.message.edit_text(query.message.text + "\n\n✅ *VALIDÉE*", parse_mode='Markdown')
-        await context.bot.send_message(chat_id=client_id, text=f"✅ *Livraison confirmée !*\n\n📋 `{order_id}`\n\nMerci ! 💚", parse_mode='Markdown')
-    except Exception as e:
-        logger.error(f"Validation: {e}")
-    
-    await query.answer("✅ Validé!", show_alert=True)
-
-@error_handler
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    await query.message.edit_text(tr(context.user_data, "order_cancelled"), parse_mode='Markdown')
-    context.user_data.clear()
-    return ConversationHandler.END
-
-async def error_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.error(f"Exception: {context.error}", exc_info=context.error)
-
-def main():
-    logger.info("🤖 Configuration du bot...")
-    
-    application = Application.builder().token(TOKEN).build()
-    
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start_command)],
-        states={
-            LANGUE: [CallbackQueryHandler(set_langue, pattern='^lang_')],
-            PAYS: [
-                CallbackQueryHandler(menu_navigation, pattern='^(start_order|price_menu)'),
-                CallbackQueryHandler(choix_pays, pattern='^country_')
-            ],
-            PRODUIT: [CallbackQueryHandler(choix_produit, pattern='^product_')],
-            PILL_SUBCATEGORY: [CallbackQueryHandler(choix_pill_subcategory, pattern='^pill_')],
-            ROCK_SUBCATEGORY: [CallbackQueryHandler(choix_rock_subcategory, pattern='^rock_')],
-            QUANTITE: [MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_quantite)],
-            CART_MENU: [CallbackQueryHandler(cart_menu, pattern='^(add_more|proceed_checkout)')],
-            ADRESSE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_adresse),
-                CallbackQueryHandler(saisie_adresse, pattern='^back_to_address')
-            ],
-            LIVRAISON: [CallbackQueryHandler(choix_livraison, pattern='^delivery_')],
-            PAIEMENT: [CallbackQueryHandler(choix_paiement, pattern='^payment_')],
-            CONFIRMATION: [CallbackQueryHandler(confirmation, pattern='^(confirm_order|cancel)')]
-        },
-        fallbacks=[CommandHandler('start', start_command), CallbackQueryHandler(cancel, pattern='^cancel')],
-        per_chat=True,
-        per_user=True,
-        per_message=False
-    )
-    
-    application.add_handler(conv_handler)
-    application.add_handler(CallbackQueryHandler(admin_validation_livraison, pattern='^admin_validate_'))
-    application.add_error_handler(error_callback)
-    
-    logger.info("✅ Bot configuré avec succès")
-    return application
-
-bot_application = main()
-logger.info("✅ Bot prêt à être importé par app.py")
-
-if __name__ == '__main__':
-    logger.warning("⚠️ N'exécutez pas bot.py directement")
-    logger.warning("👉 Utilisez: python app.py")
-    sys.exit(0)

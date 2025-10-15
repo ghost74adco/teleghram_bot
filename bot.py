@@ -479,8 +479,13 @@ async def error_callback(update, context):
 
 def main():
     logger.info("🤖 Configuration du bot...")
+    logger.info("📱 Token: " + TOKEN[:10] + "...")
     
-    application = Application.builder().token(TOKEN).build()
+    try:
+        application = Application.builder().token(TOKEN).build()
+    except Exception as e:
+        logger.error("❌ Erreur création application: " + str(e))
+        sys.exit(1)
     
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start_command)],
@@ -511,8 +516,14 @@ def main():
     application.add_handler(CallbackQueryHandler(admin_validation_livraison, pattern='^admin_validate_'))
     application.add_error_handler(error_callback)
     
-    logger.info("🚀 Bot démarré!")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    logger.info("✅ Handlers configurés")
+    logger.info("🚀 Démarrage du polling...")
+    
+    try:
+        application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+    except Exception as e:
+        logger.error("❌ Erreur polling: " + str(e))
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()

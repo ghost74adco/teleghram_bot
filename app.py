@@ -1,80 +1,193 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
-from dotenv import load_dotenv
-from functools import wraps
-import os, cloudinary, cloudinary.uploader
+import os
+import sys
 import logging
-import secrets
-import hashlib
-import requests
-import json
+import re
+import csv
 import math
+from dotenv import load_dotenv
+from pathlib import Path
+from functools import wraps
+from collections import defaultdict
 from datetime import datetime, timedelta
-import asyncio
-from telegram import Update
 
-# Google Sheets
-try:
-    from google.oauth2.service_account import Credentials
-    from googleapiclient.discovery import build
-    GOOGLE_SHEETS_AVAILABLE = True
-except ImportError:
-    GOOGLE_SHEETS_AVAILABLE = False
+# Configuration du Logging
+logging.basicConfig(
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    level=logging.INFO,
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger(__name__)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("telegram").setLevel(logging.WARNING)
+
+# Chargement des variables d'environnement
+for env_file in ['.env', 'infos.env']:
+    dotenv_path = Path(__file__).parent / env_file
+    if dotenv_path.exists():
+        load_dotenv(dotenv_path)
+        logger.info(f"✅ Variables chargées: {env_file}")
+        break
+else:
+    load_dotenv()
+    logger.info("✅ Variables système chargées")
+
+# Charger les variables avec tous les alias possibles
+TOKEN = (os.getenv("TELEGRAM_BOT_TOKEN") or 
+         os.getenv("BOT_TOKEN") or 
+         os.getenv("TELEGRAM_TOKEN") or "").strip()
+
+ADMIN_ID_STR = (os.getenv("ADMIN_ID") or 
+                os.getenv("ADMIN_USER_IDS") or 
+                os.getenv("TELEGRAM_ADMIN_ID") or "").strip()
+
+ADMIN_ADDRESS = (os.getenv("ADMIN_ADDRESS") or 
+                 "858 Rte du Chef Lieu, 74250 Fillinges").strip()
+
+# Validation
+if not TOKEN or ':' not in TOKEN:
+    logger.error("❌ TOKEN invalide!")
+    sys.exit(1)
+
+if not ADMIN_ID_STR or not ADMIN_ID_STR.isdigit():
+    logger.error(f"❌ ADMIN_ID invalide: {ADMIN_ID_STR}")
+    sys.exit(1)
+
+ADMIN_ID = int(ADMIN_ID_STR)
+logger.info(f"✅ Bot configuré - Token: {TOKEN[:15]}...{TOKEN[-5:]}")
+logger.info(f"✅ Admin ID: {ADMIN_ID}")
+
+# Imports Telegram
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    Application, ContextTypes, CallbackQueryHandler,
+    ConversationHandler, MessageHandler, CommandHandler, filters
+)
 
 # Géolocalisation
 try:
     from geopy.geocoders import Nominatim
     from geopy.distance import geodesic
     GEOPY_AVAILABLE = True
+    logger.info("✅ Géolocalisation disponible")
 except ImportError:
     GEOPY_AVAILABLE = False
-
-logging.basicConfig(level=logging.WARNING)
-logger = logging.getLogger(__name__)
-
-load_dotenv('infos.env')
-
-app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
-CORS(app, supports_credentials=True, origins=['*'])
+    logger.warning("⚠️ Géolocalisation non disponible")
 
 # Configuration
-ADMIN_PASSWORD_HASH = hashlib.sha256(os.environ.get('ADMIN_PASSWORD', 'changeme123').encode()).hexdigest()
-TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN') or os.environ.get('BOT_TOKEN') or os.environ.get('TELEGRAM_TOKEN')
-TELEGRAM_ADMIN_ID = os.environ.get('TELEGRAM_ADMIN_ID') or os.environ.get('ADMIN_ID')
-ADMIN_ADDRESS = os.environ.get('ADMIN_ADDRESS', 'Chamonix-Mont-Blanc, France')
-BACKGROUND_IMAGE = os.environ.get('BACKGROUND_URL') or os.environ.get('BACKGROUND_IMAGE', 'https://res.cloudinary.com/dfhrrtzsd/image/upload/v1760118433/ChatGPT_Image_8_oct._2025_03_01_21_zm5zfy.png')
-
-# Google Sheets Configuration
-GOOGLE_SHEETS_ENABLED = False
-SPREADSHEET_ID = os.environ.get('GOOGLE_SPREADSHEET_ID', '')
-GOOGLE_CREDENTIALS_JSON = os.environ.get('GOOGLE_CREDENTIALS_JSON', '')
-sheets_service = None
-
-limiter = Limiter(app=app, key_func=get_remote_address, default_limits=["200 per day", "50 per hour"], storage_uri="memory://")
-
-admin_tokens = {}
-failed_login_attempts = {}
-
-# Configuration Cloudinary
-try:
-    cloudinary.config(
-        cloud_name=os.environ.get('CLOUDINARY_CLOUD_NAME') or os.environ.get('CLOUD_NAME'),
-        api_key=os.environ.get('CLOUDINARY_API_KEY') or os.environ.get('CLOUD_API_KEY'),
-        api_secret=os.environ.get('CLOUDINARY_API_SECRET') or os.environ.get('CLOUD_API_SECRET'),
-        secure=True
-    )
-    logger.warning("✅ Cloudinary configuré")
-except Exception as e:
-    logger.error(f"❌ Erreur Cloudinary: {e}")
-
-PRODUCTS_FILE = 'products.json'
-ORDERS_FILE = 'orders.json'
+USE_WHITELIST = False
+AUTHORIZED_USERS = []
+user_message_timestamps = defaultdict(list)
+MAX_MESSAGES_PER_MINUTE = 30
+RATE_LIMIT_WINDOW = 60
+MAX_QUANTITY_PER_PRODUCT = 100
 FRAIS_POSTAL = 10
 
-def calculate_delivery_fee(delivery_type: str, distance: float = 0, subtotal: float = 0) -> float:
+# États de conversation
+LANGUE, PAYS, PRODUIT, PILL_SUBCATEGORY, ROCK_SUBCATEGORY, QUANTITE, CART_MENU, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION = range(11)
+
+# Produits
+PILL_SUBCATEGORIES = {"squid_game": "💊 Squid Game", "punisher": "💊 Punisher"}
+ROCK_SUBCATEGORIES = {"mdma": "🪨 MDMA", "fourmmc": "🪨 4MMC"}
+
+PRIX_FR = {
+    "❄️ Coco": 80,
+    "💊 Squid Game": 10,
+    "💊 Punisher": 10,
+    "🫒 Hash": 7,
+    "🍀 Weed": 10,
+    "🪨 MDMA": 50,
+    "🪨 4MMC": 50
+}
+
+PRIX_CH = {
+    "❄️ Coco": 100,
+    "💊 Squid Game": 15,
+    "💊 Punisher": 15,
+    "🫒 Hash": 8,
+    "🍀 Weed": 12,
+    "🪨 MDMA": 70,
+    "🪨 4MMC": 70
+}
+
+# Traductions
+TRANSLATIONS = {
+    "fr": {
+        "welcome": "🌿 *BIENVENUE* 🌿\n\n⚠️ *IMPORTANT :*\nToutes les conversations doivent être établies en *ÉCHANGE SECRET*.\n\n🙏 *Merci* 💪💚",
+        "main_menu": "\n\n📱 *MENU PRINCIPAL :*\n\n👇 Choisissez une option :",
+        "choose_country": "🌍 *Choisissez votre pays de livraison :*",
+        "choose_product": "🛒 *Choisissez votre produit :*",
+        "choose_pill_type": "💊 *Choisissez le type de pilule :*",
+        "choose_rock_type": "🪨 *Choisissez le type de crystal :*",
+        "enter_quantity": "🔢 *Entrez la quantité désirée :*",
+        "enter_address": "📍 *Entrez votre adresse complète :*",
+        "choose_delivery": "📦 *Choisissez le type de livraison :*",
+        "calculating_distance": "📏 Calcul de la distance...",
+        "distance_calculated": "📏 *Distance :* {distance} km\n💶 *Frais :* {fee}€",
+        "geocoding_error": "❌ Impossible de localiser l'adresse.",
+        "choose_payment": "💳 *Choisissez le mode de paiement :*",
+        "order_summary": "✅ *Résumé de votre commande :*",
+        "confirm": "✅ Confirmer",
+        "cancel": "❌ Annuler",
+        "order_confirmed": "✅ *Commande confirmée !*\n\nMerci pour votre commande.\nVous serez contacté prochainement. 📞",
+        "order_cancelled": "❌ *Commande annulée.*",
+        "add_more": "➕ Ajouter un produit",
+        "proceed": "✅ Valider le panier",
+        "invalid_quantity": "❌ Veuillez entrer un nombre valide entre 1 et {max}.",
+        "cart_title": "🛒 *Votre panier :*",
+        "start_order": "🛒 Commander",
+        "price_menu": "🏴‍☠️ Carte du Pirate",
+        "france": "🇫🇷 France",
+        "switzerland": "🇨🇭 Suisse",
+        "postal": "✉️ Postale (+10€)",
+        "express": "⚡ Express",
+        "cash": "💵 Espèces",
+        "crypto": "₿ Crypto",
+        "total": "💰 *Total :*",
+        "delivery_fee": "📦 *Frais de livraison :*",
+        "subtotal": "💵 *Sous-total produits :*",
+        "back": "🔙 Retour"
+    }
+}
+
+def tr(user_data, key):
+    """Récupère une traduction"""
+    lang = user_data.get("langue", "fr")
+    translation = TRANSLATIONS.get(lang, TRANSLATIONS["fr"]).get(key, key)
+    if "{max}" in translation:
+        translation = translation.replace("{max}", str(MAX_QUANTITY_PER_PRODUCT))
+    return translation
+
+def sanitize_input(text: str, max_length: int = 200) -> str:
+    """Nettoie les entrées utilisateur"""
+    if not text:
+        return ""
+    text = text.strip()[:max_length]
+    text = re.sub(r'[<>{}[\]\\`|]', '', text)
+    return text
+
+def is_authorized(user_id: int) -> bool:
+    """Vérifie si un utilisateur est autorisé"""
+    return not USE_WHITELIST or user_id in AUTHORIZED_USERS
+
+def check_rate_limit(user_id: int) -> bool:
+    """Vérifie le rate limiting"""
+    now = datetime.now()
+    user_message_timestamps[user_id] = [
+        ts for ts in user_message_timestamps[user_id]
+        if now - ts < timedelta(seconds=RATE_LIMIT_WINDOW)
+    ]
+    if len(user_message_timestamps[user_id]) >= MAX_MESSAGES_PER_MINUTE:
+        logger.warning(f"⚠️ Rate limit dépassé: user {user_id}")
+        return False
+    user_message_timestamps[user_id].append(now)
+    return True
+
+def update_last_activity(user_data: dict):
+    """Met à jour l'activité"""
+    user_data['last_activity'] = datetime.now()
+
+def calculate_delivery_fee(delivery_type: str, distance: int = 0, subtotal: float = 0) -> float:
+    """Calcule les frais de livraison"""
     if delivery_type == "postal":
         return FRAIS_POSTAL
     elif delivery_type == "express":
@@ -82,1008 +195,740 @@ def calculate_delivery_fee(delivery_type: str, distance: float = 0, subtotal: fl
         return math.ceil(base_fee / 10) * 10
     return 0
 
-def load_json_file(filename, default=[]):
-    if os.path.exists(filename):
-        try:
-            with open(filename, 'r', encoding='utf-8') as f:
-                content = f.read().strip()
-                if not content:
-                    save_json_file(filename, default)
-                    return default
-                data = json.loads(content)
-                return data if isinstance(data, list) else default
-        except Exception as e:
-            logger.error(f"Erreur lecture {filename}: {e}")
-            save_json_file(filename, default)
-            return default
-    else:
-        save_json_file(filename, default)
-        return default
-
-def save_json_file(filename, data):
+async def get_distance_between_addresses(address1: str, address2: str) -> tuple:
+    """Calcule la distance entre deux adresses"""
+    if not GEOPY_AVAILABLE:
+        return (0, False, "Module de géolocalisation non disponible")
+    
     try:
-        with open(filename, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        geolocator = Nominatim(user_agent="telegram_shop_bot")
+        location1 = geolocator.geocode(address1, timeout=10)
+        location2 = geolocator.geocode(address2, timeout=10)
+        
+        if not location1 or not location2:
+            return (0, False, "Adresse introuvable")
+        
+        coords1 = (location1.latitude, location1.longitude)
+        coords2 = (location2.latitude, location2.longitude)
+        distance = round(geodesic(coords1, coords2).kilometers, 1)
+        
+        logger.info(f"📏 Distance calculée: {distance} km")
+        return (distance, True, None)
     except Exception as e:
-        logger.error(f"Erreur sauvegarde {filename}: {e}")
+        logger.error(f"❌ Erreur géolocalisation: {e}")
+        return (0, False, str(e))
 
-def ensure_valid_json_files():
-    for filename in [PRODUCTS_FILE, ORDERS_FILE]:
-        if not os.path.exists(filename):
-            save_json_file(filename, [])
-
-logger.warning("🔍 Vérification des fichiers JSON...")
-ensure_valid_json_files()
-logger.warning("✅ Vérification terminée")
-
-logger.warning("=" * 50)
-logger.warning("🔧 CONFIGURATION DE L'APPLICATION")
-logger.warning("=" * 50)
-logger.warning(f"📱 TELEGRAM_BOT_TOKEN: {'✅ Configuré' if TELEGRAM_BOT_TOKEN else '❌ Manquant'}")
-logger.warning(f"👤 TELEGRAM_ADMIN_ID: {'✅ Configuré (' + TELEGRAM_ADMIN_ID + ')' if TELEGRAM_ADMIN_ID else '❌ Manquant'}")
-logger.warning(f"🏠 ADMIN_ADDRESS: {ADMIN_ADDRESS}")
-logger.warning("=" * 50)
-
-products = load_json_file(PRODUCTS_FILE)
-orders = load_json_file(ORDERS_FILE)
-
-# ==================== IMPORT DU BOT ====================
-
-try:
-    from bot import bot_application
-    BOT_AVAILABLE = True
-    logger.warning("✅ Bot Telegram importé avec succès")
-except Exception as e:
-    BOT_AVAILABLE = False
-    logger.error(f"❌ Erreur import bot: {e}")
-
-# ==================== GOOGLE SHEETS FUNCTIONS ====================
-
-def init_google_sheets():
-    global sheets_service, GOOGLE_SHEETS_ENABLED
+def calculate_total(cart, country, delivery_type: str = None, distance: int = 0):
+    """Calcule le total de la commande"""
+    prix_table = PRIX_FR if country == "FR" else PRIX_CH
+    subtotal = sum(prix_table[item["produit"]] * item["quantite"] for item in cart)
     
-    if not GOOGLE_SHEETS_AVAILABLE:
-        logger.warning("⚠️ google-api-python-client non installé")
-        return False
+    if delivery_type:
+        delivery_fee = calculate_delivery_fee(delivery_type, distance, subtotal)
+        return subtotal + delivery_fee, subtotal, delivery_fee
     
-    if not SPREADSHEET_ID or not GOOGLE_CREDENTIALS_JSON:
-        logger.warning("⚠️ Google Sheets non configuré - fonctionnalité désactivée")
-        return False
+    return subtotal, subtotal, 0
+
+def format_cart(cart, user_data):
+    """Formate l'affichage du panier"""
+    if not cart:
+        return ""
+    cart_text = f"\n{tr(user_data, 'cart_title')}\n"
+    for item in cart:
+        cart_text += f"• {item['produit']} x {item['quantite']}\n"
+    return cart_text
+
+def save_order_to_csv(order_data: dict):
+    """Sauvegarde une commande dans le CSV"""
+    csv_path = Path(__file__).parent / "orders.csv"
+    file_exists = csv_path.exists()
     
     try:
-        creds_dict = json.loads(GOOGLE_CREDENTIALS_JSON)
-        credentials = Credentials.from_service_account_info(
-            creds_dict,
-            scopes=['https://www.googleapis.com/auth/spreadsheets']
+        with open(csv_path, 'a', newline='', encoding='utf-8') as csvfile:
+            fieldnames = [
+                'date', 'order_id', 'user_id', 'username', 'first_name',
+                'products', 'country', 'address', 'delivery_type', 
+                'distance_km', 'payment_method', 'subtotal', 'delivery_fee', 
+                'total', 'status'
+            ]
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            
+            if not file_exists:
+                writer.writeheader()
+            
+            writer.writerow(order_data)
+        
+        logger.info(f"✅ Commande sauvegardée: {order_data['order_id']}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Erreur CSV: {e}")
+        return False
+
+def error_handler(func):
+    """Gère les erreurs"""
+    @wraps(func)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            return await func(update, context)
+        except Exception as e:
+            user_id = update.effective_user.id if update.effective_user else "Unknown"
+            logger.error(f"❌ Erreur dans {func.__name__} (User {user_id}): {e}", exc_info=True)
+            
+            try:
+                if update.callback_query:
+                    await update.callback_query.answer("❌ Erreur")
+                    await update.callback_query.message.reply_text("❌ Erreur. Utilisez /start")
+                elif update.message:
+                    await update.message.reply_text("❌ Erreur. Utilisez /start")
+            except:
+                pass
+            
+            return ConversationHandler.END
+    return wrapper
+
+# ============================================================================
+# HANDLERS
+# ============================================================================
+
+@error_handler
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /start - Point d'entrée du bot"""
+    user = update.effective_user
+    logger.info(f"👤 /start de {user.first_name} (ID: {user.id})")
+    
+    # Réinitialiser les données
+    context.user_data.clear()
+    update_last_activity(context.user_data)
+    
+    # Vérifications
+    if not is_authorized(user.id):
+        logger.warning(f"❌ User non autorisé: {user.id}")
+        await update.message.reply_text("❌ Accès non autorisé")
+        return ConversationHandler.END
+    
+    if not check_rate_limit(user.id):
+        await update.message.reply_text("⚠️ Trop rapide. Attendez un peu.")
+        return
+    
+    # Menu de langue
+    keyboard = [
+        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
+        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")]
+    ]
+    
+    await update.message.reply_text(
+        "🌍 *Choisissez votre langue / Select your language*",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    logger.info(f"✅ Menu langue envoyé à {user.id}")
+    return LANGUE
+
+@error_handler
+async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Définit la langue"""
+    query = update.callback_query
+    await query.answer()
+    
+    lang_code = query.data.replace("lang_", "")
+    context.user_data['langue'] = lang_code
+    update_last_activity(context.user_data)
+    
+    logger.info(f"🌍 Langue: {lang_code} pour user {query.from_user.id}")
+    
+    welcome_text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
+    
+    keyboard = [
+        [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
+        [InlineKeyboardButton(tr(context.user_data, "price_menu"), callback_data="price_menu")]
+    ]
+    
+    await query.message.edit_text(
+        welcome_text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return PAYS
+
+@error_handler
+async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Navigation menu"""
+    query = update.callback_query
+    await query.answer()
+    update_last_activity(context.user_data)
+    
+    if 'langue' not in context.user_data:
+        context.user_data['langue'] = 'fr'
+    
+    if query.data == "start_order":
+        keyboard = [
+            [InlineKeyboardButton(tr(context.user_data, "france"), callback_data="country_FR")],
+            [InlineKeyboardButton(tr(context.user_data, "switzerland"), callback_data="country_CH")]
+        ]
+        text = tr(context.user_data, "choose_country")
+        
+    elif query.data == "price_menu":
+        text = ("🏴‍☠️ *CARTE DU PIRATE*\n\n"
+                "🇫🇷 *France:*\n"
+                "❄️ Coco: 80€/g\n💊 Pills: 10€\n🫒 Hash: 7€/g\n🍀 Weed: 10€/g\n🪨 MDMA/4MMC: 50€/g\n\n"
+                "🇨🇭 *Suisse:*\n"
+                "❄️ Coco: 100€/g\n💊 Pills: 15€\n🫒 Hash: 8€/g\n🍀 Weed: 12€/g\n🪨 MDMA/4MMC: 70€/g")
+        keyboard = [
+            [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")]
+        ]
+    
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    return PAYS
+
+@error_handler
+async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Choix du pays"""
+    query = update.callback_query
+    await query.answer()
+    update_last_activity(context.user_data)
+    
+    country_code = query.data.replace("country_", "")
+    context.user_data['pays'] = country_code
+    context.user_data['cart'] = []
+    
+    logger.info(f"🌍 Pays: {country_code} pour user {query.from_user.id}")
+    
+    keyboard = [
+        [InlineKeyboardButton("❄️ COCO", callback_data="product_snow")],
+        [InlineKeyboardButton("💊 Pills", callback_data="product_pill")],
+        [InlineKeyboardButton("🫒 Hash", callback_data="product_olive")],
+        [InlineKeyboardButton("🍀 Weed", callback_data="product_clover")],
+        [InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")]
+    ]
+    
+    await query.message.edit_text(
+        tr(context.user_data, "choose_product"),
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return PRODUIT
+
+@error_handler
+async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Choix du produit"""
+    query = update.callback_query
+    await query.answer()
+    update_last_activity(context.user_data)
+    
+    product_code = query.data.replace("product_", "")
+    
+    if product_code == "pill":
+        keyboard = [
+            [InlineKeyboardButton("💊 Squid Game", callback_data="pill_squid_game")],
+            [InlineKeyboardButton("💊 Punisher", callback_data="pill_punisher")]
+        ]
+        await query.message.edit_text(
+            tr(context.user_data, "choose_pill_type"),
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        return PILL_SUBCATEGORY
+    
+    elif product_code == "rock":
+        keyboard = [
+            [InlineKeyboardButton("🪨 MDMA", callback_data="rock_mdma")],
+            [InlineKeyboardButton("🪨 4MMC", callback_data="rock_fourmmc")]
+        ]
+        await query.message.edit_text(
+            tr(context.user_data, "choose_rock_type"),
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        return ROCK_SUBCATEGORY
+    
+    product_names = {
+        "snow": "❄️ Coco",
+        "olive": "🫒 Hash",
+        "clover": "🍀 Weed"
+    }
+    
+    context.user_data['current_product'] = product_names.get(product_code, product_code)
+    
+    text = f"✅ Produit : {context.user_data['current_product']}\n\n{tr(context.user_data, 'enter_quantity')}"
+    await query.message.edit_text(text, parse_mode='Markdown')
+    
+    return QUANTITE
+
+@error_handler
+async def choix_pill_subcategory(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sous-catégorie pilules"""
+    query = update.callback_query
+    await query.answer()
+    update_last_activity(context.user_data)
+    
+    pill_type = query.data.replace("pill_", "")
+    product_name = PILL_SUBCATEGORIES.get(pill_type, "💊")
+    context.user_data['current_product'] = product_name
+    
+    text = f"✅ Produit : {product_name}\n\n{tr(context.user_data, 'enter_quantity')}"
+    await query.message.edit_text(text, parse_mode='Markdown')
+    
+    return QUANTITE
+
+@error_handler
+async def choix_rock_subcategory(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sous-catégorie crystaux"""
+    query = update.callback_query
+    await query.answer()
+    update_last_activity(context.user_data)
+    
+    rock_type = query.data.replace("rock_", "")
+    product_name = ROCK_SUBCATEGORIES.get(rock_type, "🪨")
+    context.user_data['current_product'] = product_name
+    
+    text = f"✅ Produit : {product_name}\n\n{tr(context.user_data, 'enter_quantity')}"
+    await query.message.edit_text(text, parse_mode='Markdown')
+    
+    return QUANTITE
+
+@error_handler
+async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Saisie quantité"""
+    qty = sanitize_input(update.message.text, max_length=10)
+    update_last_activity(context.user_data)
+    
+    if not qty.isdigit():
+        await update.message.reply_text(tr(context.user_data, "invalid_quantity"))
+        return QUANTITE
+    
+    qty_int = int(qty)
+    if qty_int <= 0 or qty_int > MAX_QUANTITY_PER_PRODUCT:
+        await update.message.reply_text(tr(context.user_data, "invalid_quantity"))
+        return QUANTITE
+    
+    context.user_data['cart'].append({
+        "produit": context.user_data['current_product'],
+        "quantite": qty_int
+    })
+    
+    logger.info(f"🛒 Panier: {context.user_data['current_product']} x{qty_int}")
+    
+    cart_summary = format_cart(context.user_data['cart'], context.user_data)
+    
+    keyboard = [
+        [InlineKeyboardButton(tr(context.user_data, "add_more"), callback_data="add_more")],
+        [InlineKeyboardButton(tr(context.user_data, "proceed"), callback_data="proceed_checkout")]
+    ]
+    
+    await update.message.reply_text(
+        cart_summary,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return CART_MENU
+
+@error_handler
+async def cart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu panier"""
+    query = update.callback_query
+    await query.answer()
+    update_last_activity(context.user_data)
+    
+    if query.data == "add_more":
+        keyboard = [
+            [InlineKeyboardButton("❄️ COCO", callback_data="product_snow")],
+            [InlineKeyboardButton("💊 Pills", callback_data="product_pill")],
+            [InlineKeyboardButton("🫒 Hash", callback_data="product_olive")],
+            [InlineKeyboardButton("🍀 Weed", callback_data="product_clover")],
+            [InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")]
+        ]
+        await query.message.edit_text(
+            tr(context.user_data, "choose_product"),
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        return PRODUIT
+        
+    elif query.data == "proceed_checkout":
+        await query.message.edit_text(tr(context.user_data, 'enter_address'), parse_mode='Markdown')
+        return ADRESSE
+
+@error_handler
+async def saisie_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Saisie adresse"""
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        await query.message.edit_text(tr(context.user_data, 'enter_address'), parse_mode='Markdown')
+        return ADRESSE
+    
+    address = sanitize_input(update.message.text, max_length=300)
+    update_last_activity(context.user_data)
+    
+    if len(address) < 15:
+        await update.message.reply_text("❌ Adresse trop courte (min 15 caractères)")
+        return ADRESSE
+    
+    context.user_data['adresse'] = address
+    
+    keyboard = [
+        [InlineKeyboardButton(tr(context.user_data, "postal"), callback_data="delivery_postal")],
+        [InlineKeyboardButton(tr(context.user_data, "express"), callback_data="delivery_express")]
+    ]
+    
+    await update.message.reply_text(
+        tr(context.user_data, "choose_delivery"),
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return LIVRAISON
+
+@error_handler
+async def choix_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Choix livraison"""
+    query = update.callback_query
+    await query.answer()
+    update_last_activity(context.user_data)
+    
+    delivery_type = query.data.replace("delivery_", "")
+    context.user_data['livraison'] = delivery_type
+    
+    if delivery_type == "express":
+        await query.message.edit_text(tr(context.user_data, "calculating_distance"), parse_mode='Markdown')
+        
+        distance_km, success, error_msg = await get_distance_between_addresses(
+            ADMIN_ADDRESS,
+            context.user_data.get('adresse', '')
         )
         
-        sheets_service = build('sheets', 'v4', credentials=credentials)
-        GOOGLE_SHEETS_ENABLED = True
-        logger.warning("✅ Google Sheets API initialisée")
-        return True
+        if not success:
+            keyboard = [[InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_address")]]
+            await query.message.edit_text(
+                tr(context.user_data, "geocoding_error"),
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+            return LIVRAISON
         
-    except Exception as e:
-        logger.error(f"❌ Erreur initialisation Google Sheets: {e}")
-        return False
+        context.user_data['distance'] = distance_km
+        cart = context.user_data['cart']
+        country = context.user_data['pays']
+        subtotal, _, _ = calculate_total(cart, country)
+        delivery_fee = calculate_delivery_fee("express", distance_km, subtotal)
+        
+        distance_text = tr(context.user_data, "distance_calculated").format(
+            distance=distance_km,
+            fee=delivery_fee
+        )
+        
+        keyboard = [
+            [InlineKeyboardButton(tr(context.user_data, "cash"), callback_data="payment_cash")],
+            [InlineKeyboardButton(tr(context.user_data, "crypto"), callback_data="payment_crypto")]
+        ]
+        
+        await query.message.edit_text(
+            distance_text + "\n\n" + tr(context.user_data, "choose_payment"),
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        return PAIEMENT
+    else:
+        context.user_data['distance'] = 0
+        keyboard = [
+            [InlineKeyboardButton(tr(context.user_data, "cash"), callback_data="payment_cash")],
+            [InlineKeyboardButton(tr(context.user_data, "crypto"), callback_data="payment_crypto")]
+        ]
+        
+        await query.message.edit_text(
+            tr(context.user_data, "choose_payment"),
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        return PAIEMENT
 
-def sync_products_from_sheets():
-    """Récupère les produits depuis Google Sheets et met à jour products.json"""
-    if not GOOGLE_SHEETS_ENABLED:
-        return False
+@error_handler
+async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Choix paiement"""
+    query = update.callback_query
+    await query.answer()
+    update_last_activity(context.user_data)
     
-    try:
-        result = sheets_service.spreadsheets().values().get(
-            spreadsheetId=SPREADSHEET_ID,
-            range='Catalogue!A2:H1000'
-        ).execute()
+    payment_type = query.data.replace("payment_", "")
+    context.user_data['paiement'] = payment_type
+    
+    cart = context.user_data['cart']
+    country = context.user_data['pays']
+    delivery_type = context.user_data['livraison']
+    distance = context.user_data.get('distance', 0)
+    
+    total, subtotal, delivery_fee = calculate_total(cart, country, delivery_type, distance)
+    
+    summary = f"{tr(context.user_data, 'order_summary')}\n\n"
+    summary += format_cart(cart, context.user_data)
+    summary += f"\n{tr(context.user_data, 'subtotal')} {subtotal}€\n"
+    summary += f"{tr(context.user_data, 'delivery_fee')} {delivery_fee}€\n"
+    summary += f"{tr(context.user_data, 'total')} *{total}€*\n\n"
+    summary += f"📍 {context.user_data['adresse']}\n"
+    summary += f"📦 {delivery_type.title()}\n"
+    summary += f"💳 {payment_type.title()}"
+    
+    keyboard = [
+        [InlineKeyboardButton(tr(context.user_data, "confirm"), callback_data="confirm_order")],
+        [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
+    ]
+    
+    await query.message.edit_text(
+        summary,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return CONFIRMATION
+
+@error_handler
+async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Confirmation commande"""
+    query = update.callback_query
+    await query.answer()
+    
+    if query.data == "confirm_order":
+        user = update.effective_user
+        cart = context.user_data['cart']
+        country = context.user_data['pays']
+        delivery_type = context.user_data['livraison']
+        distance = context.user_data.get('distance', 0)
         
-        values = result.get('values', [])
+        total, subtotal, delivery_fee = calculate_total(cart, country, delivery_type, distance)
         
-        if not values:
-            logger.warning("⚠️ Aucune donnée dans la feuille Catalogue")
-            return False
+        order_id = f"ORD-{datetime.now().strftime('%Y%m%d%H%M%S')}-{user.id}"
         
-        updated_products = []
-        for row in values:
-            if len(row) < 3:
-                continue
+        products_str = "; ".join([f"{item['produit']} x{item['quantite']}" for item in cart])
+        
+        order_data = {
+            'date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'order_id': order_id,
+            'user_id': user.id,
+            'username': user.username or "N/A",
+            'first_name': user.first_name or "N/A",
+            'products': products_str,
+            'country': country,
+            'address': context.user_data['adresse'],
+            'delivery_type': delivery_type,
+            'distance_km': distance if delivery_type == "express" else 0,
+            'payment_method': context.user_data['paiement'],
+            'subtotal': f"{subtotal:.2f}",
+            'delivery_fee': f"{delivery_fee:.2f}",
+            'total': f"{total:.2f}",
+            'status': 'En attente validation'
+        }
+        
+        save_order_to_csv(order_data)
+        
+        logger.info(f"✅ Commande confirmée: {order_id}")
+        
+        admin_message = f"🆕 *NOUVELLE COMMANDE*\n\n"
+        admin_message += f"📋 `{order_id}`\n"
+        admin_message += f"👤 {user.first_name}"
+        if user.username:
+            admin_message += f" (@{user.username})"
+        admin_message += f"\n🆔 ID: `{user.id}`\n\n"
+        admin_message += format_cart(cart, context.user_data)
+        admin_message += f"\n💰 Total: {total}€"
+        
+        admin_keyboard = [
+            [InlineKeyboardButton(
+                "✅ Valider la livraison", 
+                callback_data=f"admin_validate_{order_id}_{user.id}"
+            )]
+        ]
+        
+        try:
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=admin_message,
+                reply_markup=InlineKeyboardMarkup(admin_keyboard),
+                parse_mode='Markdown'
+            )
+            logger.info(f"✅ Admin notifié: {order_id}")
+        except Exception as e:
+            logger.error(f"❌ Erreur notification admin: {e}")
+        
+        confirmation_text = tr(context.user_data, "order_confirmed")
+        confirmation_text += f"\n\n📋 `{order_id}`"
+        confirmation_text += f"\n💰 {total:.2f}€"
+        
+        await query.message.edit_text(
+            confirmation_text,
+            parse_mode='Markdown'
+        )
+        
+        context.user_data.clear()
+        return ConversationHandler.END
+    
+    elif query.data == "cancel":
+        return await cancel(update, context)
+
+@error_handler
+async def admin_validation_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Validation admin"""
+    query = update.callback_query
+    await query.answer()
+    
+    if update.effective_user.id != ADMIN_ID:
+        await query.answer("❌ Action non autorisée", show_alert=True)
+        return
+    
+    data_parts = query.data.split("_")
+    if len(data_parts) >= 4:
+        order_id = "_".join(data_parts[2:-1])
+        client_id = int(data_parts[-1])
+    else:
+        await query.answer("❌ Erreur de données", show_alert=True)
+        return
+    
+    csv_path = Path(__file__).parent / "orders.csv"
+    if csv_path.exists():
+        try:
+            rows = []
+            with open(csv_path, 'r', encoding='utf-8') as csvfile:
+                reader = csv.DictReader(csvfile)
+                for row in reader:
+                    if row['order_id'] == order_id:
+                        row['status'] = 'Livraison validée'
+                    rows.append(row)
             
-            try:
-                product = {
-                    "id": int(row[0]) if row[0] else 0,
-                    "name": row[1] if len(row) > 1 else "",
-                    "price": float(row[2]) if len(row) > 2 else 0,
-                    "description": row[3] if len(row) > 3 else "",
-                    "category": row[4] if len(row) > 4 else "",
-                    "image_url": row[5] if len(row) > 5 else "",
-                    "video_url": row[6] if len(row) > 6 else "",
-                    "stock": int(row[7]) if len(row) > 7 else 0
-                }
-                
-                if product["id"] > 0 and product["name"]:
-                    updated_products.append(product)
-                    
-            except (ValueError, IndexError) as e:
-                logger.warning(f"⚠️ Ligne ignorée: {row}")
-                continue
-        
-        global products
-        products = updated_products
-        save_json_file(PRODUCTS_FILE, products)
-        
-        logger.warning(f"✅ {len(products)} produits synchronisés depuis Google Sheets")
-        return True
-        
-    except Exception as e:
-        logger.error(f"❌ Erreur sync depuis Sheets: {e}")
-        return False
-
-def sync_products_to_sheets():
-    """Écrit les produits de products.json vers Google Sheets"""
-    if not GOOGLE_SHEETS_ENABLED:
-        return False
+            if rows:
+                with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
+                    writer = csv.DictWriter(csvfile, fieldnames=rows[0].keys())
+                    writer.writeheader()
+                    writer.writerows(rows)
+        except Exception as e:
+            logger.error(f"❌ Erreur CSV: {e}")
     
     try:
-        values = [["ID", "Nom", "Prix (€)", "Description", "Catégorie", "Image URL", "Video URL", "Stock"]]
-        
-        for product in products:
-            values.append([
-                product.get("id", ""),
-                product.get("name", ""),
-                product.get("price", 0),
-                product.get("description", ""),
-                product.get("category", ""),
-                product.get("image_url", ""),
-                product.get("video_url", ""),
-                product.get("stock", 0)
-            ])
-        
-        body = {'values': values}
-        sheets_service.spreadsheets().values().update(
-            spreadsheetId=SPREADSHEET_ID,
-            range='Catalogue!A1:H1000',
-            valueInputOption='RAW',
-            body=body
-        ).execute()
-        
-        logger.warning(f"✅ {len(products)} produits écrits dans Google Sheets")
-        return True
-        
-    except Exception as e:
-        logger.error(f"❌ Erreur sync vers Sheets: {e}")
-        return False
-
-def log_sale_to_sheets(order_data):
-    """Enregistre une commande dans la feuille Ventes"""
-    if not GOOGLE_SHEETS_ENABLED:
-        return False
+        new_text = query.message.text + "\n\n✅ *LIVRAISON VALIDÉE*"
+        await query.message.edit_text(new_text, parse_mode='Markdown')
+    except:
+        pass
     
     try:
-        rows = []
+        client_message = f"✅ *Livraison confirmée !*\n\n"
+        client_message += f"📋 `{order_id}`\n\n"
+        client_message += f"Merci ! 💚"
         
-        for item in order_data['items']:
-            row = [
-                order_data['created_at'],
-                order_data['order_number'],
-                order_data['customer_name'],
-                item['product_id'],
-                item['product_name'],
-                item['quantity'],
-                item['price'],
-                item['subtotal'],
-                order_data['shipping_type'],
-                order_data['total'],
-                order_data['status']
+        await context.bot.send_message(
+            chat_id=client_id,
+            text=client_message,
+            parse_mode='Markdown'
+        )
+        logger.info(f"✅ Client notifié: {client_id}")
+    except Exception as e:
+        logger.error(f"❌ Erreur notification client: {e}")
+    
+    await query.answer("✅ Livraison validée !", show_alert=True)
+
+@error_handler
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Annulation"""
+    query = update.callback_query
+    await query.answer()
+    
+    logger.info(f"❌ Annulation par {query.from_user.id}")
+    
+    await query.message.edit_text(
+        tr(context.user_data, "order_cancelled"),
+        parse_mode='Markdown'
+    )
+    
+    context.user_data.clear()
+    return ConversationHandler.END
+
+async def error_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gestionnaire d'erreurs global"""
+    logger.error(f"❌ Exception globale: {context.error}", exc_info=context.error)
+
+# ============================================================================
+# FONCTION PRINCIPALE
+# ============================================================================
+
+def main():
+    """Initialise le bot"""
+    logger.info("=" * 70)
+    logger.info("🤖 CONFIGURATION DU BOT")
+    logger.info("=" * 70)
+    
+    application = Application.builder().token(TOKEN).build()
+    
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler('start', start_command)],
+        states={
+            LANGUE: [
+                CallbackQueryHandler(set_langue, pattern='^lang_')
+            ],
+            PAYS: [
+                CallbackQueryHandler(menu_navigation, pattern='^(start_order|price_menu)'),
+                CallbackQueryHandler(choix_pays, pattern='^country_')
+            ],
+            PRODUIT: [
+                CallbackQueryHandler(choix_produit, pattern='^product_'),
+                CallbackQueryHandler(cancel, pattern='^cancel')
+            ],
+            PILL_SUBCATEGORY: [
+                CallbackQueryHandler(choix_pill_subcategory, pattern='^pill_')
+            ],
+            ROCK_SUBCATEGORY: [
+                CallbackQueryHandler(choix_rock_subcategory, pattern='^rock_')
+            ],
+            QUANTITE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_quantite)
+            ],
+            CART_MENU: [
+                CallbackQueryHandler(cart_menu, pattern='^(add_more|proceed_checkout)')
+            ],
+            ADRESSE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_adresse),
+                CallbackQueryHandler(saisie_adresse, pattern='^back_to_address')
+            ],
+            LIVRAISON: [
+                CallbackQueryHandler(choix_livraison, pattern='^delivery_')
+            ],
+            PAIEMENT: [
+                CallbackQueryHandler(choix_paiement, pattern='^payment_')
+            ],
+            CONFIRMATION: [
+                CallbackQueryHandler(confirmation, pattern='^(confirm_order|cancel)')
             ]
-            rows.append(row)
-        
-        body = {'values': rows}
-        sheets_service.spreadsheets().values().append(
-            spreadsheetId=SPREADSHEET_ID,
-            range='Ventes!A:K',
-            valueInputOption='RAW',
-            insertDataOption='INSERT_ROWS',
-            body=body
-        ).execute()
-        
-        logger.warning(f"✅ Vente {order_data['order_number']} enregistrée dans Sheets")
-        
-        update_stock_in_sheets(order_data['items'])
-        
-        return True
-        
-    except Exception as e:
-        logger.error(f"❌ Erreur log vente Sheets: {e}")
-        return False
-
-def update_stock_in_sheets(items):
-    """Met à jour les stocks dans la feuille Catalogue après une vente"""
-    if not GOOGLE_SHEETS_ENABLED:
-        return False
+        },
+        fallbacks=[
+            CommandHandler('start', start_command),
+            CallbackQueryHandler(cancel, pattern='^cancel')
+        ],
+        per_chat=True,
+        per_user=True,
+        per_message=False
+    )
     
-    try:
-        result = sheets_service.spreadsheets().values().get(
-            spreadsheetId=SPREADSHEET_ID,
-            range='Catalogue!A2:H1000'
-        ).execute()
-        
-        values = result.get('values', [])
-        
-        updates = []
-        for i, row in enumerate(values):
-            if len(row) < 8:
-                continue
-            
-            product_id = int(row[0]) if row[0] else 0
-            
-            for item in items:
-                if item['product_id'] == product_id:
-                    current_stock = int(row[7]) if row[7] else 0
-                    new_stock = max(0, current_stock - item['quantity'])
-                    
-                    updates.append({
-                        'range': f'Catalogue!H{i+2}',
-                        'values': [[new_stock]]
-                    })
-        
-        if updates:
-            body = {'data': updates, 'valueInputOption': 'RAW'}
-            sheets_service.spreadsheets().values().batchUpdate(
-                spreadsheetId=SPREADSHEET_ID,
-                body=body
-            ).execute()
-            
-            logger.warning(f"✅ Stocks mis à jour dans Sheets ({len(updates)} produits)")
-        
-        return True
-        
-    except Exception as e:
-        logger.error(f"❌ Erreur mise à jour stock Sheets: {e}")
-        return False
-
-# Initialiser Google Sheets
-logger.warning("📊 Initialisation Google Sheets...")
-init_google_sheets()
-
-if GOOGLE_SHEETS_ENABLED:
-    logger.warning("🔄 Synchronisation initiale depuis Google Sheets...")
-    sync_products_from_sheets()
-
-logger.warning("=" * 50)
-
-# ==================== TELEGRAM WEBHOOK FUNCTIONS ====================
-
-def send_telegram_notification(order_data):
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_ADMIN_ID:
-        logger.error("❌ Configuration Telegram manquante")
-        return False
+    application.add_handler(conv_handler)
     
-    try:
-        logger.warning(f"📤 Envoi notification Telegram pour commande #{order_data['order_number']}")
-        
-        message = f"""🆕 *NOUVELLE COMMANDE WEB #{order_data['order_number']}*
-
-👤 *Client:*
-• Nom: {order_data['customer_name']}
-• Contact: {order_data['customer_contact']}
-• 🏠 Adresse: {order_data.get('customer_address', '')}
-
-📦 *Articles:*
-"""
-        
-        for item in order_data['items']:
-            message += f"• {item['product_name']} x{item['quantity']} = {item['subtotal']:.2f}€\n"
-        
-        shipping_type = order_data.get('shipping_type', 'N/A')
-        delivery_fee = order_data.get('delivery_fee', 0)
-        
-        message += f"\n💵 *Sous-total:* {order_data['subtotal']:.2f}€\n"
-        
-        if shipping_type == 'postal':
-            message += f"📦 *Livraison:* ✉️ Postale 48-72H (+{FRAIS_POSTAL}€)\n"
-        elif shipping_type == 'express':
-            message += f"📦 *Livraison:* ⚡ Express\n💶 *Frais:* {delivery_fee:.2f}€\n"
-        
-        message += f"\n💰 *TOTAL: {order_data['total']:.2f}€*\n"
-        
-        if order_data.get('customer_notes'):
-            message += f"\n📝 *Notes:* {order_data['customer_notes']}\n"
-        
-        message += f"\n📅 {order_data['created_at']}"
-        
-        keyboard = {
-            "inline_keyboard": [[
-                {
-                    "text": "✅ Valider la livraison",
-                    "callback_data": f"webapp_validate_{order_data['id']}"
-                }
-            ]]
-        }
-        
-        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-        payload = {
-            "chat_id": TELEGRAM_ADMIN_ID,
-            "text": message,
-            "parse_mode": "Markdown",
-            "reply_markup": json.dumps(keyboard)
-        }
-        
-        response = requests.post(url, json=payload, timeout=10)
-        
-        if response.status_code == 200:
-            logger.warning(f"✅ Notification Telegram envoyée")
-            return True
-        else:
-            logger.error(f"❌ Erreur Telegram: {response.text}")
-            return False
-            
-    except Exception as e:
-        logger.error(f"❌ Erreur envoi Telegram: {str(e)}")
-        return False
-
-def configure_telegram_webhook():
-    """Configure le webhook Telegram au démarrage de Flask"""
-    if not TELEGRAM_BOT_TOKEN:
-        logger.error("❌ TELEGRAM_BOT_TOKEN manquant")
-        return False
+    application.add_handler(CallbackQueryHandler(
+        admin_validation_livraison, 
+        pattern='^admin_validate_'
+    ))
     
-    webhook_url = os.environ.get('WEBHOOK_URL', 'https://carte-du-pirate.onrender.com')
-    full_webhook_url = f"{webhook_url}/telegram/bot/{TELEGRAM_BOT_TOKEN}"
+    application.add_error_handler(error_callback)
     
-    try:
-        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setWebhook"
-        
-        logger.warning(f"🔧 Configuration webhook: {full_webhook_url}")
-        
-        response = requests.post(url, json={"url": full_webhook_url}, timeout=10)
-        
-        if response.status_code == 200:
-            result = response.json()
-            if result.get('ok'):
-                logger.warning(f"✅ Webhook Telegram configuré")
-                
-                # Vérifier la configuration
-                info_response = requests.get(
-                    f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getWebhookInfo", 
-                    timeout=10
-                )
-                if info_response.status_code == 200:
-                    info = info_response.json()
-                    logger.warning(f"📡 Webhook info: {json.dumps(info.get('result', {}), indent=2)}")
-                
-                return True
-            else:
-                logger.error(f"❌ Erreur webhook: {result}")
-                return False
-        else:
-            logger.error(f"❌ HTTP {response.status_code}: {response.text}")
-            return False
-            
-    except Exception as e:
-        logger.error(f"❌ Erreur webhook: {e}")
-        return False
-
-# ==================== UTILITY FUNCTIONS ====================
-
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
-
-def check_rate_limit(ip):
-    if ip not in failed_login_attempts:
-        failed_login_attempts[ip] = {'count': 0, 'blocked_until': None}
-    attempt = failed_login_attempts[ip]
-    if attempt['blocked_until']:
-        if datetime.now() < attempt['blocked_until']:
-            return False, "Trop de tentatives. Réessayez dans 15 minutes."
-        else:
-            attempt['count'] = 0
-            attempt['blocked_until'] = None
-    return True, None
-
-def register_failed_attempt(ip):
-    if ip not in failed_login_attempts:
-        failed_login_attempts[ip] = {'count': 0, 'blocked_until': None}
-    failed_login_attempts[ip]['count'] += 1
-    if failed_login_attempts[ip]['count'] >= 5:
-        failed_login_attempts[ip]['blocked_until'] = datetime.now() + timedelta(minutes=15)
-        return True
-    return False
-
-def require_admin(f):
-    @wraps(f)
-    def wrapped(*args, **kwargs):
-        token = request.headers.get('X-Admin-Token')
-        if not token or token not in admin_tokens:
-            return jsonify({'error': 'Non autorisé'}), 403
-        token_data = admin_tokens[token]
-        if datetime.now() > token_data['expires']:
-            del admin_tokens[token]
-            return jsonify({'error': 'Session expirée'}), 403
-        return f(*args, **kwargs)
-    return wrapped
-
-# ==================== ROUTES ====================
-
-@app.route('/')
-def index():
-    try:
-        html = f'''<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<title>Carte du Pirate</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>
-* {{ margin: 0; padding: 0; box-sizing: border-box; }}
-body {{
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: url('{BACKGROUND_IMAGE}') center center fixed;
-  background-size: cover;
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  position: relative;
-}}
-body::before {{
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
-  z-index: 1;
-}}
-.container {{
-  text-align: center;
-  color: white;
-  max-width: 800px;
-  position: relative;
-  z-index: 2;
-}}
-h1 {{
-  font-size: 3.5em;
-  margin-bottom: 30px;
-  text-shadow: 4px 4px 8px rgba(0,0,0,0.8);
-}}
-.subtitle {{
-  font-size: 1.3em;
-  margin-bottom: 40px;
-  opacity: 0.95;
-  text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
-}}
-.btn {{
-  display: inline-block;
-  padding: 20px 50px;
-  font-size: 1.5em;
-  background: linear-gradient(45deg, #d4af37, #f4e5a1);
-  border: 3px solid #8b7220;
-  border-radius: 15px;
-  color: #2c1810;
-  text-decoration: none;
-  font-weight: bold;
-  transition: all 0.3s ease;
-  margin: 10px;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-}}
-.btn:hover {{
-  transform: scale(1.05) translateY(-5px);
-  box-shadow: 0 15px 40px rgba(212, 175, 55, 0.6);
-}}
-</style>
-</head>
-<body>
-<div class="container">
-  <h1>🏴‍☠️ Carte du Pirate 🏴‍☠️</h1>
-  <p class="subtitle">Votre boutique de trésors en ligne</p>
-  <a href="/catalogue" class="btn">📦 Catalogue & Commandes</a>
-</div>
-</body>
-</html>'''
-        return html, 200
-    except Exception as e:
-        logger.error(f"Erreur route index: {e}")
-        return "Erreur serveur", 500
-
-@app.route('/health')
-def health():
-    return jsonify({'status': 'ok'}), 200
-
-@app.route('/catalogue')
-def catalogue():
-    try:
-        with open('catalogue.html', 'r', encoding='utf-8') as f:
-            html = f.read()
-            html = html.replace('{{BACKGROUND_IMAGE}}', BACKGROUND_IMAGE)
-            return html, 200
-    except FileNotFoundError:
-        return "Fichier catalogue.html introuvable", 404
-    except Exception as e:
-        logger.error(f"Erreur route catalogue: {e}")
-        return "Erreur serveur", 500
-
-# ==================== TELEGRAM WEBHOOK ROUTES ====================
-
-@app.route('/telegram/bot/<path:token>', methods=['POST'])
-def telegram_bot_webhook(token):
-    """Route webhook principale pour le bot Telegram"""
-    try:
-        # Vérifier le token
-        if token != TELEGRAM_BOT_TOKEN:
-            logger.warning(f"⚠️ Token invalide: {token}")
-            return jsonify({'error': 'Unauthorized'}), 403
-        
-        if not BOT_AVAILABLE:
-            logger.error("❌ Bot non disponible")
-            return jsonify({'error': 'Bot not available'}), 503
-        
-        # Récupérer les données
-        data = request.get_json()
-        logger.warning(f"📨 Webhook reçu: {json.dumps(data, indent=2)}")
-        
-        # Créer l'Update Telegram
-        update = Update.de_json(data, bot_application.bot)
-        
-        # Traiter l'update de manière asynchrone
-        asyncio.run(bot_application.process_update(update))
-        
-        logger.warning("✅ Update traité avec succès")
-        return jsonify({'ok': True}), 200
-        
-    except Exception as e:
-        logger.error(f"❌ Erreur webhook bot: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return jsonify({'ok': True}), 200  # Toujours retourner 200 à Telegram
-
-@app.route('/api/telegram/webapp-callback', methods=['POST'])
-def telegram_webapp_callback():
-    """Gère UNIQUEMENT les validations de commandes webapp"""
-    try:
-        data = request.json
-        logger.warning(f"📨 Webhook webapp: {json.dumps(data, indent=2)}")
-        
-        if 'callback_query' not in data:
-            logger.warning("⚠️ Pas de callback_query - ignoré")
-            return jsonify({'ok': True}), 200
-        
-        callback_query = data['callback_query']
-        callback_data = callback_query.get('data', '')
-        callback_id = callback_query.get('id', '')
-        
-        # Répondre immédiatement au callback
-        if TELEGRAM_BOT_TOKEN:
-            try:
-                answer_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/answerCallbackQuery"
-                requests.post(answer_url, json={
-                    "callback_query_id": callback_id,
-                    "text": "✅ Traitement..."
-                }, timeout=5)
-            except Exception as e:
-                logger.error(f"Erreur answerCallbackQuery: {e}")
-        
-        # Traiter UNIQUEMENT les validations webapp
-        if not callback_data.startswith('webapp_validate_'):
-            logger.warning(f"⚠️ Callback non-webapp ignoré: {callback_data}")
-            return jsonify({'ok': True}), 200
-        
-        # Valider la commande
-        try:
-            order_id = int(callback_data.split('_')[2])
-            logger.warning(f"📦 Validation commande webapp #{order_id}")
-            
-            order_found = False
-            for order in orders:
-                if order['id'] == order_id:
-                    order['status'] = 'delivered'
-                    order['delivered_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    order_found = True
-                    break
-            
-            if order_found:
-                save_json_file(ORDERS_FILE, orders)
-                
-                # Éditer le message Telegram
-                message_id = callback_query.get('message', {}).get('message_id')
-                chat_id = callback_query.get('message', {}).get('chat', {}).get('id')
-                original_text = callback_query.get('message', {}).get('text', '')
-                
-                if message_id and chat_id and TELEGRAM_BOT_TOKEN:
-                    edit_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/editMessageText"
-                    requests.post(edit_url, json={
-                        "chat_id": chat_id,
-                        "message_id": message_id,
-                        "text": original_text + "\n\n✅ *COMMANDE LIVRÉE*",
-                        "parse_mode": "Markdown"
-                    }, timeout=5)
-                
-                logger.warning(f"✅ Commande #{order_id} validée")
-            else:
-                logger.error(f"❌ Commande #{order_id} introuvable")
-                
-        except Exception as e:
-            logger.error(f"❌ Erreur validation: {e}")
-        
-        return jsonify({'ok': True}), 200
-        
-    except Exception as e:
-        logger.error(f"❌ Erreur webhook webapp: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return jsonify({'ok': True}), 200
-
-# ==================== ADMIN ROUTES ====================
-
-@app.route('/api/admin/login', methods=['POST'])
-@limiter.limit("5 per 15 minutes")
-def api_login():
-    try:
-        ip = get_remote_address()
-        allowed, message = check_rate_limit(ip)
-        if not allowed:
-            return jsonify({'error': message}), 429
-        data = request.json or {}
-        password_hash = hash_password(data.get('password', ''))
-        if password_hash == ADMIN_PASSWORD_HASH:
-            token = secrets.token_urlsafe(32)
-            admin_tokens[token] = {
-                'created': datetime.now(),
-                'expires': datetime.now() + timedelta(hours=12),
-                'ip': ip
-            }
-            if ip in failed_login_attempts:
-                failed_login_attempts[ip]['count'] = 0
-            return jsonify({'success': True, 'token': token})
-        blocked = register_failed_attempt(ip)
-        if blocked:
-            return jsonify({'error': 'Trop de tentatives. Compte bloqué 15 minutes.'}), 429
-        return jsonify({'error': 'Mot de passe incorrect'}), 403
-    except Exception as e:
-        return jsonify({'error': 'Erreur serveur'}), 500
-
-@app.route('/api/admin/logout', methods=['POST'])
-def api_logout():
-    try:
-        token = request.headers.get('X-Admin-Token')
-        if token and token in admin_tokens:
-            del admin_tokens[token]
-        return jsonify({'success': True})
-    except:
-        return jsonify({'success': False}), 500
-
-@app.route('/api/admin/check', methods=['GET'])
-def api_check_admin():
-    try:
-        token = request.headers.get('X-Admin-Token')
-        ip = get_remote_address()
-        is_admin = False
-        if token and token in admin_tokens:
-            if admin_tokens[token]['ip'] == ip:
-                if datetime.now() <= admin_tokens[token]['expires']:
-                    is_admin = True
-                else:
-                    del admin_tokens[token]
-            else:
-                del admin_tokens[token]
-        return jsonify({'admin': is_admin}), 200
-    except:
-        return jsonify({'admin': False}), 200
-
-# ==================== PRODUCT ROUTES ====================
-
-@app.route('/api/products', methods=['GET'])
-def get_products():
-    try:
-        return jsonify(products), 200
-    except:
-        return jsonify([]), 200
-
-@app.route('/api/admin/products', methods=['POST'])
-@require_admin
-def add_product():
-    global products
-    try:
-        data = request.json or {}
-        if not data.get('name') or not data.get('price'):
-            return jsonify({'error': 'Nom et prix requis'}), 400
-        new_product = {
-            "id": max([p["id"] for p in products]) + 1 if products else 1,
-            "name": data.get("name"),
-            "price": float(data.get("price", 0)),
-            "description": data.get("description", ""),
-            "category": data.get("category", ""),
-            "image_url": data.get("image_url", ""),
-            "video_url": data.get("video_url", ""),
-            "stock": int(data.get("stock", 0))
-        }
-        products.append(new_product)
-        save_json_file(PRODUCTS_FILE, products)
-        return jsonify(new_product), 201
-    except:
-        return jsonify({'error': 'Erreur création'}), 500
-
-@app.route('/api/admin/products/<int:pid>', methods=['PUT'])
-@require_admin
-def update_product(pid):
-    try:
-        data = request.json or {}
-        for p in products:
-            if p['id'] == pid:
-                p.update({
-                    "name": data.get("name", p["name"]),
-                    "price": float(data.get("price", p["price"])),
-                    "description": data.get("description", p["description"]),
-                    "category": data.get("category", p["category"]),
-                    "image_url": data.get("image_url", p.get("image_url", "")),
-                    "video_url": data.get("video_url", p.get("video_url", "")),
-                    "stock": int(data.get("stock", p["stock"]))
-                })
-                save_json_file(PRODUCTS_FILE, products)
-                return jsonify(p)
-        return jsonify({'error': 'Produit non trouvé'}), 404
-    except:
-        return jsonify({'error': 'Erreur modification'}), 500
-
-@app.route('/api/admin/products/<int:pid>', methods=['DELETE'])
-@require_admin
-def delete_product(pid):
-    global products
-    try:
-        before = len(products)
-        products = [p for p in products if p['id'] != pid]
-        if len(products) < before:
-            save_json_file(PRODUCTS_FILE, products)
-            return jsonify({'success': True})
-        return jsonify({'error': 'Produit non trouvé'}), 404
-    except:
-        return jsonify({'error': 'Erreur suppression'}), 500
-
-# ==================== ORDER ROUTES ====================
-
-@app.route('/api/orders', methods=['POST'])
-@limiter.limit("5 per hour")
-def create_order():
-    global orders
-    try:
-        data = request.json or {}
-        
-        logger.warning(f"📥 Nouvelle commande reçue")
-        
-        if not data.get('items') or len(data.get('items', [])) == 0:
-            return jsonify({'error': 'Panier vide'}), 400
-        if not data.get('customer_name') or not data.get('customer_contact'):
-            return jsonify({'error': 'Nom et contact requis'}), 400
-        
-        total = 0
-        order_items = []
-        for item in data['items']:
-            product = next((p for p in products if p['id'] == item['product_id']), None)
-            if not product:
-                return jsonify({'error': f'Produit {item["product_id"]} introuvable'}), 404
-            if product['stock'] < item['quantity']:
-                return jsonify({'error': f'Stock insuffisant pour {product["name"]}'}), 400
-            item_total = product['price'] * item['quantity']
-            total += item_total
-            order_items.append({
-                'product_id': product['id'],
-                'product_name': product['name'],
-                'price': product['price'],
-                'quantity': item['quantity'],
-                'subtotal': item_total
-            })
-        
-        shipping_type = data.get('shipping_type', 'postal')
-        distance = float(data.get('distance_km', 0))
-        delivery_fee = calculate_delivery_fee(shipping_type, distance, total)
-        final_total = total + delivery_fee
-        
-        order_id = max([o['id'] for o in orders]) + 1 if orders else 1
-        new_order = {
-            'id': order_id,
-            'order_number': f"CMD-{order_id:05d}",
-            'customer_name': data['customer_name'],
-            'customer_contact': data['customer_contact'],
-            'customer_address': data.get('customer_address', ''),
-            'customer_notes': data.get('customer_notes', ''),
-            'items': order_items,
-            'subtotal': total,
-            'shipping_type': shipping_type,
-            'distance_km': distance,
-            'delivery_fee': delivery_fee,
-            'total': final_total,
-            'status': 'pending',
-            'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        }
-        
-        orders.append(new_order)
-        save_json_file(ORDERS_FILE, orders)
-        
-        logger.warning(f"✅ Commande #{new_order['order_number']} créée")
-        
-        # Enregistrer dans Google Sheets
-        if GOOGLE_SHEETS_ENABLED:
-            log_sale_to_sheets(new_order)
-        
-        telegram_sent = send_telegram_notification(new_order)
-        
-        if telegram_sent:
-            logger.warning(f"✅ Notification Telegram envoyée")
-        else:
-            logger.error(f"❌ Échec notification Telegram")
-        
-        return jsonify({'success': True, 'order': new_order}), 201
-        
-    except Exception as e:
-        logger.error(f"❌ Erreur création commande: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return jsonify({'error': 'Erreur serveur'}), 500
-
-@app.route('/api/admin/orders', methods=['GET'])
-@require_admin
-def get_orders():
-    try:
-        return jsonify(orders), 200
-    except:
-        return jsonify([]), 200
-
-@app.route('/api/admin/orders/<int:order_id>', methods=['PUT'])
-@require_admin
-def update_order_status(order_id):
-    try:
-        data = request.json or {}
-        new_status = data.get('status')
-        if new_status not in ['pending', 'confirmed', 'preparing', 'ready', 'delivered', 'cancelled']:
-            return jsonify({'error': 'Statut invalide'}), 400
-        for order in orders:
-            if order['id'] == order_id:
-                order['status'] = new_status
-                order['updated_at'] = datetime.now().isoformat()
-                save_json_file(ORDERS_FILE, orders)
-                return jsonify(order)
-        return jsonify({'error': 'Commande non trouvée'}), 404
-    except:
-        return jsonify({'error': 'Erreur modification'}), 500
-
-# ==================== UPLOAD ROUTE ====================
-
-@app.route('/api/upload', methods=['POST'])
-@require_admin
-@limiter.limit("10 per hour")
-def upload_file():
-    try:
-        if 'file' not in request.files:
-            return jsonify({'error': 'Aucun fichier'}), 400
-        file = request.files['file']
-        file.seek(0, os.SEEK_END)
-        file_length = file.tell()
-        if file_length > 10 * 1024 * 1024:
-            return jsonify({'error': 'Fichier trop gros (max 10MB)'}), 400
-        file.seek(0)
-        result = cloudinary.uploader.upload(file, resource_type='auto', folder='catalogue', timeout=60)
-        return jsonify({'url': result.get('secure_url')}), 200
-    except:
-        return jsonify({'error': 'Erreur upload'}), 500
-
-# ==================== GEOLOCATION ROUTE ====================
-
-@app.route('/api/calculate-distance', methods=['POST'])
-def calculate_distance():
-    try:
-        data = request.json or {}
-        client_address = data.get('address', '').strip()
-        
-        if not client_address or len(client_address) < 15:
-            return jsonify({'error': 'Adresse invalide (min 15 caractères)'}), 400
-        
-        if not GEOPY_AVAILABLE:
-            return jsonify({'error': 'Service de géolocalisation non disponible'}), 503
-        
-        try:
-            geolocator = Nominatim(user_agent="carte_du_pirate_webapp")
-            
-            location1 = geolocator.geocode(ADMIN_ADDRESS, timeout=10)
-            location2 = geolocator.geocode(client_address, timeout=10)
-            
-            if not location1:
-                return jsonify({'error': f'Adresse de départ introuvable'}), 400
-            
-            if not location2:
-                return jsonify({'error': 'Adresse de livraison introuvable'}), 400
-            
-            coords1 = (location1.latitude, location1.longitude)
-            coords2 = (location2.latitude, location2.longitude)
-            
-            distance = geodesic(coords1, coords2).kilometers
-            distance_rounded = round(distance, 1)
-            
-            return jsonify({
-                'success': True,
-                'distance_km': distance_rounded,
-                'from': ADMIN_ADDRESS,
-                'to': client_address
-            }), 200
-            
-        except Exception as e:
-            logger.error(f"Erreur géolocalisation: {e}")
-            return jsonify({'error': f'Erreur de géolocalisation'}), 500
-        
-    except Exception as e:
-        logger.error(f"Erreur calcul distance: {e}")
-        return jsonify({'error': 'Erreur serveur'}), 500
-
-# ==================== GOOGLE SHEETS ROUTES ====================
-
-@app.route('/api/admin/sync-from-sheets', methods=['POST'])
-@require_admin
-def api_sync_from_sheets():
-    """Synchronise les produits depuis Google Sheets"""
-    try:
-        if not GOOGLE_SHEETS_ENABLED:
-            return jsonify({'error': 'Google Sheets non configuré'}), 503
-        
-        success = sync_products_from_sheets()
-        
-        if success:
-            return jsonify({
-                'success': True, 
-                'message': f'{len(products)} produits synchronisés',
-                'products': products
-            }), 200
-        else:
-            return jsonify({'error': 'Échec synchronisation'}), 500
-            
-    except Exception as e:
-        logger.error(f"Erreur API sync from sheets: {e}")
-        return jsonify({'error': 'Erreur serveur'}), 500
-
-@app.route('/api/admin/sync-to-sheets', methods=['POST'])
-@require_admin
-def api_sync_to_sheets():
-    """Synchronise les produits vers Google Sheets"""
-    try:
-        if not GOOGLE_SHEETS_ENABLED:
-            return jsonify({'error': 'Google Sheets non configuré'}), 503
-        
-        success = sync_products_to_sheets()
-        
-        if success:
-            return jsonify({
-                'success': True, 
-                'message': f'{len(products)} produits synchronisés vers Sheets'
-            }), 200
-        else:
-            return jsonify({'error': 'Échec synchronisation'}), 500
-            
-    except Exception as e:
-        logger.error(f"Erreur API sync to sheets: {e}")
-        return jsonify({'error': 'Erreur serveur'}), 500
-
-@app.route('/api/admin/sheets-status', methods=['GET'])
-@require_admin
-def api_sheets_status():
-    """Retourne le statut de Google Sheets"""
-    return jsonify({
-        'enabled': GOOGLE_SHEETS_ENABLED,
-        'spreadsheet_id': SPREADSHEET_ID if GOOGLE_SHEETS_ENABLED else None
-    }), 200
-
-# ==================== WEBHOOK CONFIGURATION ====================
-
-# Configurer le webhook après un délai
-if TELEGRAM_BOT_TOKEN and BOT_AVAILABLE:
-    import threading
-    def delayed_webhook_setup():
-        import time
-        time.sleep(5)
-        configure_telegram_webhook()
+    logger.info("✅ Bot configuré avec succès")
+    logger.info("=" * 70)
     
-    webhook_thread = threading.Thread(target=delayed_webhook_setup, daemon=True)
-    webhook_thread.start()
+    return application
 
-# ==================== MAIN ====================
+# Créer l'application
+bot_application = main()
+
+logger.info("✅ Bot prêt à être lancé")
+logger.info("=" * 70)
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    logger.warning(f"🚀 Démarrage sur le port {port}")
-    app.run(host='0.0.0.0', port=port, debug=False)
+    logger.warning("⚠️ N'exécutez pas bot.py directement")
+    logger.warning("👉 Utilisez: python app.py")
+    sys.exit(0)

@@ -385,10 +385,9 @@ def catalogue():
         logger.error(f"Erreur route catalogue: {e}")
         return "Erreur serveur", 500
 
-# ==================== TELEGRAM WEBHOOK ====================
 @app.route('/telegram/bot/<path:token>', methods=['POST'])
 def telegram_bot_webhook(token):
-    """Route webhook principale - VERSION 100% FONCTIONNELLE"""
+    """Route webhook principale - VERSION CORRIGÉE"""
     try:
         logger.warning("=" * 70)
         logger.warning("🔔 WEBHOOK APPELÉ!")
@@ -398,7 +397,7 @@ def telegram_bot_webhook(token):
         
         # Vérifier token
         if token != TELEGRAM_BOT_TOKEN:
-            logger.error(f"❌ Token invalide")
+            logger.error("❌ Token invalide")
             return jsonify({'error': 'Unauthorized'}), 403
         
         logger.warning("✅ Token valide")
@@ -418,18 +417,23 @@ def telegram_bot_webhook(token):
         
         logger.warning("✅ Données reçues")
         
-        # Identifier type
+        # Identifier type - VERSION CORRIGÉE
         if 'message' in data:
             msg = data['message']
             user = msg.get('from', {})
-            logger.warning(f"📧 MESSAGE de {user.get('first_name')} (ID: {user.get('id')})")
-            logger.warning(f"💬 Texte: {msg.get('text')}")
+            user_name = user.get('first_name', 'Unknown')
+            user_id = user.get('id', 'N/A')
+            msg_text = msg.get('text', 'N/A')
+            logger.warning(f"📧 MESSAGE de {user_name} (ID: {user_id})")
+            logger.warning(f"💬 Texte: {msg_text}")
             
         elif 'callback_query' in data:
             cb = data['callback_query']
             user = cb.get('from', {})
-            logger.warning(f"📧 CALLBACK de {user.get('first_name')}")
-            logger.warning(f"🔘 Data: {cb.get('data')}")
+            user_name = user.get('first_name', 'Unknown')
+            cb_data = cb.get('data', 'N/A')
+            logger.warning(f"📧 CALLBACK de {user_name}")
+            logger.warning(f"🔘 Data: {cb_data}")
         
         # Créer Update
         logger.warning("🔄 Création Update...")
@@ -450,35 +454,6 @@ def telegram_bot_webhook(token):
         import traceback
         logger.error(traceback.format_exc())
         logger.error("=" * 70)
-        return jsonify({'ok': True}), 200
-
-@app.route('/api/telegram/webapp-callback', methods=['POST'])
-def telegram_webapp_callback():
-    """Callback pour webapp uniquement"""
-    try:
-        data = request.json
-        if 'callback_query' not in data:
-            return jsonify({'ok': True}), 200
-        
-        callback_query = data['callback_query']
-        callback_data = callback_query.get('data', '')
-        
-        if not callback_data.startswith('webapp_validate_'):
-            return jsonify({'ok': True}), 200
-        
-        order_id = int(callback_data.split('_')[2])
-        
-        for order in orders:
-            if order['id'] == order_id:
-                order['status'] = 'delivered'
-                order['delivered_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                break
-        
-        save_json_file(ORDERS_FILE, orders)
-        return jsonify({'ok': True}), 200
-        
-    except Exception as e:
-        logger.error(f"❌ Erreur webapp callback: {e}")
         return jsonify({'ok': True}), 200
 
 # ==================== ADMIN ROUTES ====================

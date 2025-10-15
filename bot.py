@@ -34,27 +34,44 @@ def validate_environment():
     if missing:
         msg = f"❌ Variables manquantes: {', '.join(missing)}"
         logger.error(msg)
-        sys.exit(1)
+        # NE PAS QUITTER si importé par app.py
+        if __name__ == '__main__':
+            sys.exit(1)
+        else:
+            logger.warning("⚠️ Bot importé par app.py, on continue malgré l'erreur")
+            return False
     
-    token = os.getenv("TELEGRAM_BOT_TOKEN").strip()
-    admin_id = os.getenv("ADMIN_ID").strip()
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    if not token:
+        logger.error("❌ TELEGRAM_BOT_TOKEN vide")
+        return False
+        
+    token = token.strip()
+    admin_id = os.getenv("ADMIN_ID", "").strip()
     
     if ':' not in token or len(token) < 40:
         logger.error("❌ TELEGRAM_BOT_TOKEN invalide")
-        sys.exit(1)
+        return False
     
     if not admin_id.isdigit():
         logger.error("❌ ADMIN_ID doit être un nombre")
-        sys.exit(1)
+        return False
     
     logger.info("✅ Configuration validée")
+    return True
 
-validate_environment()
-
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-ADMIN_ID = int(os.getenv("ADMIN_ID"))
-CRYPTO_WALLET = os.getenv("CRYPTO_WALLET", "")
-ADMIN_ADDRESS = os.getenv("ADMIN_ADDRESS", "Chamonix-Mont-Blanc, France")
+# Valider seulement si exécuté directement
+if validate_environment():
+    TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+    ADMIN_ID = int(os.getenv("ADMIN_ID"))
+    CRYPTO_WALLET = os.getenv("CRYPTO_WALLET", "")
+    ADMIN_ADDRESS = os.getenv("ADMIN_ADDRESS", "Chamonix-Mont-Blanc, France")
+else:
+    # Valeurs par défaut si validation échoue (pour import par app.py)
+    TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    ADMIN_ID = int(os.getenv("ADMIN_ID", "0")) if os.getenv("ADMIN_ID") else 0
+    CRYPTO_WALLET = os.getenv("CRYPTO_WALLET", "")
+    ADMIN_ADDRESS = os.getenv("ADMIN_ADDRESS", "Chamonix-Mont-Blanc, France")
 
 # --- Imports Telegram ---
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, MenuButtonWebApp, WebAppInfo
@@ -505,13 +522,21 @@ async def choix_pill_subcategory(update: Update, context: ContextTypes.DEFAULT_T
 async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
     qty = sanitize_input(update.message.text, max_length=10)
     
+    # Supprimer le message de l'utilisateur
+    await delete_user_message(update)
+    
+    # Supprimer le dernier message du bot
+    await delete_last_bot_message(context, update.effective_chat.id)
+    
     if not qty.isdigit():
-        await update.message.reply_text(tr(context.user_data, "invalid_quantity"))
+        sent_message = await update.message.reply_text(tr(context.user_data, "invalid_quantity"))
+        save_bot_message_id(context, sent_message.message_id)
         return QUANTITE
     
     qty_int = int(qty)
     if qty_int <= 0 or qty_int > MAX_QUANTITY_PER_PRODUCT:
-        await update.message.reply_text(tr(context.user_data, "invalid_quantity"))
+        sent_message = await update.message.reply_text(tr(context.user_data, "invalid_quantity"))
+        save_bot_message_id(context, sent_message.message_id)
         return QUANTITE
     
     context.user_data['cart'].append({
@@ -526,11 +551,13 @@ async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(tr(context.user_data, "proceed"), callback_data="proceed_checkout")]
     ]
     
-    await update.message.reply_text(
+    sent_message = await update.message.reply_text(
         cart_summary,
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
+    
+    save_bot_message_id(context, sent_message.message_id)
     
     return CART_MENU
 
@@ -568,8 +595,15 @@ async def saisie_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     address = sanitize_input(update.message.text, max_length=300)
     
+    # Supprimer le message de l'utilisateur
+    await delete_user_message(update)
+    
+    # Supprimer le dernier message du bot
+    await delete_last_bot_message(context, update.effective_chat.id)
+    
     if len(address) < 15:
-        await update.message.reply_text("❌ Adresse trop courte (min 15 caractères)")
+        sent_message = await update.message.reply_text("❌ Adresse trop courte (min 15 caractères)")
+        save_bot_message_id(context, sent_message.message_id)
         return ADRESSE
     
     context.user_data['adresse'] = address
@@ -579,11 +613,13 @@ async def saisie_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(tr(context.user_data, "express"), callback_data="delivery_express")]
     ]
     
-    await update.message.reply_text(
+    sent_message = await update.message.reply_text(
         tr(context.user_data, "choose_delivery"),
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
+    
+    save_bot_message_id(context, sent_message.message_id)
     
     return LIVRAISON
 

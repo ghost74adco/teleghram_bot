@@ -952,10 +952,6 @@ if __name__ == '__main__':
     logger.info("⚠️ Ce fichier ne doit pas être exécuté directement")
     logger.info("👉 Utilisez 'python app.py' pour démarrer l'application complète")
     sys.exit(0)
-            text=welcome_text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
-        )
     
     return PAYS
 

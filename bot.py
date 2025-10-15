@@ -4,6 +4,7 @@ import logging
 import re
 import csv
 import math
+import requests
 from dotenv import load_dotenv
 from pathlib import Path
 from functools import wraps
@@ -23,7 +24,7 @@ for env_file in ['.env', 'infos.env']:
     dotenv_path = Path(__file__).parent / env_file
     if dotenv_path.exists():
         load_dotenv(dotenv_path)
-        logger.info(f"✅ Variables: {env_file}")
+        logger.info("✅ Variables: " + env_file)
         break
 else:
     load_dotenv()
@@ -31,27 +32,21 @@ else:
 TOKEN = (os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("BOT_TOKEN") or os.getenv("TELEGRAM_TOKEN") or "").strip()
 ADMIN_ID_STR = (os.getenv("ADMIN_ID") or os.getenv("ADMIN_USER_IDS") or os.getenv("TELEGRAM_ADMIN_ID") or "").strip()
 ADMIN_ADDRESS = (os.getenv("ADMIN_ADDRESS") or "858 Rte du Chef Lieu, 74250 Fillinges").strip()
+API_BASE_URL = os.getenv("API_BASE_URL", "https://carte-du-pirate.onrender.com")
 
 if not TOKEN or ':' not in TOKEN:
     logger.error("❌ TOKEN invalide!")
     sys.exit(1)
 
 if not ADMIN_ID_STR or not ADMIN_ID_STR.isdigit():
-    logger.error(f"❌ ADMIN_ID invalide: {ADMIN_ID_STR}")
+    logger.error("❌ ADMIN_ID invalide: " + ADMIN_ID_STR)
     sys.exit(1)
 
 ADMIN_ID = int(ADMIN_ID_STR)
-logger.info(f"✅ Bot prêt - Admin: {ADMIN_ID}")
+logger.info("✅ Bot prêt - Admin: " + str(ADMIN_ID))
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, ContextTypes, CallbackQueryHandler, ConversationHandler, MessageHandler, CommandHandler, filters
-
-try:
-    from geopy.geocoders import Nominatim
-    from geopy.distance import geodesic
-    GEOPY_AVAILABLE = True
-except ImportError:
-    GEOPY_AVAILABLE = False
 
 USE_WHITELIST = False
 AUTHORIZED_USERS = []
@@ -129,17 +124,20 @@ def calculate_delivery_fee(delivery_type, distance=0, subtotal=0):
         return math.ceil(((distance * 2) + (subtotal * 0.03)) / 10) * 10
     return 0
 
-async def get_distance_between_addresses(address1, address2):
-    if not GEOPY_AVAILABLE:
-        return (0, False, "Géolocalisation non disponible")
+async def get_distance_from_api(address):
     try:
-        geolocator = Nominatim(user_agent="telegram_shop_bot")
-        loc1 = geolocator.geocode(address1, timeout=10)
-        loc2 = geolocator.geocode(address2, timeout=10)
-        if not loc1 or not loc2:
-            return (0, False, "Adresse introuvable")
-        return (round(geodesic((loc1.latitude, loc1.longitude), (loc2.latitude, loc2.longitude)).kilometers, 1), True, None)
+        response = requests.post(
+            API_BASE_URL + "/api/calculate-distance",
+            json={"address": address},
+            timeout=15
+        )
+        if response.status_code == 200:
+            data = response.json()
+            return (data.get('distance_km', 0), True, None)
+        else:
+            return (0, False, "Erreur API")
     except Exception as e:
+        logger.error("Erreur calcul distance: " + str(e))
         return (0, False, str(e))
 
 def calculate_total(cart, country, delivery_type=None, distance=0):
@@ -169,7 +167,7 @@ def save_order_to_csv(order_data):
             writer.writerow(order_data)
         return True
     except Exception as e:
-        logger.error(f"CSV: {e}")
+        logger.error("CSV: " + str(e))
         return False
 
 def error_handler(func):
@@ -178,7 +176,7 @@ def error_handler(func):
         try:
             return await func(update, context)
         except Exception as e:
-            logger.error(f"{func.__name__}: {e}", exc_info=True)
+            logger.error(func.__name__ + ": " + str(e), exc_info=True)
             try:
                 if update.callback_query:
                     await update.callback_query.answer("❌ Erreur")
@@ -192,7 +190,7 @@ def error_handler(func):
 @error_handler
 async def start_command(update, context):
     user = update.effective_user
-    logger.info(f"👤 /start: {user.first_name} ({user.id})")
+    logger.info("👤 /start: " + user.first_name + " (" + str(user.id) + ")")
     context.user_data.clear()
     update_last_activity(context.user_data)
     
@@ -356,7 +354,7 @@ async def choix_livraison(update, context):
     
     if delivery_type == "express":
         await query.message.edit_text(tr(context.user_data, "calculating_distance"), parse_mode='Markdown')
-        distance_km, success, error_msg = await get_distance_between_addresses(ADMIN_ADDRESS, context.user_data.get('adresse', ''))
+        distance_km, success, error_msg = await get_distance_from_api(context.user_data.get('adresse', ''))
         
         if not success:
             keyboard = [[InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_address")]]
@@ -505,23 +503,16 @@ def main():
             PAIEMENT: [CallbackQueryHandler(choix_paiement, pattern='^payment_')],
             CONFIRMATION: [CallbackQueryHandler(confirmation, pattern='^(confirm_order|cancel)')]
         },
-        fallbacks=[CommandHandler('start', start_command), CallbackQueryHandler(cancel, pattern='^cancel')],
-        per_chat=True,
-        per_user=True,
-        per_message=False
+        fallbacks=[CommandHandler('start', start_command)],
+        allow_reentry=True
     )
     
     application.add_handler(conv_handler)
     application.add_handler(CallbackQueryHandler(admin_validation_livraison, pattern='^admin_validate_'))
     application.add_error_handler(error_callback)
     
-    logger.info("✅ Bot configuré avec succès")
-    return application
-
-bot_application = main()
-logger.info("✅ Bot prêt à être importé par app.py")
+    logger.info("🚀 Bot démarré!")
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
-    logger.warning("⚠️ N'exécutez pas bot.py directement")
-    logger.warning("👉 Utilisez: python app.py")
-    sys.exit(0)
+    main()

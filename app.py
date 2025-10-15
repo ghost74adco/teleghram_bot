@@ -192,7 +192,281 @@ def require_admin(f):
     def wrapped(*args, **kwargs):
         token = request.headers.get('X-Admin-Token')
         if not token or token not in admin_tokens:
-            return jsonify({'error': 'Non autorisé'}), 403
+            return jsonify({'error': 'Erreur serveur'}), 500
+
+@app.route('/api/admin/orders', methods=['GET'])
+@require_admin
+def get_orders():
+    try:
+        return jsonify(orders), 200
+    except:
+        return jsonify([]), 200
+
+@app.route('/api/admin/orders/<int:order_id>', methods=['PUT'])
+@require_admin
+def update_order_status(order_id):
+    try:
+        data = request.json or {}
+        new_status = data.get('status')
+        if new_status not in ['pending', 'confirmed', 'preparing', 'ready', 'delivered', 'cancelled']:
+            return jsonify({'error': 'Statut invalide'}), 400
+        for order in orders:
+            if order['id'] == order_id:
+                order['status'] = new_status
+                order['updated_at'] = datetime.now().isoformat()
+                save_json_file(ORDERS_FILE, orders)
+                return jsonify(order)
+        return jsonify({'error': 'Commande non trouvée'}), 404
+    except:
+        return jsonify({'error': 'Erreur'}), 500
+
+# ==================== UPLOAD ====================
+@app.route('/api/upload', methods=['POST'])
+@require_admin
+@limiter.limit("10 per hour")
+def upload_file():
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'Aucun fichier'}), 400
+        
+        file = request.files['file']
+        
+        if file.filename == '':
+            return jsonify({'error': 'Nom de fichier vide'}), 400
+        
+        # Vérifier la taille du fichier
+        file.seek(0, os.SEEK_END)
+        file_length = file.tell()
+        if file_length > 10 * 1024 * 1024:
+            return jsonify({'error': 'Fichier trop volumineux (max 10 MB)'}), 400
+        
+        file.seek(0)
+        
+        # Vérifier le type de fichier
+        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'mp4', 'mov', 'avi'}
+        file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+        
+        if file_ext not in allowed_extensions:
+            return jsonify({'error': 'Type de fichier non autorisé'}), 400
+        
+        # Upload vers Cloudinary
+        filename_log = file.filename
+        logger.warning(f"📤 Upload de {filename_log} vers Cloudinary...")
+        
+        resource_type = 'video' if file_ext in {'mp4', 'mov', 'avi'} else 'image'
+        
+        result = cloudinary.uploader.upload(
+            file,
+            resource_type=resource_type,
+            folder='carte_du_pirate',
+            allowed_formats=list(allowed_extensions)
+        )
+        
+        url = result.get('secure_url')
+        logger.warning(f"✅ Upload réussi: {url}")
+        
+        return jsonify({
+            'success': True,
+            'url': url,
+            'public_id': result.get('public_id'),
+            'resource_type': resource_type
+        }), 200
+        
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f"❌ Erreur upload: {e}")
+        return jsonify({'error': f'Erreur upload: {error_msg}'}), 500
+
+# ==================== GEOLOCALISATION ====================
+@app.route('/api/calculate-distance', methods=['POST'])
+def calculate_distance():
+    """Calcule la distance entre l'adresse du client et l'admin"""
+    if not GEOPY_AVAILABLE:
+        return jsonify({'error': 'Service de géolocalisation non disponible'}), 503
+    
+    try:
+        data = request.json or {}
+        customer_address = data.get('address')
+        
+        if not customer_address:
+            return jsonify({'error': 'Adresse requise'}), 400
+        
+        geolocator = Nominatim(user_agent="carte_du_pirate")
+        
+        # Géolocaliser l'adresse admin
+        admin_location = geolocator.geocode(ADMIN_ADDRESS)
+        if not admin_location:
+            return jsonify({'error': 'Impossible de localiser l\'adresse admin'}), 500
+        
+        # Géolocaliser l'adresse client
+        customer_location = geolocator.geocode(customer_address)
+        if not customer_location:
+            return jsonify({'error': 'Adresse client introuvable'}), 404
+        
+        # Calculer la distance
+        admin_coords = (admin_location.latitude, admin_location.longitude)
+        customer_coords = (customer_location.latitude, customer_location.longitude)
+        distance_km = geodesic(admin_coords, customer_coords).kilometers
+        
+        return jsonify({
+            'success': True,
+            'distance_km': round(distance_km, 2),
+            'customer_address_formatted': customer_location.address
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur calcul distance: {e}")
+        return jsonify({'error': 'Erreur calcul distance'}), 500
+
+# ==================== GOOGLE SHEETS SYNC ====================
+@app.route('/api/admin/sync-sheets', methods=['POST'])
+@require_admin
+def sync_to_sheets():
+    """Synchronise les commandes vers Google Sheets"""
+    if not GOOGLE_SHEETS_ENABLED:
+        return jsonify({'error': 'Google Sheets non configuré'}), 503
+    
+    try:
+        headers = ['N° Commande', 'Client', 'Contact', 'Adresse', 'Articles', 
+                   'Sous-total', 'Livraison', 'Frais livraison', 'Total', 'Statut', 'Date']
+        
+        rows = [headers]
+        
+        for order in orders:
+            items_text = ', '.join([f"{item['product_name']} x{item['quantity']}" 
+                                    for item in order['items']])
+            
+            order_number = order['order_number']
+            customer_name = order['customer_name']
+            customer_contact = order['customer_contact']
+            customer_address = order.get('customer_address', '')
+            subtotal_value = order['subtotal']
+            shipping_type = order.get('shipping_type', '')
+            delivery_fee_value = order.get('delivery_fee', 0)
+            total_value = order['total']
+            status_value = order['status']
+            created_at = order['created_at']
+            
+            row = [
+                order_number,
+                customer_name,
+                customer_contact,
+                customer_address,
+                items_text,
+                f"{subtotal_value:.2f}€",
+                shipping_type,
+                f"{delivery_fee_value:.2f}€",
+                f"{total_value:.2f}€",
+                status_value,
+                created_at
+            ]
+            rows.append(row)
+        
+        # Écrire dans Google Sheets
+        body = {'values': rows}
+        sheets_service.spreadsheets().values().update(
+            spreadsheetId=SPREADSHEET_ID,
+            range='Commandes!A1',
+            valueInputOption='RAW',
+            body=body
+        ).execute()
+        
+        orders_count = len(orders)
+        logger.warning(f"✅ {orders_count} commandes synchronisées vers Google Sheets")
+        
+        return jsonify({
+            'success': True,
+            'message': f'{orders_count} commandes synchronisées'
+        }), 200
+        
+    except Exception as e:
+        error_text = str(e)
+        logger.error(f"❌ Erreur sync Google Sheets: {e}")
+        return jsonify({'error': f'Erreur synchronisation: {error_text}'}), 500
+
+# ==================== STATISTICS ====================
+@app.route('/api/admin/stats', methods=['GET'])
+@require_admin
+def get_statistics():
+    """Retourne des statistiques sur les commandes"""
+    try:
+        total_orders = len(orders)
+        total_revenue = sum(order['total'] for order in orders)
+        
+        pending_orders = len([o for o in orders if o['status'] == 'pending'])
+        delivered_orders = len([o for o in orders if o['status'] == 'delivered'])
+        
+        # Produits les plus vendus
+        product_sales = {}
+        for order in orders:
+            for item in order['items']:
+                pid = item['product_id']
+                if pid not in product_sales:
+                    product_sales[pid] = {
+                        'name': item['product_name'],
+                        'quantity': 0,
+                        'revenue': 0
+                    }
+                product_sales[pid]['quantity'] += item['quantity']
+                product_sales[pid]['revenue'] += item['subtotal']
+        
+        top_products = sorted(
+            product_sales.values(),
+            key=lambda x: x['quantity'],
+            reverse=True
+        )[:5]
+        
+        avg_order = round(total_revenue / total_orders, 2) if total_orders > 0 else 0
+        
+        stats = {
+            'total_orders': total_orders,
+            'total_revenue': round(total_revenue, 2),
+            'pending_orders': pending_orders,
+            'delivered_orders': delivered_orders,
+            'top_products': top_products,
+            'average_order_value': avg_order
+        }
+        
+        return jsonify(stats), 200
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur stats: {e}")
+        return jsonify({'error': 'Erreur calcul statistiques'}), 500
+
+# ==================== ERROR HANDLERS ====================
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({'error': 'Route introuvable'}), 404
+
+@app.errorhandler(500)
+def internal_error(e):
+    logger.error(f"Erreur 500: {e}")
+    return jsonify({'error': 'Erreur serveur interne'}), 500
+
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    return jsonify({'error': 'Trop de requêtes, réessayez plus tard'}), 429
+
+# ==================== STARTUP ====================
+if __name__ == '__main__':
+    logger.warning("=" * 70)
+    logger.warning("🚀 DÉMARRAGE DE L'APPLICATION")
+    logger.warning("=" * 70)
+    
+    # Configuration du webhook Telegram
+    if TELEGRAM_BOT_TOKEN:
+        logger.warning("🔧 Configuration du webhook Telegram...")
+        configure_telegram_webhook()
+    else:
+        logger.warning("⚠️ Webhook Telegram non configuré (token manquant)")
+    
+    logger.warning("=" * 70)
+    logger.warning("✅ Serveur prêt!")
+    logger.warning("=" * 70)
+    
+    # Démarrer le serveur
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)'Non autorisé'}), 403
         token_data = admin_tokens[token]
         if datetime.now() > token_data['expires']:
             del admin_tokens[token]
@@ -207,24 +481,38 @@ def send_telegram_notification(order_data):
         return False
     
     try:
-        message = f"""🆕 *NOUVELLE COMMANDE WEB #{order_data['order_number']}*
+        order_number = order_data['order_number']
+        customer_name = order_data['customer_name']
+        customer_contact = order_data['customer_contact']
+        customer_address = order_data.get('customer_address', '')
+        
+        message = f"""🆕 *NOUVELLE COMMANDE WEB #{order_number}*
 
 👤 *Client:*
-• Nom: {order_data['customer_name']}
-• Contact: {order_data['customer_contact']}
-• 🏠 Adresse: {order_data.get('customer_address', '')}
+• Nom: {customer_name}
+• Contact: {customer_contact}
+• 🏠 Adresse: {customer_address}
 
 📦 *Articles:*
 """
         for item in order_data['items']:
-            message += f"• {item['product_name']} x{item['quantity']} = {item['subtotal']:.2f}€\n"
+            product_name = item['product_name']
+            quantity = item['quantity']
+            subtotal = item['subtotal']
+            message += f"• {product_name} x{quantity} = {subtotal:.2f}€\n"
         
-        message += f"\n💵 *Sous-total:* {order_data['subtotal']:.2f}€\n"
-        message += f"📦 *Livraison:* {order_data.get('shipping_type', 'N/A')}\n"
-        message += f"💰 *TOTAL: {order_data['total']:.2f}€*\n"
-        message += f"\n📅 {order_data['created_at']}"
+        order_subtotal = order_data['subtotal']
+        shipping_type = order_data.get('shipping_type', 'N/A')
+        order_total = order_data['total']
+        created_at = order_data['created_at']
         
-        keyboard = {"inline_keyboard": [[{"text": "✅ Valider", "callback_data": f"webapp_validate_{order_data['id']}"}]]}
+        message += f"\n💵 *Sous-total:* {order_subtotal:.2f}€\n"
+        message += f"📦 *Livraison:* {shipping_type}\n"
+        message += f"💰 *TOTAL: {order_total:.2f}€*\n"
+        message += f"\n📅 {created_at}"
+        
+        order_id = order_data['id']
+        keyboard = {"inline_keyboard": [[{"text": "✅ Valider", "callback_data": f"webapp_validate_{order_id}"}]]}
         
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         payload = {"chat_id": TELEGRAM_ADMIN_ID, "text": message, "parse_mode": "Markdown", "reply_markup": json.dumps(keyboard)}
@@ -236,7 +524,7 @@ def send_telegram_notification(order_data):
         return False
 
 def configure_telegram_webhook():
-    """Configure le webhook Telegram - VERSION CORRIGÉE"""
+    """Configure le webhook Telegram"""
     if not TELEGRAM_BOT_TOKEN:
         logger.error("❌ TELEGRAM_BOT_TOKEN manquant")
         return False
@@ -274,9 +562,13 @@ def configure_telegram_webhook():
             
             if info_response.status_code == 200:
                 info = info_response.json().get('result', {})
-                logger.warning(f"📡 URL: {info.get('url')}")
-                logger.warning(f"📨 Updates en attente: {info.get('pending_update_count', 0)}")
-                logger.warning(f"❌ Dernière erreur: {info.get('last_error_message', 'Aucune')}")
+                info_url_value = info.get('url', 'N/A')
+                pending_count = info.get('pending_update_count', 0)
+                last_error = info.get('last_error_message', 'Aucune')
+                
+                logger.warning(f"📡 URL: {info_url_value}")
+                logger.warning(f"📨 Updates en attente: {pending_count}")
+                logger.warning(f"❌ Dernière erreur: {last_error}")
             
             logger.warning("=" * 70)
             return True
@@ -363,7 +655,7 @@ h1 {{
 </div>
 </body>
 </html>
-        return html, 200
+return html, 200
     except Exception as e:
         logger.error(f"Erreur route index: {e}")
         return "Erreur serveur", 500
@@ -385,14 +677,18 @@ def catalogue():
         logger.error(f"Erreur route catalogue: {e}")
         return "Erreur serveur", 500
 
+# ==================== TELEGRAM WEBHOOK ====================
 @app.route('/telegram/bot/<path:token>', methods=['POST'])
 def telegram_bot_webhook(token):
-    """Route webhook principale - VERSION CORRIGÉE"""
+    """Route webhook principale - VERSION FINALE CORRIGÉE"""
     try:
+        token_short = token[:20] if len(token) >= 20 else token
+        current_time = datetime.now().strftime('%H:%M:%S')
+        
         logger.warning("=" * 70)
         logger.warning("🔔 WEBHOOK APPELÉ!")
-        logger.warning(f"📍 Route: /telegram/bot/{token[:20]}...")
-        logger.warning(f"🕐 {datetime.now().strftime('%H:%M:%S')}")
+        logger.warning(f"📍 Route: /telegram/bot/{token_short}...")
+        logger.warning(f"🕐 {current_time}")
         logger.warning("=" * 70)
         
         # Vérifier token
@@ -417,23 +713,25 @@ def telegram_bot_webhook(token):
         
         logger.warning("✅ Données reçues")
         
-        # Identifier type - VERSION CORRIGÉE
+        # Identifier type - VERSION FINALE CORRIGÉE
         if 'message' in data:
             msg = data['message']
-            user = msg.get('from', {})
-            user_name = user.get('first_name', 'Unknown')
-            user_id = user.get('id', 'N/A')
-            msg_text = msg.get('text', 'N/A')
-            logger.warning(f"📧 MESSAGE de {user_name} (ID: {user_id})")
-            logger.warning(f"💬 Texte: {msg_text}")
+            from_user = msg.get('from', {})
+            user_first_name = from_user.get('first_name', 'Unknown')
+            user_id_value = from_user.get('id', 'N/A')
+            message_text = msg.get('text', 'N/A')
+            
+            logger.warning(f"📧 MESSAGE de {user_first_name} (ID: {user_id_value})")
+            logger.warning(f"💬 Texte: {message_text}")
             
         elif 'callback_query' in data:
-            cb = data['callback_query']
-            user = cb.get('from', {})
-            user_name = user.get('first_name', 'Unknown')
-            cb_data = cb.get('data', 'N/A')
-            logger.warning(f"📧 CALLBACK de {user_name}")
-            logger.warning(f"🔘 Data: {cb_data}")
+            cb_query = data['callback_query']
+            from_user = cb_query.get('from', {})
+            user_first_name = from_user.get('first_name', 'Unknown')
+            callback_data_value = cb_query.get('data', 'N/A')
+            
+            logger.warning(f"📧 CALLBACK de {user_first_name}")
+            logger.warning(f"🔘 Data: {callback_data_value}")
         
         # Créer Update
         logger.warning("🔄 Création Update...")
@@ -454,6 +752,35 @@ def telegram_bot_webhook(token):
         import traceback
         logger.error(traceback.format_exc())
         logger.error("=" * 70)
+        return jsonify({'ok': True}), 200
+
+@app.route('/api/telegram/webapp-callback', methods=['POST'])
+def telegram_webapp_callback():
+    """Callback pour webapp uniquement"""
+    try:
+        data = request.json
+        if 'callback_query' not in data:
+            return jsonify({'ok': True}), 200
+        
+        callback_query = data['callback_query']
+        callback_data = callback_query.get('data', '')
+        
+        if not callback_data.startswith('webapp_validate_'):
+            return jsonify({'ok': True}), 200
+        
+        order_id = int(callback_data.split('_')[2])
+        
+        for order in orders:
+            if order['id'] == order_id:
+                order['status'] = 'delivered'
+                order['delivered_date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                break
+        
+        save_json_file(ORDERS_FILE, orders)
+        return jsonify({'ok': True}), 200
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur webapp callback: {e}")
         return jsonify({'ok': True}), 200
 
 # ==================== ADMIN ROUTES ====================
@@ -501,7 +828,9 @@ def api_check_admin():
         ip = get_remote_address()
         is_admin = False
         if token and token in admin_tokens:
-            if admin_tokens[token]['ip'] == ip and datetime.now() <= admin_tokens[token]['expires']:
+            token_ip = admin_tokens[token]['ip']
+            token_expires = admin_tokens[token]['expires']
+            if token_ip == ip and datetime.now() <= token_expires:
                 is_admin = True
             else:
                 del admin_tokens[token]
@@ -595,9 +924,11 @@ def create_order():
         for item in data['items']:
             product = next((p for p in products if p['id'] == item['product_id']), None)
             if not product:
-                return jsonify({'error': f'Produit {item["product_id"]} introuvable'}), 404
+                product_id_missing = item['product_id']
+                return jsonify({'error': f'Produit {product_id_missing} introuvable'}), 404
             if product['stock'] < item['quantity']:
-                return jsonify({'error': f'Stock insuffisant pour {product["name"]}'}), 400
+                product_name_insufficient = product['name']
+                return jsonify({'error': f'Stock insuffisant pour {product_name_insufficient}'}), 400
             item_total = product['price'] * item['quantity']
             total += item_total
             order_items.append({
@@ -614,9 +945,10 @@ def create_order():
         final_total = total + delivery_fee
         
         order_id = max([o['id'] for o in orders]) + 1 if orders else 1
+        order_number = f"CMD-{order_id:05d}"
         new_order = {
             'id': order_id,
-            'order_number': f"CMD-{order_id:05d}",
+            'order_number': order_number,
             'customer_name': data['customer_name'],
             'customer_contact': data['customer_contact'],
             'customer_address': data.get('customer_address', ''),
@@ -641,262 +973,4 @@ def create_order():
         
     except Exception as e:
         logger.error(f"❌ Erreur création commande: {e}")
-        return jsonify({'error': 'Erreur serveur'}), 500
-
-@app.route('/api/admin/orders', methods=['GET'])
-@require_admin
-def get_orders():
-    try:
-        return jsonify(orders), 200
-    except:
-        return jsonify([]), 200
-
-@app.route('/api/admin/orders/<int:order_id>', methods=['PUT'])
-@require_admin
-def update_order_status(order_id):
-    try:
-        data = request.json or {}
-        new_status = data.get('status')
-        if new_status not in ['pending', 'confirmed', 'preparing', 'ready', 'delivered', 'cancelled']:
-            return jsonify({'error': 'Statut invalide'}), 400
-        for order in orders:
-            if order['id'] == order_id:
-                order['status'] = new_status
-                order['updated_at'] = datetime.now().isoformat()
-                save_json_file(ORDERS_FILE, orders)
-                return jsonify(order)
-        return jsonify({'error': 'Commande non trouvée'}), 404
-    except:
-        return jsonify({'error': 'Erreur'}), 500
-
-# ==================== UPLOAD (SUITE) ====================
-@app.route('/api/upload', methods=['POST'])
-@require_admin
-@limiter.limit("10 per hour")
-def upload_file():
-    try:
-        if 'file' not in request.files:
-            return jsonify({'error': 'Aucun fichier'}), 400
-        
-        file = request.files['file']
-        
-        if file.filename == '':
-            return jsonify({'error': 'Nom de fichier vide'}), 400
-        
-        # Vérifier la taille du fichier
-        file.seek(0, os.SEEK_END)
-        file_length = file.tell()
-        if file_length > 10 * 1024 * 1024:  # 10 MB max
-            return jsonify({'error': 'Fichier trop volumineux (max 10 MB)'}), 400
-        
-        file.seek(0)  # Revenir au début du fichier
-        
-        # Vérifier le type de fichier
-        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'mp4', 'mov', 'avi'}
-        file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
-        
-        if file_ext not in allowed_extensions:
-            return jsonify({'error': 'Type de fichier non autorisé'}), 400
-        
-        # Upload vers Cloudinary
-        logger.warning(f"📤 Upload de {file.filename} vers Cloudinary...")
-        
-        resource_type = 'video' if file_ext in {'mp4', 'mov', 'avi'} else 'image'
-        
-        result = cloudinary.uploader.upload(
-            file,
-            resource_type=resource_type,
-            folder='carte_du_pirate',
-            allowed_formats=list(allowed_extensions)
-        )
-        
-        url = result.get('secure_url')
-        logger.warning(f"✅ Upload réussi: {url}")
-        
-        return jsonify({
-            'success': True,
-            'url': url,
-            'public_id': result.get('public_id'),
-            'resource_type': resource_type
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"❌ Erreur upload: {e}")
-        return jsonify({'error': f'Erreur upload: {str(e)}'}), 500
-
-# ==================== GEOLOCALISATION ====================
-@app.route('/api/calculate-distance', methods=['POST'])
-def calculate_distance():
-    """Calcule la distance entre l'adresse du client et l'admin"""
-    if not GEOPY_AVAILABLE:
-        return jsonify({'error': 'Service de géolocalisation non disponible'}), 503
-    
-    try:
-        data = request.json or {}
-        customer_address = data.get('address')
-        
-        if not customer_address:
-            return jsonify({'error': 'Adresse requise'}), 400
-        
-        geolocator = Nominatim(user_agent="carte_du_pirate")
-        
-        # Géolocaliser l'adresse admin
-        admin_location = geolocator.geocode(ADMIN_ADDRESS)
-        if not admin_location:
-            return jsonify({'error': 'Impossible de localiser l\'adresse admin'}), 500
-        
-        # Géolocaliser l'adresse client
-        customer_location = geolocator.geocode(customer_address)
-        if not customer_location:
-            return jsonify({'error': 'Adresse client introuvable'}), 404
-        
-        # Calculer la distance
-        admin_coords = (admin_location.latitude, admin_location.longitude)
-        customer_coords = (customer_location.latitude, customer_location.longitude)
-        distance_km = geodesic(admin_coords, customer_coords).kilometers
-        
-        return jsonify({
-            'success': True,
-            'distance_km': round(distance_km, 2),
-            'customer_address_formatted': customer_location.address
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"❌ Erreur calcul distance: {e}")
-        return jsonify({'error': 'Erreur calcul distance'}), 500
-
-# ==================== GOOGLE SHEETS SYNC ====================
-@app.route('/api/admin/sync-sheets', methods=['POST'])
-@require_admin
-def sync_to_sheets():
-    """Synchronise les commandes vers Google Sheets"""
-    if not GOOGLE_SHEETS_ENABLED:
-        return jsonify({'error': 'Google Sheets non configuré'}), 503
-    
-    try:
-        # Préparer les données
-        headers = ['N° Commande', 'Client', 'Contact', 'Adresse', 'Articles', 
-                   'Sous-total', 'Livraison', 'Frais livraison', 'Total', 'Statut', 'Date']
-        
-        rows = [headers]
-        
-        for order in orders:
-            items_text = ', '.join([f"{item['product_name']} x{item['quantity']}" 
-                                    for item in order['items']])
-            
-            row = [
-                order['order_number'],
-                order['customer_name'],
-                order['customer_contact'],
-                order.get('customer_address', ''),
-                items_text,
-                f"{order['subtotal']:.2f}€",
-                order.get('shipping_type', ''),
-                f"{order.get('delivery_fee', 0):.2f}€",
-                f"{order['total']:.2f}€",
-                order['status'],
-                order['created_at']
-            ]
-            rows.append(row)
-        
-        # Écrire dans Google Sheets
-        body = {'values': rows}
-        sheets_service.spreadsheets().values().update(
-            spreadsheetId=SPREADSHEET_ID,
-            range='Commandes!A1',
-            valueInputOption='RAW',
-            body=body
-        ).execute()
-        
-        logger.warning(f"✅ {len(orders)} commandes synchronisées vers Google Sheets")
-        
-        return jsonify({
-            'success': True,
-            'message': f'{len(orders)} commandes synchronisées'
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"❌ Erreur sync Google Sheets: {e}")
-        return jsonify({'error': f'Erreur synchronisation: {str(e)}'}), 500
-
-# ==================== STATISTICS ====================
-@app.route('/api/admin/stats', methods=['GET'])
-@require_admin
-def get_statistics():
-    """Retourne des statistiques sur les commandes"""
-    try:
-        total_orders = len(orders)
-        total_revenue = sum(order['total'] for order in orders)
-        
-        pending_orders = len([o for o in orders if o['status'] == 'pending'])
-        delivered_orders = len([o for o in orders if o['status'] == 'delivered'])
-        
-        # Produits les plus vendus
-        product_sales = {}
-        for order in orders:
-            for item in order['items']:
-                pid = item['product_id']
-                if pid not in product_sales:
-                    product_sales[pid] = {
-                        'name': item['product_name'],
-                        'quantity': 0,
-                        'revenue': 0
-                    }
-                product_sales[pid]['quantity'] += item['quantity']
-                product_sales[pid]['revenue'] += item['subtotal']
-        
-        top_products = sorted(
-            product_sales.values(),
-            key=lambda x: x['quantity'],
-            reverse=True
-        )[:5]
-        
-        stats = {
-            'total_orders': total_orders,
-            'total_revenue': round(total_revenue, 2),
-            'pending_orders': pending_orders,
-            'delivered_orders': delivered_orders,
-            'top_products': top_products,
-            'average_order_value': round(total_revenue / total_orders, 2) if total_orders > 0 else 0
-        }
-        
-        return jsonify(stats), 200
-        
-    except Exception as e:
-        logger.error(f"❌ Erreur stats: {e}")
-        return jsonify({'error': 'Erreur calcul statistiques'}), 500
-
-# ==================== ERROR HANDLERS ====================
-@app.errorhandler(404)
-def not_found(e):
-    return jsonify({'error': 'Route introuvable'}), 404
-
-@app.errorhandler(500)
-def internal_error(e):
-    logger.error(f"Erreur 500: {e}")
-    return jsonify({'error': 'Erreur serveur interne'}), 500
-
-@app.errorhandler(429)
-def ratelimit_handler(e):
-    return jsonify({'error': 'Trop de requêtes, réessayez plus tard'}), 429
-
-# ==================== STARTUP ====================
-if __name__ == '__main__':
-    logger.warning("=" * 70)
-    logger.warning("🚀 DÉMARRAGE DE L'APPLICATION")
-    logger.warning("=" * 70)
-    
-    # Configuration du webhook Telegram
-    if TELEGRAM_BOT_TOKEN:
-        logger.warning("🔧 Configuration du webhook Telegram...")
-        configure_telegram_webhook()
-    else:
-        logger.warning("⚠️ Webhook Telegram non configuré (token manquant)")
-    
-    logger.warning("=" * 70)
-    logger.warning("✅ Serveur prêt!")
-    logger.warning("=" * 70)
-    
-    # Démarrer le serveur
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+        return jsonify({'error':

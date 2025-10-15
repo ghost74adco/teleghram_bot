@@ -1342,6 +1342,10 @@ async def setup_webapp_menu(application):
 # (à partir de la ligne ~1230)
 # ============================================================
 
+# ============================================================
+# REMPLACER LA FONCTION main() dans bot.py
+# ============================================================
+
 def main():
     """Fonction principale"""
     logger.info("🚀 Démarrage du bot...")
@@ -1414,50 +1418,21 @@ def main():
     
     application.add_error_handler(error_callback)
     
-    # Configuration du menu WebApp après l'initialisation
-    application.post_init = setup_webapp_menu
-    
     logger.info("✅ Bot démarré avec succès!")
+    logger.info("🌐 Mode: Webhook géré par Flask (app.py)")
+    logger.info("📡 Le bot ne démarre PAS son propre serveur")
     
-    # ✅ CONFIGURATION MODIFIÉE - Webhook avec chemin unique
-    PORT = int(os.environ.get('PORT', 8443))
-    WEBHOOK_URL = os.environ.get('WEBHOOK_URL')
-    
-    if WEBHOOK_URL:
-        # ✅ Mode WEBHOOK avec chemin séparé de app.py
-        webhook_path = f"telegram/bot/{TOKEN}"
-        webhook_full_url = f"{WEBHOOK_URL}/{webhook_path}"
-        
-        logger.info("=" * 60)
-        logger.info("🌐 MODE WEBHOOK ACTIVÉ")
-        logger.info("=" * 60)
-        logger.info(f"📡 Port d'écoute: {PORT}")
-        logger.info(f"📡 Chemin webhook: /{webhook_path}")
-        logger.info(f"📡 URL complète: {webhook_full_url}")
-        logger.info("=" * 60)
-        
-        application.run_webhook(
-            listen="0.0.0.0",
-            port=PORT,
-            url_path=webhook_path,  # ✅ Chemin unique pour éviter conflit avec app.py
-            webhook_url=webhook_full_url,
-            drop_pending_updates=True
-        )
-    else:
-        # Mode POLLING (Développement local)
-        logger.info("=" * 60)
-        logger.info("🔄 MODE POLLING ACTIVÉ (développement local)")
-        logger.info("=" * 60)
-        application.run_polling(drop_pending_updates=True)
+    # ✅ RETOURNER l'application pour que app.py puisse l'utiliser
+    return application
+
+# ✅ Créer l'application au niveau module pour app.py
+bot_application = main()
+
+# ✅ Configurer le menu WebApp
+import asyncio
+asyncio.run(setup_webapp_menu(bot_application))
 
 if __name__ == '__main__':
-    try:
-        main()
-    except KeyboardInterrupt:
-        logger.info("🛑 Bot arrêté par l'utilisateur")
-    except Exception as e:
-        logger.error(f"❌ Erreur fatale: {e}", exc_info=True)
-        sys.exit(1)
-    except Exception as e:
-        logger.error(f"❌ Erreur fatale: {e}", exc_info=True)
-        sys.exit(1)
+    logger.info("⚠️ Ce fichier ne doit pas être exécuté directement")
+    logger.info("👉 Utilisez 'python app.py' pour démarrer l'application complète")
+    sys.exit(0)

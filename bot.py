@@ -1337,6 +1337,11 @@ async def setup_webapp_menu(application):
         logger.error(f"❌ Erreur configuration menu WebApp : {e}")
 
 # --- Configuration du bot ---
+# ============================================================
+# REMPLACER LA FONCTION main() À LA FIN DU FICHIER bot.py
+# (à partir de la ligne ~1230)
+# ============================================================
+
 def main():
     """Fonction principale"""
     logger.info("🚀 Démarrage du bot...")
@@ -1396,7 +1401,7 @@ def main():
         ],
         per_chat=True,
         per_user=True,
-        per_message=False  # ✅ CHANGÉ DE True À False
+        per_message=False
     )
     
     application.add_handler(conv_handler)
@@ -1414,25 +1419,35 @@ def main():
     
     logger.info("✅ Bot démarré avec succès!")
     
-    # Détection automatique de l'environnement
+    # ✅ CONFIGURATION MODIFIÉE - Webhook avec chemin unique
     PORT = int(os.environ.get('PORT', 8443))
     WEBHOOK_URL = os.environ.get('WEBHOOK_URL')
     
     if WEBHOOK_URL:
-        # Mode WEBHOOK (Production sur Render)
-        logger.info(f"🌐 Mode WEBHOOK activé sur le port {PORT}")
-        logger.info(f"📡 Webhook URL: {WEBHOOK_URL}")
+        # ✅ Mode WEBHOOK avec chemin séparé de app.py
+        webhook_path = f"telegram/bot/{TOKEN}"
+        webhook_full_url = f"{WEBHOOK_URL}/{webhook_path}"
+        
+        logger.info("=" * 60)
+        logger.info("🌐 MODE WEBHOOK ACTIVÉ")
+        logger.info("=" * 60)
+        logger.info(f"📡 Port d'écoute: {PORT}")
+        logger.info(f"📡 Chemin webhook: /{webhook_path}")
+        logger.info(f"📡 URL complète: {webhook_full_url}")
+        logger.info("=" * 60)
         
         application.run_webhook(
             listen="0.0.0.0",
             port=PORT,
-            url_path=TOKEN,
-            webhook_url=f"{WEBHOOK_URL}/{TOKEN}",
+            url_path=webhook_path,  # ✅ Chemin unique pour éviter conflit avec app.py
+            webhook_url=webhook_full_url,
             drop_pending_updates=True
         )
     else:
         # Mode POLLING (Développement local)
-        logger.info("🔄 Mode POLLING activé (développement local)")
+        logger.info("=" * 60)
+        logger.info("🔄 MODE POLLING ACTIVÉ (développement local)")
+        logger.info("=" * 60)
         application.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
@@ -1440,6 +1455,9 @@ if __name__ == '__main__':
         main()
     except KeyboardInterrupt:
         logger.info("🛑 Bot arrêté par l'utilisateur")
+    except Exception as e:
+        logger.error(f"❌ Erreur fatale: {e}", exc_info=True)
+        sys.exit(1)
     except Exception as e:
         logger.error(f"❌ Erreur fatale: {e}", exc_info=True)
         sys.exit(1)

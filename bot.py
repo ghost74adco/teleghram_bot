@@ -1,7 +1,3 @@
-#!/usr/bin/env python3
-"""
-Bot Telegram - Version corrigée pour Python 3.13
-"""
 import os
 import sys
 import logging
@@ -72,7 +68,7 @@ FRAIS_POSTAL = 10
 
 # États
 LANGUE, PAYS, PRODUIT, PILL_SUBCATEGORY, ROCK_SUBCATEGORY = range(5)
-QUANTITE, CART_MENU, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION = range(5, 11)
+QUANTITE, CART_MENU, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION, CONTACT = range(5, 12)
 
 PILL_SUBCATEGORIES = {"squid_game": "💊 Squid Game", "punisher": "💊 Punisher"}
 ROCK_SUBCATEGORIES = {"mdma": "🪨 MDMA", "fourmmc": "🪨 4MMC"}
@@ -108,6 +104,9 @@ TRANSLATIONS = {
         "invalid_quantity": "❌ Invalide (1-{max}).",
         "cart_title": "🛒 *PANIER :*",
         "start_order": "🛒 Commander",
+        "contact_admin": "📞 Contacter",
+        "contact_message": "📞 *CONTACT ADMIN*\n\nÉcrivez votre message ci-dessous.\nIl sera transmis directement à l'administrateur.\n\n💬 Que souhaitez-vous dire ?",
+        "contact_sent": "✅ *Message envoyé !*\n\nL'admin vous répondra sous peu.",
         "france": "🇫🇷 France", "switzerland": "🇨🇭 Suisse",
         "postal": "✉️ Postale", "express": "⚡ Express",
         "cash": "💵 Espèces", "crypto": "₿ Crypto",
@@ -210,8 +209,10 @@ async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['langue'] = 'fr'
     
     text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
-    # SUPPRIMÉ: bouton "Voir la carte"
-    keyboard = [[InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")]]
+    keyboard = [
+        [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
+        [InlineKeyboardButton(tr(context.user_data, "contact_admin"), callback_data="contact_admin")]
+    ]
     await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return PAYS
 
@@ -220,13 +221,54 @@ async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    # Seulement démarrage de commande, PAS de catalogue
-    keyboard = [[InlineKeyboardButton(tr(context.user_data, "france"), callback_data="country_FR")],
-                [InlineKeyboardButton(tr(context.user_data, "switzerland"), callback_data="country_CH")]]
+    if query.data == "contact_admin":
+        await query.message.edit_text(
+            tr(context.user_data, "contact_message"),
+            parse_mode='Markdown'
+        )
+        return CONTACT
+    
+    # Seulement démarrage de commande
+    keyboard = [
+        [InlineKeyboardButton(tr(context.user_data, "france"), callback_data="country_FR")],
+        [InlineKeyboardButton(tr(context.user_data, "switzerland"), callback_data="country_CH")]
+    ]
     text = tr(context.user_data, "choose_country")
     
     await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return PAYS
+
+@error_handler
+async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gère les messages de contact"""
+    user = update.effective_user
+    message_text = sanitize_input(update.message.text, 1000)
+    
+    # Message pour l'admin
+    admin_message = (
+        f"📞 *MESSAGE UTILISATEUR*\n\n"
+        f"👤 {user.first_name} (@{user.username or 'N/A'})\n"
+        f"🆔 `{user.id}`\n\n"
+        f"💬 Message:\n{message_text}"
+    )
+    
+    try:
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=admin_message,
+            parse_mode='Markdown'
+        )
+        logger.info(f"📞 Contact de {user.first_name} ({user.id})")
+        
+        await update.message.reply_text(
+            tr(context.user_data, "contact_sent"),
+            parse_mode='Markdown'
+        )
+    except Exception as e:
+        logger.error(f"❌ Erreur contact: {e}")
+        await update.message.reply_text("❌ Erreur d'envoi. Réessayez.")
+    
+    return ConversationHandler.END
 
 @error_handler
 async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -468,7 +510,11 @@ async def main_async():
         entry_points=[CommandHandler('start', start_command)],
         states={
             LANGUE: [CallbackQueryHandler(set_langue, pattern='^lang_')],
-            PAYS: [CallbackQueryHandler(choix_pays, pattern='^country_')],
+            PAYS: [
+                CallbackQueryHandler(menu_navigation, pattern='^(start_order|contact_admin)'),
+                CallbackQueryHandler(choix_pays, pattern='^country_')
+            ],
+            CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, contact_handler)],
             PRODUIT: [CallbackQueryHandler(choix_produit, pattern='^product_')],
             PILL_SUBCATEGORY: [CallbackQueryHandler(choix_pill_subcategory, pattern='^pill_')],
             ROCK_SUBCATEGORY: [CallbackQueryHandler(choix_rock_subcategory, pattern='^rock_')],

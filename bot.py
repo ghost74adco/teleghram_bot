@@ -1,3 +1,7 @@
+#!/usr/bin/env python3
+"""
+Bot Telegram - Version finale
+"""
 import os
 import sys
 import logging
@@ -201,6 +205,41 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
     return LANGUE
+
+@error_handler
+async def commander_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /commander pour démarrer directement"""
+    user = update.effective_user
+    logger.info(f"🛒 /commander: {user.first_name} ({user.id})")
+    
+    if 'langue' not in context.user_data:
+        context.user_data['langue'] = 'fr'
+    
+    keyboard = [
+        [InlineKeyboardButton(tr(context.user_data, "france"), callback_data="country_FR")],
+        [InlineKeyboardButton(tr(context.user_data, "switzerland"), callback_data="country_CH")]
+    ]
+    await update.message.reply_text(
+        tr(context.user_data, "choose_country"),
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    return PAYS
+
+@error_handler
+async def contact_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /contact pour contacter directement"""
+    user = update.effective_user
+    logger.info(f"📞 /contact: {user.first_name} ({user.id})")
+    
+    if 'langue' not in context.user_data:
+        context.user_data['langue'] = 'fr'
+    
+    await update.message.reply_text(
+        tr(context.user_data, "contact_message"),
+        parse_mode='Markdown'
+    )
+    return CONTACT
 
 @error_handler
 async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -659,11 +698,23 @@ async def main_async():
     application = Application.builder().token(TOKEN).build()
     logger.info("✅ Application créée")
     
+    # Configuration des commandes du menu
+    await application.bot.set_my_commands([
+        BotCommand("start", "🏠 Menu principal"),
+        BotCommand("commander", "🛒 Passer commande"),
+        BotCommand("contact", "📞 Contacter l'admin"),
+    ])
+    logger.info("✅ Menu des commandes configuré")
+    
     await application.bot.delete_webhook(drop_pending_updates=True)
     logger.info("✅ Webhook supprimé")
     
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start_command)],
+        entry_points=[
+            CommandHandler('start', start_command),
+            CommandHandler('commander', commander_command),
+            CommandHandler('contact', contact_command)
+        ],
         states={
             LANGUE: [CallbackQueryHandler(set_langue, pattern='^lang_')],
             PAYS: [

@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-"""Bot Telegram - Version finale 100% fonctionnelle"""
 import os
 import sys
 import logging
@@ -412,7 +410,8 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"Admin: {e}")
         keyboard = [[InlineKeyboardButton("🔄 Nouvelle commande", callback_data="restart_order")]]
         await query.message.edit_text(f"{tr(context.user_data, 'order_confirmed')}\n\n📋 `{order_id}`\n💰 {total}€", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-        context.user_data.clear()
+        # NE PAS clear avant que l'utilisateur clique sur le bouton
+        # context.user_data.clear() sera fait dans restart_order
         return ConversationHandler.END
     else:
         await query.message.edit_text(tr(context.user_data, "order_cancelled"), parse_mode='Markdown')

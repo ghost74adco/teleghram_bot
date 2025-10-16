@@ -1,3 +1,7 @@
+#!/usr/bin/env python3
+"""
+Bot Telegram - Version finale
+"""
 import os
 import sys
 import logging
@@ -733,15 +737,18 @@ async def main_async():
     logger.info("✅ Webhook supprimé")
     
     conv_handler = ConversationHandler(
-        entry_points=[
-            CommandHandler('start', start_command),
-            CommandHandler('commander', commander_command),
-            CommandHandler('contact', contact_command),
-            CallbackQueryHandler(restart_order, pattern='^restart_order
-            LANGUE: [CallbackQueryHandler(set_langue, pattern='^lang_')],
-            PAYS: [
-                CallbackQueryHandler(menu_navigation, pattern='^(start_order|contact_admin)'),
-                CallbackQueryHandler(choix_pays, pattern='^country_')
+    entry_points=[
+        CommandHandler('start', start_command),
+        CommandHandler('commander', commander_command),
+        CommandHandler('contact', contact_command),
+        CallbackQueryHandler(restart_order, pattern='^restart_order')
+    ],
+    states={
+        LANGUE: [CallbackQueryHandler(set_langue, pattern='^lang_')],
+        PAYS: [
+            CallbackQueryHandler(menu_navigation, pattern='^(start_order|contact_admin)'),
+            CallbackQueryHandler(choix_pays, pattern='^country_')
+        ],
             ],
             CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, contact_handler)],
             PRODUIT: [

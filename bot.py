@@ -1,3 +1,7 @@
+#!/usr/bin/env python3
+"""
+Bot Telegram - Version corrigée pour Python 3.13
+"""
 import os
 import sys
 import logging
@@ -277,11 +281,14 @@ async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['pays'] = query.data.replace("country_", "")
     context.user_data['cart'] = []
     
-    keyboard = [[InlineKeyboardButton("❄️ COCO", callback_data="product_snow")],
-                [InlineKeyboardButton("💊 Pills", callback_data="product_pill")],
-                [InlineKeyboardButton("🫒 Hash", callback_data="product_olive")],
-                [InlineKeyboardButton("🍀 Weed", callback_data="product_clover")],
-                [InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")]]
+    keyboard = [
+        [InlineKeyboardButton("❄️ COCO", callback_data="product_snow")],
+        [InlineKeyboardButton("💊 Pills", callback_data="product_pill")],
+        [InlineKeyboardButton("🫒 Hash", callback_data="product_olive")],
+        [InlineKeyboardButton("🍀 Weed", callback_data="product_clover")],
+        [InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="back_to_main")]
+    ]
     await query.message.edit_text(tr(context.user_data, "choose_product"), 
                                  reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return PRODUIT
@@ -293,14 +300,20 @@ async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     product_code = query.data.replace("product_", "")
     
     if product_code == "pill":
-        keyboard = [[InlineKeyboardButton("💊 Squid Game", callback_data="pill_squid_game")],
-                    [InlineKeyboardButton("💊 Punisher", callback_data="pill_punisher")]]
+        keyboard = [
+            [InlineKeyboardButton("💊 Squid Game", callback_data="pill_squid_game")],
+            [InlineKeyboardButton("💊 Punisher", callback_data="pill_punisher")],
+            [InlineKeyboardButton("🔙 Retour", callback_data="back_to_products")]
+        ]
         await query.message.edit_text(tr(context.user_data, "choose_pill_type"),
                                      reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return PILL_SUBCATEGORY
     elif product_code == "rock":
-        keyboard = [[InlineKeyboardButton("🪨 MDMA", callback_data="rock_mdma")],
-                    [InlineKeyboardButton("🪨 4MMC", callback_data="rock_fourmmc")]]
+        keyboard = [
+            [InlineKeyboardButton("🪨 MDMA", callback_data="rock_mdma")],
+            [InlineKeyboardButton("🪨 4MMC", callback_data="rock_fourmmc")],
+            [InlineKeyboardButton("🔙 Retour", callback_data="back_to_products")]
+        ]
         await query.message.edit_text(tr(context.user_data, "choose_rock_type"),
                                      reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return ROCK_SUBCATEGORY
@@ -332,15 +345,27 @@ async def choix_rock_subcategory(update: Update, context: ContextTypes.DEFAULT_T
 @error_handler
 async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
     qty = sanitize_input(update.message.text, 10)
+    
+    logger.info(f"📦 Quantité reçue: '{qty}' de {update.effective_user.first_name}")
+    
     if not qty.isdigit() or not (0 < int(qty) <= MAX_QUANTITY_PER_PRODUCT):
         await update.message.reply_text(tr(context.user_data, "invalid_quantity"))
         return QUANTITE
     
     context.user_data['cart'].append({"produit": context.user_data['current_product'], "quantite": int(qty)})
-    keyboard = [[InlineKeyboardButton(tr(context.user_data, "add_more"), callback_data="add_more")],
-                [InlineKeyboardButton(tr(context.user_data, "proceed"), callback_data="proceed_checkout")]]
-    await update.message.reply_text(format_cart(context.user_data['cart'], context.user_data),
-                                   reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    
+    logger.info(f"✅ Panier: {context.user_data['cart']}")
+    
+    keyboard = [
+        [InlineKeyboardButton(tr(context.user_data, "add_more"), callback_data="add_more")],
+        [InlineKeyboardButton(tr(context.user_data, "proceed"), callback_data="proceed_checkout")]
+    ]
+    
+    await update.message.reply_text(
+        format_cart(context.user_data['cart'], context.user_data),
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
     return CART_MENU
 
 @error_handler
@@ -348,12 +373,17 @@ async def cart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
+    logger.info(f"🛒 Cart menu: {query.data}")
+    
     if query.data == "add_more":
-        keyboard = [[InlineKeyboardButton("❄️ COCO", callback_data="product_snow")],
-                    [InlineKeyboardButton("💊 Pills", callback_data="product_pill")],
-                    [InlineKeyboardButton("🫒 Hash", callback_data="product_olive")],
-                    [InlineKeyboardButton("🍀 Weed", callback_data="product_clover")],
-                    [InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")]]
+        keyboard = [
+            [InlineKeyboardButton("❄️ COCO", callback_data="product_snow")],
+            [InlineKeyboardButton("💊 Pills", callback_data="product_pill")],
+            [InlineKeyboardButton("🫒 Hash", callback_data="product_olive")],
+            [InlineKeyboardButton("🍀 Weed", callback_data="product_clover")],
+            [InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")],
+            [InlineKeyboardButton("🔙 Retour", callback_data="back_to_main")]
+        ]
         await query.message.edit_text(tr(context.user_data, "choose_product"),
                                      reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return PRODUIT
@@ -389,18 +419,56 @@ async def choix_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
         delivery_fee = calculate_delivery_fee("express", distance_km, subtotal)
         
         distance_text = tr(context.user_data, "distance_calculated").format(distance=distance_km, fee=delivery_fee)
-        keyboard = [[InlineKeyboardButton(tr(context.user_data, "cash"), callback_data="payment_cash")],
-                    [InlineKeyboardButton(tr(context.user_data, "crypto"), callback_data="payment_crypto")]]
+        keyboard = [
+            [InlineKeyboardButton(tr(context.user_data, "cash"), callback_data="payment_cash")],
+            [InlineKeyboardButton(tr(context.user_data, "crypto"), callback_data="payment_crypto")],
+            [InlineKeyboardButton("🔙 Retour", callback_data="back_to_address")]
+        ]
         await query.message.edit_text(f"{distance_text}\n\n{tr(context.user_data, 'choose_payment')}",
                                      reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return PAIEMENT
     else:
         context.user_data['distance'] = 0
-        keyboard = [[InlineKeyboardButton(tr(context.user_data, "cash"), callback_data="payment_cash")],
-                    [InlineKeyboardButton(tr(context.user_data, "crypto"), callback_data="payment_crypto")]]
+        keyboard = [
+            [InlineKeyboardButton(tr(context.user_data, "cash"), callback_data="payment_cash")],
+            [InlineKeyboardButton(tr(context.user_data, "crypto"), callback_data="payment_crypto")],
+            [InlineKeyboardButton("🔙 Retour", callback_data="back_to_address")]
+        ]
         await query.message.edit_text(tr(context.user_data, "choose_payment"),
                                      reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return PAIEMENT
+
+# Handler pour les boutons retour
+@error_handler
+async def back_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    if query.data == "back_to_main":
+        text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
+        keyboard = [
+            [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
+            [InlineKeyboardButton(tr(context.user_data, "contact_admin"), callback_data="contact_admin")]
+        ]
+        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        return PAYS
+    
+    elif query.data == "back_to_products":
+        keyboard = [
+            [InlineKeyboardButton("❄️ COCO", callback_data="product_snow")],
+            [InlineKeyboardButton("💊 Pills", callback_data="product_pill")],
+            [InlineKeyboardButton("🫒 Hash", callback_data="product_olive")],
+            [InlineKeyboardButton("🍀 Weed", callback_data="product_clover")],
+            [InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")],
+            [InlineKeyboardButton("🔙 Retour", callback_data="back_to_main")]
+        ]
+        await query.message.edit_text(tr(context.user_data, "choose_product"),
+                                     reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        return PRODUIT
+    
+    elif query.data == "back_to_address":
+        await query.message.edit_text(tr(context.user_data, 'enter_address'), parse_mode='Markdown')
+        return ADRESSE
 
 @error_handler
 async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -515,14 +583,32 @@ async def main_async():
                 CallbackQueryHandler(choix_pays, pattern='^country_')
             ],
             CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, contact_handler)],
-            PRODUIT: [CallbackQueryHandler(choix_produit, pattern='^product_')],
-            PILL_SUBCATEGORY: [CallbackQueryHandler(choix_pill_subcategory, pattern='^pill_')],
-            ROCK_SUBCATEGORY: [CallbackQueryHandler(choix_rock_subcategory, pattern='^rock_')],
+            PRODUIT: [
+                CallbackQueryHandler(choix_produit, pattern='^product_'),
+                CallbackQueryHandler(back_navigation, pattern='^back_')
+            ],
+            PILL_SUBCATEGORY: [
+                CallbackQueryHandler(choix_pill_subcategory, pattern='^pill_'),
+                CallbackQueryHandler(back_navigation, pattern='^back_')
+            ],
+            ROCK_SUBCATEGORY: [
+                CallbackQueryHandler(choix_rock_subcategory, pattern='^rock_'),
+                CallbackQueryHandler(back_navigation, pattern='^back_')
+            ],
             QUANTITE: [MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_quantite)],
-            CART_MENU: [CallbackQueryHandler(cart_menu, pattern='^(add_more|proceed_checkout)')],
+            CART_MENU: [
+                CallbackQueryHandler(cart_menu, pattern='^(add_more|proceed_checkout)'),
+                CallbackQueryHandler(back_navigation, pattern='^back_')
+            ],
             ADRESSE: [MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_adresse)],
-            LIVRAISON: [CallbackQueryHandler(choix_livraison, pattern='^delivery_')],
-            PAIEMENT: [CallbackQueryHandler(choix_paiement, pattern='^payment_')],
+            LIVRAISON: [
+                CallbackQueryHandler(choix_livraison, pattern='^delivery_'),
+                CallbackQueryHandler(back_navigation, pattern='^back_')
+            ],
+            PAIEMENT: [
+                CallbackQueryHandler(choix_paiement, pattern='^payment_'),
+                CallbackQueryHandler(back_navigation, pattern='^back_')
+            ],
             CONFIRMATION: [CallbackQueryHandler(confirmation, pattern='^(confirm_order|cancel)')]
         },
         fallbacks=[CommandHandler('start', start_command)],

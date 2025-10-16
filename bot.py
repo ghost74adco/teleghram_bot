@@ -11,14 +11,14 @@ from functools import wraps
 from collections import defaultdict
 from datetime import datetime, timedelta
 
-# FIX PYTHON 3.13 - DOIT ÊTRE AU TOUT DÉBUT
+# FIX PYTHON 3.13
 if sys.version_info >= (3, 13):
     try:
         asyncio.get_event_loop()
     except RuntimeError:
         asyncio.set_event_loop(asyncio.new_event_loop())
 
-# Configuration des logs
+# Logs
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO,
@@ -27,7 +27,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-# Chargement variables
+# Variables d'environnement
 for env_file in ['.env', 'infos.env']:
     dotenv_path = Path(__file__).parent / env_file
     if dotenv_path.exists():
@@ -59,10 +59,10 @@ try:
         ConversationHandler, MessageHandler, CommandHandler, filters
     )
 except ImportError:
-    logger.error("❌ Installez: pip install python-telegram-bot")
+    logger.error("❌ pip install python-telegram-bot")
     sys.exit(1)
 
-# Configuration
+# Config
 MAX_QUANTITY_PER_PRODUCT = 100
 FRAIS_POSTAL = 10
 
@@ -84,18 +84,18 @@ PRIX_CH = {
 
 TRANSLATIONS = {
     "fr": {
-        "welcome": "🌿 *BIENVENUE* 🌿\n\n⚠️ *IMPORTANT :*\nConversations en *ÉCHANGE SECRET*.\n\n🙏 *Merci* 💪💚",
+        "welcome": "🌿 *BIENVENUE* 🌿\n\n⚠️ *VERSION 2.0 - NOUVEAU BOT*\n\n⚠️ *IMPORTANT :*\nConversations en *ÉCHANGE SECRET*.\n\n🙏 *Merci* 💪💚",
         "main_menu": "\n\n📱 *MENU PRINCIPAL :*",
-        "choose_country": "🌍 *Pays :*",
-        "choose_product": "🛒 *Produit :*",
-        "choose_pill_type": "💊 *Type :*",
-        "choose_rock_type": "🪨 *Type :*",
-        "enter_quantity": "🔢 *Quantité :*",
+        "choose_country": "🌍 *Pays de livraison :*",
+        "choose_product": "🛒 *Choisissez votre produit :*",
+        "choose_pill_type": "💊 *Type de pilule :*",
+        "choose_rock_type": "🪨 *Type de crystal :*",
+        "enter_quantity": "🔢 *Quantité désirée :*",
         "enter_address": "📍 *Adresse complète :*",
-        "choose_delivery": "📦 *Livraison :*\n\n✉️ Postale: 48-72h, 10€\n⚡ Express: 30min+",
+        "choose_delivery": "📦 *Type de livraison :*\n\n✉️ Postale: 48-72h, 10€\n⚡ Express: 30min+",
         "calculating_distance": "📏 Calcul...",
-        "distance_calculated": "📏 {distance} km\n💶 {fee}€",
-        "choose_payment": "💳 *Paiement :*",
+        "distance_calculated": "📏 Distance: {distance} km\n💶 Frais: {fee}€",
+        "choose_payment": "💳 *Mode de paiement :*",
         "order_summary": "✅ *RÉSUMÉ*",
         "confirm": "✅ Confirmer", "cancel": "❌ Annuler",
         "order_confirmed": "✅ *Confirmé !*\n\n📞 Contact sous peu.",
@@ -105,13 +105,13 @@ TRANSLATIONS = {
         "cart_title": "🛒 *PANIER :*",
         "start_order": "🛒 Commander",
         "contact_admin": "📞 Contacter",
-        "contact_message": "📞 *CONTACT ADMIN*\n\nÉcrivez votre message ci-dessous.\nIl sera transmis directement à l'administrateur.\n\n💬 Que souhaitez-vous dire ?",
+        "contact_message": "📞 *CONTACT*\n\nÉcrivez votre message.\nIl sera transmis à l'admin.\n\n💬 Que souhaitez-vous dire ?",
         "contact_sent": "✅ *Message envoyé !*\n\nL'admin vous répondra sous peu.",
         "france": "🇫🇷 France", "switzerland": "🇨🇭 Suisse",
         "postal": "✉️ Postale", "express": "⚡ Express",
         "cash": "💵 Espèces", "crypto": "₿ Crypto",
         "total": "💰 *TOTAL :*", "delivery_fee": "📦 *Frais :*",
-        "subtotal": "💵 *Sous-total :*"
+        "subtotal": "💵 *Sous-total :*", "back": "🔙 Retour"
     }
 }
 
@@ -187,7 +187,7 @@ def error_handler(func):
             return ConversationHandler.END
     return wrapper
 
-# Handlers
+# HANDLERS
 @error_handler
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -228,23 +228,22 @@ async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return CONTACT
     
-    # Seulement démarrage de commande
     keyboard = [
         [InlineKeyboardButton(tr(context.user_data, "france"), callback_data="country_FR")],
         [InlineKeyboardButton(tr(context.user_data, "switzerland"), callback_data="country_CH")]
     ]
-    text = tr(context.user_data, "choose_country")
-    
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    await query.message.edit_text(
+        tr(context.user_data, "choose_country"),
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
     return PAYS
 
 @error_handler
 async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Gère les messages de contact"""
     user = update.effective_user
     message_text = sanitize_input(update.message.text, 1000)
     
-    # Message pour l'admin
     admin_message = (
         f"📞 *MESSAGE UTILISATEUR*\n\n"
         f"👤 {user.first_name} (@{user.username or 'N/A'})\n"
@@ -258,15 +257,14 @@ async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text=admin_message,
             parse_mode='Markdown'
         )
-        logger.info(f"📞 Contact de {user.first_name} ({user.id})")
-        
+        logger.info(f"📞 Contact de {user.first_name}")
         await update.message.reply_text(
             tr(context.user_data, "contact_sent"),
             parse_mode='Markdown'
         )
     except Exception as e:
-        logger.error(f"❌ Erreur contact: {e}")
-        await update.message.reply_text("❌ Erreur d'envoi. Réessayez.")
+        logger.error(f"❌ Contact: {e}")
+        await update.message.reply_text("❌ Erreur d'envoi.")
     
     return ConversationHandler.END
 
@@ -283,10 +281,13 @@ async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🫒 Hash", callback_data="product_olive")],
         [InlineKeyboardButton("🍀 Weed", callback_data="product_clover")],
         [InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")],
-        [InlineKeyboardButton("🔙 Retour", callback_data="back_to_main")]
+        [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_main")]
     ]
-    await query.message.edit_text(tr(context.user_data, "choose_product"), 
-                                 reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    await query.message.edit_text(
+        tr(context.user_data, "choose_product"),
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
     return PRODUIT
 
 @error_handler
@@ -299,56 +300,75 @@ async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             [InlineKeyboardButton("💊 Squid Game", callback_data="pill_squid_game")],
             [InlineKeyboardButton("💊 Punisher", callback_data="pill_punisher")],
-            [InlineKeyboardButton("🔙 Retour", callback_data="back_to_products")]
+            [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_products")]
         ]
-        await query.message.edit_text(tr(context.user_data, "choose_pill_type"),
-                                     reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        await query.message.edit_text(
+            tr(context.user_data, "choose_pill_type"),
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
         return PILL_SUBCATEGORY
     elif product_code == "rock":
         keyboard = [
             [InlineKeyboardButton("🪨 MDMA", callback_data="rock_mdma")],
             [InlineKeyboardButton("🪨 4MMC", callback_data="rock_fourmmc")],
-            [InlineKeyboardButton("🔙 Retour", callback_data="back_to_products")]
+            [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_products")]
         ]
-        await query.message.edit_text(tr(context.user_data, "choose_rock_type"),
-                                     reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        await query.message.edit_text(
+            tr(context.user_data, "choose_rock_type"),
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
         return ROCK_SUBCATEGORY
     
     product_names = {"snow": "❄️ Coco", "olive": "🫒 Hash", "clover": "🍀 Weed"}
     context.user_data['current_product'] = product_names.get(product_code, product_code)
-    await query.message.edit_text(f"✅ {context.user_data['current_product']}\n\n{tr(context.user_data, 'enter_quantity')}",
-                                 parse_mode='Markdown')
+    await query.message.edit_text(
+        f"✅ {context.user_data['current_product']}\n\n{tr(context.user_data, 'enter_quantity')}",
+        parse_mode='Markdown'
+    )
     return QUANTITE
 
 @error_handler
 async def choix_pill_subcategory(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    context.user_data['current_product'] = PILL_SUBCATEGORIES.get(query.data.replace("pill_", ""), "💊")
-    await query.message.edit_text(f"✅ {context.user_data['current_product']}\n\n{tr(context.user_data, 'enter_quantity')}",
-                                 parse_mode='Markdown')
+    context.user_data['current_product'] = PILL_SUBCATEGORIES.get(
+        query.data.replace("pill_", ""), "💊"
+    )
+    await query.message.edit_text(
+        f"✅ {context.user_data['current_product']}\n\n{tr(context.user_data, 'enter_quantity')}",
+        parse_mode='Markdown'
+    )
     return QUANTITE
 
 @error_handler
 async def choix_rock_subcategory(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    context.user_data['current_product'] = ROCK_SUBCATEGORIES.get(query.data.replace("rock_", ""), "🪨")
-    await query.message.edit_text(f"✅ {context.user_data['current_product']}\n\n{tr(context.user_data, 'enter_quantity')}",
-                                 parse_mode='Markdown')
+    context.user_data['current_product'] = ROCK_SUBCATEGORIES.get(
+        query.data.replace("rock_", ""), "🪨"
+    )
+    await query.message.edit_text(
+        f"✅ {context.user_data['current_product']}\n\n{tr(context.user_data, 'enter_quantity')}",
+        parse_mode='Markdown'
+    )
     return QUANTITE
 
 @error_handler
 async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
     qty = sanitize_input(update.message.text, 10)
     
-    logger.info(f"📦 Quantité reçue: '{qty}' de {update.effective_user.first_name}")
+    logger.info(f"📦 Quantité: '{qty}' de {update.effective_user.first_name}")
     
     if not qty.isdigit() or not (0 < int(qty) <= MAX_QUANTITY_PER_PRODUCT):
         await update.message.reply_text(tr(context.user_data, "invalid_quantity"))
         return QUANTITE
     
-    context.user_data['cart'].append({"produit": context.user_data['current_product'], "quantite": int(qty)})
+    context.user_data['cart'].append({
+        "produit": context.user_data['current_product'],
+        "quantite": int(qty)
+    })
     
     logger.info(f"✅ Panier: {context.user_data['cart']}")
     
@@ -369,7 +389,7 @@ async def cart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    logger.info(f"🛒 Cart menu: {query.data}")
+    logger.info(f"🛒 Cart: {query.data}")
     
     if query.data == "add_more":
         keyboard = [
@@ -378,13 +398,19 @@ async def cart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("🫒 Hash", callback_data="product_olive")],
             [InlineKeyboardButton("🍀 Weed", callback_data="product_clover")],
             [InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")],
-            [InlineKeyboardButton("🔙 Retour", callback_data="back_to_main")]
+            [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_main")]
         ]
-        await query.message.edit_text(tr(context.user_data, "choose_product"),
-                                     reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        await query.message.edit_text(
+            tr(context.user_data, "choose_product"),
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
         return PRODUIT
     else:
-        await query.message.edit_text(tr(context.user_data, 'enter_address'), parse_mode='Markdown')
+        await query.message.edit_text(
+            tr(context.user_data, 'enter_address'),
+            parse_mode='Markdown'
+        )
         return ADRESSE
 
 @error_handler
@@ -395,10 +421,15 @@ async def saisie_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ADRESSE
     
     context.user_data['adresse'] = address
-    keyboard = [[InlineKeyboardButton(tr(context.user_data, "postal"), callback_data="delivery_postal")],
-                [InlineKeyboardButton(tr(context.user_data, "express"), callback_data="delivery_express")]]
-    await update.message.reply_text(tr(context.user_data, "choose_delivery"),
-                                   reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    keyboard = [
+        [InlineKeyboardButton(tr(context.user_data, "postal"), callback_data="delivery_postal")],
+        [InlineKeyboardButton(tr(context.user_data, "express"), callback_data="delivery_express")]
+    ]
+    await update.message.reply_text(
+        tr(context.user_data, "choose_delivery"),
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
     return LIVRAISON
 
 @error_handler
@@ -414,27 +445,35 @@ async def choix_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
         subtotal, _, _ = calculate_total(context.user_data['cart'], context.user_data['pays'])
         delivery_fee = calculate_delivery_fee("express", distance_km, subtotal)
         
-        distance_text = tr(context.user_data, "distance_calculated").format(distance=distance_km, fee=delivery_fee)
+        distance_text = tr(context.user_data, "distance_calculated").format(
+            distance=distance_km,
+            fee=delivery_fee
+        )
         keyboard = [
             [InlineKeyboardButton(tr(context.user_data, "cash"), callback_data="payment_cash")],
             [InlineKeyboardButton(tr(context.user_data, "crypto"), callback_data="payment_crypto")],
-            [InlineKeyboardButton("🔙 Retour", callback_data="back_to_address")]
+            [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_address")]
         ]
-        await query.message.edit_text(f"{distance_text}\n\n{tr(context.user_data, 'choose_payment')}",
-                                     reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        await query.message.edit_text(
+            f"{distance_text}\n\n{tr(context.user_data, 'choose_payment')}",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
         return PAIEMENT
     else:
         context.user_data['distance'] = 0
         keyboard = [
             [InlineKeyboardButton(tr(context.user_data, "cash"), callback_data="payment_cash")],
             [InlineKeyboardButton(tr(context.user_data, "crypto"), callback_data="payment_crypto")],
-            [InlineKeyboardButton("🔙 Retour", callback_data="back_to_address")]
+            [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_address")]
         ]
-        await query.message.edit_text(tr(context.user_data, "choose_payment"),
-                                     reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        await query.message.edit_text(
+            tr(context.user_data, "choose_payment"),
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
         return PAIEMENT
 
-# Handler pour les boutons retour
 @error_handler
 async def back_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -456,14 +495,20 @@ async def back_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("🫒 Hash", callback_data="product_olive")],
             [InlineKeyboardButton("🍀 Weed", callback_data="product_clover")],
             [InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")],
-            [InlineKeyboardButton("🔙 Retour", callback_data="back_to_main")]
+            [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_main")]
         ]
-        await query.message.edit_text(tr(context.user_data, "choose_product"),
-                                     reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        await query.message.edit_text(
+            tr(context.user_data, "choose_product"),
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
         return PRODUIT
     
     elif query.data == "back_to_address":
-        await query.message.edit_text(tr(context.user_data, 'enter_address'), parse_mode='Markdown')
+        await query.message.edit_text(
+            tr(context.user_data, 'enter_address'),
+            parse_mode='Markdown'
+        )
         return ADRESSE
 
 @error_handler
@@ -472,16 +517,28 @@ async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     context.user_data['paiement'] = query.data.replace("payment_", "")
     
-    total, subtotal, delivery_fee = calculate_total(context.user_data['cart'], context.user_data['pays'],
-                                                    context.user_data['livraison'], context.user_data.get('distance', 0))
+    total, subtotal, delivery_fee = calculate_total(
+        context.user_data['cart'],
+        context.user_data['pays'],
+        context.user_data['livraison'],
+        context.user_data.get('distance', 0)
+    )
     
-    summary = (f"{tr(context.user_data, 'order_summary')}\n\n{format_cart(context.user_data['cart'], context.user_data)}\n"
-              f"{tr(context.user_data, 'subtotal')} {subtotal}€\n{tr(context.user_data, 'delivery_fee')} {delivery_fee}€\n"
-              f"{tr(context.user_data, 'total')} *{total}€*\n\n📍 {context.user_data['adresse']}\n"
-              f"📦 {context.user_data['livraison'].title()}\n💳 {context.user_data['paiement'].title()}")
+    summary = (
+        f"{tr(context.user_data, 'order_summary')}\n\n"
+        f"{format_cart(context.user_data['cart'], context.user_data)}\n"
+        f"{tr(context.user_data, 'subtotal')} {subtotal}€\n"
+        f"{tr(context.user_data, 'delivery_fee')} {delivery_fee}€\n"
+        f"{tr(context.user_data, 'total')} *{total}€*\n\n"
+        f"📍 {context.user_data['adresse']}\n"
+        f"📦 {context.user_data['livraison'].title()}\n"
+        f"💳 {context.user_data['paiement'].title()}"
+    )
     
-    keyboard = [[InlineKeyboardButton(tr(context.user_data, "confirm"), callback_data="confirm_order")],
-                [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]]
+    keyboard = [
+        [InlineKeyboardButton(tr(context.user_data, "confirm"), callback_data="confirm_order")],
+        [InlineKeyboardButton(tr(context.user_data, "cancel"), callback_data="cancel")]
+    ]
     await query.message.edit_text(summary, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return CONFIRMATION
 
@@ -492,40 +549,70 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if query.data == "confirm_order":
         user = update.effective_user
-        total, subtotal, delivery_fee = calculate_total(context.user_data['cart'], context.user_data['pays'],
-                                                        context.user_data['livraison'], context.user_data.get('distance', 0))
+        total, subtotal, delivery_fee = calculate_total(
+            context.user_data['cart'],
+            context.user_data['pays'],
+            context.user_data['livraison'],
+            context.user_data.get('distance', 0)
+        )
         order_id = f"ORD-{datetime.now().strftime('%Y%m%d%H%M%S')}-{user.id}"
         
         order_data = {
-            'date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'order_id': order_id, 'user_id': user.id,
-            'username': user.username or "N/A", 'first_name': user.first_name or "N/A",
+            'date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'order_id': order_id,
+            'user_id': user.id,
+            'username': user.username or "N/A",
+            'first_name': user.first_name or "N/A",
             'products': "; ".join([f"{item['produit']} x{item['quantite']}" for item in context.user_data['cart']]),
-            'country': context.user_data['pays'], 'address': context.user_data['adresse'],
-            'delivery_type': context.user_data['livraison'], 'distance_km': context.user_data.get('distance', 0),
-            'payment_method': context.user_data['paiement'], 'subtotal': str(round(subtotal, 2)),
-            'delivery_fee': str(round(delivery_fee, 2)), 'total': str(round(total, 2)), 'status': 'En attente'
+            'country': context.user_data['pays'],
+            'address': context.user_data['adresse'],
+            'delivery_type': context.user_data['livraison'],
+            'distance_km': context.user_data.get('distance', 0),
+            'payment_method': context.user_data['paiement'],
+            'subtotal': str(round(subtotal, 2)),
+            'delivery_fee': str(round(delivery_fee, 2)),
+            'total': str(round(total, 2)),
+            'status': 'En attente'
         }
         save_order_to_csv(order_data)
         
-        admin_message = (f"🆕 *COMMANDE*\n\n📋 `{order_id}`\n👤 {user.first_name} (@{user.username or 'N/A'})\n\n"
-                        f"{format_cart(context.user_data['cart'], context.user_data)}\n💰 *{total}€*\n\n"
-                        f"📍 {context.user_data['adresse']}\n💳 {context.user_data['paiement'].title()}")
+        admin_message = (
+            f"🆕 *COMMANDE*\n\n"
+            f"📋 `{order_id}`\n"
+            f"👤 {user.first_name} (@{user.username or 'N/A'})\n\n"
+            f"{format_cart(context.user_data['cart'], context.user_data)}\n"
+            f"💰 *{total}€*\n\n"
+            f"📍 {context.user_data['adresse']}\n"
+            f"💳 {context.user_data['paiement'].title()}"
+        )
         
-        admin_keyboard = [[InlineKeyboardButton("✅ Valider", callback_data=f"admin_validate_{order_id}_{user.id}")]]
+        admin_keyboard = [[InlineKeyboardButton(
+            "✅ Valider",
+            callback_data=f"admin_validate_{order_id}_{user.id}"
+        )]]
         
         try:
-            await context.bot.send_message(chat_id=ADMIN_ID, text=admin_message,
-                                          reply_markup=InlineKeyboardMarkup(admin_keyboard), parse_mode='Markdown')
-            logger.info(f"✅ Envoyé: {order_id}")
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=admin_message,
+                reply_markup=InlineKeyboardMarkup(admin_keyboard),
+                parse_mode='Markdown'
+            )
+            logger.info(f"✅ Commande: {order_id}")
         except Exception as e:
             logger.error(f"❌ Admin: {e}")
         
-        await query.message.edit_text(f"{tr(context.user_data, 'order_confirmed')}\n\n📋 `{order_id}`\n💰 {total}€",
-                                     parse_mode='Markdown')
+        await query.message.edit_text(
+            f"{tr(context.user_data, 'order_confirmed')}\n\n📋 `{order_id}`\n💰 {total}€",
+            parse_mode='Markdown'
+        )
         context.user_data.clear()
         return ConversationHandler.END
     else:
-        await query.message.edit_text(tr(context.user_data, "order_cancelled"), parse_mode='Markdown')
+        await query.message.edit_text(
+            tr(context.user_data, "order_cancelled"),
+            parse_mode='Markdown'
+        )
         context.user_data.clear()
         return ConversationHandler.END
 
@@ -543,9 +630,15 @@ async def admin_validation_livraison(update: Update, context: ContextTypes.DEFAU
     client_id = int(data_parts[-1])
     
     try:
-        await query.message.edit_text(f"{query.message.text}\n\n✅ *VALIDÉE*", parse_mode='Markdown')
-        await context.bot.send_message(chat_id=client_id, text=f"✅ *Validée !*\n\n📋 `{order_id}`\n\n💚",
-                                      parse_mode='Markdown')
+        await query.message.edit_text(
+            f"{query.message.text}\n\n✅ *VALIDÉE*",
+            parse_mode='Markdown'
+        )
+        await context.bot.send_message(
+            chat_id=client_id,
+            text=f"✅ *Validée !*\n\n📋 `{order_id}`\n\n💚",
+            parse_mode='Markdown'
+        )
         logger.info(f"✅ Validée: {order_id}")
     except Exception as e:
         logger.error(f"❌ Validation: {e}")
@@ -556,7 +649,6 @@ async def error_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Exception: {context.error}", exc_info=context.error)
 
 async def main_async():
-    """Fonction principale async"""
     logger.info("=" * 60)
     logger.info("🤖 BOT TELEGRAM")
     logger.info("=" * 60)
@@ -625,7 +717,6 @@ async def main_async():
     await application.start()
     await application.updater.start_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
     
-    # Maintenir actif
     import signal
     stop_event = asyncio.Event()
     
@@ -642,7 +733,6 @@ async def main_async():
     await application.shutdown()
 
 def main():
-    """Point d'entrée"""
     try:
         asyncio.run(main_async())
     except KeyboardInterrupt:

@@ -1,7 +1,3 @@
-#!/usr/bin/env python3
-"""
-Bot Telegram - Version corrigée pour Python 3.13
-"""
 import os
 import sys
 import logging

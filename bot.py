@@ -1,7 +1,3 @@
-#!/usr/bin/env python3
-"""
-Bot Telegram - Version finale
-"""
 import os
 import sys
 import logging
@@ -641,11 +637,17 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.error(f"❌ Admin: {e}")
         
+        # Message de confirmation avec bouton pour recommander
+        keyboard = [[InlineKeyboardButton("🔄 Nouvelle commande", callback_data="restart_order")]]
+        
         await query.message.edit_text(
             f"{tr(context.user_data, 'order_confirmed')}\n\n📋 `{order_id}`\n💰 {total}€",
+            reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode='Markdown'
         )
-        context.user_data.clear()
+        
+        # NE PAS clear user_data pour pouvoir gérer le restart
+        # context.user_data.clear()
         return ConversationHandler.END
     else:
         await query.message.edit_text(
@@ -654,6 +656,27 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         context.user_data.clear()
         return ConversationHandler.END
+
+@error_handler
+async def restart_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Redémarre une nouvelle commande"""
+    query = update.callback_query
+    await query.answer()
+    
+    user = update.effective_user
+    logger.info(f"🔄 Restart: {user.first_name} ({user.id})")
+    context.user_data.clear()
+    
+    if 'langue' not in context.user_data:
+        context.user_data['langue'] = 'fr'
+    
+    text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
+    keyboard = [
+        [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
+        [InlineKeyboardButton(tr(context.user_data, "contact_admin"), callback_data="contact_admin")]
+    ]
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    return PAYS
 
 @error_handler
 async def admin_validation_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -713,7 +736,86 @@ async def main_async():
         entry_points=[
             CommandHandler('start', start_command),
             CommandHandler('commander', commander_command),
-            CommandHandler('contact', contact_command)
+            CommandHandler('contact', contact_command),
+            CallbackQueryHandler(restart_order, pattern='^restart_order
+            LANGUE: [CallbackQueryHandler(set_langue, pattern='^lang_')],
+            PAYS: [
+                CallbackQueryHandler(menu_navigation, pattern='^(start_order|contact_admin)'),
+                CallbackQueryHandler(choix_pays, pattern='^country_')
+            ],
+            CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, contact_handler)],
+            PRODUIT: [
+                CallbackQueryHandler(choix_produit, pattern='^product_'),
+                CallbackQueryHandler(back_navigation, pattern='^back_')
+            ],
+            PILL_SUBCATEGORY: [
+                CallbackQueryHandler(choix_pill_subcategory, pattern='^pill_'),
+                CallbackQueryHandler(back_navigation, pattern='^back_')
+            ],
+            ROCK_SUBCATEGORY: [
+                CallbackQueryHandler(choix_rock_subcategory, pattern='^rock_'),
+                CallbackQueryHandler(back_navigation, pattern='^back_')
+            ],
+            QUANTITE: [MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_quantite)],
+            CART_MENU: [
+                CallbackQueryHandler(cart_menu, pattern='^(add_more|proceed_checkout)'),
+                CallbackQueryHandler(back_navigation, pattern='^back_')
+            ],
+            ADRESSE: [MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_adresse)],
+            LIVRAISON: [
+                CallbackQueryHandler(choix_livraison, pattern='^delivery_'),
+                CallbackQueryHandler(back_navigation, pattern='^back_')
+            ],
+            PAIEMENT: [
+                CallbackQueryHandler(choix_paiement, pattern='^payment_'),
+                CallbackQueryHandler(back_navigation, pattern='^back_')
+            ],
+            CONFIRMATION: [CallbackQueryHandler(confirmation, pattern='^(confirm_order|cancel)')]
+        },
+        fallbacks=[CommandHandler('start', start_command)],
+        allow_reentry=True,
+        per_message=False
+    )
+    
+    application.add_handler(conv_handler)
+    application.add_handler(CallbackQueryHandler(admin_validation_livraison, pattern='^admin_validate_'))
+    application.add_error_handler(error_callback)
+    
+    logger.info("✅ Handlers configurés")
+    logger.info("=" * 60)
+    logger.info("🚀 EN LIGNE")
+    logger.info("=" * 60)
+    
+    await application.initialize()
+    await application.start()
+    await application.updater.start_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
+    
+    import signal
+    stop_event = asyncio.Event()
+    
+    def stop_handler(signum, frame):
+        stop_event.set()
+    
+    signal.signal(signal.SIGINT, stop_handler)
+    signal.signal(signal.SIGTERM, stop_handler)
+    
+    await stop_event.wait()
+    
+    await application.updater.stop()
+    await application.stop()
+    await application.shutdown()
+
+def main():
+    try:
+        asyncio.run(main_async())
+    except KeyboardInterrupt:
+        logger.info("\n⏹️  Arrêt...")
+    except Exception as e:
+        logger.error(f"❌ Erreur: {e}", exc_info=True)
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main())
         ],
         states={
             LANGUE: [CallbackQueryHandler(set_langue, pattern='^lang_')],

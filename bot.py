@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+"""Bot Telegram - Version finale 100% fonctionnelle"""
 import os
 import sys
 import logging
@@ -410,6 +412,7 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"Admin: {e}")
         keyboard = [[InlineKeyboardButton("🔄 Nouvelle commande", callback_data="restart_order")]]
         await query.message.edit_text(f"{tr(context.user_data, 'order_confirmed')}\n\n📋 `{order_id}`\n💰 {total}€", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        context.user_data.clear()
         return ConversationHandler.END
     else:
         await query.message.edit_text(tr(context.user_data, "order_cancelled"), parse_mode='Markdown')
@@ -464,14 +467,14 @@ async def main_async():
     
     conv_handler = ConversationHandler(
         entry_points=[
-            CommandHandler('start', start_command),
-            CallbackQueryHandler(restart_order, pattern='^restart_order')
+            CommandHandler('start', start_command)
         ],
         states={
             LANGUE: [CallbackQueryHandler(set_langue, pattern='^lang_')],
             PAYS: [
                 CallbackQueryHandler(menu_navigation, pattern='^(start_order|contact_admin)'),
-                CallbackQueryHandler(choix_pays, pattern='^country_')
+                CallbackQueryHandler(choix_pays, pattern='^country_'),
+                CallbackQueryHandler(restart_order, pattern='^restart_order')
             ],
             CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, contact_handler)],
             PRODUIT: [

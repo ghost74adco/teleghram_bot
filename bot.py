@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-"""Bot Telegram - Version finale 100% fonctionnelle"""
 import os
 import sys
 import logging
@@ -97,12 +95,179 @@ TRANSLATIONS = {
         "postal": "✉️ Postale", "express": "⚡ Express",
         "cash": "💵 Espèces", "crypto": "₿ Crypto",
         "total": "💰 *TOTAL :*", "delivery_fee": "📦 *Frais :*",
-        "subtotal": "💵 *Sous-total :*", "back": "🔙 Retour"
+        "subtotal": "💵 *Sous-total :*", "back": "🔙 Retour",
+        "pirate_card": "🏴‍☠️ Carte du Pirate",
+        "choose_country_prices": "🏴‍☠️ *CARTE DU PIRATE*\n\nChoisissez votre pays :",
+        "prices_france": "🇫🇷 Prix France",
+        "prices_switzerland": "🇨🇭 Prix Suisse",
+        "back_to_card": "🔙 Retour carte",
+        "main_menu_btn": "🏠 Menu principal",
+        "price_list_fr": "🇫🇷 *PRIX FRANCE*\n\n❄️ *Coco* : 80€/g\n💊 *Pills* :\n  • Squid Game : 10€\n  • Punisher : 10€\n🫒 *Hash* : 7€/g\n🍀 *Weed* : 10€/g\n🪨 *Crystal* :\n  • MDMA : 50€/g\n  • 4MMC : 50€/g\n\n📦 *Livraison* :\n  • Postale (48-72h) : 10€\n  • Express (30min+) : calculée",
+        "price_list_ch": "🇨🇭 *PRIX SUISSE*\n\n❄️ *Coco* : 100€/g\n💊 *Pills* :\n  • Squid Game : 15€\n  • Punisher : 15€\n🫒 *Hash* : 8€/g\n🍀 *Weed* : 12€/g\n🪨 *Crystal* :\n  • MDMA : 70€/g\n  • 4MMC : 70€/g\n\n📦 *Livraison* :\n  • Postale (48-72h) : 10€\n  • Express (30min+) : calculée",
+        "new_order": "🔄 Nouvelle commande",
+        "address_too_short": "❌ Adresse trop courte"
+    },
+    "en": {
+        "welcome": "🌿 *WELCOME* 🌿\n\n⚠️ *VERSION 2.0*\n\nConversations in *SECRET EXCHANGE*.\n\n🙏 *Thank you* 💪💚",
+        "main_menu": "\n\n📱 *MENU:*",
+        "choose_country": "🌍 *Country:*",
+        "choose_product": "🛒 *Product:*",
+        "choose_pill_type": "💊 *Type:*",
+        "choose_rock_type": "🪨 *Type:*",
+        "enter_quantity": "🔢 *Quantity:*",
+        "enter_address": "📍 *Address:*",
+        "choose_delivery": "📦 *Delivery:*\n\n✉️ Postal: 48-72h, 10€\n⚡ Express: 30min+",
+        "distance_calculated": "📏 {distance} km\n💶 {fee}€",
+        "choose_payment": "💳 *Payment:*",
+        "order_summary": "✅ *SUMMARY*",
+        "confirm": "✅ Confirm", "cancel": "❌ Cancel",
+        "order_confirmed": "✅ *Confirmed!*\n\n📞 Contact soon.",
+        "order_cancelled": "❌ *Cancelled.*",
+        "add_more": "➕ Add more", "proceed": "✅ Proceed",
+        "invalid_quantity": "❌ Invalid (1-{max}).",
+        "cart_title": "🛒 *CART:*",
+        "start_order": "🛒 Order",
+        "contact_admin": "📞 Contact",
+        "contact_message": "📞 *CONTACT*\n\nWrite your message.\n\n💬 Message?",
+        "contact_sent": "✅ *Sent!*\n\nReply soon.",
+        "france": "🇫🇷 France", "switzerland": "🇨🇭 Switzerland",
+        "postal": "✉️ Postal", "express": "⚡ Express",
+        "cash": "💵 Cash", "crypto": "₿ Crypto",
+        "total": "💰 *TOTAL:*", "delivery_fee": "📦 *Fee:*",
+        "subtotal": "💵 *Subtotal:*", "back": "🔙 Back",
+        "pirate_card": "🏴‍☠️ Pirate Card",
+        "choose_country_prices": "🏴‍☠️ *PIRATE CARD*\n\nChoose your country:",
+        "prices_france": "🇫🇷 France Prices",
+        "prices_switzerland": "🇨🇭 Switzerland Prices",
+        "back_to_card": "🔙 Back to card",
+        "main_menu_btn": "🏠 Main menu",
+        "price_list_fr": "🇫🇷 *FRANCE PRICES*\n\n❄️ *Coco*: 80€/g\n💊 *Pills*:\n  • Squid Game: 10€\n  • Punisher: 10€\n🫒 *Hash*: 7€/g\n🍀 *Weed*: 10€/g\n🪨 *Crystal*:\n  • MDMA: 50€/g\n  • 4MMC: 50€/g\n\n📦 *Delivery*:\n  • Postal (48-72h): 10€\n  • Express (30min+): calculated",
+        "price_list_ch": "🇨🇭 *SWITZERLAND PRICES*\n\n❄️ *Coco*: 100€/g\n💊 *Pills*:\n  • Squid Game: 15€\n  • Punisher: 15€\n🫒 *Hash*: 8€/g\n🍀 *Weed*: 12€/g\n🪨 *Crystal*:\n  • MDMA: 70€/g\n  • 4MMC: 70€/g\n\n📦 *Delivery*:\n  • Postal (48-72h): 10€\n  • Express (30min+): calculated",
+        "new_order": "🔄 New order",
+        "address_too_short": "❌ Address too short"
+    },
+    "de": {
+        "welcome": "🌿 *WILLKOMMEN* 🌿\n\n⚠️ *VERSION 2.0*\n\nGespräche im *GEHEIMEN AUSTAUSCH*.\n\n🙏 *Danke* 💪💚",
+        "main_menu": "\n\n📱 *MENÜ:*",
+        "choose_country": "🌍 *Land:*",
+        "choose_product": "🛒 *Produkt:*",
+        "choose_pill_type": "💊 *Typ:*",
+        "choose_rock_type": "🪨 *Typ:*",
+        "enter_quantity": "🔢 *Menge:*",
+        "enter_address": "📍 *Adresse:*",
+        "choose_delivery": "📦 *Lieferung:*\n\n✉️ Post: 48-72h, 10€\n⚡ Express: 30min+",
+        "distance_calculated": "📏 {distance} km\n💶 {fee}€",
+        "choose_payment": "💳 *Zahlung:*",
+        "order_summary": "✅ *ZUSAMMENFASSUNG*",
+        "confirm": "✅ Bestätigen", "cancel": "❌ Abbrechen",
+        "order_confirmed": "✅ *Bestätigt!*\n\n📞 Kontakt bald.",
+        "order_cancelled": "❌ *Abgebrochen.*",
+        "add_more": "➕ Mehr hinzufügen", "proceed": "✅ Weiter",
+        "invalid_quantity": "❌ Ungültig (1-{max}).",
+        "cart_title": "🛒 *WARENKORB:*",
+        "start_order": "🛒 Bestellen",
+        "contact_admin": "📞 Kontakt",
+        "contact_message": "📞 *KONTAKT*\n\nSchreiben Sie Ihre Nachricht.\n\n💬 Nachricht?",
+        "contact_sent": "✅ *Gesendet!*\n\nAntwort bald.",
+        "france": "🇫🇷 Frankreich", "switzerland": "🇨🇭 Schweiz",
+        "postal": "✉️ Post", "express": "⚡ Express",
+        "cash": "💵 Bar", "crypto": "₿ Krypto",
+        "total": "💰 *GESAMT:*", "delivery_fee": "📦 *Gebühr:*",
+        "subtotal": "💵 *Zwischensumme:*", "back": "🔙 Zurück",
+        "pirate_card": "🏴‍☠️ Piratenkarte",
+        "choose_country_prices": "🏴‍☠️ *PIRATENKARTE*\n\nWählen Sie Ihr Land:",
+        "prices_france": "🇫🇷 Preise Frankreich",
+        "prices_switzerland": "🇨🇭 Preise Schweiz",
+        "back_to_card": "🔙 Zurück zur Karte",
+        "main_menu_btn": "🏠 Hauptmenü",
+        "price_list_fr": "🇫🇷 *PREISE FRANKREICH*\n\n❄️ *Coco*: 80€/g\n💊 *Pillen*:\n  • Squid Game: 10€\n  • Punisher: 10€\n🫒 *Hash*: 7€/g\n🍀 *Weed*: 10€/g\n🪨 *Kristall*:\n  • MDMA: 50€/g\n  • 4MMC: 50€/g\n\n📦 *Lieferung*:\n  • Post (48-72h): 10€\n  • Express (30min+): berechnet",
+        "price_list_ch": "🇨🇭 *PREISE SCHWEIZ*\n\n❄️ *Coco*: 100€/g\n💊 *Pillen*:\n  • Squid Game: 15€\n  • Punisher: 15€\n🫒 *Hash*: 8€/g\n🍀 *Weed*: 12€/g\n🪨 *Kristall*:\n  • MDMA: 70€/g\n  • 4MMC: 70€/g\n\n📦 *Lieferung*:\n  • Post (48-72h): 10€\n  • Express (30min+): berechnet",
+        "new_order": "🔄 Neue Bestellung",
+        "address_too_short": "❌ Adresse zu kurz"
+    },
+    "es": {
+        "welcome": "🌿 *BIENVENIDO* 🌿\n\n⚠️ *VERSIÓN 2.0*\n\nConversaciones en *INTERCAMBIO SECRETO*.\n\n🙏 *Gracias* 💪💚",
+        "main_menu": "\n\n📱 *MENÚ:*",
+        "choose_country": "🌍 *País:*",
+        "choose_product": "🛒 *Producto:*",
+        "choose_pill_type": "💊 *Tipo:*",
+        "choose_rock_type": "🪨 *Tipo:*",
+        "enter_quantity": "🔢 *Cantidad:*",
+        "enter_address": "📍 *Dirección:*",
+        "choose_delivery": "📦 *Entrega:*\n\n✉️ Postal: 48-72h, 10€\n⚡ Express: 30min+",
+        "distance_calculated": "📏 {distance} km\n💶 {fee}€",
+        "choose_payment": "💳 *Pago:*",
+        "order_summary": "✅ *RESUMEN*",
+        "confirm": "✅ Confirmar", "cancel": "❌ Cancelar",
+        "order_confirmed": "✅ *¡Confirmado!*\n\n📞 Contacto pronto.",
+        "order_cancelled": "❌ *Cancelado.*",
+        "add_more": "➕ Añadir más", "proceed": "✅ Continuar",
+        "invalid_quantity": "❌ Inválido (1-{max}).",
+        "cart_title": "🛒 *CARRITO:*",
+        "start_order": "🛒 Pedir",
+        "contact_admin": "📞 Contactar",
+        "contact_message": "📞 *CONTACTO*\n\nEscriba su mensaje.\n\n💬 ¿Mensaje?",
+        "contact_sent": "✅ *¡Enviado!*\n\nRespuesta pronto.",
+        "france": "🇫🇷 Francia", "switzerland": "🇨🇭 Suiza",
+        "postal": "✉️ Postal", "express": "⚡ Express",
+        "cash": "💵 Efectivo", "crypto": "₿ Cripto",
+        "total": "💰 *TOTAL:*", "delivery_fee": "📦 *Gastos:*",
+        "subtotal": "💵 *Subtotal:*", "back": "🔙 Volver",
+        "pirate_card": "🏴‍☠️ Carta Pirata",
+        "choose_country_prices": "🏴‍☠️ *CARTA PIRATA*\n\nElija su país:",
+        "prices_france": "🇫🇷 Precios Francia",
+        "prices_switzerland": "🇨🇭 Precios Suiza",
+        "back_to_card": "🔙 Volver a carta",
+        "main_menu_btn": "🏠 Menú principal",
+        "price_list_fr": "🇫🇷 *PRECIOS FRANCIA*\n\n❄️ *Coco*: 80€/g\n💊 *Pastillas*:\n  • Squid Game: 10€\n  • Punisher: 10€\n🫒 *Hash*: 7€/g\n🍀 *Weed*: 10€/g\n🪨 *Cristal*:\n  • MDMA: 50€/g\n  • 4MMC: 50€/g\n\n📦 *Entrega*:\n  • Postal (48-72h): 10€\n  • Express (30min+): calculado",
+        "price_list_ch": "🇨🇭 *PRECIOS SUIZA*\n\n❄️ *Coco*: 100€/g\n💊 *Pastillas*:\n  • Squid Game: 15€\n  • Punisher: 15€\n🫒 *Hash*: 8€/g\n🍀 *Weed*: 12€/g\n🪨 *Cristal*:\n  • MDMA: 70€/g\n  • 4MMC: 70€/g\n\n📦 *Entrega*:\n  • Postal (48-72h): 10€\n  • Express (30min+): calculado",
+        "new_order": "🔄 Nuevo pedido",
+        "address_too_short": "❌ Dirección muy corta"
+    },
+    "it": {
+        "welcome": "🌿 *BENVENUTO* 🌿\n\n⚠️ *VERSIONE 2.0*\n\nConversazioni in *SCAMBIO SEGRETO*.\n\n🙏 *Grazie* 💪💚",
+        "main_menu": "\n\n📱 *MENU:*",
+        "choose_country": "🌍 *Paese:*",
+        "choose_product": "🛒 *Prodotto:*",
+        "choose_pill_type": "💊 *Tipo:*",
+        "choose_rock_type": "🪨 *Tipo:*",
+        "enter_quantity": "🔢 *Quantità:*",
+        "enter_address": "📍 *Indirizzo:*",
+        "choose_delivery": "📦 *Consegna:*\n\n✉️ Postale: 48-72h, 10€\n⚡ Express: 30min+",
+        "distance_calculated": "📏 {distance} km\n💶 {fee}€",
+        "choose_payment": "💳 *Pagamento:*",
+        "order_summary": "✅ *RIEPILOGO*",
+        "confirm": "✅ Confermare", "cancel": "❌ Annullare",
+        "order_confirmed": "✅ *Confermato!*\n\n📞 Contatto presto.",
+        "order_cancelled": "❌ *Annullato.*",
+        "add_more": "➕ Aggiungi altro", "proceed": "✅ Continua",
+        "invalid_quantity": "❌ Non valido (1-{max}).",
+        "cart_title": "🛒 *CARRELLO:*",
+        "start_order": "🛒 Ordina",
+        "contact_admin": "📞 Contatta",
+        "contact_message": "📞 *CONTATTO*\n\nScrivi il tuo messaggio.\n\n💬 Messaggio?",
+        "contact_sent": "✅ *Inviato!*\n\nRisposta presto.",
+        "france": "🇫🇷 Francia", "switzerland": "🇨🇭 Svizzera",
+        "postal": "✉️ Postale", "express": "⚡ Express",
+        "cash": "💵 Contanti", "crypto": "₿ Crypto",
+        "total": "💰 *TOTALE:*", "delivery_fee": "📦 *Spese:*",
+        "subtotal": "💵 *Subtotale:*", "back": "🔙 Indietro",
+        "pirate_card": "🏴‍☠️ Carta Pirata",
+        "choose_country_prices": "🏴‍☠️ *CARTA PIRATA*\n\nScegli il tuo paese:",
+        "prices_france": "🇫🇷 Prezzi Francia",
+        "prices_switzerland": "🇨🇭 Prezzi Svizzera",
+        "back_to_card": "🔙 Torna alla carta",
+        "main_menu_btn": "🏠 Menu principale",
+        "price_list_fr": "🇫🇷 *PREZZI FRANCIA*\n\n❄️ *Coco*: 80€/g\n💊 *Pillole*:\n  • Squid Game: 10€\n  • Punisher: 10€\n🫒 *Hash*: 7€/g\n🍀 *Weed*: 10€/g\n🪨 *Cristallo*:\n  • MDMA: 50€/g\n  • 4MMC: 50€/g\n\n📦 *Consegna*:\n  • Postale (48-72h): 10€\n  • Express (30min+): calcolato",
+        "price_list_ch": "🇨🇭 *PREZZI SVIZZERA*\n\n❄️ *Coco*: 100€/g\n💊 *Pillole*:\n  • Squid Game: 15€\n  • Punisher: 15€\n🫒 *Hash*: 8€/g\n🍀 *Weed*: 12€/g\n🪨 *Cristallo*:\n  • MDMA: 70€/g\n  • 4MMC: 70€/g\n\n📦 *Consegna*:\n  • Postale (48-72h): 10€\n  • Express (30min+): calcolato",
+        "new_order": "🔄 Nuovo ordine",
+        "address_too_short": "❌ Indirizzo troppo corto"
     }
 }
 
 def tr(user_data, key):
-    t = TRANSLATIONS.get("fr", {}).get(key, key)
+    lang = user_data.get('langue', 'fr')
+    t = TRANSLATIONS.get(lang, TRANSLATIONS['fr']).get(key, key)
     return t.replace("{max}", str(MAX_QUANTITY_PER_PRODUCT)) if "{max}" in t else t
 
 def sanitize_input(text, max_length=300):
@@ -143,7 +308,7 @@ def save_order_to_csv(order_data):
     try:
         file_exists = csv_path.exists()
         with open(csv_path, 'a', newline='', encoding='utf-8') as f:
-            fieldnames = ['date', 'order_id', 'user_id', 'username', 'first_name', 'products', 'country', 'address', 'delivery_type', 'distance_km', 'payment_method', 'subtotal', 'delivery_fee', 'total', 'status']
+            fieldnames = ['date', 'order_id', 'user_id', 'username', 'first_name', 'language', 'products', 'country', 'address', 'delivery_type', 'distance_km', 'payment_method', 'subtotal', 'delivery_fee', 'total', 'status']
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             if not file_exists:
                 writer.writeheader()
@@ -175,19 +340,26 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     logger.info(f"👤 /start: {user.first_name}")
     context.user_data.clear()
-    keyboard = [[InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")]]
-    await update.message.reply_text("🌍 *Langue*", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    keyboard = [
+        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
+        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
+        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")],
+        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
+        [InlineKeyboardButton("🇮🇹 Italiano", callback_data="lang_it")]
+    ]
+    await update.message.reply_text("🌍 *Langue / Language / Sprache / Idioma / Lingua*", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return LANGUE
 
 @error_handler
 async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    context.user_data['langue'] = 'fr'
+    lang_code = query.data.replace("lang_", "")
+    context.user_data['langue'] = lang_code
     text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
     keyboard = [
         [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
-        [InlineKeyboardButton("🏴‍☠️ Carte du Pirate", callback_data="voir_carte")],
+        [InlineKeyboardButton(tr(context.user_data, "pirate_card"), callback_data="voir_carte")],
         [InlineKeyboardButton(tr(context.user_data, "contact_admin"), callback_data="contact_admin")]
     ]
     await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
@@ -199,11 +371,11 @@ async def voir_carte(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     keyboard = [
-        [InlineKeyboardButton("🇫🇷 Prix France", callback_data="prix_france")],
-        [InlineKeyboardButton("🇨🇭 Prix Suisse", callback_data="prix_suisse")],
-        [InlineKeyboardButton("🔙 Retour", callback_data="back_to_main_menu")]
+        [InlineKeyboardButton(tr(context.user_data, "prices_france"), callback_data="prix_france")],
+        [InlineKeyboardButton(tr(context.user_data, "prices_switzerland"), callback_data="prix_suisse")],
+        [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_main_menu")]
     ]
-    await query.message.edit_text("🏴‍☠️ *CARTE DU PIRATE*\n\nChoisissez votre pays :", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    await query.message.edit_text(tr(context.user_data, "choose_country_prices"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return PAYS
 
 @error_handler
@@ -213,42 +385,14 @@ async def afficher_prix(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     if query.data == "prix_france":
-        text = (
-            "🇫🇷 *PRIX FRANCE*\n\n"
-            "❄️ *Coco* : 80€/g\n"
-            "💊 *Pills* :\n"
-            "  • Squid Game : 10€\n"
-            "  • Punisher : 10€\n"
-            "🫒 *Hash* : 7€/g\n"
-            "🍀 *Weed* : 10€/g\n"
-            "🪨 *Crystal* :\n"
-            "  • MDMA : 50€/g\n"
-            "  • 4MMC : 50€/g\n\n"
-            "📦 *Livraison* :\n"
-            "  • Postale (48-72h) : 10€\n"
-            "  • Express (30min+) : calculée"
-        )
+        text = tr(context.user_data, "price_list_fr")
     else:  # prix_suisse
-        text = (
-            "🇨🇭 *PRIX SUISSE*\n\n"
-            "❄️ *Coco* : 100€/g\n"
-            "💊 *Pills* :\n"
-            "  • Squid Game : 15€\n"
-            "  • Punisher : 15€\n"
-            "🫒 *Hash* : 8€/g\n"
-            "🍀 *Weed* : 12€/g\n"
-            "🪨 *Crystal* :\n"
-            "  • MDMA : 70€/g\n"
-            "  • 4MMC : 70€/g\n\n"
-            "📦 *Livraison* :\n"
-            "  • Postale (48-72h) : 10€\n"
-            "  • Express (30min+) : calculée"
-        )
+        text = tr(context.user_data, "price_list_ch")
     
     keyboard = [
-        [InlineKeyboardButton("🛒 Commander", callback_data="start_order")],
-        [InlineKeyboardButton("🔙 Retour carte", callback_data="voir_carte")],
-        [InlineKeyboardButton("🏠 Menu principal", callback_data="back_to_main_menu")]
+        [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
+        [InlineKeyboardButton(tr(context.user_data, "back_to_card"), callback_data="voir_carte")],
+        [InlineKeyboardButton(tr(context.user_data, "main_menu_btn"), callback_data="back_to_main_menu")]
     ]
     await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return PAYS
@@ -261,7 +405,7 @@ async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
     keyboard = [
         [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
-        [InlineKeyboardButton("🏴‍☠️ Carte du Pirate", callback_data="voir_carte")],
+        [InlineKeyboardButton(tr(context.user_data, "pirate_card"), callback_data="voir_carte")],
         [InlineKeyboardButton(tr(context.user_data, "contact_admin"), callback_data="contact_admin")]
     ]
     await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
@@ -285,7 +429,9 @@ async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     message_text = sanitize_input(update.message.text, 1000)
-    admin_message = f"📞 *MESSAGE*\n\n👤 {user.first_name} (@{user.username or 'N/A'})\n🆔 `{user.id}`\n\n💬 {message_text}"
+    user_lang = context.user_data.get('langue', 'fr')
+    lang_names = {'fr': 'Français', 'en': 'English', 'de': 'Deutsch', 'es': 'Español', 'it': 'Italiano'}
+    admin_message = f"📞 *MESSAGE* ({lang_names.get(user_lang, user_lang)})\n\n👤 {user.first_name} (@{user.username or 'N/A'})\n🆔 `{user.id}`\n\n💬 {message_text}"
     try:
         await context.bot.send_message(chat_id=ADMIN_ID, text=admin_message, parse_mode='Markdown')
         await update.message.reply_text(tr(context.user_data, "contact_sent"), parse_mode='Markdown')
@@ -390,7 +536,7 @@ async def cart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def saisie_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     address = sanitize_input(update.message.text, 300)
     if len(address) < 15:
-        await update.message.reply_text("❌ Adresse trop courte")
+        await update.message.reply_text(tr(context.user_data, "address_too_short"))
         return ADRESSE
     context.user_data['adresse'] = address
     keyboard = [
@@ -435,6 +581,7 @@ async def back_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
         keyboard = [
             [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
+            [InlineKeyboardButton(tr(context.user_data, "pirate_card"), callback_data="voir_carte")],
             [InlineKeyboardButton(tr(context.user_data, "contact_admin"), callback_data="contact_admin")]
         ]
         await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
@@ -472,23 +619,43 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = update.effective_user
         total, subtotal, delivery_fee = calculate_total(context.user_data['cart'], context.user_data['pays'], context.user_data['livraison'], context.user_data.get('distance', 0))
         order_id = f"ORD-{datetime.now().strftime('%Y%m%d%H%M%S')}-{user.id}"
+        user_lang = context.user_data.get('langue', 'fr')
+        lang_names = {'fr': 'Français', 'en': 'English', 'de': 'Deutsch', 'es': 'Español', 'it': 'Italiano'}
+        
         order_data = {
-            'date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'order_id': order_id, 'user_id': user.id, 'username': user.username or "N/A", 'first_name': user.first_name or "N/A",
+            'date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 
+            'order_id': order_id, 
+            'user_id': user.id, 
+            'username': user.username or "N/A", 
+            'first_name': user.first_name or "N/A",
+            'language': lang_names.get(user_lang, user_lang),
             'products': "; ".join([f"{item['produit']} x{item['quantite']}" for item in context.user_data['cart']]),
-            'country': context.user_data['pays'], 'address': context.user_data['adresse'], 'delivery_type': context.user_data['livraison'], 'distance_km': context.user_data.get('distance', 0),
-            'payment_method': context.user_data['paiement'], 'subtotal': str(round(subtotal, 2)), 'delivery_fee': str(round(delivery_fee, 2)), 'total': str(round(total, 2)), 'status': 'En attente'
+            'country': context.user_data['pays'], 
+            'address': context.user_data['adresse'], 
+            'delivery_type': context.user_data['livraison'], 
+            'distance_km': context.user_data.get('distance', 0),
+            'payment_method': context.user_data['paiement'], 
+            'subtotal': str(round(subtotal, 2)), 
+            'delivery_fee': str(round(delivery_fee, 2)), 
+            'total': str(round(total, 2)), 
+            'status': 'En attente'
         }
         save_order_to_csv(order_data)
-        admin_message = f"🆕 *COMMANDE*\n\n📋 `{order_id}`\n👤 {user.first_name} (@{user.username or 'N/A'})\n\n{format_cart(context.user_data['cart'], context.user_data)}\n💰 *{total}€*\n\n📍 {context.user_data['adresse']}\n💳 {context.user_data['paiement'].title()}"
+        
+        # Message admin toujours en français
+        admin_message = f"🆕 *COMMANDE* ({lang_names.get(user_lang, user_lang)})\n\n📋 `{order_id}`\n👤 {user.first_name} (@{user.username or 'N/A'})\n\n🛒 *PANIER :*\n"
+        for item in context.user_data['cart']:
+            admin_message += f"• {item['produit']} x {item['quantite']}\n"
+        admin_message += f"\n💰 *TOTAL : {total}€*\n💵 Sous-total : {subtotal}€\n📦 Frais : {delivery_fee}€\n\n📍 {context.user_data['adresse']}\n📦 {context.user_data['livraison'].title()}\n💳 {context.user_data['paiement'].title()}"
+        
         admin_keyboard = [[InlineKeyboardButton("✅ Valider", callback_data=f"admin_validate_{order_id}_{user.id}")]]
         try:
             await context.bot.send_message(chat_id=ADMIN_ID, text=admin_message, reply_markup=InlineKeyboardMarkup(admin_keyboard), parse_mode='Markdown')
         except Exception as e:
             logger.error(f"Admin: {e}")
-        keyboard = [[InlineKeyboardButton("🔄 Nouvelle commande", callback_data="restart_order")]]
+        
+        keyboard = [[InlineKeyboardButton(tr(context.user_data, "new_order"), callback_data="restart_order")]]
         await query.message.edit_text(f"{tr(context.user_data, 'order_confirmed')}\n\n📋 `{order_id}`\n💰 {total}€", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-        # NE PAS clear avant que l'utilisateur clique sur le bouton
-        # context.user_data.clear() sera fait dans restart_order
         return ConversationHandler.END
     else:
         await query.message.edit_text(tr(context.user_data, "order_cancelled"), parse_mode='Markdown')
@@ -499,11 +666,13 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def restart_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    saved_lang = context.user_data.get('langue', 'fr')
     context.user_data.clear()
-    context.user_data['langue'] = 'fr'
+    context.user_data['langue'] = saved_lang
     text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
     keyboard = [
         [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
+        [InlineKeyboardButton(tr(context.user_data, "pirate_card"), callback_data="voir_carte")],
         [InlineKeyboardButton(tr(context.user_data, "contact_admin"), callback_data="contact_admin")]
     ]
     await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
@@ -531,10 +700,11 @@ async def error_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def main_async():
     logger.info("=" * 60)
-    logger.info("🤖 BOT TELEGRAM")
+    logger.info("🤖 BOT TELEGRAM MULTILINGUE")
     logger.info("=" * 60)
     logger.info(f"📱 Token: {TOKEN[:15]}...")
     logger.info(f"👤 Admin: {ADMIN_ID}")
+    logger.info("🌍 Langues: FR, EN, DE, ES, IT")
     logger.info("=" * 60)
     application = Application.builder().token(TOKEN).build()
     logger.info("✅ Application créée")
@@ -550,7 +720,10 @@ async def main_async():
             PAYS: [
                 CallbackQueryHandler(menu_navigation, pattern='^(start_order|contact_admin)'),
                 CallbackQueryHandler(choix_pays, pattern='^country_'),
-                CallbackQueryHandler(restart_order, pattern='^restart_order')
+                CallbackQueryHandler(restart_order, pattern='^restart_order'),
+                CallbackQueryHandler(voir_carte, pattern='^voir_carte'),
+                CallbackQueryHandler(afficher_prix, pattern='^prix_(france|suisse)'),
+                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu')
             ],
             ConversationHandler.TIMEOUT: [
                 CallbackQueryHandler(restart_order, pattern='^restart_order')

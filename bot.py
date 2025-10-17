@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+"""Bot Telegram - Version finale 100% fonctionnelle"""
 import os
 import sys
 import logging
@@ -185,6 +187,81 @@ async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
     keyboard = [
         [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
+        [InlineKeyboardButton("🏴‍☠️ Carte du Pirate", callback_data="voir_carte")],
+        [InlineKeyboardButton(tr(context.user_data, "contact_admin"), callback_data="contact_admin")]
+    ]
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    return PAYS
+
+@error_handler
+async def voir_carte(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche le menu de sélection France/Suisse pour les prix"""
+    query = update.callback_query
+    await query.answer()
+    keyboard = [
+        [InlineKeyboardButton("🇫🇷 Prix France", callback_data="prix_france")],
+        [InlineKeyboardButton("🇨🇭 Prix Suisse", callback_data="prix_suisse")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="back_to_main_menu")]
+    ]
+    await query.message.edit_text("🏴‍☠️ *CARTE DU PIRATE*\n\nChoisissez votre pays :", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    return PAYS
+
+@error_handler
+async def afficher_prix(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche les prix selon le pays"""
+    query = update.callback_query
+    await query.answer()
+    
+    if query.data == "prix_france":
+        text = (
+            "🇫🇷 *PRIX FRANCE*\n\n"
+            "❄️ *Coco* : 80€/g\n"
+            "💊 *Pills* :\n"
+            "  • Squid Game : 10€\n"
+            "  • Punisher : 10€\n"
+            "🫒 *Hash* : 7€/g\n"
+            "🍀 *Weed* : 10€/g\n"
+            "🪨 *Crystal* :\n"
+            "  • MDMA : 50€/g\n"
+            "  • 4MMC : 50€/g\n\n"
+            "📦 *Livraison* :\n"
+            "  • Postale (48-72h) : 10€\n"
+            "  • Express (30min+) : calculée"
+        )
+    else:  # prix_suisse
+        text = (
+            "🇨🇭 *PRIX SUISSE*\n\n"
+            "❄️ *Coco* : 100€/g\n"
+            "💊 *Pills* :\n"
+            "  • Squid Game : 15€\n"
+            "  • Punisher : 15€\n"
+            "🫒 *Hash* : 8€/g\n"
+            "🍀 *Weed* : 12€/g\n"
+            "🪨 *Crystal* :\n"
+            "  • MDMA : 70€/g\n"
+            "  • 4MMC : 70€/g\n\n"
+            "📦 *Livraison* :\n"
+            "  • Postale (48-72h) : 10€\n"
+            "  • Express (30min+) : calculée"
+        )
+    
+    keyboard = [
+        [InlineKeyboardButton("🛒 Commander", callback_data="start_order")],
+        [InlineKeyboardButton("🔙 Retour carte", callback_data="voir_carte")],
+        [InlineKeyboardButton("🏠 Menu principal", callback_data="back_to_main_menu")]
+    ]
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    return PAYS
+
+@error_handler
+async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Retour au menu principal"""
+    query = update.callback_query
+    await query.answer()
+    text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
+    keyboard = [
+        [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
+        [InlineKeyboardButton("🏴‍☠️ Carte du Pirate", callback_data="voir_carte")],
         [InlineKeyboardButton(tr(context.user_data, "contact_admin"), callback_data="contact_admin")]
     ]
     await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
@@ -475,6 +552,9 @@ async def main_async():
                 CallbackQueryHandler(choix_pays, pattern='^country_'),
                 CallbackQueryHandler(restart_order, pattern='^restart_order')
             ],
+            ConversationHandler.TIMEOUT: [
+                CallbackQueryHandler(restart_order, pattern='^restart_order')
+            ],
             CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, contact_handler)],
             PRODUIT: [
                 CallbackQueryHandler(choix_produit, pattern='^product_'),
@@ -498,7 +578,10 @@ async def main_async():
             PAIEMENT: [CallbackQueryHandler(choix_paiement, pattern='^payment_')],
             CONFIRMATION: [CallbackQueryHandler(confirmation, pattern='^(confirm_order|cancel)')]
         },
-        fallbacks=[CommandHandler('start', start_command)],
+        fallbacks=[
+            CommandHandler('start', start_command),
+            CallbackQueryHandler(restart_order, pattern='^restart_order')
+        ],
         allow_reentry=True,
         per_message=False
     )

@@ -5,11 +5,12 @@ import re
 import csv
 import math
 import asyncio
+import json
 from dotenv import load_dotenv
 from pathlib import Path
 from functools import wraps
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 
 # FIX PYTHON 3.13
 if sys.version_info >= (3, 13):
@@ -60,12 +61,18 @@ FRAIS_POSTAL = 10
 
 LANGUE, PAYS, PRODUIT, PILL_SUBCATEGORY, ROCK_SUBCATEGORY = range(5)
 QUANTITE, CART_MENU, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION, CONTACT = range(5, 12)
+ADMIN_HORAIRES_MENU, ADMIN_HORAIRES_INPUT = range(12, 14)
 
 PILL_SUBCATEGORIES = {"squid_game": "💊 Squid Game", "punisher": "💊 Punisher"}
 ROCK_SUBCATEGORIES = {"mdma": "🪨 MDMA", "fourmmc": "🪨 4MMC"}
 
 PRIX_FR = {"❄️ Coco": 80, "💊 Squid Game": 10, "💊 Punisher": 10, "🫒 Hash": 7, "🍀 Weed": 10, "🪨 MDMA": 50, "🪨 4MMC": 50}
 PRIX_CH = {"❄️ Coco": 100, "💊 Squid Game": 15, "💊 Punisher": 15, "🫒 Hash": 8, "🍀 Weed": 12, "🪨 MDMA": 70, "🪨 4MMC": 70}
+
+# Fichiers de configuration
+HORAIRES_FILE = Path(__file__).parent / "horaires.json"
+STATS_FILE = Path(__file__).parent / "stats.json"
+PENDING_MESSAGES_FILE = Path(__file__).parent / "pending_messages.json"
 
 TRANSLATIONS = {
     "fr": {
@@ -105,7 +112,8 @@ TRANSLATIONS = {
         "price_list_fr": "🇫🇷 *PRIX FRANCE*\n\n❄️ *Coco* : 80€/g\n💊 *Pills* :\n  • Squid Game : 10€\n  • Punisher : 10€\n🫒 *Hash* : 7€/g\n🍀 *Weed* : 10€/g\n🪨 *Crystal* :\n  • MDMA : 50€/g\n  • 4MMC : 50€/g\n\n📦 *Livraison* :\n  • Postale (48-72h) : 10€\n  • Express (30min+) : calculée",
         "price_list_ch": "🇨🇭 *PRIX SUISSE*\n\n❄️ *Coco* : 100€/g\n💊 *Pills* :\n  • Squid Game : 15€\n  • Punisher : 15€\n🫒 *Hash* : 8€/g\n🍀 *Weed* : 12€/g\n🪨 *Crystal* :\n  • MDMA : 70€/g\n  • 4MMC : 70€/g\n\n📦 *Livraison* :\n  • Postale (48-72h) : 10€\n  • Express (30min+) : calculée",
         "new_order": "🔄 Nouvelle commande",
-        "address_too_short": "❌ Adresse trop courte"
+        "address_too_short": "❌ Adresse trop courte",
+        "outside_hours": "⏰ Livraisons fermées.\n\nHoraires : {hours}"
     },
     "en": {
         "welcome": "🌿 *WELCOME* 🌿\n\n⚠️ *VERSION 2.0*\n\nConversations in *SECRET EXCHANGE*.\n\n🙏 *Thank you* 💪💚",
@@ -144,7 +152,8 @@ TRANSLATIONS = {
         "price_list_fr": "🇫🇷 *FRANCE PRICES*\n\n❄️ *Coco*: 80€/g\n💊 *Pills*:\n  • Squid Game: 10€\n  • Punisher: 10€\n🫒 *Hash*: 7€/g\n🍀 *Weed*: 10€/g\n🪨 *Crystal*:\n  • MDMA: 50€/g\n  • 4MMC: 50€/g\n\n📦 *Delivery*:\n  • Postal (48-72h): 10€\n  • Express (30min+): calculated",
         "price_list_ch": "🇨🇭 *SWITZERLAND PRICES*\n\n❄️ *Coco*: 100€/g\n💊 *Pills*:\n  • Squid Game: 15€\n  • Punisher: 15€\n🫒 *Hash*: 8€/g\n🍀 *Weed*: 12€/g\n🪨 *Crystal*:\n  • MDMA: 70€/g\n  • 4MMC: 70€/g\n\n📦 *Delivery*:\n  • Postal (48-72h): 10€\n  • Express (30min+): calculated",
         "new_order": "🔄 New order",
-        "address_too_short": "❌ Address too short"
+        "address_too_short": "❌ Address too short",
+        "outside_hours": "⏰ Deliveries closed.\n\nHours: {hours}"
     },
     "de": {
         "welcome": "🌿 *WILLKOMMEN* 🌿\n\n⚠️ *VERSION 2.0*\n\nGespräche im *GEHEIMEN AUSTAUSCH*.\n\n🙏 *Danke* 💪💚",
@@ -183,7 +192,8 @@ TRANSLATIONS = {
         "price_list_fr": "🇫🇷 *PREISE FRANKREICH*\n\n❄️ *Coco*: 80€/g\n💊 *Pillen*:\n  • Squid Game: 10€\n  • Punisher: 10€\n🫒 *Hash*: 7€/g\n🍀 *Weed*: 10€/g\n🪨 *Kristall*:\n  • MDMA: 50€/g\n  • 4MMC: 50€/g\n\n📦 *Lieferung*:\n  • Post (48-72h): 10€\n  • Express (30min+): berechnet",
         "price_list_ch": "🇨🇭 *PREISE SCHWEIZ*\n\n❄️ *Coco*: 100€/g\n💊 *Pillen*:\n  • Squid Game: 15€\n  • Punisher: 15€\n🫒 *Hash*: 8€/g\n🍀 *Weed*: 12€/g\n🪨 *Kristall*:\n  • MDMA: 70€/g\n  • 4MMC: 70€/g\n\n📦 *Lieferung*:\n  • Post (48-72h): 10€\n  • Express (30min+): berechnet",
         "new_order": "🔄 Neue Bestellung",
-        "address_too_short": "❌ Adresse zu kurz"
+        "address_too_short": "❌ Adresse zu kurz",
+        "outside_hours": "⏰ Lieferungen geschlossen.\n\nZeiten: {hours}"
     },
     "es": {
         "welcome": "🌿 *BIENVENIDO* 🌿\n\n⚠️ *VERSIÓN 2.0*\n\nConversaciones en *INTERCAMBIO SECRETO*.\n\n🙏 *Gracias* 💪💚",
@@ -222,7 +232,8 @@ TRANSLATIONS = {
         "price_list_fr": "🇫🇷 *PRECIOS FRANCIA*\n\n❄️ *Coco*: 80€/g\n💊 *Pastillas*:\n  • Squid Game: 10€\n  • Punisher: 10€\n🫒 *Hash*: 7€/g\n🍀 *Weed*: 10€/g\n🪨 *Cristal*:\n  • MDMA: 50€/g\n  • 4MMC: 50€/g\n\n📦 *Entrega*:\n  • Postal (48-72h): 10€\n  • Express (30min+): calculado",
         "price_list_ch": "🇨🇭 *PRECIOS SUIZA*\n\n❄️ *Coco*: 100€/g\n💊 *Pastillas*:\n  • Squid Game: 15€\n  • Punisher: 15€\n🫒 *Hash*: 8€/g\n🍀 *Weed*: 12€/g\n🪨 *Cristal*:\n  • MDMA: 70€/g\n  • 4MMC: 70€/g\n\n📦 *Entrega*:\n  • Postal (48-72h): 10€\n  • Express (30min+): calculado",
         "new_order": "🔄 Nuevo pedido",
-        "address_too_short": "❌ Dirección muy corta"
+        "address_too_short": "❌ Dirección muy corta",
+        "outside_hours": "⏰ Entregas cerradas.\n\nHorario: {hours}"
     },
     "it": {
         "welcome": "🌿 *BENVENUTO* 🌿\n\n⚠️ *VERSIONE 2.0*\n\nConversazioni in *SCAMBIO SEGRETO*.\n\n🙏 *Grazie* 💪💚",
@@ -261,14 +272,370 @@ TRANSLATIONS = {
         "price_list_fr": "🇫🇷 *PREZZI FRANCIA*\n\n❄️ *Coco*: 80€/g\n💊 *Pillole*:\n  • Squid Game: 10€\n  • Punisher: 10€\n🫒 *Hash*: 7€/g\n🍀 *Weed*: 10€/g\n🪨 *Cristallo*:\n  • MDMA: 50€/g\n  • 4MMC: 50€/g\n\n📦 *Consegna*:\n  • Postale (48-72h): 10€\n  • Express (30min+): calcolato",
         "price_list_ch": "🇨🇭 *PREZZI SVIZZERA*\n\n❄️ *Coco*: 100€/g\n💊 *Pillole*:\n  • Squid Game: 15€\n  • Punisher: 15€\n🫒 *Hash*: 8€/g\n🍀 *Weed*: 12€/g\n🪨 *Cristallo*:\n  • MDMA: 70€/g\n  • 4MMC: 70€/g\n\n📦 *Consegna*:\n  • Postale (48-72h): 10€\n  • Express (30min+): calcolato",
         "new_order": "🔄 Nuovo ordine",
-        "address_too_short": "❌ Indirizzo troppo corto"
+        "address_too_short": "❌ Indirizzo troppo corto",
+        "outside_hours": "⏰ Consegne chiuse.\n\nOrari: {hours}"
     }
 }
+
+# ==================== NOUVELLES FONCTIONS ====================
+
+def load_horaires():
+    """Charge les horaires depuis le fichier JSON"""
+    if HORAIRES_FILE.exists():
+        try:
+            with open(HORAIRES_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            pass
+    # Horaires par défaut : 9h-23h tous les jours
+    return {
+        "enabled": True,
+        "start_hour": 9,
+        "start_minute": 0,
+        "end_hour": 23,
+        "end_minute": 0
+    }
+
+def save_horaires(horaires):
+    """Sauvegarde les horaires dans le fichier JSON"""
+    try:
+        with open(HORAIRES_FILE, 'w', encoding='utf-8') as f:
+            json.dump(horaires, f, indent=2)
+        return True
+    except Exception as e:
+        logger.error(f"Erreur sauvegarde horaires: {e}")
+        return False
+
+def is_within_delivery_hours():
+    """Vérifie si on est dans les horaires de livraison"""
+    horaires = load_horaires()
+    if not horaires.get("enabled", True):
+        return True  # Si désactivé, toujours ouvert
+    
+    now = datetime.now().time()
+    start = time(horaires["start_hour"], horaires["start_minute"])
+    end = time(horaires["end_hour"], horaires["end_minute"])
+    
+    return start <= now <= end
+
+def get_horaires_text():
+    """Retourne le texte des horaires actuels"""
+    horaires = load_horaires()
+    if not horaires.get("enabled", True):
+        return "24h/24 (toujours ouvert)"
+    return f"{horaires['start_hour']:02d}:{horaires['start_minute']:02d} - {horaires['end_hour']:02d}:{horaires['end_minute']:02d}"
+
+def load_pending_messages():
+    """Charge les messages en attente de suppression"""
+    if PENDING_MESSAGES_FILE.exists():
+        try:
+            with open(PENDING_MESSAGES_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            pass
+    return []
+
+def save_pending_messages(messages):
+    """Sauvegarde les messages en attente"""
+    try:
+        with open(PENDING_MESSAGES_FILE, 'w', encoding='utf-8') as f:
+            json.dump(messages, f, indent=2)
+        return True
+    except Exception as e:
+        logger.error(f"Erreur sauvegarde messages: {e}")
+        return False
+
+def add_pending_message(chat_id, message_id, delete_at):
+    """Ajoute un message à supprimer plus tard"""
+    messages = load_pending_messages()
+    messages.append({
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "delete_at": delete_at.isoformat()
+    })
+    save_pending_messages(messages)
+
+async def check_pending_deletions(context: ContextTypes.DEFAULT_TYPE):
+    """Vérifie et supprime les messages programmés"""
+    messages = load_pending_messages()
+    now = datetime.now()
+    to_keep = []
+    
+    for msg in messages:
+        delete_time = datetime.fromisoformat(msg["delete_at"])
+        if now >= delete_time:
+            try:
+                await context.bot.delete_message(
+                    chat_id=msg["chat_id"],
+                    message_id=msg["message_id"]
+                )
+                logger.info(f"✅ Message supprimé: {msg['message_id']}")
+            except Exception as e:
+                logger.error(f"Erreur suppression message: {e}")
+        else:
+            to_keep.append(msg)
+    
+    save_pending_messages(to_keep)
+
+def load_stats():
+    """Charge les statistiques"""
+    if STATS_FILE.exists():
+        try:
+            with open(STATS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            pass
+    return {
+        "weekly": [],
+        "monthly": [],
+        "last_weekly_report": None,
+        "last_monthly_report": None
+    }
+
+def save_stats(stats):
+    """Sauvegarde les statistiques"""
+    try:
+        with open(STATS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(stats, f, indent=2)
+        return True
+    except Exception as e:
+        logger.error(f"Erreur sauvegarde stats: {e}")
+        return False
+
+def add_sale(amount, country, products):
+    """Ajoute une vente aux statistiques"""
+    stats = load_stats()
+    sale_data = {
+        "date": datetime.now().isoformat(),
+        "amount": amount,
+        "country": country,
+        "products": products
+    }
+    stats["weekly"].append(sale_data)
+    stats["monthly"].append(sale_data)
+    save_stats(stats)
+
+async def send_weekly_report(context: ContextTypes.DEFAULT_TYPE):
+    """Envoie le rapport hebdomadaire"""
+    stats = load_stats()
+    weekly_sales = stats.get("weekly", [])
+    
+    if not weekly_sales:
+        return
+    
+    total = sum(sale["amount"] for sale in weekly_sales)
+    count = len(weekly_sales)
+    
+    # Comptage par pays
+    fr_count = sum(1 for sale in weekly_sales if sale.get("country") == "FR")
+    ch_count = sum(1 for sale in weekly_sales if sale.get("country") == "CH")
+    
+    report = f"📊 *RAPPORT HEBDOMADAIRE*\n\n"
+    report += f"📅 Semaine du {datetime.now().strftime('%d/%m/%Y')}\n\n"
+    report += f"💰 *Chiffre d'affaires :* {total:.2f}€\n"
+    report += f"📦 *Commandes :* {count}\n"
+    report += f"🇫🇷 France : {fr_count}\n"
+    report += f"🇨🇭 Suisse : {ch_count}\n"
+    report += f"💵 *Panier moyen :* {total/count:.2f}€\n"
+    
+    try:
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=report,
+            parse_mode='Markdown'
+        )
+        # Reset hebdomadaire
+        stats["weekly"] = []
+        stats["last_weekly_report"] = datetime.now().isoformat()
+        save_stats(stats)
+        logger.info("✅ Rapport hebdomadaire envoyé")
+    except Exception as e:
+        logger.error(f"Erreur envoi rapport hebdo: {e}")
+
+async def send_monthly_report(context: ContextTypes.DEFAULT_TYPE):
+    """Envoie le rapport mensuel"""
+    stats = load_stats()
+    monthly_sales = stats.get("monthly", [])
+    
+    if not monthly_sales:
+        return
+    
+    total = sum(sale["amount"] for sale in monthly_sales)
+    count = len(monthly_sales)
+    
+    # Comptage par pays
+    fr_count = sum(1 for sale in monthly_sales if sale.get("country") == "FR")
+    ch_count = sum(1 for sale in monthly_sales if sale.get("country") == "CH")
+    
+    # Top produits
+    product_count = defaultdict(int)
+    for sale in monthly_sales:
+        for product in sale.get("products", "").split(";"):
+            if product.strip():
+                product_count[product.strip()] += 1
+    
+    top_products = sorted(product_count.items(), key=lambda x: x[1], reverse=True)[:5]
+    
+    report = f"📊 *RAPPORT MENSUEL*\n\n"
+    report += f"📅 Mois de {datetime.now().strftime('%B %Y')}\n\n"
+    report += f"💰 *Chiffre d'affaires :* {total:.2f}€\n"
+    report += f"📦 *Commandes :* {count}\n"
+    report += f"🇫🇷 France : {fr_count}\n"
+    report += f"🇨🇭 Suisse : {ch_count}\n"
+    report += f"💵 *Panier moyen :* {total/count:.2f}€\n\n"
+    report += f"🏆 *Top 5 produits :*\n"
+    for i, (product, qty) in enumerate(top_products, 1):
+        report += f"{i}. {product} ({qty}x)\n"
+    
+    try:
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=report,
+            parse_mode='Markdown'
+        )
+        # Reset mensuel
+        stats["monthly"] = []
+        stats["last_monthly_report"] = datetime.now().isoformat()
+        save_stats(stats)
+        logger.info("✅ Rapport mensuel envoyé")
+    except Exception as e:
+        logger.error(f"Erreur envoi rapport mensuel: {e}")
+
+async def schedule_reports(context: ContextTypes.DEFAULT_TYPE):
+    """Vérifie et envoie les rapports programmés"""
+    now = datetime.now()
+    stats = load_stats()
+    
+    # Rapport hebdomadaire (dimanche à 23h59)
+    if now.weekday() == 6 and now.hour == 23 and now.minute == 59:
+        last_weekly = stats.get("last_weekly_report")
+        if not last_weekly or (now - datetime.fromisoformat(last_weekly)).days >= 7:
+            await send_weekly_report(context)
+    
+    # Rapport mensuel (dernier jour du mois à 23h59)
+    next_month = (now.replace(day=1) + timedelta(days=32)).replace(day=1)
+    last_day = (next_month - timedelta(days=1)).day
+    
+    if now.day == last_day and now.hour == 23 and now.minute == 59:
+        last_monthly = stats.get("last_monthly_report")
+        if not last_monthly or (now - datetime.fromisoformat(last_monthly)).days >= 28:
+            await send_monthly_report(context)
+
+# ==================== COMMANDES ADMIN ====================
+
+@error_handler
+async def admin_horaires_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /horaires pour gérer les horaires (admin uniquement)"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Commande réservée à l'administrateur.")
+        return ConversationHandler.END
+    
+    horaires = load_horaires()
+    current = get_horaires_text()
+    enabled_text = "✅ Activés" if horaires.get("enabled", True) else "❌ Désactivés"
+    
+    text = f"⏰ *GESTION DES HORAIRES*\n\n"
+    text += f"📋 Horaires actuels : {current}\n"
+    text += f"🔔 Statut : {enabled_text}\n\n"
+    text += f"Envoyez les horaires au format :\n"
+    text += f"`HH:MM-HH:MM`\n\n"
+    text += f"Exemples :\n"
+    text += f"• `09:00-23:00`\n"
+    text += f"• `10:30-22:30`\n\n"
+    text += f"Ou envoyez :\n"
+    text += f"• `off` pour désactiver\n"
+    text += f"• `on` pour réactiver\n"
+    text += f"• `cancel` pour annuler"
+    
+    await update.message.reply_text(text, parse_mode='Markdown')
+    return ADMIN_HORAIRES_INPUT
+
+@error_handler
+async def admin_horaires_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Traite l'input des horaires"""
+    if update.effective_user.id != ADMIN_ID:
+        return ConversationHandler.END
+    
+    text = update.message.text.strip().lower()
+    
+    if text == "cancel":
+        await update.message.reply_text("❌ Modification annulée.")
+        return ConversationHandler.END
+    
+    horaires = load_horaires()
+    
+    if text == "off":
+        horaires["enabled"] = False
+        save_horaires(horaires)
+        await update.message.reply_text("✅ Horaires désactivés. Le bot accepte les commandes 24h/24.")
+        return ConversationHandler.END
+    
+    if text == "on":
+        horaires["enabled"] = True
+        save_horaires(horaires)
+        current = get_horaires_text()
+        await update.message.reply_text(f"✅ Horaires réactivés : {current}")
+        return ConversationHandler.END
+    
+    # Parse le format HH:MM-HH:MM
+    match = re.match(r'^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$', text)
+    if not match:
+        await update.message.reply_text("❌ Format invalide. Utilisez : HH:MM-HH:MM")
+        return ADMIN_HORAIRES_INPUT
+    
+    start_h, start_m, end_h, end_m = map(int, match.groups())
+    
+    if not (0 <= start_h < 24 and 0 <= end_h < 24 and 0 <= start_m < 60 and 0 <= end_m < 60):
+        await update.message.reply_text("❌ Heures invalides.")
+        return ADMIN_HORAIRES_INPUT
+    
+    horaires["start_hour"] = start_h
+    horaires["start_minute"] = start_m
+    horaires["end_hour"] = end_h
+    horaires["end_minute"] = end_m
+    horaires["enabled"] = True
+    
+    save_horaires(horaires)
+    await update.message.reply_text(f"✅ Horaires mis à jour : {get_horaires_text()}")
+    return ConversationHandler.END
+
+@error_handler
+async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /stats pour voir les statistiques (admin uniquement)"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Commande réservée à l'administrateur.")
+        return
+    
+    stats = load_stats()
+    weekly = stats.get("weekly", [])
+    monthly = stats.get("monthly", [])
+    
+    text = "📊 *STATISTIQUES*\n\n"
+    
+    if weekly:
+        total_week = sum(s["amount"] for s in weekly)
+        text += f"📅 *Cette semaine :*\n"
+        text += f"💰 {total_week:.2f}€ ({len(weekly)} commandes)\n\n"
+    else:
+        text += f"📅 *Cette semaine :* Aucune vente\n\n"
+    
+    if monthly:
+        total_month = sum(s["amount"] for s in monthly)
+        text += f"📆 *Ce mois :*\n"
+        text += f"💰 {total_month:.2f}€ ({len(monthly)} commandes)\n"
+    else:
+        text += f"📆 *Ce mois :* Aucune vente\n"
+    
+    await update.message.reply_text(text, parse_mode='Markdown')
+
+# ==================== FONCTIONS EXISTANTES MODIFIÉES ====================
 
 def tr(user_data, key):
     lang = user_data.get('langue', 'fr')
     t = TRANSLATIONS.get(lang, TRANSLATIONS['fr']).get(key, key)
-    return t.replace("{max}", str(MAX_QUANTITY_PER_PRODUCT)) if "{max}" in t else t
+    t = t.replace("{max}", str(MAX_QUANTITY_PER_PRODUCT))
+    t = t.replace("{hours}", get_horaires_text())
+    return t
 
 def sanitize_input(text, max_length=300):
     if not text:
@@ -367,7 +734,6 @@ async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @error_handler
 async def voir_carte(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Affiche le menu de sélection France/Suisse pour les prix"""
     query = update.callback_query
     await query.answer()
     keyboard = [
@@ -380,13 +746,12 @@ async def voir_carte(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @error_handler
 async def afficher_prix(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Affiche les prix selon le pays"""
     query = update.callback_query
     await query.answer()
     
     if query.data == "prix_france":
         text = tr(context.user_data, "price_list_fr")
-    else:  # prix_suisse
+    else:
         text = tr(context.user_data, "price_list_ch")
     
     keyboard = [
@@ -399,7 +764,6 @@ async def afficher_prix(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @error_handler
 async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Retour au menu principal"""
     query = update.callback_query
     await query.answer()
     text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
@@ -415,9 +779,19 @@ async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    
     if query.data == "contact_admin":
         await query.message.edit_text(tr(context.user_data, "contact_message"), parse_mode='Markdown')
         return CONTACT
+    
+    # VÉRIFICATION DES HORAIRES
+    if not is_within_delivery_hours():
+        await query.message.edit_text(
+            tr(context.user_data, "outside_hours"),
+            parse_mode='Markdown'
+        )
+        return ConversationHandler.END
+    
     keyboard = [
         [InlineKeyboardButton(tr(context.user_data, "france"), callback_data="country_FR")],
         [InlineKeyboardButton(tr(context.user_data, "switzerland"), callback_data="country_CH")]
@@ -622,6 +996,7 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_lang = context.user_data.get('langue', 'fr')
         lang_names = {'fr': 'Français', 'en': 'English', 'de': 'Deutsch', 'es': 'Español', 'it': 'Italiano'}
         
+        # Sauvegarde CSV
         order_data = {
             'date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 
             'order_id': order_id, 
@@ -642,7 +1017,14 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
         save_order_to_csv(order_data)
         
-        # Message admin toujours en français
+        # AJOUT AUX STATISTIQUES
+        add_sale(
+            amount=total,
+            country=context.user_data['pays'],
+            products=order_data['products']
+        )
+        
+        # Message admin
         admin_message = f"🆕 *COMMANDE* ({lang_names.get(user_lang, user_lang)})\n\n📋 `{order_id}`\n👤 {user.first_name} (@{user.username or 'N/A'})\n\n🛒 *PANIER :*\n"
         for item in context.user_data['cart']:
             admin_message += f"• {item['produit']} x {item['quantite']}\n"
@@ -650,12 +1032,19 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         admin_keyboard = [[InlineKeyboardButton("✅ Valider", callback_data=f"admin_validate_{order_id}_{user.id}")]]
         try:
-            await context.bot.send_message(chat_id=ADMIN_ID, text=admin_message, reply_markup=InlineKeyboardMarkup(admin_keyboard), parse_mode='Markdown')
+            admin_msg = await context.bot.send_message(chat_id=ADMIN_ID, text=admin_message, reply_markup=InlineKeyboardMarkup(admin_keyboard), parse_mode='Markdown')
+            # Stocker l'ID du message admin pour suppression ultérieure
+            context.user_data['admin_message_id'] = admin_msg.message_id
         except Exception as e:
             logger.error(f"Admin: {e}")
         
         keyboard = [[InlineKeyboardButton(tr(context.user_data, "new_order"), callback_data="restart_order")]]
-        await query.message.edit_text(f"{tr(context.user_data, 'order_confirmed')}\n\n📋 `{order_id}`\n💰 {total}€", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        user_msg = await query.message.edit_text(f"{tr(context.user_data, 'order_confirmed')}\n\n📋 `{order_id}`\n💰 {total}€", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        
+        # Stocker l'ID du message client pour suppression ultérieure
+        context.user_data['user_message_id'] = user_msg.message_id
+        context.user_data['user_chat_id'] = user.id
+        
         return ConversationHandler.END
     else:
         await query.message.edit_text(tr(context.user_data, "order_cancelled"), parse_mode='Markdown')
@@ -685,31 +1074,57 @@ async def admin_validation_livraison(update: Update, context: ContextTypes.DEFAU
     if update.effective_user.id != ADMIN_ID:
         await query.answer("❌ Non autorisé", show_alert=True)
         return
+    
     data_parts = query.data.split("_")
     order_id = "_".join(data_parts[2:-1])
     client_id = int(data_parts[-1])
+    
     try:
+        # Éditer le message admin
         await query.message.edit_text(f"{query.message.text}\n\n✅ *VALIDÉE*", parse_mode='Markdown')
-        await context.bot.send_message(chat_id=client_id, text=f"✅ *Validée !*\n\n📋 `{order_id}`\n\n💚", parse_mode='Markdown')
+        
+        # Envoyer message client
+        client_msg = await context.bot.send_message(chat_id=client_id, text=f"✅ *Validée !*\n\n📋 `{order_id}`\n\n💚", parse_mode='Markdown')
+        
+        # PROGRAMMATION DE LA SUPPRESSION DANS 30 MINUTES
+        delete_time = datetime.now() + timedelta(minutes=30)
+        add_pending_message(ADMIN_ID, query.message.message_id, delete_time)
+        add_pending_message(client_id, client_msg.message_id, delete_time)
+        
+        logger.info(f"✅ Messages programmés pour suppression à {delete_time.strftime('%H:%M:%S')}")
+        
     except Exception as e:
         logger.error(f"Validation: {e}")
-    await query.answer("✅ Validé!", show_alert=True)
+    
+    await query.answer("✅ Validé! (suppression dans 30min)", show_alert=True)
 
 async def error_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Exception: {context.error}", exc_info=context.error)
 
 async def main_async():
     logger.info("=" * 60)
-    logger.info("🤖 BOT TELEGRAM MULTILINGUE")
+    logger.info("🤖 BOT TELEGRAM MULTILINGUE - VERSION AMÉLIORÉE")
     logger.info("=" * 60)
     logger.info(f"📱 Token: {TOKEN[:15]}...")
     logger.info(f"👤 Admin: {ADMIN_ID}")
     logger.info("🌍 Langues: FR, EN, DE, ES, IT")
+    logger.info(f"⏰ Horaires: {get_horaires_text()}")
     logger.info("=" * 60)
+    
     application = Application.builder().token(TOKEN).build()
     logger.info("✅ Application créée")
     await application.bot.delete_webhook(drop_pending_updates=True)
     logger.info("✅ Webhook supprimé")
+    
+    # Handler de gestion des horaires (admin)
+    horaires_handler = ConversationHandler(
+        entry_points=[CommandHandler('horaires', admin_horaires_command)],
+        states={
+            ADMIN_HORAIRES_INPUT: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_horaires_input)]
+        },
+        fallbacks=[CommandHandler('start', start_command)],
+        allow_reentry=True
+    )
     
     conv_handler = ConversationHandler(
         entry_points=[
@@ -759,16 +1174,32 @@ async def main_async():
         per_message=False
     )
     
+    application.add_handler(horaires_handler)
     application.add_handler(conv_handler)
+    application.add_handler(CommandHandler('stats', admin_stats_command))
     application.add_handler(CallbackQueryHandler(admin_validation_livraison, pattern='^admin_validate_'))
     application.add_error_handler(error_callback)
+    
+    # Job queue pour les tâches programmées
+    job_queue = application.job_queue
+    
+    # Vérification des suppressions toutes les minutes
+    job_queue.run_repeating(check_pending_deletions, interval=60, first=10)
+    logger.info("✅ Task: Suppression messages (60s)")
+    
+    # Vérification des rapports toutes les minutes
+    job_queue.run_repeating(schedule_reports, interval=60, first=10)
+    logger.info("✅ Task: Rapports automatiques (60s)")
+    
     logger.info("✅ Handlers configurés")
     logger.info("=" * 60)
     logger.info("🚀 EN LIGNE")
     logger.info("=" * 60)
+    
     await application.initialize()
     await application.start()
     await application.updater.start_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
+    
     import signal
     stop_event = asyncio.Event()
     def stop_handler(signum, frame):

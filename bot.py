@@ -696,8 +696,20 @@ async def main_async():
     logger.info(f"⏰ Horaires: {get_horaires_text()}")
     logger.info("=" * 60)
     
-    application = Application.builder().token(TOKEN).build()
+    # Créer l'application avec job_queue activé
+    from telegram.ext import JobQueue
+    application = (
+        Application.builder()
+        .token(TOKEN)
+        .concurrent_updates(True)
+        .build()
+    )
     logger.info("✅ Application créée")
+    
+    # S'assurer que le job_queue existe
+    if application.job_queue is None:
+        logger.warning("⚠️ Job queue non disponible - fonctionnalités programmées désactivées")
+    
     await application.bot.delete_webhook(drop_pending_updates=True)
     logger.info("✅ Webhook supprimé")
     
@@ -729,11 +741,17 @@ async def main_async():
     application.add_handler(CommandHandler('stats', admin_stats_command))
     application.add_error_handler(error_callback)
     
-    # Job queue
-    job_queue = application.job_queue
-    job_queue.run_repeating(check_pending_deletions, interval=60, first=10)
-    job_queue.run_repeating(schedule_reports, interval=60, first=10)
-    logger.info("✅ Tasks programmées")
+    # Job queue pour les tâches programmées (si disponible)
+    if application.job_queue is not None:
+        # Vérification des suppressions toutes les minutes
+        application.job_queue.run_repeating(check_pending_deletions, interval=60, first=10)
+        logger.info("✅ Task: Suppression messages (60s)")
+        
+        # Vérification des rapports toutes les minutes
+        application.job_queue.run_repeating(schedule_reports, interval=60, first=10)
+        logger.info("✅ Task: Rapports automatiques (60s)")
+    else:
+        logger.warning("⚠️ Job queue indisponible - suppressions et rapports désactivés")
     
     logger.info("✅ Handlers configurés")
     logger.info("=" * 60)

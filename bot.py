@@ -60,7 +60,7 @@ from pathlib import Path
 
 # Chemins vers les images locales (hébergées sur GitHub)
 IMAGE_DIR = Path(__file__).parent / "images"
-PRODUITS_DIR = IMAGE_DIR / "produits"
+FOLDER_DIR = IMAGE_DIR / "produits"
 PRIX_DIR = IMAGE_DIR / "prix"
 
 # Images de la carte des prix
@@ -70,12 +70,12 @@ IMAGE_PRIX_SUISSE = PRIX_DIR / "suisse.jpg"
 # Images des produits
 IMAGES_PRODUITS = {
     "❄️ Coco": FOLDER_DIR / "coco.png",
-    "💊 Squid Game": PRODUITS_DIR / "squid_game.jpg",
-    "💊 Punisher": PRODUITS_DIR / "punisher.jpg",
-    "🫒 Hash": PRODUITS_DIR / "hash.jpg",
-    "🍀 Weed": PRODUITS_DIR / "weed.jpg",
-    "🪨 MDMA": PRODUITS_DIR / "mdma.jpg",
-    "🪨 4MMC": PRODUITS_DIR / "fourmmc.jpg"
+    "💊 Squid Game": FOLDER_DIR / "squid_game.jpg",
+    "💊 Punisher": FOLDER_DIR / "punisher.jpg",
+    "🫒 Hash": FOLDER_DIR / "hash.jpg",
+    "🍀 Weed": FOLDER_DIR / "weed.jpg",
+    "🪨 MDMA": FOLDER_DIR / "mdma.jpg",
+    "🪨 4MMC": FOLDER_DIR / "fourmmc.jpg"
 }
 
 MAX_QUANTITY_PER_PRODUCT = 100

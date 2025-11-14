@@ -56,6 +56,28 @@ except ImportError:
     logger.error("❌ pip install python-telegram-bot")
     sys.exit(1)
 
+from pathlib import Path
+
+# Chemins vers les images locales (hébergées sur GitHub)
+IMAGE_DIR = Path(__file__).parent / "images"
+PRODUITS_DIR = IMAGE_DIR / "produits"
+PRIX_DIR = IMAGE_DIR / "prix"
+
+# Images de la carte des prix
+IMAGE_PRIX_FRANCE = PRIX_DIR / "france.jpg"
+IMAGE_PRIX_SUISSE = PRIX_DIR / "suisse.jpg"
+
+# Images des produits
+IMAGES_PRODUITS = {
+    "❄️ Coco": PRODUITS_DIR / "coco.jpg",
+    "💊 Squid Game": PRODUITS_DIR / "squid_game.jpg",
+    "💊 Punisher": PRODUITS_DIR / "punisher.jpg",
+    "🫒 Hash": PRODUITS_DIR / "hash.jpg",
+    "🍀 Weed": PRODUITS_DIR / "weed.jpg",
+    "🪨 MDMA": PRODUITS_DIR / "mdma.jpg",
+    "🪨 4MMC": PRODUITS_DIR / "fourmmc.jpg"
+}
+
 MAX_QUANTITY_PER_PRODUCT = 100
 FRAIS_POSTAL = 10
 
@@ -560,16 +582,35 @@ async def voir_carte(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def afficher_prix(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    
     if query.data == "prix_france":
         text = tr(context.user_data, "price_list_fr")
+        image_path = IMAGE_PRIX_FRANCE
     else:
         text = tr(context.user_data, "price_list_ch")
+        image_path = IMAGE_PRIX_SUISSE
+    
     keyboard = [
         [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
         [InlineKeyboardButton(tr(context.user_data, "back_to_card"), callback_data="voir_carte")],
         [InlineKeyboardButton(tr(context.user_data, "main_menu_btn"), callback_data="back_to_main_menu")]
     ]
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    
+    # Vérifier si l'image existe et l'envoyer
+    if image_path.exists():
+        await query.message.delete()
+        with open(image_path, 'rb') as photo:
+            await context.bot.send_photo(
+                chat_id=query.message.chat_id,
+                photo=photo,
+                caption=text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+    else:
+        # Fallback : afficher juste le texte si l'image n'existe pas
+        logger.warning(f"⚠️ Image non trouvée : {image_path}")
+        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return PAYS
 
 @error_handler
@@ -649,9 +690,29 @@ async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         await query.message.edit_text(tr(context.user_data, "choose_rock_type"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return ROCK_SUBCATEGORY
+    
+    # Produits simples (Coco, Hash, Weed)
     product_names = {"snow": "❄️ Coco", "olive": "🫒 Hash", "clover": "🍀 Weed"}
     context.user_data['current_product'] = product_names.get(product_code, product_code)
-    await query.message.edit_text(f"✅ {context.user_data['current_product']}\n\n{tr(context.user_data, 'enter_quantity')}", parse_mode='Markdown')
+    
+    # Afficher l'image du produit si disponible
+    product_image_path = IMAGES_PRODUITS.get(context.user_data['current_product'])
+    text = f"✅ {context.user_data['current_product']}\n\n{tr(context.user_data, 'enter_quantity')}"
+    
+    if product_image_path and product_image_path.exists():
+        await query.message.delete()
+        with open(product_image_path, 'rb') as photo:
+            await context.bot.send_photo(
+                chat_id=query.message.chat_id,
+                photo=photo,
+                caption=text,
+                parse_mode='Markdown'
+            )
+    else:
+        if product_image_path:
+            logger.warning(f"⚠️ Image non trouvée : {product_image_path}")
+        await query.message.edit_text(text, parse_mode='Markdown')
+    
     return QUANTITE
 
 @error_handler
@@ -659,7 +720,25 @@ async def choix_pill_subcategory(update: Update, context: ContextTypes.DEFAULT_T
     query = update.callback_query
     await query.answer()
     context.user_data['current_product'] = PILL_SUBCATEGORIES.get(query.data.replace("pill_", ""), "💊")
-    await query.message.edit_text(f"✅ {context.user_data['current_product']}\n\n{tr(context.user_data, 'enter_quantity')}", parse_mode='Markdown')
+    
+    # Afficher l'image du produit si disponible
+    product_image_path = IMAGES_PRODUITS.get(context.user_data['current_product'])
+    text = f"✅ {context.user_data['current_product']}\n\n{tr(context.user_data, 'enter_quantity')}"
+    
+    if product_image_path and product_image_path.exists():
+        await query.message.delete()
+        with open(product_image_path, 'rb') as photo:
+            await context.bot.send_photo(
+                chat_id=query.message.chat_id,
+                photo=photo,
+                caption=text,
+                parse_mode='Markdown'
+            )
+    else:
+        if product_image_path:
+            logger.warning(f"⚠️ Image non trouvée : {product_image_path}")
+        await query.message.edit_text(text, parse_mode='Markdown')
+    
     return QUANTITE
 
 @error_handler
@@ -667,7 +746,25 @@ async def choix_rock_subcategory(update: Update, context: ContextTypes.DEFAULT_T
     query = update.callback_query
     await query.answer()
     context.user_data['current_product'] = ROCK_SUBCATEGORIES.get(query.data.replace("rock_", ""), "🪨")
-    await query.message.edit_text(f"✅ {context.user_data['current_product']}\n\n{tr(context.user_data, 'enter_quantity')}", parse_mode='Markdown')
+    
+    # Afficher l'image du produit si disponible
+    product_image_path = IMAGES_PRODUITS.get(context.user_data['current_product'])
+    text = f"✅ {context.user_data['current_product']}\n\n{tr(context.user_data, 'enter_quantity')}"
+    
+    if product_image_path and product_image_path.exists():
+        await query.message.delete()
+        with open(product_image_path, 'rb') as photo:
+            await context.bot.send_photo(
+                chat_id=query.message.chat_id,
+                photo=photo,
+                caption=text,
+                parse_mode='Markdown'
+            )
+    else:
+        if product_image_path:
+            logger.warning(f"⚠️ Image non trouvée : {product_image_path}")
+        await query.message.edit_text(text, parse_mode='Markdown')
+    
     return QUANTITE
 
 @error_handler

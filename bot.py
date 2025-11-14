@@ -601,7 +601,8 @@ async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     keyboard = [
         [InlineKeyboardButton(tr(context.user_data, "france"), callback_data="country_FR")],
-        [InlineKeyboardButton(tr(context.user_data, "switzerland"), callback_data="country_CH")]
+        [InlineKeyboardButton(tr(context.user_data, "switzerland"), callback_data="country_CH")],
+        [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_main_menu")]
     ]
     await query.message.edit_text(tr(context.user_data, "choose_country"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return PAYS  # CORRECTION: reste dans PAYS pour que choix_pays soit appelé
@@ -619,7 +620,8 @@ async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🫒 Hash", callback_data="product_olive")],
         [InlineKeyboardButton("🍀 Weed", callback_data="product_clover")],
         [InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")],
-        [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_main")]
+        [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_country_choice")],
+        [InlineKeyboardButton(tr(context.user_data, "main_menu_btn"), callback_data="back_to_main_menu")]
     ]
     await query.message.edit_text(tr(context.user_data, "choose_product"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return PRODUIT
@@ -633,7 +635,8 @@ async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             [InlineKeyboardButton("💊 Squid Game", callback_data="pill_squid_game")],
             [InlineKeyboardButton("💊 Punisher", callback_data="pill_punisher")],
-            [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_products")]
+            [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_products")],
+            [InlineKeyboardButton(tr(context.user_data, "main_menu_btn"), callback_data="back_to_main_menu")]
         ]
         await query.message.edit_text(tr(context.user_data, "choose_pill_type"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return PILL_SUBCATEGORY
@@ -641,7 +644,8 @@ async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             [InlineKeyboardButton("🪨 MDMA", callback_data="rock_mdma")],
             [InlineKeyboardButton("🪨 4MMC", callback_data="rock_fourmmc")],
-            [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_products")]
+            [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_products")],
+            [InlineKeyboardButton(tr(context.user_data, "main_menu_btn"), callback_data="back_to_main_menu")]
         ]
         await query.message.edit_text(tr(context.user_data, "choose_rock_type"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return ROCK_SUBCATEGORY
@@ -690,7 +694,8 @@ async def cart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("💊 Pills", callback_data="product_pill")],
             [InlineKeyboardButton("🫒 Hash", callback_data="product_olive")],
             [InlineKeyboardButton("🍀 Weed", callback_data="product_clover")],
-            [InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")]
+            [InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")],
+            [InlineKeyboardButton(tr(context.user_data, "main_menu_btn"), callback_data="back_to_main_menu")]
         ]
         await query.message.edit_text(tr(context.user_data, "choose_product"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return PRODUIT
@@ -824,6 +829,7 @@ async def restart_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def back_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    
     if query.data == "back_to_main":
         text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
         keyboard = [
@@ -833,13 +839,25 @@ async def back_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return PAYS
+    
+    elif query.data == "back_to_country_choice":
+        keyboard = [
+            [InlineKeyboardButton(tr(context.user_data, "france"), callback_data="country_FR")],
+            [InlineKeyboardButton(tr(context.user_data, "switzerland"), callback_data="country_CH")],
+            [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_main_menu")]
+        ]
+        await query.message.edit_text(tr(context.user_data, "choose_country"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        return PAYS
+    
     elif query.data == "back_to_products":
         keyboard = [
             [InlineKeyboardButton("❄️ COCO", callback_data="product_snow")],
             [InlineKeyboardButton("💊 Pills", callback_data="product_pill")],
             [InlineKeyboardButton("🫒 Hash", callback_data="product_olive")],
             [InlineKeyboardButton("🍀 Weed", callback_data="product_clover")],
-            [InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")]
+            [InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")],
+            [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_country_choice")],
+            [InlineKeyboardButton(tr(context.user_data, "main_menu_btn"), callback_data="back_to_main_menu")]
         ]
         await query.message.edit_text(tr(context.user_data, "choose_product"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return PRODUIT
@@ -991,23 +1009,30 @@ async def main_async():
                 CallbackQueryHandler(voir_carte, pattern='^voir_carte$'),
                 CallbackQueryHandler(afficher_prix, pattern='^prix_(france|suisse)$'),
                 CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$'),
-                CallbackQueryHandler(menu_navigation, pattern='^contact_admin$')
+                CallbackQueryHandler(menu_navigation, pattern='^contact_admin$'),
+                CallbackQueryHandler(back_navigation, pattern='^back_to_country_choice$')
             ],
             CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, contact_handler)],
             PRODUIT: [
                 CallbackQueryHandler(choix_produit, pattern='^product_'),
-                CallbackQueryHandler(back_navigation, pattern='^back_')
+                CallbackQueryHandler(back_navigation, pattern='^back_(to_main|to_country_choice|to_products)$'),
+                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')
             ],
             PILL_SUBCATEGORY: [
                 CallbackQueryHandler(choix_pill_subcategory, pattern='^pill_'),
-                CallbackQueryHandler(back_navigation, pattern='^back_')
+                CallbackQueryHandler(back_navigation, pattern='^back_to_products$'),
+                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')
             ],
             ROCK_SUBCATEGORY: [
                 CallbackQueryHandler(choix_rock_subcategory, pattern='^rock_'),
-                CallbackQueryHandler(back_navigation, pattern='^back_')
+                CallbackQueryHandler(back_navigation, pattern='^back_to_products$'),
+                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')
             ],
             QUANTITE: [MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_quantite)],
-            CART_MENU: [CallbackQueryHandler(cart_menu, pattern='^(add_more|proceed_checkout)$')],
+            CART_MENU: [
+                CallbackQueryHandler(cart_menu, pattern='^(add_more|proceed_checkout)$'),
+                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')
+            ],
             ADRESSE: [MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_adresse)],
             LIVRAISON: [CallbackQueryHandler(choix_livraison, pattern='^delivery_')],
             PAIEMENT: [CallbackQueryHandler(choix_paiement, pattern='^payment_')],

@@ -69,7 +69,7 @@ IMAGE_PRIX_SUISSE = PRIX_DIR / "suisse.jpg"
 
 # Images des produits
 IMAGES_PRODUITS = {
-    "❄️ Coco": PRODUITS_DIR / "coco.jpg",
+    "❄️ Coco": sampleFolder / "coco.png",
     "💊 Squid Game": PRODUITS_DIR / "squid_game.jpg",
     "💊 Punisher": PRODUITS_DIR / "punisher.jpg",
     "🫒 Hash": PRODUITS_DIR / "hash.jpg",

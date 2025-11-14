@@ -453,8 +453,9 @@ def calculate_delivery_fee(delivery_type, distance=0, subtotal=0):
     if delivery_type == "postal":
         return FRAIS_POSTAL
     elif delivery_type == "express":
-        fee = distance * 10
-        return math.ceil(fee / 10) * 10
+        # 10€ par kilomètre, arrondi au kilomètre supérieur
+        distance_arrondie = math.ceil(distance)  # Arrondi au km supérieur
+        return distance_arrondie * 10
     return 0
 
 def calculate_distance_simple(address):

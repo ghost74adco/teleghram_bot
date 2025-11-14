@@ -603,7 +603,7 @@ async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(tr(context.user_data, "switzerland"), callback_data="country_CH")]
     ]
     await query.message.edit_text(tr(context.user_data, "choose_country"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return PRODUIT
+    return PAYS  # CORRECTION: reste dans PAYS pour que choix_pays soit appelé
 
 @error_handler
 async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -963,6 +963,13 @@ async def main_async():
     
     await application.bot.delete_webhook(drop_pending_updates=True)
     logger.info("✅ Webhook supprimé")
+    
+    # Force la libération de toutes les connexions précédentes
+    try:
+        await application.bot.get_updates(offset=-1, timeout=1)
+        logger.info("✅ Connexions précédentes libérées")
+    except Exception as e:
+        logger.warning(f"⚠️ Tentative de libération: {e}")
     
     horaires_handler = ConversationHandler(
         entry_points=[CommandHandler('horaires', admin_horaires_command)],

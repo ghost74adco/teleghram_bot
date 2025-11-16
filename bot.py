@@ -181,8 +181,8 @@ TRANSLATIONS = {
         "prices_switzerland": "🇨🇭 Switzerland Prices",
         "back_to_card": "🔙 Back to card",
         "main_menu_btn": "🏠 Main menu",
-        "price_list_fr": "🇫🇷 *FRANCE PRICES*\n\n❄️ *Coco*: 80€/g\n💊 *Pills*:\n  • Squid Game: 10€\n  • Punisher: 10€\n🫒 *Hash*: 7€/g\n🍀 *Weed*: 10€/g\n🪨 *Crystal*:\n  • MDMA: 50€/g\n  • 4MMC: 50€/g\n\n📦 *Delivery*:\n  • Postal (48-72h): 10€\n  • Express (30min+): 10€/km",
-        "price_list_ch": "🇨🇭 *SWITZERLAND PRICES*\n\n❄️ *Coco*: 100€/g\n💊 *Pills*:\n  • Squid Game: 15€\n  • Punisher: 15€\n🫒 *Hash*: 8€/g\n🍀 *Weed*: 12€/g\n🪨 *Crystal*:\n  • MDMA: 70€/g\n  • 4MMC: 70€/g\n\n📦 *Delivery*:\n  • Postal (48-72h): 10€\n  • Express (30min+): 10€/km",
+        "price_list_fr": "🇫🇷 *FRANCE PRICES*\n\n❄️ *Coco*: 80€/g\n💊 *Pills*:\n  • Squid Game: 10€\n  • Punisher: 10€\n🫒 *Hash*: 7€/g\n🍀 *Weed*: 10€/g\n🪨 *Crystal*:\n  • MDMA: 50€/g\n  • 4MMC: 50€/g\n\n📦 *Delivery*:\n  • Postal (48-72h): 10€\n  • Express (30min+): 1€/km",
+        "price_list_ch": "🇨🇭 *SWITZERLAND PRICES*\n\n❄️ *Coco*: 100€/g\n💊 *Pills*:\n  • Squid Game: 15€\n  • Punisher: 15€\n🫒 *Hash*: 8€/g\n🍀 *Weed*: 12€/g\n🪨 *Crystal*:\n  • MDMA: 70€/g\n  • 4MMC: 70€/g\n\n📦 *Delivery*:\n  • Postal (48-72h): 10€\n  • Express (30min+): 1€/km",
         "new_order": "🔄 New order",
         "address_too_short": "❌ Address too short",
         "outside_hours": "⏰ Deliveries closed.\n\nHours: {hours}"
@@ -221,8 +221,8 @@ TRANSLATIONS = {
         "prices_switzerland": "🇨🇭 Preise Schweiz",
         "back_to_card": "🔙 Zurück zur Karte",
         "main_menu_btn": "🏠 Hauptmenü",
-        "price_list_fr": "🇫🇷 *PREISE FRANKREICH*\n\n❄️ *Coco*: 80€/g\n💊 *Pillen*:\n  • Squid Game: 10€\n  • Punisher: 10€\n🫒 *Hash*: 7€/g\n🍀 *Weed*: 10€/g\n🪨 *Kristall*:\n  • MDMA: 50€/g\n  • 4MMC: 50€/g\n\n📦 *Lieferung*:\n  • Post (48-72h): 10€\n  • Express (30min+): 10€/km",
-        "price_list_ch": "🇨🇭 *PREISE SCHWEIZ*\n\n❄️ *Coco*: 100€/g\n💊 *Pillen*:\n  • Squid Game: 15€\n  • Punisher: 15€\n🫒 *Hash*: 8€/g\n🍀 *Weed*: 12€/g\n🪨 *Kristall*:\n  • MDMA: 70€/g\n  • 4MMC: 70€/g\n\n📦 *Lieferung*:\n  • Post (48-72h): 10€\n  • Express (30min+): 10€/km",
+        "price_list_fr": "🇫🇷 *PREISE FRANKREICH*\n\n❄️ *Coco*: 80€/g\n💊 *Pillen*:\n  • Squid Game: 10€\n  • Punisher: 10€\n🫒 *Hash*: 7€/g\n🍀 *Weed*: 10€/g\n🪨 *Kristall*:\n  • MDMA: 50€/g\n  • 4MMC: 50€/g\n\n📦 *Lieferung*:\n  • Post (48-72h): 10€\n  • Express (30min+): 1€/km",
+        "price_list_ch": "🇨🇭 *PREISE SCHWEIZ*\n\n❄️ *Coco*: 100€/g\n💊 *Pillen*:\n  • Squid Game: 15€\n  • Punisher: 15€\n🫒 *Hash*: 8€/g\n🍀 *Weed*: 12€/g\n🪨 *Kristall*:\n  • MDMA: 70€/g\n  • 4MMC: 70€/g\n\n📦 *Lieferung*:\n  • Post (48-72h): 10€\n  • Express (30min+): 1€/km",
         "new_order": "🔄 Neue Bestellung",
         "address_too_short": "❌ Adresse zu kurz",
         "outside_hours": "⏰ Lieferungen geschlossen.\n\nZeiten: {hours}"
@@ -261,8 +261,8 @@ TRANSLATIONS = {
         "prices_switzerland": "🇨🇭 Precios Suiza",
         "back_to_card": "🔙 Volver a carta",
         "main_menu_btn": "🏠 Menú principal",
-        "price_list_fr": "🇫🇷 *PRECIOS FRANCIA*\n\n❄️ *Coco*: 80€/g\n💊 *Pastillas*:\n  • Squid Game: 10€\n  • Punisher: 10€\n🫒 *Hash*: 7€/g\n🍀 *Weed*: 10€/g\n🪨 *Cristal*:\n  • MDMA: 50€/g\n  • 4MMC: 50€/g\n\n📦 *Entrega*:\n  • Postal (48-72h): 10€\n  • Express (30min+): 10€/km",
-        "price_list_ch": "🇨🇭 *PRECIOS SUIZA*\n\n❄️ *Coco*: 100€/g\n💊 *Pastillas*:\n  • Squid Game: 15€\n  • Punisher: 15€\n🫒 *Hash*: 8€/g\n🍀 *Weed*: 12€/g\n🪨 *Cristal*:\n  • MDMA: 70€/g\n  • 4MMC: 70€/g\n\n📦 *Entrega*:\n  • Postal (48-72h): 10€\n  • Express (30min+): 10€/km",
+        "price_list_fr": "🇫🇷 *PRECIOS FRANCIA*\n\n❄️ *Coco*: 80€/g\n💊 *Pastillas*:\n  • Squid Game: 10€\n  • Punisher: 10€\n🫒 *Hash*: 7€/g\n🍀 *Weed*: 10€/g\n🪨 *Cristal*:\n  • MDMA: 50€/g\n  • 4MMC: 50€/g\n\n📦 *Entrega*:\n  • Postal (48-72h): 10€\n  • Express (30min+): 1€/km",
+        "price_list_ch": "🇨🇭 *PRECIOS SUIZA*\n\n❄️ *Coco*: 100€/g\n💊 *Pastillas*:\n  • Squid Game: 15€\n  • Punisher: 15€\n🫒 *Hash*: 8€/g\n🍀 *Weed*: 12€/g\n🪨 *Cristal*:\n  • MDMA: 70€/g\n  • 4MMC: 70€/g\n\n📦 *Entrega*:\n  • Postal (48-72h): 10€\n  • Express (30min+): 1€/km",
         "new_order": "🔄 Nuevo pedido",
         "address_too_short": "❌ Dirección muy corta",
         "outside_hours": "⏰ Entregas cerradas.\n\nHorario: {hours}"
@@ -301,8 +301,8 @@ TRANSLATIONS = {
         "prices_switzerland": "🇨🇭 Prezzi Svizzera",
         "back_to_card": "🔙 Torna alla carta",
         "main_menu_btn": "🏠 Menu principale",
-        "price_list_fr": "🇫🇷 *PREZZI FRANCIA*\n\n❄️ *Coco*: 80€/g\n💊 *Pillole*:\n  • Squid Game: 10€\n  • Punisher: 10€\n🫒 *Hash*: 7€/g\n🍀 *Weed*: 10€/g\n🪨 *Cristallo*:\n  • MDMA: 50€/g\n  • 4MMC: 50€/g\n\n📦 *Consegna*:\n  • Postale (48-72h): 10€\n  • Express (30min+): 10€/km",
-        "price_list_ch": "🇨🇭 *PREZZI SVIZZERA*\n\n❄️ *Coco*: 100€/g\n💊 *Pillole*:\n  • Squid Game: 15€\n  • Punisher: 15€\n🫒 *Hash*: 8€/g\n🍀 *Weed*: 12€/g\n🪨 *Cristallo*:\n  • MDMA: 70€/g\n  • 4MMC: 70€/g\n\n📦 *Consegna*:\n  • Postale (48-72h): 10€\n  • Express (30min+): 10€/km",
+        "price_list_fr": "🇫🇷 *PREZZI FRANCIA*\n\n❄️ *Coco*: 80€/g\n💊 *Pillole*:\n  • Squid Game: 10€\n  • Punisher: 10€\n🫒 *Hash*: 7€/g\n🍀 *Weed*: 10€/g\n🪨 *Cristallo*:\n  • MDMA: 50€/g\n  • 4MMC: 50€/g\n\n📦 *Consegna*:\n  • Postale (48-72h): 10€\n  • Express (30min+): 1€/km",
+        "price_list_ch": "🇨🇭 *PREZZI SVIZZERA*\n\n❄️ *Coco*: 100€/g\n💊 *Pillole*:\n  • Squid Game: 15€\n  • Punisher: 15€\n🫒 *Hash*: 8€/g\n🍀 *Weed*: 12€/g\n🪨 *Cristallo*:\n  • MDMA: 70€/g\n  • 4MMC: 70€/g\n\n📦 *Consegna*:\n  • Postale (48-72h): 10€\n  • Express (30min+): 1€/km",
         "new_order": "🔄 Nuovo ordine",
         "address_too_short": "❌ Indirizzo troppo corto",
         "outside_hours": "⏰ Consegne chiuse.\n\nOrari: {hours}"
@@ -484,9 +484,12 @@ def calculate_delivery_fee(delivery_type, distance=0, subtotal=0):
     if delivery_type == "postal":
         return FRAIS_POSTAL
     elif delivery_type == "express":
-        # 10€ par kilomètre, arrondi au kilomètre supérieur
+        # 1€ par kilomètre, arrondi à la dizaine supérieure
         distance_arrondie = math.ceil(distance)  # Arrondi au km supérieur
-        return distance_arrondie * 10
+        frais_brut = distance_arrondie * 1  # 1€ par km
+        # Arrondir à la dizaine supérieure
+        frais_final = math.ceil(frais_brut / 10) * 10
+        return frais_final
     return 0
 
 def calculate_distance_simple(address):

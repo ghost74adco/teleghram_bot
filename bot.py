@@ -58,24 +58,34 @@ except ImportError:
 
 from pathlib import Path
 
-# Chemins vers les images locales (hébergées sur GitHub dans sampleFolder)
-# TOUTES les images sont directement dans sampleFolder (pas de sous-dossiers)
-IMAGE_DIR = Path(__file__).parent / "sampleFolder"
+# Chemins vers les médias locaux (hébergés sur GitHub dans sampleFolder)
+MEDIA_DIR = Path(__file__).parent / "sampleFolder"
 
-# Images de la carte des prix (directement dans sampleFolder)
-IMAGE_PRIX_FRANCE = IMAGE_DIR / "france.jpg"
-IMAGE_PRIX_SUISSE = IMAGE_DIR / "suisse.jpg"
-
-# Images des produits (directement dans sampleFolder)
+# Images des produits (toujours utiles comme fallback)
 IMAGES_PRODUITS = {
-    "❄️ Coco": IMAGE_DIR / "coco.jpg",
-    "💊 Squid Game": IMAGE_DIR / "squid_game.jpg",
-    "💊 Punisher": IMAGE_DIR / "punisher.jpg",
-    "🫒 Hash": IMAGE_DIR / "hash.jpg",
-    "🍀 Weed": IMAGE_DIR / "weed.jpg",
-    "🪨 MDMA": IMAGE_DIR / "mdma.jpg",
-    "🪨 4MMC": IMAGE_DIR / "fourmmc.jpg"
+    "❄️ Coco": MEDIA_DIR / "coco.jpg",
+    "💊 Squid Game": MEDIA_DIR / "squid_game.jpg",
+    "💊 Punisher": MEDIA_DIR / "punisher.jpg",
+    "🫒 Hash": MEDIA_DIR / "hash.jpg",
+    "🍀 Weed": MEDIA_DIR / "weed.jpg",
+    "🪨 MDMA": MEDIA_DIR / "mdma.jpg",
+    "🪨 4MMC": MEDIA_DIR / "fourmmc.jpg"
 }
+
+# NOUVEAU : Vidéos des produits (optionnel - prioritaire sur les images)
+VIDEOS_PRODUITS = {
+    "❄️ Coco": MEDIA_DIR / "coco_demo.mp4",
+    "💊 Squid Game": MEDIA_DIR / "squid_game_demo.mp4",
+    "💊 Punisher": MEDIA_DIR / "punisher_demo.mp4",
+    "🫒 Hash": MEDIA_DIR / "hash_demo.mp4",
+    "🍀 Weed": MEDIA_DIR / "weed_demo.mp4",
+    "🪨 MDMA": MEDIA_DIR / "mdma_demo.mp4",
+    "🪨 4MMC": MEDIA_DIR / "fourmmc_demo.mp4"
+}
+
+# Images de la carte des prix
+IMAGE_PRIX_FRANCE = MEDIA_DIR / "france.jpg"
+IMAGE_PRIX_SUISSE = MEDIA_DIR / "suisse.jpg"
 
 MAX_QUANTITY_PER_PRODUCT = 100
 FRAIS_POSTAL = 10
@@ -694,12 +704,26 @@ async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     product_names = {"snow": "❄️ Coco", "olive": "🫒 Hash", "clover": "🍀 Weed"}
     context.user_data['current_product'] = product_names.get(product_code, product_code)
     
-    # Afficher l'image du produit si disponible
+    # Récupérer les chemins média
+    product_video_path = VIDEOS_PRODUITS.get(context.user_data['current_product'])
     product_image_path = IMAGES_PRODUITS.get(context.user_data['current_product'])
     text = f"✅ {context.user_data['current_product']}\n\n{tr(context.user_data, 'enter_quantity')}"
     
-    if product_image_path and product_image_path.exists():
-        await query.message.delete()
+    await query.message.delete()
+    
+    # Priorité : VIDÉO > IMAGE > TEXTE
+    if product_video_path and product_video_path.exists():
+        # Envoyer la vidéo
+        with open(product_video_path, 'rb') as video:
+            await context.bot.send_video(
+                chat_id=query.message.chat_id,
+                video=video,
+                caption=text,
+                parse_mode='Markdown',
+                supports_streaming=True
+            )
+    elif product_image_path and product_image_path.exists():
+        # Fallback : envoyer l'image
         with open(product_image_path, 'rb') as photo:
             await context.bot.send_photo(
                 chat_id=query.message.chat_id,
@@ -708,9 +732,14 @@ async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode='Markdown'
             )
     else:
-        if product_image_path:
-            logger.warning(f"⚠️ Image non trouvée : {product_image_path}")
-        await query.message.edit_text(text, parse_mode='Markdown')
+        # Fallback : juste le texte
+        if product_video_path or product_image_path:
+            logger.warning(f"⚠️ Média non trouvé pour {context.user_data['current_product']}")
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text=text,
+            parse_mode='Markdown'
+        )
     
     return QUANTITE
 
@@ -720,12 +749,24 @@ async def choix_pill_subcategory(update: Update, context: ContextTypes.DEFAULT_T
     await query.answer()
     context.user_data['current_product'] = PILL_SUBCATEGORIES.get(query.data.replace("pill_", ""), "💊")
     
-    # Afficher l'image du produit si disponible
+    # Récupérer les chemins média
+    product_video_path = VIDEOS_PRODUITS.get(context.user_data['current_product'])
     product_image_path = IMAGES_PRODUITS.get(context.user_data['current_product'])
     text = f"✅ {context.user_data['current_product']}\n\n{tr(context.user_data, 'enter_quantity')}"
     
-    if product_image_path and product_image_path.exists():
-        await query.message.delete()
+    await query.message.delete()
+    
+    # Priorité : VIDÉO > IMAGE > TEXTE
+    if product_video_path and product_video_path.exists():
+        with open(product_video_path, 'rb') as video:
+            await context.bot.send_video(
+                chat_id=query.message.chat_id,
+                video=video,
+                caption=text,
+                parse_mode='Markdown',
+                supports_streaming=True
+            )
+    elif product_image_path and product_image_path.exists():
         with open(product_image_path, 'rb') as photo:
             await context.bot.send_photo(
                 chat_id=query.message.chat_id,
@@ -734,9 +775,13 @@ async def choix_pill_subcategory(update: Update, context: ContextTypes.DEFAULT_T
                 parse_mode='Markdown'
             )
     else:
-        if product_image_path:
-            logger.warning(f"⚠️ Image non trouvée : {product_image_path}")
-        await query.message.edit_text(text, parse_mode='Markdown')
+        if product_video_path or product_image_path:
+            logger.warning(f"⚠️ Média non trouvé pour {context.user_data['current_product']}")
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text=text,
+            parse_mode='Markdown'
+        )
     
     return QUANTITE
 
@@ -746,12 +791,24 @@ async def choix_rock_subcategory(update: Update, context: ContextTypes.DEFAULT_T
     await query.answer()
     context.user_data['current_product'] = ROCK_SUBCATEGORIES.get(query.data.replace("rock_", ""), "🪨")
     
-    # Afficher l'image du produit si disponible
+    # Récupérer les chemins média
+    product_video_path = VIDEOS_PRODUITS.get(context.user_data['current_product'])
     product_image_path = IMAGES_PRODUITS.get(context.user_data['current_product'])
     text = f"✅ {context.user_data['current_product']}\n\n{tr(context.user_data, 'enter_quantity')}"
     
-    if product_image_path and product_image_path.exists():
-        await query.message.delete()
+    await query.message.delete()
+    
+    # Priorité : VIDÉO > IMAGE > TEXTE
+    if product_video_path and product_video_path.exists():
+        with open(product_video_path, 'rb') as video:
+            await context.bot.send_video(
+                chat_id=query.message.chat_id,
+                video=video,
+                caption=text,
+                parse_mode='Markdown',
+                supports_streaming=True
+            )
+    elif product_image_path and product_image_path.exists():
         with open(product_image_path, 'rb') as photo:
             await context.bot.send_photo(
                 chat_id=query.message.chat_id,
@@ -760,9 +817,13 @@ async def choix_rock_subcategory(update: Update, context: ContextTypes.DEFAULT_T
                 parse_mode='Markdown'
             )
     else:
-        if product_image_path:
-            logger.warning(f"⚠️ Image non trouvée : {product_image_path}")
-        await query.message.edit_text(text, parse_mode='Markdown')
+        if product_video_path or product_image_path:
+            logger.warning(f"⚠️ Média non trouvé pour {context.user_data['current_product']}")
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text=text,
+            parse_mode='Markdown'
+        )
     
     return QUANTITE
 

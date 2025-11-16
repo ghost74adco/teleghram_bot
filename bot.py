@@ -58,24 +58,23 @@ except ImportError:
 
 from pathlib import Path
 
-# Chemins vers les images locales (hébergées sur GitHub)
-IMAGE_DIR = Path(__file__).parent / "images"
-FOLDER_DIR = IMAGE_DIR / "produits"
-PRIX_DIR = IMAGE_DIR / "prix"
+# Chemins vers les images locales (hébergées sur GitHub dans sampleFolder)
+# TOUTES les images sont directement dans sampleFolder (pas de sous-dossiers)
+IMAGE_DIR = Path(__file__).parent / "sampleFolder"
 
-# Images de la carte des prix
-IMAGE_PRIX_FRANCE = PRIX_DIR / "france.jpg"
-IMAGE_PRIX_SUISSE = PRIX_DIR / "suisse.jpg"
+# Images de la carte des prix (directement dans sampleFolder)
+IMAGE_PRIX_FRANCE = IMAGE_DIR / "france.jpg"
+IMAGE_PRIX_SUISSE = IMAGE_DIR / "suisse.jpg"
 
-# Images des produits
+# Images des produits (directement dans sampleFolder)
 IMAGES_PRODUITS = {
-    "❄️ Coco": FOLDER_DIR / "coco.png",
-    "💊 Squid Game": FOLDER_DIR / "squid_game.jpg",
-    "💊 Punisher": FOLDER_DIR / "punisher.jpg",
-    "🫒 Hash": FOLDER_DIR / "hash.jpg",
-    "🍀 Weed": FOLDER_DIR / "weed.jpg",
-    "🪨 MDMA": FOLDER_DIR / "mdma.jpg",
-    "🪨 4MMC": FOLDER_DIR / "fourmmc.jpg"
+    "❄️ Coco": IMAGE_DIR / "coco.jpg",
+    "💊 Squid Game": IMAGE_DIR / "squid_game.jpg",
+    "💊 Punisher": IMAGE_DIR / "punisher.jpg",
+    "🫒 Hash": IMAGE_DIR / "hash.jpg",
+    "🍀 Weed": IMAGE_DIR / "weed.jpg",
+    "🪨 MDMA": IMAGE_DIR / "mdma.jpg",
+    "🪨 4MMC": IMAGE_DIR / "fourmmc.jpg"
 }
 
 MAX_QUANTITY_PER_PRODUCT = 100

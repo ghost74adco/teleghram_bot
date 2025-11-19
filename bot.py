@@ -208,7 +208,15 @@ def save_horaires(horaires):
         logger.error(f"Erreur sauvegarde horaires: {e}")
         return False
 
-def is_within_delivery_hours():
+def is_within_delivery_hours(user_id=None):
+    """
+    Vérifie si les livraisons sont ouvertes.
+    L'admin peut toujours commander, même en dehors des horaires.
+    """
+    # L'admin bypasse toujours les horaires
+    if user_id and user_id == ADMIN_ID:
+        return True
+    
     horaires = load_horaires()
     if not horaires.get("enabled", True):
         return True
@@ -517,7 +525,8 @@ async def send_product_media(context, chat_id, product_name, caption):
 @error_handler
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    logger.info(f"👤 /start: {user.first_name} (ID: {user.id})")
+    is_admin = user.id == ADMIN_ID
+    logger.info(f"👤 /start: {user.first_name} (ID: {user.id}){' 🔑 ADMIN' if is_admin else ''}")
     context.user_data.clear()
     keyboard = [
         [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
@@ -535,8 +544,16 @@ async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     lang_code = query.data.replace("lang_", "")
     context.user_data['langue'] = lang_code
-    logger.info(f"👤 Langue: {lang_code}")
+    user_id = update.effective_user.id
+    
+    logger.info(f"👤 Langue: {lang_code} (User: {user_id})")
+    
     text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
+    
+    # Ajouter un badge admin si c'est l'admin
+    if user_id == ADMIN_ID:
+        text += "\n\n🔑 *MODE ADMINISTRATEUR*\n✅ Accès illimité 24h/24"
+    
     keyboard = [
         [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
         [InlineKeyboardButton(tr(context.user_data, "pirate_card"), callback_data="voir_carte")],
@@ -613,16 +630,27 @@ async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.edit_text(tr(context.user_data, "contact_message"), parse_mode='Markdown')
         return CONTACT
     
-    if not is_within_delivery_hours():
-        await query.message.edit_text(tr(context.user_data, "outside_hours"), parse_mode='Markdown')
-        return ConversationHandler.END
+    user_id = update.effective_user.id
+    
+    # Vérifier les horaires (sauf pour l'admin)
+    if not is_within_delivery_hours(user_id):
+        # Message spécial pour l'admin
+        if user_id == ADMIN_ID:
+            hours_msg = f"\n\n⚠️ *MODE ADMIN* - Horaires fermés pour les clients\nHoraires : {get_horaires_text()}"
+        else:
+            await query.message.edit_text(tr(context.user_data, "outside_hours"), parse_mode='Markdown')
+            return ConversationHandler.END
+    else:
+        hours_msg = ""
     
     keyboard = [
         [InlineKeyboardButton(tr(context.user_data, "france"), callback_data="country_FR")],
         [InlineKeyboardButton(tr(context.user_data, "switzerland"), callback_data="country_CH")],
         [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_main_menu")]
     ]
-    await query.message.edit_text(tr(context.user_data, "choose_country"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    
+    message_text = tr(context.user_data, "choose_country") + hours_msg
+    await query.message.edit_text(message_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return PAYS
 
 @error_handler

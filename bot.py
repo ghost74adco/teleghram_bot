@@ -21,7 +21,7 @@ except RuntimeError:
 asyncio.set_event_loop(asyncio.new_event_loop())
 
 logging.basicConfig(
-format=’%(asctime)s - %(name)s - %(levelname)s - %(message)s’,
+format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 level=logging.INFO,
 handlers=[logging.StreamHandler()]
 )

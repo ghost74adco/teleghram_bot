@@ -26,7 +26,7 @@ level=logging.INFO,
 handlers=[logging.StreamHandler()]
 )
 logger = logging.getLogger(**name**)
-logging.getLogger(“httpx”).setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 for env_file in [’.env’, ‘infos.env’]:
 dotenv_path = Path(**file**).parent / env_file

@@ -280,9 +280,16 @@ def save_stats(stats):
         logger.error(f"Erreur sauvegarde stats: {e}")
         return False
 
-def add_sale(amount, country, products):
+def add_sale(amount, country, products, subtotal=0, delivery_fee=0):
     stats = load_stats()
-    sale_data = {"date": datetime.now().isoformat(), "amount": amount, "country": country, "products": products}
+    sale_data = {
+        "date": datetime.now().isoformat(), 
+        "amount": amount, 
+        "subtotal": subtotal,
+        "delivery_fee": delivery_fee,
+        "country": country, 
+        "products": products
+    }
     stats["weekly"].append(sale_data)
     stats["monthly"].append(sale_data)
     save_stats(stats)
@@ -292,11 +299,24 @@ async def send_weekly_report(context: ContextTypes.DEFAULT_TYPE):
     weekly_sales = stats.get("weekly", [])
     if not weekly_sales:
         return
+    
     total = sum(sale["amount"] for sale in weekly_sales)
+    total_subtotal = sum(sale.get("subtotal", sale["amount"]) for sale in weekly_sales)
+    total_delivery_fees = sum(sale.get("delivery_fee", 0) for sale in weekly_sales)
     count = len(weekly_sales)
     fr_count = sum(1 for sale in weekly_sales if sale.get("country") == "FR")
     ch_count = sum(1 for sale in weekly_sales if sale.get("country") == "CH")
-    report = f"📊 *RAPPORT HEBDOMADAIRE*\n\n📅 Semaine du {datetime.now().strftime('%d/%m/%Y')}\n\n💰 *Chiffre d'affaires :* {total:.2f}€\n📦 *Commandes :* {count}\n🇫🇷 France : {fr_count}\n🇨🇭 Suisse : {ch_count}\n💵 *Panier moyen :* {total/count:.2f}€\n"
+    
+    report = f"📊 *RAPPORT HEBDOMADAIRE*\n\n"
+    report += f"📅 Semaine du {datetime.now().strftime('%d/%m/%Y')}\n\n"
+    report += f"💰 *Chiffre d'affaires TOTAL :* {total:.2f}€\n"
+    report += f"🛍️ *Ventes articles :* {total_subtotal:.2f}€\n"
+    report += f"📦 *Frais de port :* {total_delivery_fees:.2f}€\n\n"
+    report += f"📦 *Commandes :* {count}\n"
+    report += f"🇫🇷 France : {fr_count}\n"
+    report += f"🇨🇭 Suisse : {ch_count}\n"
+    report += f"💵 *Panier moyen :* {total/count:.2f}€\n"
+    
     try:
         await context.bot.send_message(chat_id=ADMIN_ID, text=report, parse_mode='Markdown')
         stats["weekly"] = []
@@ -311,19 +331,35 @@ async def send_monthly_report(context: ContextTypes.DEFAULT_TYPE):
     monthly_sales = stats.get("monthly", [])
     if not monthly_sales:
         return
+    
     total = sum(sale["amount"] for sale in monthly_sales)
+    total_subtotal = sum(sale.get("subtotal", sale["amount"]) for sale in monthly_sales)
+    total_delivery_fees = sum(sale.get("delivery_fee", 0) for sale in monthly_sales)
     count = len(monthly_sales)
     fr_count = sum(1 for sale in monthly_sales if sale.get("country") == "FR")
     ch_count = sum(1 for sale in monthly_sales if sale.get("country") == "CH")
+    
     product_count = defaultdict(int)
     for sale in monthly_sales:
         for product in sale.get("products", "").split(";"):
             if product.strip():
                 product_count[product.strip()] += 1
     top_products = sorted(product_count.items(), key=lambda x: x[1], reverse=True)[:5]
-    report = f"📊 *RAPPORT MENSUEL*\n\n📅 Mois de {datetime.now().strftime('%B %Y')}\n\n💰 *Chiffre d'affaires :* {total:.2f}€\n📦 *Commandes :* {count}\n🇫🇷 France : {fr_count}\n🇨🇭 Suisse : {ch_count}\n💵 *Panier moyen :* {total/count:.2f}€\n\n🏆 *Top 5 produits :*\n"
+    
+    report = f"📊 *RAPPORT MENSUEL*\n\n"
+    report += f"📅 Mois de {datetime.now().strftime('%B %Y')}\n\n"
+    report += f"💰 *Chiffre d'affaires TOTAL :* {total:.2f}€\n"
+    report += f"🛍️ *Ventes articles :* {total_subtotal:.2f}€\n"
+    report += f"📦 *Frais de port :* {total_delivery_fees:.2f}€\n\n"
+    report += f"📦 *Commandes :* {count}\n"
+    report += f"🇫🇷 France : {fr_count}\n"
+    report += f"🇨🇭 Suisse : {ch_count}\n"
+    report += f"💵 *Panier moyen :* {total/count:.2f}€\n\n"
+    report += f"🏆 *Top 5 produits :*\n"
+    
     for i, (product, qty) in enumerate(top_products, 1):
         report += f"{i}. {product} ({qty}x)\n"
+    
     try:
         await context.bot.send_message(chat_id=ADMIN_ID, text=report, parse_mode='Markdown')
         stats["monthly"] = []
@@ -786,7 +822,7 @@ async def confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             'status': 'En attente'
         }
         save_order_to_csv(order_data)
-        add_sale(amount=total, country=context.user_data['pays'], products=order_data['products'])
+        add_sale(amount=total, country=context.user_data['pays'], products=order_data['products'], subtotal=subtotal, delivery_fee=delivery_fee)
         
         admin_message = f"🆕 *COMMANDE* ({lang_names.get(user_lang, user_lang)})\n\n📋 `{order_id}`\n👤 {user.first_name} (@{user.username or 'N/A'})\n\n🛒 *PANIER :*\n"
         for item in context.user_data['cart']:
@@ -947,17 +983,35 @@ async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     stats = load_stats()
     weekly = stats.get("weekly", [])
     monthly = stats.get("monthly", [])
+    
     text = "📊 *STATISTIQUES*\n\n"
+    
+    # Statistiques hebdomadaires
     if weekly:
         total_week = sum(s["amount"] for s in weekly)
-        text += f"📅 *Cette semaine :*\n💰 {total_week:.2f}€ ({len(weekly)} commandes)\n\n"
+        total_subtotal_week = sum(s.get("subtotal", s["amount"]) for s in weekly)
+        total_delivery_week = sum(s.get("delivery_fee", 0) for s in weekly)
+        text += f"📅 *Cette semaine :*\n"
+        text += f"💰 Total : {total_week:.2f}€\n"
+        text += f"🛍️ Articles : {total_subtotal_week:.2f}€\n"
+        text += f"📦 Frais port : {total_delivery_week:.2f}€\n"
+        text += f"📦 Commandes : {len(weekly)}\n\n"
     else:
         text += f"📅 *Cette semaine :* Aucune vente\n\n"
+    
+    # Statistiques mensuelles
     if monthly:
         total_month = sum(s["amount"] for s in monthly)
-        text += f"📆 *Ce mois :*\n💰 {total_month:.2f}€ ({len(monthly)} commandes)\n"
+        total_subtotal_month = sum(s.get("subtotal", s["amount"]) for s in monthly)
+        total_delivery_month = sum(s.get("delivery_fee", 0) for s in monthly)
+        text += f"📆 *Ce mois :*\n"
+        text += f"💰 Total : {total_month:.2f}€\n"
+        text += f"🛍️ Articles : {total_subtotal_month:.2f}€\n"
+        text += f"📦 Frais port : {total_delivery_month:.2f}€\n"
+        text += f"📦 Commandes : {len(monthly)}\n"
     else:
         text += f"📆 *Ce mois :* Aucune vente\n"
+    
     await update.message.reply_text(text, parse_mode='Markdown')
 
 async def error_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):

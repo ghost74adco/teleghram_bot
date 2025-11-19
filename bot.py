@@ -1051,8 +1051,8 @@ async def main_async():
     logger.info("=" * 60)
     logger.info("🤖 BOT TELEGRAM V2 - VERSION CORRIGÉE")
     logger.info("=" * 60)
-    logger.info(f"📱 Token: {TOKEN[:15]}...")
-    logger.info(f"👤 Admin: {ADMIN_ID}")
+    logger.info(f"📱 Token: {TOKEN[:5]}***[MASKED]")
+    logger.info(f"👤 Admin: ***{str(ADMIN_ID)[-3:]}")
     logger.info(f"⏰ Horaires: {get_horaires_text()}")
     logger.info(f"📁 Dossier médias: {MEDIA_DIR}")
     

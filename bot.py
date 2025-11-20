@@ -61,7 +61,7 @@ except ImportError:
 MEDIA_DIR = Path(__file__).parent / "sampleFolder"
 
 IMAGES_PRODUITS = {
-    "❄️ Coco": MEDIA_DIR / "coco.png",
+    "❄️ Coco": MEDIA_DIR / "coco.jpg",
     "💊 Squid Game": MEDIA_DIR / "squid_game.jpg",
     "💊 Punisher": MEDIA_DIR / "punisher.jpg",
     "🫒 Hash": MEDIA_DIR / "hash.jpg",

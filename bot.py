@@ -1427,45 +1427,45 @@ async def main_async():
         name="horaires_conv"
     )
     
-   conv_handler = ConversationHandler(
+    conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start_command)],
         states={
             LANGUE: [CallbackQueryHandler(set_langue, pattern='^lang_')],
             PAYS: [
                 CallbackQueryHandler(menu_navigation, pattern='^start_order$'),
                 CallbackQueryHandler(choix_pays, pattern='^country_'),
-                CallbackQueryHandler(restart_order, pattern='^restart_order$'),  # ← Ajouté $'
-                CallbackQueryHandler(voir_carte, pattern='^voir_carte$'),  # ← Ajouté $'
-                CallbackQueryHandler(afficher_prix, pattern='^prix_(france|suisse)$'),  # ← Ajouté $'
-                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$'),  # ← Ajouté $'
-                CallbackQueryHandler(menu_navigation, pattern='^contact_admin$'),  # ← Ajouté $'
-                CallbackQueryHandler(back_navigation, pattern='^back_to_country_choice$')  # ← Ajouté $'
+                CallbackQueryHandler(restart_order, pattern='^restart_order$'),
+                CallbackQueryHandler(voir_carte, pattern='^voir_carte$'),
+                CallbackQueryHandler(afficher_prix, pattern='^prix_(france|suisse)$'),
+                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$'),
+                CallbackQueryHandler(menu_navigation, pattern='^contact_admin$'),
+                CallbackQueryHandler(back_navigation, pattern='^back_to_country_choice$')
             ],
             CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, contact_handler)],
             PRODUIT: [
                 CallbackQueryHandler(choix_produit, pattern='^product_'),
-                CallbackQueryHandler(back_navigation, pattern='^back_(to_main|to_country_choice|to_products)$'),  # ← Ajouté $'
-                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')  # ← Ajouté $'
+                CallbackQueryHandler(back_navigation, pattern='^back_(to_main|to_country_choice|to_products)$'),
+                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')
             ],
             PILL_SUBCATEGORY: [
                 CallbackQueryHandler(choix_pill_subcategory, pattern='^pill_'),
-                CallbackQueryHandler(back_navigation, pattern='^back_to_products$'),  # ← Ajouté $'
-                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')  # ← Ajouté $'
+                CallbackQueryHandler(back_navigation, pattern='^back_to_products$'),
+                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')
             ],
             ROCK_SUBCATEGORY: [
                 CallbackQueryHandler(choix_rock_subcategory, pattern='^rock_'),
-                CallbackQueryHandler(back_navigation, pattern='^back_to_products$'),  # ← Ajouté $'
-                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')  # ← Ajouté $'
+                CallbackQueryHandler(back_navigation, pattern='^back_to_products$'),
+                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')
             ],
             QUANTITE: [MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_quantite)],
             CART_MENU: [
-                CallbackQueryHandler(cart_menu, pattern='^(add_more|proceed_checkout)$'),  # ← Ajouté $'
-                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')  # ← Ajouté $'
+                CallbackQueryHandler(cart_menu, pattern='^(add_more|proceed_checkout)$'),
+                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')
             ],
             ADRESSE: [MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_adresse)],
             LIVRAISON: [CallbackQueryHandler(choix_livraison, pattern='^delivery_')],
             PAIEMENT: [CallbackQueryHandler(choix_paiement, pattern='^payment_')],
-            CONFIRMATION: [CallbackQueryHandler(confirmation, pattern='^(confirm_order|cancel)$')]  # ← Ajouté $'
+            CONFIRMATION: [CallbackQueryHandler(confirmation, pattern='^(confirm_order|cancel)$')]
         },
         fallbacks=[CommandHandler('start', start_command)],
         allow_reentry=True,

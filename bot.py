@@ -60,31 +60,28 @@ except ImportError:
 
 MEDIA_DIR = Path(__file__).parent / "sampleFolder"
 
-# CORRECTION : Extensions correctes basées sur vos fichiers réels
 IMAGES_PRODUITS = {
-    "❄️ Coco": MEDIA_DIR / "coco.png",  # ✅ CORRIGÉ : .png au lieu de .jpg
+    "❄️ Coco": MEDIA_DIR / "coco.png",
     "💊 Squid Game": MEDIA_DIR / "squid_game.jpg",
     "💊 Punisher": MEDIA_DIR / "punisher.jpg",
-    "🫒 Hash": MEDIA_DIR / "hash.jpg",  # À ajouter si nécessaire
-    "🍀 Weed": MEDIA_DIR / "weed.jpg",  # À ajouter si nécessaire
+    "🫒 Hash": MEDIA_DIR / "hash.jpg",
+    "🍀 Weed": MEDIA_DIR / "weed.jpg",
     "🪨 MDMA": MEDIA_DIR / "mdma.jpg",
     "🪨 4MMC": MEDIA_DIR / "fourmmc.jpg"
 }
 
-# Vidéos optionnelles (prioritaires si présentes)
 VIDEOS_PRODUITS = {
     "❄️ Coco": MEDIA_DIR / "coco_demo.mp4",
     "💊 Squid Game": MEDIA_DIR / "squid_game_demo.mp4",
     "💊 Punisher": MEDIA_DIR / "punisher_demo.mp4",
     "🫒 Hash": MEDIA_DIR / "hash_demo.mp4",
-    "🍀 Weed": MEDIA_DIR / "weed_demo.mp4",  # ✅ Existe dans votre dossier
+    "🍀 Weed": MEDIA_DIR / "weed_demo.mp4",
     "🪨 MDMA": MEDIA_DIR / "mdma_demo.mp4",
     "🪨 4MMC": MEDIA_DIR / "fourmmc_demo.mp4"
 }
 
-# Images des catalogues de prix
-IMAGE_PRIX_FRANCE = MEDIA_DIR / "catalogue.png"  # Utilisez catalogue.png
-IMAGE_PRIX_SUISSE = MEDIA_DIR / "catalogue.png"  # Ou créez suisse.png
+IMAGE_PRIX_FRANCE = MEDIA_DIR / "catalogue.png"
+IMAGE_PRIX_SUISSE = MEDIA_DIR / "catalogue.png"
 
 MAX_QUANTITY_PER_PRODUCT = 100
 FRAIS_POSTAL = 10
@@ -97,6 +94,17 @@ ADMIN_HORAIRES_INPUT = 12
 PILL_SUBCATEGORIES = {"squid_game": "💊 Squid Game", "punisher": "💊 Punisher"}
 ROCK_SUBCATEGORIES = {"mdma": "🪨 MDMA", "fourmmc": "🪨 4MMC"}
 
+# Mapping des codes produits
+PRODUCT_CODES = {
+    "coco": "❄️ Coco",
+    "squid": "💊 Squid Game",
+    "punisher": "💊 Punisher",
+    "hash": "🫒 Hash",
+    "weed": "🍀 Weed",
+    "mdma": "🪨 MDMA",
+    "4mmc": "🪨 4MMC"
+}
+
 PRIX_FR = {"❄️ Coco": 80, "💊 Squid Game": 10, "💊 Punisher": 10, "🫒 Hash": 7, "🍀 Weed": 10, "🪨 MDMA": 50, "🪨 4MMC": 50}
 PRIX_CH = {"❄️ Coco": 100, "💊 Squid Game": 15, "💊 Punisher": 15, "🫒 Hash": 8, "🍀 Weed": 12, "🪨 MDMA": 70, "🪨 4MMC": 70}
 
@@ -104,6 +112,7 @@ PRIX_CH = {"❄️ Coco": 100, "💊 Squid Game": 15, "💊 Punisher": 15, "🫒
 HORAIRES_FILE = Path(__file__).parent / "horaires.json"
 STATS_FILE = Path(__file__).parent / "stats.json"
 PENDING_MESSAGES_FILE = Path(__file__).parent / "pending_messages.json"
+AVAILABLE_PRODUCTS_FILE = Path(__file__).parent / "available_products.json"
 
 TRANSLATIONS = {
     "fr": {
@@ -188,6 +197,39 @@ TRANSLATIONS = {
     }
 }
 
+# ==================== GESTION DES PRODUITS DISPONIBLES ====================
+
+def load_available_products():
+    """Charge la liste des produits disponibles"""
+    if AVAILABLE_PRODUCTS_FILE.exists():
+        try:
+            with open(AVAILABLE_PRODUCTS_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return set(data.get("available", list(PRIX_FR.keys())))
+        except:
+            pass
+    # Par défaut, tous les produits sont disponibles
+    return set(PRIX_FR.keys())
+
+def save_available_products(products):
+    """Sauvegarde la liste des produits disponibles"""
+    try:
+        with open(AVAILABLE_PRODUCTS_FILE, 'w', encoding='utf-8') as f:
+            json.dump({"available": list(products), "updated": datetime.now().isoformat()}, f, indent=2)
+        return True
+    except Exception as e:
+        logger.error(f"Erreur sauvegarde produits: {e}")
+        return False
+
+def is_product_available(product_name):
+    """Vérifie si un produit est disponible"""
+    available = load_available_products()
+    return product_name in available
+
+def get_available_products():
+    """Retourne la liste des produits disponibles"""
+    return load_available_products()
+
 # ==================== FONCTIONS UTILITAIRES ====================
 
 def load_horaires():
@@ -209,14 +251,8 @@ def save_horaires(horaires):
         return False
 
 def is_within_delivery_hours(user_id=None):
-    """
-    Vérifie si les livraisons sont ouvertes.
-    L'admin peut toujours commander, même en dehors des horaires.
-    """
-    # L'admin bypasse toujours les horaires
     if user_id and user_id == ADMIN_ID:
         return True
-    
     horaires = load_horaires()
     if not horaires.get("enabled", True):
         return True
@@ -475,7 +511,6 @@ async def send_product_media(context, chat_id, product_name, caption):
     product_video_path = VIDEOS_PRODUITS.get(product_name)
     product_image_path = IMAGES_PRODUITS.get(product_name)
     
-    # Log pour débogage
     logger.info(f"🎬 Produit: {product_name}")
     logger.info(f"📹 Vidéo: {product_video_path} (existe: {product_video_path and product_video_path.exists()})")
     logger.info(f"🖼️ Image: {product_image_path} (existe: {product_image_path and product_image_path.exists()})")
@@ -520,6 +555,109 @@ async def send_product_media(context, chat_id, product_name, caption):
     )
     return False
 
+# ==================== COMMANDES ADMIN GESTION PRODUITS ====================
+
+@error_handler
+async def admin_products_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche l'état de tous les produits"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return
+    
+    available = get_available_products()
+    all_products = list(PRIX_FR.keys())
+    
+    text = "📦 *GESTION DES PRODUITS*\n\n"
+    text += "✅ *Disponibles :*\n"
+    for product in sorted(all_products):
+        if product in available:
+            text += f"  • {product}\n"
+    
+    text += "\n❌ *Rupture de stock :*\n"
+    unavailable = [p for p in all_products if p not in available]
+    if unavailable:
+        for product in sorted(unavailable):
+            text += f"  • {product}\n"
+    else:
+        text += "  _Aucun_\n"
+    
+    text += "\n💡 *Commandes :*\n"
+    text += "`/del <code>` - Masquer un produit\n"
+    text += "`/add <code>` - Rendre disponible\n\n"
+    text += "*Codes produits :*\n"
+    for code, name in sorted(PRODUCT_CODES.items()):
+        text += f"  • `{code}` → {name}\n"
+    
+    await update.message.reply_text(text, parse_mode='Markdown')
+
+@error_handler
+async def admin_del_product_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Masque un produit (rupture de stock)"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return
+    
+    if not context.args:
+        text = "❌ *Usage :* `/del <code>`\n\n*Codes disponibles :*\n"
+        for code, name in sorted(PRODUCT_CODES.items()):
+            text += f"  • `{code}` → {name}\n"
+        text += "\n*Exemple :* `/del weed`"
+        await update.message.reply_text(text, parse_mode='Markdown')
+        return
+    
+    code = context.args[0].lower()
+    product_name = PRODUCT_CODES.get(code)
+    
+    if not product_name:
+        await update.message.reply_text(f"❌ Code invalide: `{code}`\n\nUtilisez `/products` pour voir les codes.", parse_mode='Markdown')
+        return
+    
+    available = get_available_products()
+    
+    if product_name not in available:
+        await update.message.reply_text(f"⚠️ {product_name} est déjà en rupture de stock.", parse_mode='Markdown')
+        return
+    
+    available.remove(product_name)
+    save_available_products(available)
+    
+    await update.message.reply_text(f"✅ *Produit masqué*\n\n❌ {product_name}\n\n_Les clients ne verront plus ce produit._", parse_mode='Markdown')
+    logger.info(f"🔴 Produit masqué: {product_name}")
+
+@error_handler
+async def admin_add_product_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Rend un produit disponible"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return
+    
+    if not context.args:
+        text = "❌ *Usage :* `/add <code>`\n\n*Codes disponibles :*\n"
+        for code, name in sorted(PRODUCT_CODES.items()):
+            text += f"  • `{code}` → {name}\n"
+        text += "\n*Exemple :* `/add weed`"
+        await update.message.reply_text(text, parse_mode='Markdown')
+        return
+    
+    code = context.args[0].lower()
+    product_name = PRODUCT_CODES.get(code)
+    
+    if not product_name:
+        await update.message.reply_text(f"❌ Code invalide: `{code}`\n\nUtilisez `/products` pour voir les codes.", parse_mode='Markdown')
+        return
+    
+    available = get_available_products()
+    
+    if product_name in available:
+        await update.message.reply_text(f"⚠️ {product_name} est déjà disponible.", parse_mode='Markdown')
+        return
+    
+    available.add(product_name)
+    save_available_products(available)
+    
+    await update.message.reply_text(f"✅ *Produit disponible*\n\n✅ {product_name}\n\n_Les clients peuvent maintenant commander ce produit._", parse_mode='Markdown')
+    logger.info(f"🟢 Produit activé: {product_name}")
+
 # ==================== HANDLERS ====================
 
 @error_handler
@@ -550,7 +688,6 @@ async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
     
-    # Ajouter un badge admin si c'est l'admin
     if user_id == ADMIN_ID:
         text += "\n\n🔑 *MODE ADMINISTRATEUR*\n✅ Accès illimité 24h/24"
     
@@ -632,9 +769,7 @@ async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user_id = update.effective_user.id
     
-    # Vérifier les horaires (sauf pour l'admin)
     if not is_within_delivery_hours(user_id):
-        # Message spécial pour l'admin
         if user_id == ADMIN_ID:
             hours_msg = f"\n\n⚠️ *MODE ADMIN* - Horaires fermés pour les clients\nHoraires : {get_horaires_text()}"
         else:
@@ -660,15 +795,25 @@ async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['pays'] = query.data.replace("country_", "")
     context.user_data['cart'] = []
     logger.info(f"👤 Pays: {context.user_data['pays']}")
-    keyboard = [
-        [InlineKeyboardButton("❄️ COCO", callback_data="product_snow")],
-        [InlineKeyboardButton("💊 Pills", callback_data="product_pill")],
-        [InlineKeyboardButton("🫒 Hash", callback_data="product_olive")],
-        [InlineKeyboardButton("🍀 Weed", callback_data="product_clover")],
-        [InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")],
-        [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_country_choice")],
-        [InlineKeyboardButton(tr(context.user_data, "main_menu_btn"), callback_data="back_to_main_menu")]
-    ]
+    
+    # Filtrer les produits disponibles
+    available = get_available_products()
+    keyboard = []
+    
+    if "❄️ Coco" in available:
+        keyboard.append([InlineKeyboardButton("❄️ COCO", callback_data="product_snow")])
+    if "💊 Squid Game" in available or "💊 Punisher" in available:
+        keyboard.append([InlineKeyboardButton("💊 Pills", callback_data="product_pill")])
+    if "🫒 Hash" in available:
+        keyboard.append([InlineKeyboardButton("🫒 Hash", callback_data="product_olive")])
+    if "🍀 Weed" in available:
+        keyboard.append([InlineKeyboardButton("🍀 Weed", callback_data="product_clover")])
+    if "🪨 MDMA" in available or "🪨 4MMC" in available:
+        keyboard.append([InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")])
+    
+    keyboard.append([InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_country_choice")])
+    keyboard.append([InlineKeyboardButton(tr(context.user_data, "main_menu_btn"), callback_data="back_to_main_menu")])
+    
     await query.message.edit_text(tr(context.user_data, "choose_product"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return PRODUIT
 
@@ -677,30 +822,41 @@ async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     product_code = query.data.replace("product_", "")
+    available = get_available_products()
     
     if product_code == "pill":
-        keyboard = [
-            [InlineKeyboardButton("💊 Squid Game", callback_data="pill_squid_game")],
-            [InlineKeyboardButton("💊 Punisher", callback_data="pill_punisher")],
-            [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_products")],
-            [InlineKeyboardButton(tr(context.user_data, "main_menu_btn"), callback_data="back_to_main_menu")]
-        ]
+        keyboard = []
+        if "💊 Squid Game" in available:
+            keyboard.append([InlineKeyboardButton("💊 Squid Game", callback_data="pill_squid_game")])
+        if "💊 Punisher" in available:
+            keyboard.append([InlineKeyboardButton("💊 Punisher", callback_data="pill_punisher")])
+        keyboard.append([InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_products")])
+        keyboard.append([InlineKeyboardButton(tr(context.user_data, "main_menu_btn"), callback_data="back_to_main_menu")])
+        
         await query.message.edit_text(tr(context.user_data, "choose_pill_type"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return PILL_SUBCATEGORY
     
     elif product_code == "rock":
-        keyboard = [
-            [InlineKeyboardButton("🪨 MDMA", callback_data="rock_mdma")],
-            [InlineKeyboardButton("🪨 4MMC", callback_data="rock_fourmmc")],
-            [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_products")],
-            [InlineKeyboardButton(tr(context.user_data, "main_menu_btn"), callback_data="back_to_main_menu")]
-        ]
+        keyboard = []
+        if "🪨 MDMA" in available:
+            keyboard.append([InlineKeyboardButton("🪨 MDMA", callback_data="rock_mdma")])
+        if "🪨 4MMC" in available:
+            keyboard.append([InlineKeyboardButton("🪨 4MMC", callback_data="rock_fourmmc")])
+        keyboard.append([InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_products")])
+        keyboard.append([InlineKeyboardButton(tr(context.user_data, "main_menu_btn"), callback_data="back_to_main_menu")])
+        
         await query.message.edit_text(tr(context.user_data, "choose_rock_type"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return ROCK_SUBCATEGORY
     
-    # Produits simples
     product_names = {"snow": "❄️ Coco", "olive": "🫒 Hash", "clover": "🍀 Weed"}
-    context.user_data['current_product'] = product_names.get(product_code, product_code)
+    product_name = product_names.get(product_code, product_code)
+    
+    # Vérifier la disponibilité
+    if not is_product_available(product_name):
+        await query.answer("❌ Produit indisponible", show_alert=True)
+        return PRODUIT
+    
+    context.user_data['current_product'] = product_name
     
     text = f"✅ {context.user_data['current_product']}\n\n{tr(context.user_data, 'enter_quantity')}"
     await query.message.delete()
@@ -712,7 +868,14 @@ async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def choix_pill_subcategory(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    context.user_data['current_product'] = PILL_SUBCATEGORIES.get(query.data.replace("pill_", ""), "💊")
+    product_name = PILL_SUBCATEGORIES.get(query.data.replace("pill_", ""), "💊")
+    
+    # Vérifier la disponibilité
+    if not is_product_available(product_name):
+        await query.answer("❌ Produit indisponible", show_alert=True)
+        return PILL_SUBCATEGORY
+    
+    context.user_data['current_product'] = product_name
     
     text = f"✅ {context.user_data['current_product']}\n\n{tr(context.user_data, 'enter_quantity')}"
     await query.message.delete()
@@ -724,7 +887,14 @@ async def choix_pill_subcategory(update: Update, context: ContextTypes.DEFAULT_T
 async def choix_rock_subcategory(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    context.user_data['current_product'] = ROCK_SUBCATEGORIES.get(query.data.replace("rock_", ""), "🪨")
+    product_name = ROCK_SUBCATEGORIES.get(query.data.replace("rock_", ""), "🪨")
+    
+    # Vérifier la disponibilité
+    if not is_product_available(product_name):
+        await query.answer("❌ Produit indisponible", show_alert=True)
+        return ROCK_SUBCATEGORY
+    
+    context.user_data['current_product'] = product_name
     
     text = f"✅ {context.user_data['current_product']}\n\n{tr(context.user_data, 'enter_quantity')}"
     await query.message.delete()
@@ -751,14 +921,22 @@ async def cart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     if query.data == "add_more":
-        keyboard = [
-            [InlineKeyboardButton("❄️ COCO", callback_data="product_snow")],
-            [InlineKeyboardButton("💊 Pills", callback_data="product_pill")],
-            [InlineKeyboardButton("🫒 Hash", callback_data="product_olive")],
-            [InlineKeyboardButton("🍀 Weed", callback_data="product_clover")],
-            [InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")],
-            [InlineKeyboardButton(tr(context.user_data, "main_menu_btn"), callback_data="back_to_main_menu")]
-        ]
+        available = get_available_products()
+        keyboard = []
+        
+        if "❄️ Coco" in available:
+            keyboard.append([InlineKeyboardButton("❄️ COCO", callback_data="product_snow")])
+        if "💊 Squid Game" in available or "💊 Punisher" in available:
+            keyboard.append([InlineKeyboardButton("💊 Pills", callback_data="product_pill")])
+        if "🫒 Hash" in available:
+            keyboard.append([InlineKeyboardButton("🫒 Hash", callback_data="product_olive")])
+        if "🍀 Weed" in available:
+            keyboard.append([InlineKeyboardButton("🍀 Weed", callback_data="product_clover")])
+        if "🪨 MDMA" in available or "🪨 4MMC" in available:
+            keyboard.append([InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")])
+        
+        keyboard.append([InlineKeyboardButton(tr(context.user_data, "main_menu_btn"), callback_data="back_to_main_menu")])
+        
         await query.message.edit_text(tr(context.user_data, "choose_product"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return PRODUIT
     else:
@@ -912,15 +1090,23 @@ async def back_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return PAYS
     
     elif query.data == "back_to_products":
-        keyboard = [
-            [InlineKeyboardButton("❄️ COCO", callback_data="product_snow")],
-            [InlineKeyboardButton("💊 Pills", callback_data="product_pill")],
-            [InlineKeyboardButton("🫒 Hash", callback_data="product_olive")],
-            [InlineKeyboardButton("🍀 Weed", callback_data="product_clover")],
-            [InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")],
-            [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_country_choice")],
-            [InlineKeyboardButton(tr(context.user_data, "main_menu_btn"), callback_data="back_to_main_menu")]
-        ]
+        available = get_available_products()
+        keyboard = []
+        
+        if "❄️ Coco" in available:
+            keyboard.append([InlineKeyboardButton("❄️ COCO", callback_data="product_snow")])
+        if "💊 Squid Game" in available or "💊 Punisher" in available:
+            keyboard.append([InlineKeyboardButton("💊 Pills", callback_data="product_pill")])
+        if "🫒 Hash" in available:
+            keyboard.append([InlineKeyboardButton("🫒 Hash", callback_data="product_olive")])
+        if "🍀 Weed" in available:
+            keyboard.append([InlineKeyboardButton("🍀 Weed", callback_data="product_clover")])
+        if "🪨 MDMA" in available or "🪨 4MMC" in available:
+            keyboard.append([InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")])
+        
+        keyboard.append([InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_country_choice")])
+        keyboard.append([InlineKeyboardButton(tr(context.user_data, "main_menu_btn"), callback_data="back_to_main_menu")])
+        
         await query.message.edit_text(tr(context.user_data, "choose_product"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return PRODUIT
 
@@ -990,7 +1176,7 @@ async def admin_horaires_input(update: Update, context: ContextTypes.DEFAULT_TYP
         save_horaires(horaires)
         await update.message.reply_text(f"✅ Réactivés : {get_horaires_text()}")
         return ConversationHandler.END
-    match = re.match(r'^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$', text)
+    match = re.match(r'^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2}), text)
     if not match:
         await update.message.reply_text("❌ Format invalide. HH:MM-HH:MM")
         return ADMIN_HORAIRES_INPUT
@@ -1014,7 +1200,6 @@ async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     text = "📊 *STATISTIQUES*\n\n"
     
-    # Statistiques hebdomadaires
     if weekly:
         total_week = sum(s["amount"] for s in weekly)
         total_subtotal_week = sum(s.get("subtotal", s["amount"]) for s in weekly)
@@ -1027,7 +1212,6 @@ async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     else:
         text += f"📅 *Cette semaine :* Aucune vente\n\n"
     
-    # Statistiques mensuelles
     if monthly:
         total_month = sum(s["amount"] for s in monthly)
         total_subtotal_month = sum(s.get("subtotal", s["amount"]) for s in monthly)
@@ -1049,7 +1233,7 @@ async def error_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def main_async():
     logger.info("=" * 60)
-    logger.info("🤖 BOT TELEGRAM V2 - VERSION CORRIGÉE")
+    logger.info("🤖 BOT TELEGRAM V2.1 - GESTION PRODUITS DYNAMIQUE")
     logger.info("=" * 60)
     logger.info(f"📱 Token: {TOKEN[:5]}***[MASKED]")
     logger.info(f"👤 Admin: ***{str(ADMIN_ID)[-3:]}")
@@ -1064,6 +1248,18 @@ async def main_async():
     for product, path in VIDEOS_PRODUITS.items():
         exists = "✅" if path.exists() else "❌"
         logger.info(f"  {exists} Vidéo {product}: {path.name}")
+    
+    # Afficher les produits disponibles
+    available = get_available_products()
+    logger.info("\n📦 Produits disponibles:")
+    for product in sorted(available):
+        logger.info(f"  ✅ {product}")
+    
+    unavailable = [p for p in PRIX_FR.keys() if p not in available]
+    if unavailable:
+        logger.info("\n❌ Produits en rupture de stock:")
+        for product in sorted(unavailable):
+            logger.info(f"  ❌ {product}")
     
     logger.info("=" * 60)
     
@@ -1095,40 +1291,40 @@ async def main_async():
         states={
             LANGUE: [CallbackQueryHandler(set_langue, pattern='^lang_')],
             PAYS: [
-                CallbackQueryHandler(menu_navigation, pattern='^start_order$'),
+                CallbackQueryHandler(menu_navigation, pattern='^start_order),
                 CallbackQueryHandler(choix_pays, pattern='^country_'),
-                CallbackQueryHandler(restart_order, pattern='^restart_order$'),
-                CallbackQueryHandler(voir_carte, pattern='^voir_carte$'),
-                CallbackQueryHandler(afficher_prix, pattern='^prix_(france|suisse)$'),
-                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$'),
-                CallbackQueryHandler(menu_navigation, pattern='^contact_admin$'),
-                CallbackQueryHandler(back_navigation, pattern='^back_to_country_choice$')
+                CallbackQueryHandler(restart_order, pattern='^restart_order),
+                CallbackQueryHandler(voir_carte, pattern='^voir_carte),
+                CallbackQueryHandler(afficher_prix, pattern='^prix_(france|suisse)),
+                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu),
+                CallbackQueryHandler(menu_navigation, pattern='^contact_admin),
+                CallbackQueryHandler(back_navigation, pattern='^back_to_country_choice)
             ],
             CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, contact_handler)],
             PRODUIT: [
                 CallbackQueryHandler(choix_produit, pattern='^product_'),
-                CallbackQueryHandler(back_navigation, pattern='^back_(to_main|to_country_choice|to_products)$'),
-                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')
+                CallbackQueryHandler(back_navigation, pattern='^back_(to_main|to_country_choice|to_products)),
+                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu)
             ],
             PILL_SUBCATEGORY: [
                 CallbackQueryHandler(choix_pill_subcategory, pattern='^pill_'),
-                CallbackQueryHandler(back_navigation, pattern='^back_to_products$'),
-                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')
+                CallbackQueryHandler(back_navigation, pattern='^back_to_products),
+                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu)
             ],
             ROCK_SUBCATEGORY: [
                 CallbackQueryHandler(choix_rock_subcategory, pattern='^rock_'),
-                CallbackQueryHandler(back_navigation, pattern='^back_to_products$'),
-                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')
+                CallbackQueryHandler(back_navigation, pattern='^back_to_products),
+                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu)
             ],
             QUANTITE: [MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_quantite)],
             CART_MENU: [
-                CallbackQueryHandler(cart_menu, pattern='^(add_more|proceed_checkout)$'),
-                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')
+                CallbackQueryHandler(cart_menu, pattern='^(add_more|proceed_checkout)),
+                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu)
             ],
             ADRESSE: [MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_adresse)],
             LIVRAISON: [CallbackQueryHandler(choix_livraison, pattern='^delivery_')],
             PAIEMENT: [CallbackQueryHandler(choix_paiement, pattern='^payment_')],
-            CONFIRMATION: [CallbackQueryHandler(confirmation, pattern='^(confirm_order|cancel)$')]
+            CONFIRMATION: [CallbackQueryHandler(confirmation, pattern='^(confirm_order|cancel))]
         },
         fallbacks=[CommandHandler('start', start_command)],
         allow_reentry=True,
@@ -1139,6 +1335,9 @@ async def main_async():
     application.add_handler(horaires_handler)
     application.add_handler(conv_handler)
     application.add_handler(CommandHandler('stats', admin_stats_command))
+    application.add_handler(CommandHandler('products', admin_products_command))
+    application.add_handler(CommandHandler('del', admin_del_product_command))
+    application.add_handler(CommandHandler('add', admin_add_product_command))
     application.add_handler(CallbackQueryHandler(admin_validation_livraison, pattern='^admin_validate_'))
     application.add_error_handler(error_callback)
     
@@ -1153,6 +1352,13 @@ async def main_async():
     logger.info("=" * 60)
     logger.info("🚀 BOT EN LIGNE")
     logger.info("=" * 60)
+    logger.info("\n📋 Commandes admin disponibles:")
+    logger.info("  • /products - Voir l'état des produits")
+    logger.info("  • /del <code> - Masquer un produit")
+    logger.info("  • /add <code> - Activer un produit")
+    logger.info("  • /horaires - Gérer les horaires")
+    logger.info("  • /stats - Voir les statistiques")
+    logger.info("=" * 60 + "\n")
     
     await application.initialize()
     await application.start()

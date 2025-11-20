@@ -1427,103 +1427,48 @@ async def main_async():
         name="horaires_conv"
     )
     
-    conv_handler = ConversationHandler(
+   conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start_command)],
         states={
             LANGUE: [CallbackQueryHandler(set_langue, pattern='^lang_')],
             PAYS: [
-                CallbackQueryHandler(menu_navigation, pattern='^start_order),
+                CallbackQueryHandler(menu_navigation, pattern='^start_order$'),
                 CallbackQueryHandler(choix_pays, pattern='^country_'),
-                CallbackQueryHandler(restart_order, pattern='^restart_order),
-                CallbackQueryHandler(voir_carte, pattern='^voir_carte),
-                CallbackQueryHandler(afficher_prix, pattern='^prix_(france|suisse)),
-                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu),
-                CallbackQueryHandler(menu_navigation, pattern='^contact_admin),
-                CallbackQueryHandler(back_navigation, pattern='^back_to_country_choice)
+                CallbackQueryHandler(restart_order, pattern='^restart_order$'),  # ← Ajouté $'
+                CallbackQueryHandler(voir_carte, pattern='^voir_carte$'),  # ← Ajouté $'
+                CallbackQueryHandler(afficher_prix, pattern='^prix_(france|suisse)$'),  # ← Ajouté $'
+                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$'),  # ← Ajouté $'
+                CallbackQueryHandler(menu_navigation, pattern='^contact_admin$'),  # ← Ajouté $'
+                CallbackQueryHandler(back_navigation, pattern='^back_to_country_choice$')  # ← Ajouté $'
             ],
             CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, contact_handler)],
             PRODUIT: [
                 CallbackQueryHandler(choix_produit, pattern='^product_'),
-                CallbackQueryHandler(back_navigation, pattern='^back_(to_main|to_country_choice|to_products)),
-                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu)
+                CallbackQueryHandler(back_navigation, pattern='^back_(to_main|to_country_choice|to_products)$'),  # ← Ajouté $'
+                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')  # ← Ajouté $'
             ],
             PILL_SUBCATEGORY: [
                 CallbackQueryHandler(choix_pill_subcategory, pattern='^pill_'),
-                CallbackQueryHandler(back_navigation, pattern='^back_to_products),
-                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu)
+                CallbackQueryHandler(back_navigation, pattern='^back_to_products$'),  # ← Ajouté $'
+                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')  # ← Ajouté $'
             ],
             ROCK_SUBCATEGORY: [
                 CallbackQueryHandler(choix_rock_subcategory, pattern='^rock_'),
-                CallbackQueryHandler(back_navigation, pattern='^back_to_products),
-                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu)
+                CallbackQueryHandler(back_navigation, pattern='^back_to_products$'),  # ← Ajouté $'
+                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')  # ← Ajouté $'
             ],
             QUANTITE: [MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_quantite)],
             CART_MENU: [
-                CallbackQueryHandler(cart_menu, pattern='^(add_more|proceed_checkout)),
-                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu)
+                CallbackQueryHandler(cart_menu, pattern='^(add_more|proceed_checkout)$'),  # ← Ajouté $'
+                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')  # ← Ajouté $'
             ],
             ADRESSE: [MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_adresse)],
             LIVRAISON: [CallbackQueryHandler(choix_livraison, pattern='^delivery_')],
             PAIEMENT: [CallbackQueryHandler(choix_paiement, pattern='^payment_')],
-            CONFIRMATION: [CallbackQueryHandler(confirmation, pattern='^(confirm_order|cancel))]
+            CONFIRMATION: [CallbackQueryHandler(confirmation, pattern='^(confirm_order|cancel)$')]  # ← Ajouté $'
         },
         fallbacks=[CommandHandler('start', start_command)],
         allow_reentry=True,
         per_message=False,
         name="main_conv"
     )
-    
-    application.add_handler(horaires_handler)
-    application.add_handler(conv_handler)
-    application.add_handler(CommandHandler('stats', admin_stats_command))
-    application.add_handler(CommandHandler('products', admin_products_command))
-    application.add_handler(CommandHandler('del', admin_del_product_command))
-    application.add_handler(CommandHandler('add', admin_add_product_command))
-    application.add_handler(CallbackQueryHandler(admin_validation_livraison, pattern='^admin_validate_'))
-    application.add_error_handler(error_callback)
-    
-    if application.job_queue is not None:
-        application.job_queue.run_repeating(check_pending_deletions, interval=60, first=10)
-        application.job_queue.run_repeating(schedule_reports, interval=60, first=10)
-        logger.info("✅ Tasks programmées")
-    else:
-        logger.warning("⚠️ Tasks désactivées")
-    
-    logger.info("✅ Handlers configurés")
-    logger.info("=" * 60)
-    logger.info("🚀 BOT EN LIGNE")
-    logger.info("=" * 60)
-    logger.info("\n📋 Commandes admin disponibles:")
-    logger.info("  • /products - Voir l'état des produits")
-    logger.info("  • /del <code> - Masquer un produit")
-    logger.info("  • /add <code> - Activer un produit")
-    logger.info("  • /horaires - Gérer les horaires")
-    logger.info("  • /stats - Voir les statistiques")
-    logger.info("=" * 60 + "\n")
-    
-    await application.initialize()
-    await application.start()
-    await application.updater.start_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
-    
-    import signal
-    stop_event = asyncio.Event()
-    def stop_handler(signum, frame):
-        stop_event.set()
-    signal.signal(signal.SIGINT, stop_handler)
-    signal.signal(signal.SIGTERM, stop_handler)
-    await stop_event.wait()
-    await application.updater.stop()
-    await application.stop()
-    await application.shutdown()
-
-def main():
-    try:
-        asyncio.run(main_async())
-    except KeyboardInterrupt:
-        logger.info("\n⏹️  Arrêt...")
-    except Exception as e:
-        logger.error(f"❌ Erreur: {e}", exc_info=True)
-        sys.exit(1)
-
-if __name__ == '__main__':
-    main()

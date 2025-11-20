@@ -1317,7 +1317,7 @@ async def admin_horaires_input(update: Update, context: ContextTypes.DEFAULT_TYP
         save_horaires(horaires)
         await update.message.reply_text(f"✅ Réactivés : {get_horaires_text()}")
         return ConversationHandler.END
-    match = re.match(r'^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2}), text)
+    match = re.match(r'^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$', text)
     if not match:
         await update.message.reply_text("❌ Format invalide. HH:MM-HH:MM")
         return ADMIN_HORAIRES_INPUT

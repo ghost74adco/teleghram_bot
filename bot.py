@@ -1472,3 +1472,58 @@ async def main_async():
         per_message=False,
         name="main_conv"
     )
+    
+    application.add_handler(horaires_handler)
+    application.add_handler(conv_handler)
+    application.add_handler(CommandHandler('stats', admin_stats_command))
+    application.add_handler(CommandHandler('products', admin_products_command))
+    application.add_handler(CommandHandler('del', admin_del_product_command))
+    application.add_handler(CommandHandler('add', admin_add_product_command))
+    application.add_handler(CallbackQueryHandler(admin_validation_livraison, pattern='^admin_validate_'))
+    application.add_error_handler(error_callback)
+    
+    if application.job_queue is not None:
+        application.job_queue.run_repeating(check_pending_deletions, interval=60, first=10)
+        application.job_queue.run_repeating(schedule_reports, interval=60, first=10)
+        logger.info("✅ Tasks programmées")
+    else:
+        logger.warning("⚠️ Tasks désactivées")
+    
+    logger.info("✅ Handlers configurés")
+    logger.info("=" * 60)
+    logger.info("🚀 BOT EN LIGNE")
+    logger.info("=" * 60)
+    logger.info("\n📋 Commandes admin disponibles:")
+    logger.info("  • /products - Voir l'état des produits")
+    logger.info("  • /del <code> - Masquer un produit")
+    logger.info("  • /add <code> - Activer un produit")
+    logger.info("  • /horaires - Gérer les horaires")
+    logger.info("  • /stats - Voir les statistiques")
+    logger.info("=" * 60 + "\n")
+    
+    await application.initialize()
+    await application.start()
+    await application.updater.start_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
+    
+    import signal
+    stop_event = asyncio.Event()
+    def stop_handler(signum, frame):
+        stop_event.set()
+    signal.signal(signal.SIGINT, stop_handler)
+    signal.signal(signal.SIGTERM, stop_handler)
+    await stop_event.wait()
+    await application.updater.stop()
+    await application.stop()
+    await application.shutdown()
+
+def main():
+    try:
+        asyncio.run(main_async())
+    except KeyboardInterrupt:
+        logger.info("\n⏹️  Arrêt...")
+    except Exception as e:
+        logger.error(f"❌ Erreur: {e}", exc_info=True)
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()

@@ -105,18 +105,37 @@ PRODUCT_CODES = {
     "4mmc": "🪨 4MMC"
 }
 
-PRIX_FR = {"❄️ Coco": 80, "💊 Squid Game": 10, "💊 Punisher": 10, "🫒 Hash": 7, "🍀 Weed": 8,}
-PRIX_CH = {"❄️ Coco": 100, "💊 Squid Game": 15, "💊 Punisher": 15, "🫒 Hash": 8, "🍀 Weed": 10,}
+# Prix par défaut
+PRIX_FR = {
+    "❄️ Coco": 80, 
+    "💊 Squid Game": 10, 
+    "💊 Punisher": 10, 
+    "🫒 Hash": 7, 
+    "🍀 Weed": 8,
+    "🪨 MDMA": 50,
+    "🪨 4MMC": 50
+}
+
+PRIX_CH = {
+    "❄️ Coco": 100, 
+    "💊 Squid Game": 15, 
+    "💊 Punisher": 15, 
+    "🫒 Hash": 8, 
+    "🍀 Weed": 10,
+    "🪨 MDMA": 60,
+    "🪨 4MMC": 60
+}
 
 # Fichiers de configuration
 HORAIRES_FILE = Path(__file__).parent / "horaires.json"
 STATS_FILE = Path(__file__).parent / "stats.json"
 PENDING_MESSAGES_FILE = Path(__file__).parent / "pending_messages.json"
 AVAILABLE_PRODUCTS_FILE = Path(__file__).parent / "available_products.json"
+PRICES_FILE = Path(__file__).parent / "prices.json"
 
 TRANSLATIONS = {
     "fr": {
-        "welcome": "🌿 *BIENVENUE* 🌿\n\n⚠️ *VERSION 2.0*\n\nConversations en *ÉCHANGE SECRET*.\n\n🙏 *Merci* 💪💚",
+        "welcome": "🌿 *BIENVENUE* 🌿\n\n⚠️ *VERSION 2.1*\n\nConversations en *ÉCHANGE SECRET*.\n\n🙏 *Merci* 💪💚",
         "main_menu": "\n\n📱 *MENU :*",
         "choose_country": "🌍 *Pays :*",
         "choose_product": "🛒 *Produit :*",
@@ -149,14 +168,14 @@ TRANSLATIONS = {
         "prices_switzerland": "🇨🇭 Prix Suisse",
         "back_to_card": "🔙 Retour carte",
         "main_menu_btn": "🏠 Menu principal",
-        "price_list_fr": "🇫🇷 *PRIX FRANCE*\n\n❄️ *Coco* : 80€/g\n💊 *Pills* :\n  • Squid Game : 10€\n  • Punisher : 10€\n🫒 *Hash* : 7€/g\n🍀 *Weed* : 8€/g\n\n📦 *Livraison* :\n  • Postale (48-72h) : 10€\n  • Express (30min+) : 10€/km",
-        "price_list_ch": "🇨🇭 *PRIX SUISSE*\n\n❄️ *Coco* : 100€/g\n💊 *Pills* :\n  • Squid Game : 15€\n  • Punisher : 15€\n🫒 *Hash* : 8€/g\n🍀 *Weed* : 10€/g\n\n📦 *Livraison* :\n  • Postale (48-72h) : 10€\n  • Express (30min+) : 10€/km",
+        "price_list_fr": "🇫🇷 *PRIX FRANCE*\n\n",
+        "price_list_ch": "🇨🇭 *PRIX SUISSE*\n\n",
         "new_order": "🔄 Nouvelle commande",
         "address_too_short": "❌ Adresse trop courte",
         "outside_hours": "⏰ Livraisons fermées.\n\nHoraires : {hours}"
     },
     "en": {
-        "welcome": "🌿 *WELCOME* 🌿\n\n⚠️ *VERSION 2.0*\n\nConversations in *SECRET EXCHANGE*.\n\n🙏 *Thank you* 💪💚",
+        "welcome": "🌿 *WELCOME* 🌿\n\n⚠️ *VERSION 2.1*\n\nConversations in *SECRET EXCHANGE*.\n\n🙏 *Thank you* 💪💚",
         "main_menu": "\n\n📱 *MENU:*",
         "choose_country": "🌍 *Country:*",
         "choose_product": "🛒 *Product:*",
@@ -189,14 +208,14 @@ TRANSLATIONS = {
         "prices_switzerland": "🇨🇭 Switzerland Prices",
         "back_to_card": "🔙 Back to card",
         "main_menu_btn": "🏠 Main menu",
-        "price_list_fr": "🇫🇷 *FRANCE PRICES*\n\n❄️ *Coco*: 80€/g\n💊 *Pills*:\n  • Squid Game: 10€\n  • Punisher: 10€\n🫒 *Hash*: 7€/g\n🍀 *Weed*: 8€/g\n\n📦 *Delivery*:\n  • Postal (48-72h): 10€\n  • Express (30min+): 10€/km",
-        "price_list_ch": "🇨🇭 *SWITZERLAND PRICES*\n\n❄️ *Coco*: 100€/g\n💊 *Pills*:\n  • Squid Game: 15€\n  • Punisher: 15€\n🫒 *Hash*: 8€/g\n🍀 *Weed*: 10€/g\n\n📦 *Delivery*:\n  • Postal (48-72h): 10€\n  • Express (30min+): 10€/km",
+        "price_list_fr": "🇫🇷 *FRANCE PRICES*\n\n",
+        "price_list_ch": "🇨🇭 *SWITZERLAND PRICES*\n\n",
         "new_order": "🔄 New order",
         "address_too_short": "❌ Address too short",
         "outside_hours": "⏰ Deliveries closed.\n\nHours: {hours}"
     },
-        "de": {
-        "welcome": "🌿 *WILLKOMMEN* 🌿\n\n⚠️ *VERSION 2.0*\n\nGespräche im *GEHEIMEN AUSTAUSCH*.\n\n🙏 *Danke* 💪💚",
+    "de": {
+        "welcome": "🌿 *WILLKOMMEN* 🌿\n\n⚠️ *VERSION 2.1*\n\nGespräche im *GEHEIMEN AUSTAUSCH*.\n\n🙏 *Danke* 💪💚",
         "main_menu": "\n\n📱 *MENÜ:*",
         "choose_country": "🌍 *Land:*",
         "choose_product": "🛒 *Produkt:*",
@@ -236,14 +255,14 @@ TRANSLATIONS = {
         "prices_switzerland": "🇨🇭 Preise Schweiz",
         "back_to_card": "🔙 Zurück zur Karte",
         "main_menu_btn": "🏠 Hauptmenü",
-        "price_list_fr": "🇫🇷 *PREISE FRANKREICH*\n\n❄️ *Coco*: 80€/g\n💊 *Pillen*:\n  • Squid Game: 10€\n  • Punisher: 10€\n🫒 *Hash*: 7€/g\n🍀 *Weed*: 8€/g\n\n📦 *Lieferung*:\n  • Post (48-72h): 10€\n  • Express (30min+): 10€/km",
-        "price_list_ch": "🇨🇭 *PREISE SCHWEIZ*\n\n❄️ *Coco*: 100€/g\n💊 *Pillen*:\n  • Squid Game: 15€\n  • Punisher: 15€\n🫒 *Hash*: 8€/g\n🍀 *Weed*: 10€/g\n\n📦 *Lieferung*:\n  • Post (48-72h): 10€\n  • Express (30min+): 10€/km",
+        "price_list_fr": "🇫🇷 *PREISE FRANKREICH*\n\n",
+        "price_list_ch": "🇨🇭 *PREISE SCHWEIZ*\n\n",
         "new_order": "🔄 Neue Bestellung",
         "address_too_short": "❌ Adresse zu kurz",
         "outside_hours": "⏰ Lieferungen geschlossen.\n\nÖffnungszeiten: {hours}"
     },
     "es": {
-        "welcome": "🌿 *BIENVENIDO* 🌿\n\n⚠️ *VERSIÓN 2.0*\n\nConversaciones en *INTERCAMBIO SECRETO*.\n\n🙏 *Gracias* 💪💚",
+        "welcome": "🌿 *BIENVENIDO* 🌿\n\n⚠️ *VERSIÓN 2.1*\n\nConversaciones en *INTERCAMBIO SECRETO*.\n\n🙏 *Gracias* 💪💚",
         "main_menu": "\n\n📱 *MENÚ:*",
         "choose_country": "🌍 *País:*",
         "choose_product": "🛒 *Producto:*",
@@ -283,14 +302,14 @@ TRANSLATIONS = {
         "prices_switzerland": "🇨🇭 Precios Suiza",
         "back_to_card": "🔙 Volver a carta",
         "main_menu_btn": "🏠 Menú principal",
-        "price_list_fr": "🇫🇷 *PRECIOS FRANCIA*\n\n❄️ *Coco*: 80€/g\n💊 *Pastillas*:\n  • Squid Game: 10€\n  • Punisher: 10€\n🫒 *Hash*: 7€/g\n🍀 *Weed*: 8€/g\n\n📦 *Entrega*:\n  • Postal (48-72h): 10€\n  • Express (30min+): 10€/km",
-        "price_list_ch": "🇨🇭 *PRECIOS SUIZA*\n\n❄️ *Coco*: 100€/g\n💊 *Pastillas*:\n  • Squid Game: 15€\n  • Punisher: 15€\n🫒 *Hash*: 8€/g\n🍀 *Weed*: 10€/g\n\n📦 *Entrega*:\n  • Postal (48-72h): 10€\n  • Express (30min+): 10€/km",
+        "price_list_fr": "🇪🇸 *PRECIOS FRANCIA*\n\n",
+        "price_list_ch": "🇨🇭 *PRECIOS SUIZA*\n\n",
         "new_order": "🔄 Nuevo pedido",
         "address_too_short": "❌ Dirección demasiado corta",
         "outside_hours": "⏰ Entregas cerradas.\n\nHorario: {hours}"
     },
     "it": {
-        "welcome": "🌿 *BENVENUTO* 🌿\n\n⚠️ *VERSIONE 2.0*\n\nConversazioni in *SCAMBIO SEGRETO*.\n\n🙏 *Grazie* 💪💚",
+        "welcome": "🌿 *BENVENUTO* 🌿\n\n⚠️ *VERSIONE 2.1*\n\nConversazioni in *SCAMBIO SEGRETO*.\n\n🙏 *Grazie* 💪💚",
         "main_menu": "\n\n📱 *MENU:*",
         "choose_country": "🌍 *Paese:*",
         "choose_product": "🛒 *Prodotto:*",
@@ -330,8 +349,8 @@ TRANSLATIONS = {
         "prices_switzerland": "🇨🇭 Prezzi Svizzera",
         "back_to_card": "🔙 Torna alla carta",
         "main_menu_btn": "🏠 Menu principale",
-        "price_list_fr": "🇫🇷 *PREZZI FRANCIA*\n\n❄️ *Coco*: 80€/g\n💊 *Pillole*:\n  • Squid Game: 10€\n  • Punisher: 10€\n🫒 *Hash*: 7€/g\n🍀 *Weed*: 8€/g\n\n📦 *Consegna*:\n  • Postale (48-72h): 10€\n  • Express (30min+): 10€/km",
-        "price_list_ch": "🇨🇭 *PREZZI SVIZZERA*\n\n❄️ *Coco*: 100€/g\n💊 *Pillole*:\n  • Squid Game: 15€\n  • Punisher: 15€\n🫒 *Hash*: 8€/g\n🍀 *Weed*: 10€/g\n\n📦 *Consegna*:\n  • Postale (48-72h): 10€\n  • Express (30min+): 10€/km",
+        "price_list_fr": "🇫🇷 *PREZZI FRANCIA*\n\n",
+        "price_list_ch": "🇨🇭 *PREZZI SVIZZERA*\n\n",
         "new_order": "🔄 Nuovo ordine",
         "address_too_short": "❌ Indirizzo troppo corto",
         "outside_hours": "⏰ Consegne chiuse.\n\nOrari: {hours}"
@@ -349,7 +368,6 @@ def load_available_products():
                 return set(data.get("available", list(PRIX_FR.keys())))
         except:
             pass
-    # Par défaut, tous les produits sont disponibles
     return set(PRIX_FR.keys())
 
 def save_available_products(products):
@@ -370,6 +388,63 @@ def is_product_available(product_name):
 def get_available_products():
     """Retourne la liste des produits disponibles"""
     return load_available_products()
+
+# ==================== GESTION DES PRIX ====================
+
+def load_prices():
+    """Charge les prix personnalisés depuis le fichier"""
+    if PRICES_FILE.exists():
+        try:
+            with open(PRICES_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            pass
+    return {"FR": PRIX_FR.copy(), "CH": PRIX_CH.copy()}
+
+def save_prices(prices):
+    """Sauvegarde les prix personnalisés"""
+    try:
+        with open(PRICES_FILE, 'w', encoding='utf-8') as f:
+            json.dump(prices, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        logger.error(f"Erreur sauvegarde prix: {e}")
+        return False
+
+def get_price(product_name, country):
+    """Récupère le prix d'un produit pour un pays"""
+    prices = load_prices()
+    return prices.get(country, {}).get(product_name, 0)
+
+def set_price(product_name, country, new_price):
+    """Modifie le prix d'un produit"""
+    prices = load_prices()
+    if country not in prices:
+        prices[country] = {}
+    prices[country][product_name] = new_price
+    return save_prices(prices)
+
+def get_formatted_price_list(country_code):
+    """Génère la liste formatée des prix pour un pays"""
+    prices = load_prices()
+    country = "FR" if country_code == "fr" else "CH"
+    country_prices = prices.get(country, PRIX_FR if country == "FR" else PRIX_CH)
+    
+    text = ""
+    text += f"❄️ *Coco* : {country_prices.get('❄️ Coco', 0)}€/g\n"
+    text += f"💊 *Pills* :\n"
+    text += f"  • Squid Game : {country_prices.get('💊 Squid Game', 0)}€\n"
+    text += f"  • Punisher : {country_prices.get('💊 Punisher', 0)}€\n"
+    text += f"🫒 *Hash* : {country_prices.get('🫒 Hash', 0)}€/g\n"
+    text += f"🍀 *Weed* : {country_prices.get('🍀 Weed', 0)}€/g\n"
+    text += f"🪨 *Crystal* :\n"
+    text += f"  • MDMA : {country_prices.get('🪨 MDMA', 0)}€/g\n"
+    text += f"  • 4MMC : {country_prices.get('🪨 4MMC', 0)}€/g\n"
+    text += f"\n📦 *Livraison* :\n"
+    text += f"  • Postale (48-72h) : 10€\n"
+    text += f"  • Express (30min+) : 10€/km"
+    
+    return text
 
 # ==================== FONCTIONS UTILITAIRES ====================
 
@@ -596,7 +671,8 @@ def calculate_distance_simple(address):
     return (hash_val % 50) + 5
 
 def calculate_total(cart, country, delivery_type=None, distance=0):
-    prix_table = PRIX_FR if country == "FR" else PRIX_CH
+    prices = load_prices()
+    prix_table = prices.get(country, PRIX_FR if country == "FR" else PRIX_CH)
     subtotal = sum(prix_table.get(item["produit"], 0) * item["quantite"] for item in cart)
     if delivery_type:
         delivery_fee = calculate_delivery_fee(delivery_type, distance, subtotal)
@@ -695,6 +771,7 @@ async def send_product_media(context, chat_id, product_name, caption):
         parse_mode='Markdown'
     )
     return False
+
 
 # ==================== COMMANDES ADMIN GESTION PRODUITS ====================
 
@@ -799,6 +876,111 @@ async def admin_add_product_command(update: Update, context: ContextTypes.DEFAUL
     await update.message.reply_text(f"✅ *Produit disponible*\n\n✅ {product_name}\n\n_Les clients peuvent maintenant commander ce produit._", parse_mode='Markdown')
     logger.info(f"🟢 Produit activé: {product_name}")
 
+# ==================== COMMANDES ADMIN GESTION PRIX ====================
+
+@error_handler
+async def admin_prices_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche tous les prix actuels"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return
+    
+    prices = load_prices()
+    
+    text = "💰 *GESTION DES PRIX*\n\n"
+    
+    text += "🇫🇷 *FRANCE :*\n"
+    for product in sorted(PRIX_FR.keys()):
+        current_price = prices.get("FR", {}).get(product, PRIX_FR[product])
+        text += f"  • {product} : {current_price}€\n"
+    
+    text += "\n🇨🇭 *SUISSE :*\n"
+    for product in sorted(PRIX_CH.keys()):
+        current_price = prices.get("CH", {}).get(product, PRIX_CH[product])
+        text += f"  • {product} : {current_price}€\n"
+    
+    text += "\n💡 *Commande :*\n"
+    text += "`/setprice <code> <pays> <prix>`\n\n"
+    text += "*Exemples :*\n"
+    text += "`/setprice coco fr 85`\n"
+    text += "`/setprice weed ch 12`\n\n"
+    text += "*Codes produits :*\n"
+    for code, name in sorted(PRODUCT_CODES.items()):
+        text += f"  • `{code}` → {name}\n"
+    
+    await update.message.reply_text(text, parse_mode='Markdown')
+
+@error_handler
+async def admin_setprice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Modifie le prix d'un produit"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return
+    
+    if len(context.args) != 3:
+        text = "❌ *Usage :* `/setprice <code> <pays> <prix>`\n\n"
+        text += "*Exemples :*\n"
+        text += "• `/setprice coco fr 85`\n"
+        text += "• `/setprice weed ch 12`\n"
+        text += "• `/setprice squid fr 8`\n\n"
+        text += "*Pays :* `fr` ou `ch`\n\n"
+        text += "*Codes disponibles :*\n"
+        for code, name in sorted(PRODUCT_CODES.items()):
+            text += f"  • `{code}` → {name}\n"
+        await update.message.reply_text(text, parse_mode='Markdown')
+        return
+    
+    code = context.args[0].lower()
+    country_code = context.args[1].lower()
+    
+    # Validation du code produit
+    product_name = PRODUCT_CODES.get(code)
+    if not product_name:
+        await update.message.reply_text(
+            f"❌ Code invalide: `{code}`\n\nUtilisez `/prices` pour voir les codes.",
+            parse_mode='Markdown'
+        )
+        return
+    
+    # Validation du pays
+    if country_code not in ['fr', 'ch']:
+        await update.message.reply_text(
+            "❌ Pays invalide. Utilisez `fr` ou `ch`.",
+            parse_mode='Markdown'
+        )
+        return
+    
+    country = "FR" if country_code == "fr" else "CH"
+    
+    # Validation du prix
+    try:
+        new_price = float(context.args[2])
+        if new_price <= 0:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text(
+            "❌ Prix invalide. Entrez un nombre positif.",
+            parse_mode='Markdown'
+        )
+        return
+    
+    # Récupérer l'ancien prix
+    prices = load_prices()
+    old_price = prices.get(country, {}).get(product_name, 
+                PRIX_FR[product_name] if country == "FR" else PRIX_CH[product_name])
+    
+    # Modifier le prix
+    if set_price(product_name, country, new_price):
+        flag = "🇫🇷" if country == "FR" else "🇨🇭"
+        text = f"✅ *Prix modifié*\n\n"
+        text += f"{flag} {product_name}\n"
+        text += f"Ancien : {old_price}€\n"
+        text += f"Nouveau : {new_price}€"
+        await update.message.reply_text(text, parse_mode='Markdown')
+        logger.info(f"💰 Prix modifié: {product_name} ({country}) {old_price}€ → {new_price}€")
+    else:
+        await update.message.reply_text("❌ Erreur lors de la modification du prix.")
+
 # ==================== HANDLERS ====================
 
 @error_handler
@@ -858,10 +1040,10 @@ async def afficher_prix(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     if query.data == "prix_france":
-        text = tr(context.user_data, "price_list_fr")
+        text = tr(context.user_data, "price_list_fr") + get_formatted_price_list("fr")
         image_path = IMAGE_PRIX_FRANCE
     else:
-        text = tr(context.user_data, "price_list_ch")
+        text = tr(context.user_data, "price_list_ch") + get_formatted_price_list("ch")
         image_path = IMAGE_PRIX_SUISSE
     
     keyboard = [
@@ -871,12 +1053,21 @@ async def afficher_prix(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     
     if image_path.exists():
-        await query.message.delete()
-        with open(image_path, 'rb') as photo:
-            await context.bot.send_photo(
+        try:
+            await query.message.delete()
+            with open(image_path, 'rb') as photo:
+                await context.bot.send_photo(
+                    chat_id=query.message.chat_id,
+                    photo=photo,
+                    caption=text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+        except Exception as e:
+            logger.error(f"Erreur envoi image: {e}")
+            await context.bot.send_message(
                 chat_id=query.message.chat_id,
-                photo=photo,
-                caption=text,
+                text=text,
                 reply_markup=InlineKeyboardMarkup(keyboard),
                 parse_mode='Markdown'
             )
@@ -889,13 +1080,30 @@ async def afficher_prix(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    
+    user_id = update.effective_user.id
     text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
+    
+    if user_id == ADMIN_ID:
+        text += "\n\n🔑 *MODE ADMINISTRATEUR*\n✅ Accès illimité 24h/24"
+    
     keyboard = [
         [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
         [InlineKeyboardButton(tr(context.user_data, "pirate_card"), callback_data="voir_carte")],
         [InlineKeyboardButton(tr(context.user_data, "contact_admin"), callback_data="contact_admin")]
     ]
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    
+    try:
+        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    except Exception as e:
+        logger.error(f"Erreur edit_text: {e}")
+        await query.message.delete()
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text=text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
     return PAYS
 
 @error_handler
@@ -1197,7 +1405,13 @@ async def restart_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     saved_lang = context.user_data.get('langue', 'fr')
     context.user_data.clear()
     context.user_data['langue'] = saved_lang
+    
+    user_id = update.effective_user.id
     text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
+    
+    if user_id == ADMIN_ID:
+        text += "\n\n🔑 *MODE ADMINISTRATEUR*\n✅ Accès illimité 24h/24"
+    
     keyboard = [
         [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
         [InlineKeyboardButton(tr(context.user_data, "pirate_card"), callback_data="voir_carte")],
@@ -1211,17 +1425,7 @@ async def back_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    if query.data == "back_to_main":
-        text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
-        keyboard = [
-            [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
-            [InlineKeyboardButton(tr(context.user_data, "pirate_card"), callback_data="voir_carte")],
-            [InlineKeyboardButton(tr(context.user_data, "contact_admin"), callback_data="contact_admin")]
-        ]
-        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-        return PAYS
-    
-    elif query.data == "back_to_country_choice":
+    if query.data == "back_to_country_choice":
         keyboard = [
             [InlineKeyboardButton(tr(context.user_data, "france"), callback_data="country_FR")],
             [InlineKeyboardButton(tr(context.user_data, "switzerland"), callback_data="country_CH")],
@@ -1370,11 +1574,12 @@ async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def error_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Exception: {context.error}", exc_info=context.error)
 
+
 # ==================== FONCTION PRINCIPALE ====================
 
 async def main_async():
     logger.info("=" * 60)
-    logger.info("🤖 BOT TELEGRAM V2.1 - GESTION PRODUITS DYNAMIQUE")
+    logger.info("🤖 BOT TELEGRAM V2.1 - GESTION PRODUITS ET PRIX DYNAMIQUES")
     logger.info("=" * 60)
     logger.info(f"📱 Token: {TOKEN[:5]}***[MASKED]")
     logger.info(f"👤 Admin: ***{str(ADMIN_ID)[-3:]}")
@@ -1401,6 +1606,18 @@ async def main_async():
         logger.info("\n❌ Produits en rupture de stock:")
         for product in sorted(unavailable):
             logger.info(f"  ❌ {product}")
+    
+    # Afficher les prix actuels
+    prices = load_prices()
+    logger.info("\n💰 Prix France:")
+    for product in sorted(PRIX_FR.keys()):
+        price = prices.get("FR", {}).get(product, PRIX_FR[product])
+        logger.info(f"  • {product}: {price}€")
+    
+    logger.info("\n💰 Prix Suisse:")
+    for product in sorted(PRIX_CH.keys()):
+        price = prices.get("CH", {}).get(product, PRIX_CH[product])
+        logger.info(f"  • {product}: {price}€")
     
     logger.info("=" * 60)
     
@@ -1479,6 +1696,8 @@ async def main_async():
     application.add_handler(CommandHandler('products', admin_products_command))
     application.add_handler(CommandHandler('del', admin_del_product_command))
     application.add_handler(CommandHandler('add', admin_add_product_command))
+    application.add_handler(CommandHandler('prices', admin_prices_command))
+    application.add_handler(CommandHandler('setprice', admin_setprice_command))
     application.add_handler(CallbackQueryHandler(admin_validation_livraison, pattern='^admin_validate_'))
     application.add_error_handler(error_callback)
     
@@ -1497,6 +1716,8 @@ async def main_async():
     logger.info("  • /products - Voir l'état des produits")
     logger.info("  • /del <code> - Masquer un produit")
     logger.info("  • /add <code> - Activer un produit")
+    logger.info("  • /prices - Voir tous les prix")
+    logger.info("  • /setprice <code> <pays> <prix> - Modifier un prix")
     logger.info("  • /horaires - Gérer les horaires")
     logger.info("  • /stats - Voir les statistiques")
     logger.info("=" * 60 + "\n")

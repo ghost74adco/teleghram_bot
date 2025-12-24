@@ -39,6 +39,7 @@ else:
 TOKEN = (os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("BOT_TOKEN") or "").strip()
 ADMIN_ID_STR = (os.getenv("ADMIN_ID") or os.getenv("ADMIN_USER_IDS") or "").strip()
 ADMIN_ADDRESS = (os.getenv("ADMIN_ADDRESS") or "858 Rte du Chef Lieu, 74250 Fillinges").strip()
+OPENROUTE_API_KEY = os.getenv("OPENROUTE_API_KEY", "").strip()
 
 if not TOKEN or ':' not in TOKEN:
     logger.error("❌ TOKEN invalide")
@@ -55,6 +56,38 @@ try:
 except ImportError:
     logger.error("❌ pip install python-telegram-bot")
     sys.exit(1)
+
+# ==================== CONFIGURATION CALCUL DE DISTANCE ====================
+
+distance_client = None
+DISTANCE_METHOD = "simulation"
+
+if OPENROUTE_API_KEY:
+    try:
+        import openrouteservice
+        distance_client = openrouteservice.Client(key=OPENROUTE_API_KEY)
+        DISTANCE_METHOD = "openroute"
+        logger.info("✅ OpenRouteService - Distance réelle activée")
+    except ImportError:
+        logger.warning("⚠️ pip install openrouteservice")
+    except Exception as e:
+        logger.error(f"❌ OpenRouteService: {e}")
+
+if DISTANCE_METHOD == "simulation":
+    try:
+        from geopy.geocoders import Nominatim
+        from geopy.distance import geodesic
+        distance_client = Nominatim(user_agent="telegram_bot_v2_1")
+        DISTANCE_METHOD = "geopy"
+        logger.info("✅ Geopy - Distance approximative")
+    except:
+        pass
+
+if DISTANCE_METHOD == "simulation":
+    logger.warning("⚠️ DISTANCE SIMULÉE")
+    logger.warning("   Pour activer: pip install openrouteservice")
+    logger.warning("   Clé gratuite: https://openrouteservice.org/dev/#/signup")
+
 
 # ==================== CONFIGURATION MÉDIAS ====================
 
@@ -112,8 +145,8 @@ PRIX_FR = {
     "💊 Punisher": 10, 
     "🫒 Hash": 7, 
     "🍀 Weed": 8,
-    "🪨 MDMA": 50,
-    "🪨 4MMC": 50
+    "🪨 MDMA": 12,
+    "🪨 4MMC": 12
 }
 
 PRIX_CH = {
@@ -122,8 +155,8 @@ PRIX_CH = {
     "💊 Punisher": 15, 
     "🫒 Hash": 8, 
     "🍀 Weed": 10,
-    "🪨 MDMA": 60,
-    "🪨 4MMC": 60
+    "🪨 MDMA": 18,
+    "🪨 4MMC": 18
 }
 
 # Fichiers de configuration
@@ -665,10 +698,74 @@ def calculate_delivery_fee(delivery_type, distance=0, subtotal=0):
         return frais_final
     return 0
 
-def calculate_distance_simple(address):
+def calculate_distance_openroute(origin, destination):
+    """Calcul distance réelle avec OpenRouteService"""
+    try:
+        geocode_origin = distance_client.pelias_search(text=origin)
+        geocode_dest = distance_client.pelias_search(text=destination)
+        
+        if not geocode_origin["features"] or not geocode_dest["features"]:
+            raise Exception("Adresse non trouvée")
+        
+        coords_origin = geocode_origin["features"][0]["geometry"]["coordinates"]
+        coords_dest = geocode_dest["features"][0]["geometry"]["coordinates"]
+        
+        route = distance_client.directions(
+            coordinates=[coords_origin, coords_dest],
+            profile="driving-car",
+            format="geojson"
+        )
+        
+        distance_m = route["features"][0]["properties"]["segments"][0]["distance"]
+        distance_km = math.ceil(distance_m / 1000)
+        logger.info(f"📍 Distance: {distance_km} km (OpenRouteService)")
+        return distance_km
+    except Exception as e:
+        logger.error(f"❌ OpenRouteService: {e}")
+        return None
+
+def calculate_distance_geopy(origin, destination):
+    """Calcul distance avec Geopy (vol d'oiseau + 30%)"""
+    try:
+        loc_origin = distance_client.geocode(origin)
+        loc_dest = distance_client.geocode(destination)
+        
+        if not loc_origin or not loc_dest:
+            raise Exception("Adresse non trouvée")
+        
+        coords_origin = (loc_origin.latitude, loc_origin.longitude)
+        coords_dest = (loc_dest.latitude, loc_dest.longitude)
+        
+        distance_km = geodesic(coords_origin, coords_dest).kilometers * 1.3
+        distance_km = math.ceil(distance_km)
+        logger.info(f"📍 Distance: {distance_km} km (Geopy approximatif)")
+        return distance_km
+    except Exception as e:
+        logger.error(f"❌ Geopy: {e}")
+        return None
+
+def calculate_distance_simulation(address):
+    """Simulation distance par hash"""
     import hashlib
     hash_val = int(hashlib.md5(address.encode()).hexdigest()[:8], 16)
-    return (hash_val % 50) + 5
+    distance = (hash_val % 50) + 5
+    logger.info(f"📍 Distance: {distance} km (simulée)")
+    return distance
+
+def calculate_distance_simple(address):
+    """Calcul distance avec fallback automatique"""
+    distance = None
+    
+    if DISTANCE_METHOD == "openroute":
+        distance = calculate_distance_openroute(ADMIN_ADDRESS, address)
+    elif DISTANCE_METHOD == "geopy":
+        distance = calculate_distance_geopy(ADMIN_ADDRESS, address)
+    
+    if distance is None:
+        logger.warning("⚠️ Fallback sur simulation")
+        distance = calculate_distance_simulation(address)
+    
+    return distance
 
 def calculate_total(cart, country, delivery_type=None, distance=0):
     prices = load_prices()
@@ -1318,6 +1415,14 @@ async def choix_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
         subtotal, _, _ = calculate_total(context.user_data['cart'], context.user_data['pays'])
         delivery_fee = calculate_delivery_fee("express", distance_km, subtotal)
         distance_text = tr(context.user_data, "distance_calculated").format(distance=distance_km, fee=delivery_fee)
+        
+        # Indicateur méthode de calcul
+        if DISTANCE_METHOD == "openroute":
+            distance_text += "\n📍 _Distance routière réelle_"
+        elif DISTANCE_METHOD == "geopy":
+            distance_text += "\n📏 _Distance approximative_"
+        else:
+            distance_text += "\n⚠️ _Distance estimée_"
         keyboard = [
             [InlineKeyboardButton(tr(context.user_data, "cash"), callback_data="payment_cash")],
             [InlineKeyboardButton(tr(context.user_data, "crypto"), callback_data="payment_crypto")]

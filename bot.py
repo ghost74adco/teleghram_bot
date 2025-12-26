@@ -77,7 +77,7 @@ if DISTANCE_METHOD == "simulation":
     try:
         from geopy.geocoders import Nominatim
         from geopy.distance import geodesic
-        distance_client = Nominatim(user_agent="telegram_bot_v2_1")
+        distance_client = Nominatim(user_agent="telegram_bot_v2_2")
         DISTANCE_METHOD = "geopy"
         logger.info("✅ Geopy - Distance approximative")
     except:
@@ -123,6 +123,13 @@ FRAIS_POSTAL = 10
 LANGUE, PAYS, PRODUIT, PILL_SUBCATEGORY, ROCK_SUBCATEGORY = range(5)
 QUANTITE, CART_MENU, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION, CONTACT = range(5, 12)
 ADMIN_HORAIRES_INPUT = 12
+ADMIN_PRODUCT_MENU = 13
+ADMIN_NEW_PRODUCT_NAME = 14
+ADMIN_NEW_PRODUCT_CODE = 15
+ADMIN_NEW_PRODUCT_CATEGORY = 16
+ADMIN_NEW_PRODUCT_PRICE_FR = 17
+ADMIN_NEW_PRODUCT_PRICE_CH = 18
+ADMIN_CONFIRM_PRODUCT = 19
 
 PILL_SUBCATEGORIES = {"squid_game": "💊 Squid Game", "punisher": "💊 Punisher"}
 ROCK_SUBCATEGORIES = {"mdma": "🪨 MDMA", "fourmmc": "🪨 4MMC"}
@@ -165,10 +172,12 @@ STATS_FILE = Path(__file__).parent / "stats.json"
 PENDING_MESSAGES_FILE = Path(__file__).parent / "pending_messages.json"
 AVAILABLE_PRODUCTS_FILE = Path(__file__).parent / "available_products.json"
 PRICES_FILE = Path(__file__).parent / "prices.json"
+ARCHIVED_PRODUCTS_FILE = Path(__file__).parent / "archived_products.json"
+USERS_FILE = Path(__file__).parent / "users.json"
 
 TRANSLATIONS = {
     "fr": {
-        "welcome": "🌿 *BIENVENUE* 🌿\n\n⚠️ *VERSION 2.1*\n\nConversations en *ÉCHANGE SECRET*.\n\n🙏 *Merci* 💪💚",
+        "welcome": "🌿 *BIENVENUE* 🌿\n\n⚠️ *VERSION 2.2*\n\nConversations en *ÉCHANGE SECRET*.\n\n🙏 *Merci* 💪💚",
         "main_menu": "\n\n📱 *MENU :*",
         "choose_country": "🌍 *Pays :*",
         "choose_product": "🛒 *Produit :*",
@@ -208,7 +217,7 @@ TRANSLATIONS = {
         "outside_hours": "⏰ Livraisons fermées.\n\nHoraires : {hours}"
     },
     "en": {
-        "welcome": "🌿 *WELCOME* 🌿\n\n⚠️ *VERSION 2.1*\n\nConversations in *SECRET EXCHANGE*.\n\n🙏 *Thank you* 💪💚",
+        "welcome": "🌿 *WELCOME* 🌿\n\n⚠️ *VERSION 2.2*\n\nConversations in *SECRET EXCHANGE*.\n\n🙏 *Thank you* 💪💚",
         "main_menu": "\n\n📱 *MENU:*",
         "choose_country": "🌍 *Country:*",
         "choose_product": "🛒 *Product:*",
@@ -248,7 +257,7 @@ TRANSLATIONS = {
         "outside_hours": "⏰ Deliveries closed.\n\nHours: {hours}"
     },
     "de": {
-        "welcome": "🌿 *WILLKOMMEN* 🌿\n\n⚠️ *VERSION 2.1*\n\nGespräche im *GEHEIMEN AUSTAUSCH*.\n\n🙏 *Danke* 💪💚",
+        "welcome": "🌿 *WILLKOMMEN* 🌿\n\n⚠️ *VERSION 2.2*\n\nGespräche im *GEHEIMEN AUSTAUSCH*.\n\n🙏 *Danke* 💪💚",
         "main_menu": "\n\n📱 *MENÜ:*",
         "choose_country": "🌍 *Land:*",
         "choose_product": "🛒 *Produkt:*",
@@ -295,7 +304,7 @@ TRANSLATIONS = {
         "outside_hours": "⏰ Lieferungen geschlossen.\n\nÖffnungszeiten: {hours}"
     },
     "es": {
-        "welcome": "🌿 *BIENVENIDO* 🌿\n\n⚠️ *VERSIÓN 2.1*\n\nConversaciones en *INTERCAMBIO SECRETO*.\n\n🙏 *Gracias* 💪💚",
+        "welcome": "🌿 *BIENVENIDO* 🌿\n\n⚠️ *VERSIÓN 2.2*\n\nConversaciones en *INTERCAMBIO SECRETO*.\n\n🙏 *Gracias* 💪💚",
         "main_menu": "\n\n📱 *MENÚ:*",
         "choose_country": "🌍 *País:*",
         "choose_product": "🛒 *Producto:*",
@@ -342,7 +351,7 @@ TRANSLATIONS = {
         "outside_hours": "⏰ Entregas cerradas.\n\nHorario: {hours}"
     },
     "it": {
-        "welcome": "🌿 *BENVENUTO* 🌿\n\n⚠️ *VERSIONE 2.1*\n\nConversazioni in *SCAMBIO SEGRETO*.\n\n🙏 *Grazie* 💪💚",
+        "welcome": "🌿 *BENVENUTO* 🌿\n\n⚠️ *VERSIONE 2.2*\n\nConversazioni in *SCAMBIO SEGRETO*.\n\n🙏 *Grazie* 💪💚",
         "main_menu": "\n\n📱 *MENU:*",
         "choose_country": "🌍 *Paese:*",
         "choose_product": "🛒 *Prodotto:*",
@@ -457,6 +466,162 @@ def set_price(product_name, country, new_price):
     prices[country][product_name] = new_price
     return save_prices(prices)
 
+# ==================== GESTION AVANCÉE DES PRODUITS (NOUVEAU) ====================
+
+def load_archived_products():
+    """Charge les produits archivés"""
+    if ARCHIVED_PRODUCTS_FILE.exists():
+        try:
+            with open(ARCHIVED_PRODUCTS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+def save_archived_products(archived):
+    """Sauvegarde les produits archivés"""
+    with open(ARCHIVED_PRODUCTS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(archived, f, indent=2, ensure_ascii=False)
+
+def add_new_product(name, code, emoji, category, price_fr, price_ch):
+    """Ajoute un nouveau produit au système"""
+    PRODUCT_CODES[code] = name
+    prices = load_prices()
+    prices["FR"][name] = price_fr
+    prices["CH"][name] = price_ch
+    save_prices(prices)
+    available = load_available_products()
+    available.add(name)
+    save_available_products(available)
+    if category == "pill":
+        PILL_SUBCATEGORIES[code] = name
+    elif category == "rock":
+        ROCK_SUBCATEGORIES[code] = name
+    logger.info(f"✅ Produit créé: {name} ({code})")
+    return True
+
+def archive_product(product_name):
+    """Archive un produit (suppression réversible)"""
+    archived = load_archived_products()
+    prices = load_prices()
+    product_info = {
+        "name": product_name,
+        "price_fr": prices["FR"].get(product_name, 0),
+        "price_ch": prices["CH"].get(product_name, 0),
+        "archived_at": datetime.now().isoformat()
+    }
+    for code, name in PRODUCT_CODES.items():
+        if name == product_name:
+            product_info["code"] = code
+            if code in PILL_SUBCATEGORIES:
+                product_info["category"] = "pill"
+            elif code in ROCK_SUBCATEGORIES:
+                product_info["category"] = "rock"
+            else:
+                product_info["category"] = "powder"
+            break
+    archived[product_name] = product_info
+    save_archived_products(archived)
+    available = load_available_products()
+    if product_name in available:
+        available.remove(product_name)
+    save_available_products(available)
+    if product_name in prices["FR"]:
+        del prices["FR"][product_name]
+    if product_name in prices["CH"]:
+        del prices["CH"][product_name]
+    save_prices(prices)
+    logger.info(f"📦 Produit archivé: {product_name}")
+    return True
+
+def restore_product(product_name):
+    """Restaure un produit archivé"""
+    archived = load_archived_products()
+    if product_name not in archived:
+        return False
+    info = archived[product_name]
+    add_new_product(
+        name=info["name"],
+        code=info["code"],
+        emoji=info["name"].split()[0],
+        category=info["category"],
+        price_fr=info["price_fr"],
+        price_ch=info["price_ch"]
+    )
+    del archived[product_name]
+    save_archived_products(archived)
+    logger.info(f"♻️ Produit restauré: {product_name}")
+    return True
+
+# ==================== NOTIFICATION CONNEXIONS (NOUVEAU) ====================
+
+def load_users():
+    """Charge la liste des utilisateurs"""
+    if USERS_FILE.exists():
+        try:
+            with open(USERS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+def save_users(users):
+    """Sauvegarde la liste des utilisateurs"""
+    with open(USERS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(users, f, indent=2, ensure_ascii=False)
+
+def is_new_user(user_id):
+    """Vérifie si c'est un nouvel utilisateur"""
+    users = load_users()
+    return str(user_id) not in users
+
+def add_user(user_id, user_data):
+    """Ajoute un utilisateur"""
+    users = load_users()
+    users[str(user_id)] = {
+        "first_seen": datetime.now().isoformat(),
+        "last_seen": datetime.now().isoformat(),
+        "username": user_data.get("username"),
+        "first_name": user_data.get("first_name"),
+        "last_name": user_data.get("last_name"),
+        "visit_count": 1
+    }
+    save_users(users)
+    return True
+
+def update_user_visit(user_id):
+    """Met à jour la visite d'un utilisateur"""
+    users = load_users()
+    if str(user_id) in users:
+        users[str(user_id)]["last_seen"] = datetime.now().isoformat()
+        users[str(user_id)]["visit_count"] = users[str(user_id)].get("visit_count", 0) + 1
+        save_users(users)
+
+async def notify_admin_new_user(context, user_id, user_data):
+    """Notifie l'admin d'un nouvel utilisateur"""
+    username = user_data.get("username", "N/A")
+    first_name = user_data.get("first_name", "N/A")
+    last_name = user_data.get("last_name", "")
+    full_name = f"{first_name} {last_name}".strip()
+    notification = f"""🆕 *NOUVELLE CONNEXION*
+
+👤 *Utilisateur :*
+• Nom : {full_name}
+• Username : @{username if username != 'N/A' else 'Non défini'}
+• ID : `{user_id}`
+
+📅 *Date :* {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+
+💬 _L'utilisateur vient de démarrer le bot_
+"""
+    try:
+        await context.bot.send_message(chat_id=ADMIN_ID, text=notification, parse_mode='Markdown')
+        logger.info(f"✅ Admin notifié - Nouveau user: {user_id}")
+    except Exception as e:
+        logger.error(f"❌ Erreur notification admin: {e}")
+
+# ==================== FONCTIONS UTILITAIRES ====================
+
 def get_formatted_price_list(country_code):
     """Génère la liste formatée des prix pour un pays"""
     prices = load_prices()
@@ -478,8 +643,6 @@ def get_formatted_price_list(country_code):
     text += f"  • Express (30min+) : 10€/km"
     
     return text
-
-# ==================== FONCTIONS UTILITAIRES ====================
 
 def load_horaires():
     if HORAIRES_FILE.exists():
@@ -693,7 +856,7 @@ def calculate_delivery_fee(delivery_type, distance=0, subtotal=0):
         return FRAIS_POSTAL
     elif delivery_type == "express":
         distance_arrondie = math.ceil(distance)
-        frais_brut = distance_arrondie * 1
+        frais_brut = distance_arrondie * 10
         frais_final = math.ceil(frais_brut / 10) * 10
         return frais_final
     return 0
@@ -819,9 +982,7 @@ def error_handler(func):
 # ==================== FONCTION D'ENVOI DE MÉDIA ====================
 
 async def send_product_media(context, chat_id, product_name, caption):
-    """
-    Envoie le média d'un produit (vidéo prioritaire, sinon image, sinon texte)
-    """
+    """Envoie le média d'un produit (vidéo prioritaire, sinon image, sinon texte)"""
     product_video_path = VIDEOS_PRODUITS.get(product_name)
     product_image_path = IMAGES_PRODUITS.get(product_name)
     
@@ -829,7 +990,6 @@ async def send_product_media(context, chat_id, product_name, caption):
     logger.info(f"📹 Vidéo: {product_video_path} (existe: {product_video_path and product_video_path.exists()})")
     logger.info(f"🖼️ Image: {product_image_path} (existe: {product_image_path and product_image_path.exists()})")
     
-    # Priorité 1 : Vidéo
     if product_video_path and product_video_path.exists():
         try:
             with open(product_video_path, 'rb') as video:
@@ -845,7 +1005,6 @@ async def send_product_media(context, chat_id, product_name, caption):
         except Exception as e:
             logger.error(f"❌ Erreur envoi vidéo {product_name}: {e}")
     
-    # Priorité 2 : Image
     if product_image_path and product_image_path.exists():
         try:
             with open(product_image_path, 'rb') as photo:
@@ -860,7 +1019,6 @@ async def send_product_media(context, chat_id, product_name, caption):
         except Exception as e:
             logger.error(f"❌ Erreur envoi image {product_name}: {e}")
     
-    # Priorité 3 : Texte seulement
     logger.warning(f"⚠️ Aucun média trouvé pour {product_name}, envoi texte uniquement")
     await context.bot.send_message(
         chat_id=chat_id,
@@ -869,221 +1027,32 @@ async def send_product_media(context, chat_id, product_name, caption):
     )
     return False
 
+# ==================== SUITE DE LA PARTIE 1 ====================
+# COLLEZ CE FICHIER JUSTE APRÈS bot_v2_2_PARTIE_1.py
 
-# ==================== COMMANDES ADMIN GESTION PRODUITS ====================
-
-@error_handler
-async def admin_products_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Affiche l'état de tous les produits"""
-    if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ Admin uniquement.")
-        return
-    
-    available = get_available_products()
-    all_products = list(PRIX_FR.keys())
-    
-    text = "📦 *GESTION DES PRODUITS*\n\n"
-    text += "✅ *Disponibles :*\n"
-    for product in sorted(all_products):
-        if product in available:
-            text += f"  • {product}\n"
-    
-    text += "\n❌ *Rupture de stock :*\n"
-    unavailable = [p for p in all_products if p not in available]
-    if unavailable:
-        for product in sorted(unavailable):
-            text += f"  • {product}\n"
-    else:
-        text += "  _Aucun_\n"
-    
-    text += "\n💡 *Commandes :*\n"
-    text += "`/del <code>` - Masquer un produit\n"
-    text += "`/add <code>` - Rendre disponible\n\n"
-    text += "*Codes produits :*\n"
-    for code, name in sorted(PRODUCT_CODES.items()):
-        text += f"  • `{code}` → {name}\n"
-    
-    await update.message.reply_text(text, parse_mode='Markdown')
-
-@error_handler
-async def admin_del_product_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Masque un produit (rupture de stock)"""
-    if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ Admin uniquement.")
-        return
-    
-    if not context.args:
-        text = "❌ *Usage :* `/del <code>`\n\n*Codes disponibles :*\n"
-        for code, name in sorted(PRODUCT_CODES.items()):
-            text += f"  • `{code}` → {name}\n"
-        text += "\n*Exemple :* `/del weed`"
-        await update.message.reply_text(text, parse_mode='Markdown')
-        return
-    
-    code = context.args[0].lower()
-    product_name = PRODUCT_CODES.get(code)
-    
-    if not product_name:
-        await update.message.reply_text(f"❌ Code invalide: `{code}`\n\nUtilisez `/products` pour voir les codes.", parse_mode='Markdown')
-        return
-    
-    available = get_available_products()
-    
-    if product_name not in available:
-        await update.message.reply_text(f"⚠️ {product_name} est déjà en rupture de stock.", parse_mode='Markdown')
-        return
-    
-    available.remove(product_name)
-    save_available_products(available)
-    
-    await update.message.reply_text(f"✅ *Produit masqué*\n\n❌ {product_name}\n\n_Les clients ne verront plus ce produit._", parse_mode='Markdown')
-    logger.info(f"🔴 Produit masqué: {product_name}")
-
-@error_handler
-async def admin_add_product_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Rend un produit disponible"""
-    if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ Admin uniquement.")
-        return
-    
-    if not context.args:
-        text = "❌ *Usage :* `/add <code>`\n\n*Codes disponibles :*\n"
-        for code, name in sorted(PRODUCT_CODES.items()):
-            text += f"  • `{code}` → {name}\n"
-        text += "\n*Exemple :* `/add weed`"
-        await update.message.reply_text(text, parse_mode='Markdown')
-        return
-    
-    code = context.args[0].lower()
-    product_name = PRODUCT_CODES.get(code)
-    
-    if not product_name:
-        await update.message.reply_text(f"❌ Code invalide: `{code}`\n\nUtilisez `/products` pour voir les codes.", parse_mode='Markdown')
-        return
-    
-    available = get_available_products()
-    
-    if product_name in available:
-        await update.message.reply_text(f"⚠️ {product_name} est déjà disponible.", parse_mode='Markdown')
-        return
-    
-    available.add(product_name)
-    save_available_products(available)
-    
-    await update.message.reply_text(f"✅ *Produit disponible*\n\n✅ {product_name}\n\n_Les clients peuvent maintenant commander ce produit._", parse_mode='Markdown')
-    logger.info(f"🟢 Produit activé: {product_name}")
-
-# ==================== COMMANDES ADMIN GESTION PRIX ====================
-
-@error_handler
-async def admin_prices_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Affiche tous les prix actuels"""
-    if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ Admin uniquement.")
-        return
-    
-    prices = load_prices()
-    
-    text = "💰 *GESTION DES PRIX*\n\n"
-    
-    text += "🇫🇷 *FRANCE :*\n"
-    for product in sorted(PRIX_FR.keys()):
-        current_price = prices.get("FR", {}).get(product, PRIX_FR[product])
-        text += f"  • {product} : {current_price}€\n"
-    
-    text += "\n🇨🇭 *SUISSE :*\n"
-    for product in sorted(PRIX_CH.keys()):
-        current_price = prices.get("CH", {}).get(product, PRIX_CH[product])
-        text += f"  • {product} : {current_price}€\n"
-    
-    text += "\n💡 *Commande :*\n"
-    text += "`/setprice <code> <pays> <prix>`\n\n"
-    text += "*Exemples :*\n"
-    text += "`/setprice coco fr 85`\n"
-    text += "`/setprice weed ch 12`\n\n"
-    text += "*Codes produits :*\n"
-    for code, name in sorted(PRODUCT_CODES.items()):
-        text += f"  • `{code}` → {name}\n"
-    
-    await update.message.reply_text(text, parse_mode='Markdown')
-
-@error_handler
-async def admin_setprice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Modifie le prix d'un produit"""
-    if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ Admin uniquement.")
-        return
-    
-    if len(context.args) != 3:
-        text = "❌ *Usage :* `/setprice <code> <pays> <prix>`\n\n"
-        text += "*Exemples :*\n"
-        text += "• `/setprice coco fr 85`\n"
-        text += "• `/setprice weed ch 12`\n"
-        text += "• `/setprice squid fr 8`\n\n"
-        text += "*Pays :* `fr` ou `ch`\n\n"
-        text += "*Codes disponibles :*\n"
-        for code, name in sorted(PRODUCT_CODES.items()):
-            text += f"  • `{code}` → {name}\n"
-        await update.message.reply_text(text, parse_mode='Markdown')
-        return
-    
-    code = context.args[0].lower()
-    country_code = context.args[1].lower()
-    
-    # Validation du code produit
-    product_name = PRODUCT_CODES.get(code)
-    if not product_name:
-        await update.message.reply_text(
-            f"❌ Code invalide: `{code}`\n\nUtilisez `/prices` pour voir les codes.",
-            parse_mode='Markdown'
-        )
-        return
-    
-    # Validation du pays
-    if country_code not in ['fr', 'ch']:
-        await update.message.reply_text(
-            "❌ Pays invalide. Utilisez `fr` ou `ch`.",
-            parse_mode='Markdown'
-        )
-        return
-    
-    country = "FR" if country_code == "fr" else "CH"
-    
-    # Validation du prix
-    try:
-        new_price = float(context.args[2])
-        if new_price <= 0:
-            raise ValueError
-    except ValueError:
-        await update.message.reply_text(
-            "❌ Prix invalide. Entrez un nombre positif.",
-            parse_mode='Markdown'
-        )
-        return
-    
-    # Récupérer l'ancien prix
-    prices = load_prices()
-    old_price = prices.get(country, {}).get(product_name, 
-                PRIX_FR[product_name] if country == "FR" else PRIX_CH[product_name])
-    
-    # Modifier le prix
-    if set_price(product_name, country, new_price):
-        flag = "🇫🇷" if country == "FR" else "🇨🇭"
-        text = f"✅ *Prix modifié*\n\n"
-        text += f"{flag} {product_name}\n"
-        text += f"Ancien : {old_price}€\n"
-        text += f"Nouveau : {new_price}€"
-        await update.message.reply_text(text, parse_mode='Markdown')
-        logger.info(f"💰 Prix modifié: {product_name} ({country}) {old_price}€ → {new_price}€")
-    else:
-        await update.message.reply_text("❌ Erreur lors de la modification du prix.")
-
-# ==================== HANDLERS ====================
+# ==================== HANDLERS PRINCIPAUX ====================
 
 @error_handler
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    is_admin = user.id == ADMIN_ID
+    user_id = user.id
+    is_admin = user_id == ADMIN_ID
+    
+    # Tracking utilisateurs et notification admin (NOUVEAU)
+    is_new = is_new_user(user_id)
+    if is_new:
+        user_data_dict = {
+            "username": user.username,
+            "first_name": user.first_name,
+            "last_name": user.last_name
+        }
+        add_user(user_id, user_data_dict)
+        asyncio.create_task(notify_admin_new_user(context, user_id, user_data_dict))
+        logger.info(f"🆕 Nouvel utilisateur: {user_id} (@{user.username})")
+    else:
+        update_user_visit(user_id)
+        logger.info(f"🔄 Utilisateur connu: {user_id}")
+    
     logger.info(f"👤 /start: {user.first_name} (ID: {user.id}){' 🔑 ADMIN' if is_admin else ''}")
     context.user_data.clear()
     keyboard = [
@@ -1242,7 +1211,6 @@ async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['cart'] = []
     logger.info(f"👤 Pays: {context.user_data['pays']}")
     
-    # Filtrer les produits disponibles
     available = get_available_products()
     keyboard = []
     
@@ -1297,7 +1265,6 @@ async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     product_names = {"snow": "❄️ Coco", "olive": "🫒 Hash", "clover": "🍀 Weed"}
     product_name = product_names.get(product_code, product_code)
     
-    # Vérifier la disponibilité
     if not is_product_available(product_name):
         await query.answer("❌ Produit indisponible", show_alert=True)
         return PRODUIT
@@ -1316,7 +1283,6 @@ async def choix_pill_subcategory(update: Update, context: ContextTypes.DEFAULT_T
     await query.answer()
     product_name = PILL_SUBCATEGORIES.get(query.data.replace("pill_", ""), "💊")
     
-    # Vérifier la disponibilité
     if not is_product_available(product_name):
         await query.answer("❌ Produit indisponible", show_alert=True)
         return PILL_SUBCATEGORY
@@ -1335,7 +1301,6 @@ async def choix_rock_subcategory(update: Update, context: ContextTypes.DEFAULT_T
     await query.answer()
     product_name = ROCK_SUBCATEGORIES.get(query.data.replace("rock_", ""), "🪨")
     
-    # Vérifier la disponibilité
     if not is_product_available(product_name):
         await query.answer("❌ Produit indisponible", show_alert=True)
         return ROCK_SUBCATEGORY
@@ -1416,7 +1381,6 @@ async def choix_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
         delivery_fee = calculate_delivery_fee("express", distance_km, subtotal)
         distance_text = tr(context.user_data, "distance_calculated").format(distance=distance_km, fee=delivery_fee)
         
-        # Indicateur méthode de calcul
         if DISTANCE_METHOD == "openroute":
             distance_text += "\n📍 _Distance routière réelle_"
         elif DISTANCE_METHOD == "geopy":
@@ -1595,6 +1559,536 @@ async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Erreur.")
     return ConversationHandler.END
 
+# ==================== COMMANDES ADMIN PRODUITS (MISE À JOUR) ====================
+
+@error_handler
+async def admin_products_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /products avec menu interactif (NOUVEAU)"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return
+    
+    available = get_available_products()
+    
+    text = "📦 *GESTION DES PRODUITS*\n\n*Produits actifs :*\n"
+    
+    for product in sorted(PRIX_FR.keys()):
+        status = "✅" if product in available else "❌"
+        text += f"{status} {product}\n"
+    
+    archived = load_archived_products()
+    if archived:
+        text += f"\n📦 *Archivés :* {len(archived)}\n"
+    
+    keyboard = [
+        [InlineKeyboardButton("➕ Créer", callback_data="admin_create_product")],
+        [InlineKeyboardButton("🗑️ Archiver", callback_data="admin_archive_product")],
+        [InlineKeyboardButton("♻️ Restaurer", callback_data="admin_restore_product")],
+        [InlineKeyboardButton("🔙 Fermer", callback_data="admin_close")]
+    ]
+    
+    await update.message.reply_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+
+# ==================== HANDLERS GESTION PRODUITS (NOUVEAUX) ====================
+
+@error_handler
+async def admin_create_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Démarre la création d'un produit"""
+    query = update.callback_query
+    await query.answer()
+    context.user_data['creating_product'] = {}
+    text = "➕ *CRÉER UN PRODUIT*\n\nÉtape 1/7\n\nQuel est le *nom complet* du produit ?\n_(Incluez l'emoji, ex: 🔥 Crack)_"
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_cancel_product")]]
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    return ADMIN_NEW_PRODUCT_NAME
+
+@error_handler
+async def receive_product_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Reçoit le nom du produit"""
+    name = update.message.text.strip()
+    context.user_data['creating_product']['name'] = name
+    text = f"➕ *CRÉER UN PRODUIT*\n\nNom: {name}\n\nÉtape 2/7\n\nQuel est le *code* du produit ?\n_(Ex: crack, heroine)_\n_(Lettres minuscules, sans espaces)_"
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_cancel_product")]]
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    return ADMIN_NEW_PRODUCT_CODE
+
+@error_handler
+async def receive_product_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Reçoit le code du produit"""
+    code = update.message.text.strip().lower()
+    if code in PRODUCT_CODES:
+        await update.message.reply_text(f"❌ Le code '{code}' existe déjà.\n\nChoisissez un autre code :", parse_mode='Markdown')
+        return ADMIN_NEW_PRODUCT_CODE
+    context.user_data['creating_product']['code'] = code
+    name = context.user_data['creating_product']['name']
+    text = f"➕ *CRÉER UN PRODUIT*\n\nNom: {name}\nCode: {code}\n\nÉtape 3/7\n\nQuelle est la *catégorie* ?"
+    keyboard = [
+        [InlineKeyboardButton("❄️ Poudre", callback_data="category_powder")],
+        [InlineKeyboardButton("💊 Pilule", callback_data="category_pill")],
+        [InlineKeyboardButton("🪨 Crystal", callback_data="category_rock")],
+        [InlineKeyboardButton("❌ Annuler", callback_data="admin_cancel_product")]
+    ]
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    return ADMIN_NEW_PRODUCT_CATEGORY
+
+@error_handler
+async def receive_product_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Reçoit la catégorie du produit"""
+    query = update.callback_query
+    await query.answer()
+    category = query.data.replace("category_", "")
+    context.user_data['creating_product']['category'] = category
+    name = context.user_data['creating_product']['name']
+    code = context.user_data['creating_product']['code']
+    category_name = {"powder": "Poudre", "pill": "Pilule", "rock": "Crystal"}[category]
+    text = f"➕ *CRÉER UN PRODUIT*\n\nNom: {name}\nCode: {code}\nCatégorie: {category_name}\n\nÉtape 4/7\n\nQuel est le *prix en France* (en €) ?\n_(Ex: 50)_"
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_cancel_product")]]
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    return ADMIN_NEW_PRODUCT_PRICE_FR
+
+@error_handler
+async def receive_product_price_fr(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Reçoit le prix France"""
+    try:
+        price_fr = float(update.message.text.strip())
+        if price_fr <= 0:
+            raise ValueError
+    except:
+        await update.message.reply_text("❌ Prix invalide. Entrez un nombre positif (ex: 50) :", parse_mode='Markdown')
+        return ADMIN_NEW_PRODUCT_PRICE_FR
+    context.user_data['creating_product']['price_fr'] = price_fr
+    name = context.user_data['creating_product']['name']
+    code = context.user_data['creating_product']['code']
+    category_name = {"powder": "Poudre", "pill": "Pilule", "rock": "Crystal"}[context.user_data['creating_product']['category']]
+    text = f"➕ *CRÉER UN PRODUIT*\n\nNom: {name}\nCode: {code}\nCatégorie: {category_name}\nPrix FR: {price_fr}€\n\nÉtape 5/7\n\nQuel est le *prix en Suisse* (en €) ?\n_(Ex: 70)_"
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_cancel_product")]]
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    return ADMIN_NEW_PRODUCT_PRICE_CH
+
+@error_handler
+async def receive_product_price_ch(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Reçoit le prix Suisse et confirme"""
+    try:
+        price_ch = float(update.message.text.strip())
+        if price_ch <= 0:
+            raise ValueError
+    except:
+        await update.message.reply_text("❌ Prix invalide. Entrez un nombre positif (ex: 70) :", parse_mode='Markdown')
+        return ADMIN_NEW_PRODUCT_PRICE_CH
+    context.user_data['creating_product']['price_ch'] = price_ch
+    product_data = context.user_data['creating_product']
+    category_name = {"powder": "Poudre", "pill": "Pilule", "rock": "Crystal"}[product_data['category']]
+    text = f"➕ *CRÉER UN PRODUIT*\n\n*Récapitulatif :*\n\n• Nom: {product_data['name']}\n• Code: {product_data['code']}\n• Catégorie: {category_name}\n• Prix FR: {product_data['price_fr']}€\n• Prix CH: {price_ch}€\n\nConfirmer la création ?"
+    keyboard = [
+        [InlineKeyboardButton("✅ Créer", callback_data="admin_confirm_create")],
+        [InlineKeyboardButton("❌ Annuler", callback_data="admin_cancel_product")]
+    ]
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    return ADMIN_CONFIRM_PRODUCT
+
+@error_handler
+async def confirm_create_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Confirme et crée le produit"""
+    query = update.callback_query
+    await query.answer()
+    product_data = context.user_data['creating_product']
+    success = add_new_product(
+        name=product_data['name'],
+        code=product_data['code'],
+        emoji=product_data['name'].split()[0],
+        category=product_data['category'],
+        price_fr=product_data['price_fr'],
+        price_ch=product_data['price_ch']
+    )
+    if success:
+        text = f"✅ *PRODUIT CRÉÉ !*\n\n• {product_data['name']}\n• Code: `{product_data['code']}`\n• Prix FR: {product_data['price_fr']}€\n• Prix CH: {product_data['price_ch']}€\n\nLe produit est maintenant disponible !"
+    else:
+        text = "❌ Erreur lors de la création."
+    await query.message.edit_text(text, parse_mode='Markdown')
+    del context.user_data['creating_product']
+    return ConversationHandler.END
+
+@error_handler
+async def admin_archive_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu d'archivage"""
+    query = update.callback_query
+    await query.answer()
+    available = get_available_products()
+    if not available:
+        await query.message.edit_text("❌ Aucun produit disponible.")
+        return ConversationHandler.END
+    text = "🗑️ *ARCHIVER UN PRODUIT*\n\nSélectionnez le produit à archiver :\n_(L'archivage est réversible)_"
+    keyboard = []
+    for product in sorted(available):
+        keyboard.append([InlineKeyboardButton(f"🗑️ {product}", callback_data=f"archive_{product[:30]}")])
+    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="admin_close")])
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+
+@error_handler
+async def confirm_archive_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Confirme l'archivage"""
+    query = update.callback_query
+    await query.answer()
+    product_name = query.data.replace("archive_", "")
+    available = list(get_available_products())
+    full_name = None
+    for name in available:
+        if name.startswith(product_name):
+            full_name = name
+            break
+    if not full_name:
+        await query.message.edit_text("❌ Produit non trouvé.")
+        return ConversationHandler.END
+    text = f"🗑️ *ARCHIVER*\n\nProduit: {full_name}\n\n⚠️ Sera retiré du catalogue (réversible).\n\nConfirmer ?"
+    keyboard = [
+        [InlineKeyboardButton("✅ Archiver", callback_data=f"confirmarchive_{full_name[:30]}")],
+        [InlineKeyboardButton("❌ Annuler", callback_data="admin_close")]
+    ]
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+
+@error_handler
+async def execute_archive(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Exécute l'archivage"""
+    query = update.callback_query
+    await query.answer()
+    product_name = query.data.replace("confirmarchive_", "")
+    available = list(get_available_products())
+    full_name = None
+    for name in available:
+        if name.startswith(product_name):
+            full_name = name
+            break
+    if full_name and archive_product(full_name):
+        text = f"✅ *PRODUIT ARCHIVÉ*\n\n{full_name}\n\nRetiré du catalogue.\nRestauration: /products → ♻️"
+    else:
+        text = "❌ Erreur lors de l'archivage."
+    await query.message.edit_text(text, parse_mode='Markdown')
+    return ConversationHandler.END
+
+@error_handler
+async def admin_restore_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu de restauration"""
+    query = update.callback_query
+    await query.answer()
+    archived = load_archived_products()
+    if not archived:
+        await query.message.edit_text("❌ Aucun produit archivé.")
+        return ConversationHandler.END
+    text = "♻️ *RESTAURER UN PRODUIT*\n\nSélectionnez le produit :"
+    keyboard = []
+    for product_name in archived.keys():
+        keyboard.append([InlineKeyboardButton(f"♻️ {product_name}", callback_data=f"restore_{product_name[:30]}")])
+    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="admin_close")])
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+
+@error_handler
+async def execute_restore(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Exécute la restauration"""
+    query = update.callback_query
+    await query.answer()
+    product_name = query.data.replace("restore_", "")
+    archived = load_archived_products()
+    full_name = None
+    for name in archived.keys():
+        if name.startswith(product_name):
+            full_name = name
+            break
+    if full_name and restore_product(full_name):
+        text = f"✅ *PRODUIT RESTAURÉ*\n\n{full_name}\n\nDe nouveau disponible !"
+    else:
+        text = "❌ Erreur lors de la restauration."
+    await query.message.edit_text(text, parse_mode='Markdown')
+    return ConversationHandler.END
+
+@error_handler
+async def admin_cancel_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Annule la création"""
+    query = update.callback_query
+    await query.answer()
+    if 'creating_product' in context.user_data:
+        del context.user_data['creating_product']
+    await query.message.edit_text("❌ Annulé.")
+    return ConversationHandler.END
+
+@error_handler
+async def admin_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ferme le menu"""
+    query = update.callback_query
+    await query.answer()
+    await query.message.delete()
+    return ConversationHandler.END
+
+# ==================== HANDLERS UTILISATEURS (NOUVEAUX) ====================
+
+@error_handler
+async def users_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /users - Liste des utilisateurs"""
+    if update.effective_user.id != ADMIN_ID:
+        return
+    users = load_users()
+    if not users:
+        await update.message.reply_text("📊 Aucun utilisateur enregistré.")
+        return
+    sorted_users = sorted(users.items(), key=lambda x: x[1].get("first_seen", ""), reverse=True)
+    text = f"👥 *UTILISATEURS DU BOT*\n\n📊 *Total :* {len(users)} utilisateurs\n\n"
+    for i, (user_id, data) in enumerate(sorted_users[:20], 1):
+        username = data.get("username", "N/A")
+        first_name = data.get("first_name", "N/A")
+        visit_count = data.get("visit_count", 1)
+        first_seen = data.get("first_seen", "")
+        try:
+            date = datetime.fromisoformat(first_seen).strftime("%d/%m/%Y")
+        except:
+            date = "N/A"
+        text += f"{i}. {first_name} (@{username})\n   └ ID: `{user_id}` | Visites: {visit_count} | Depuis: {date}\n\n"
+    if len(users) > 20:
+        text += f"_... et {len(users) - 20} autres utilisateurs_\n"
+    keyboard = [
+        [InlineKeyboardButton("📊 Statistiques", callback_data="user_stats")],
+        [InlineKeyboardButton("🔄 Actualiser", callback_data="refresh_users")]
+    ]
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+
+@error_handler
+async def user_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche les statistiques des utilisateurs"""
+    query = update.callback_query
+    await query.answer()
+    if query.from_user.id != ADMIN_ID:
+        return
+    users = load_users()
+    if not users:
+        await query.message.edit_text("📊 Aucune statistique disponible.")
+        return
+    total_users = len(users)
+    total_visits = sum(u.get("visit_count", 1) for u in users.values())
+    avg_visits = total_visits / total_users if total_users > 0 else 0
+    now = datetime.now()
+    active_users = 0
+    for user_data in users.values():
+        try:
+            last_seen = datetime.fromisoformat(user_data.get("last_seen", ""))
+            if (now - last_seen).days <= 7:
+                active_users += 1
+        except:
+            pass
+    new_users_24h = 0
+    for user_data in users.values():
+        try:
+            first_seen = datetime.fromisoformat(user_data.get("first_seen", ""))
+            if (now - first_seen).days < 1:
+                new_users_24h += 1
+        except:
+            pass
+    text = "📊 *STATISTIQUES UTILISATEURS*\n\n"
+    text += f"👥 *Total utilisateurs :* {total_users}\n"
+    text += f"🟢 *Actifs (7j) :* {active_users}\n"
+    text += f"🆕 *Nouveaux (24h) :* {new_users_24h}\n"
+    text += f"📈 *Total visites :* {total_visits}\n"
+    text += f"📊 *Moy. visites/user :* {avg_visits:.1f}\n"
+    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="refresh_users")]]
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+
+@error_handler
+async def refresh_users_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Actualise la liste des utilisateurs"""
+    query = update.callback_query
+    await query.answer("🔄 Actualisation...")
+    if query.from_user.id != ADMIN_ID:
+        return
+    users = load_users()
+    sorted_users = sorted(users.items(), key=lambda x: x[1].get("first_seen", ""), reverse=True)
+    text = f"👥 *UTILISATEURS DU BOT*\n\n📊 *Total :* {len(users)} utilisateurs\n\n"
+    for i, (user_id, data) in enumerate(sorted_users[:20], 1):
+        username = data.get("username", "N/A")
+        first_name = data.get("first_name", "N/A")
+        visit_count = data.get("visit_count", 1)
+        first_seen = data.get("first_seen", "")
+        try:
+            date = datetime.fromisoformat(first_seen).strftime("%d/%m/%Y")
+        except:
+            date = "N/A"
+        text += f"{i}. {first_name} (@{username})\n   └ ID: `{user_id}` | Visites: {visit_count} | Depuis: {date}\n\n"
+    if len(users) > 20:
+        text += f"_... et {len(users) - 20} autres utilisateurs_\n"
+    keyboard = [
+        [InlineKeyboardButton("📊 Statistiques", callback_data="user_stats")],
+        [InlineKeyboardButton("🔄 Actualiser", callback_data="refresh_users")]
+    ]
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+
+# ==================== COMMANDES ADMIN ANCIENNES (CONSERVÉES) ====================
+
+@error_handler
+async def admin_del_product_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Masque un produit (rupture de stock)"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return
+    
+    if not context.args:
+        text = "❌ *Usage :* `/del <code>`\n\n*Codes disponibles :*\n"
+        for code, name in sorted(PRODUCT_CODES.items()):
+            text += f"  • `{code}` → {name}\n"
+        text += "\n*Exemple :* `/del weed`"
+        await update.message.reply_text(text, parse_mode='Markdown')
+        return
+    
+    code = context.args[0].lower()
+    product_name = PRODUCT_CODES.get(code)
+    
+    if not product_name:
+        await update.message.reply_text(f"❌ Code invalide: `{code}`\n\nUtilisez `/products` pour voir les codes.", parse_mode='Markdown')
+        return
+    
+    available = get_available_products()
+    
+    if product_name not in available:
+        await update.message.reply_text(f"⚠️ {product_name} est déjà en rupture de stock.", parse_mode='Markdown')
+        return
+    
+    available.remove(product_name)
+    save_available_products(available)
+    
+    await update.message.reply_text(f"✅ *Produit masqué*\n\n❌ {product_name}\n\n_Les clients ne verront plus ce produit._", parse_mode='Markdown')
+    logger.info(f"🔴 Produit masqué: {product_name}")
+
+@error_handler
+async def admin_add_product_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Rend un produit disponible"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return
+    
+    if not context.args:
+        text = "❌ *Usage :* `/add <code>`\n\n*Codes disponibles :*\n"
+        for code, name in sorted(PRODUCT_CODES.items()):
+            text += f"  • `{code}` → {name}\n"
+        text += "\n*Exemple :* `/add weed`"
+        await update.message.reply_text(text, parse_mode='Markdown')
+        return
+    
+    code = context.args[0].lower()
+    product_name = PRODUCT_CODES.get(code)
+    
+    if not product_name:
+        await update.message.reply_text(f"❌ Code invalide: `{code}`\n\nUtilisez `/products` pour voir les codes.", parse_mode='Markdown')
+        return
+    
+    available = get_available_products()
+    
+    if product_name in available:
+        await update.message.reply_text(f"⚠️ {product_name} est déjà disponible.", parse_mode='Markdown')
+        return
+    
+    available.add(product_name)
+    save_available_products(available)
+    
+    await update.message.reply_text(f"✅ *Produit disponible*\n\n✅ {product_name}\n\n_Les clients peuvent maintenant commander ce produit._", parse_mode='Markdown')
+    logger.info(f"🟢 Produit activé: {product_name}")
+
+@error_handler
+async def admin_prices_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche tous les prix actuels"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return
+    
+    prices = load_prices()
+    
+    text = "💰 *GESTION DES PRIX*\n\n"
+    
+    text += "🇫🇷 *FRANCE :*\n"
+    for product in sorted(PRIX_FR.keys()):
+        current_price = prices.get("FR", {}).get(product, PRIX_FR[product])
+        text += f"  • {product} : {current_price}€\n"
+    
+    text += "\n🇨🇭 *SUISSE :*\n"
+    for product in sorted(PRIX_CH.keys()):
+        current_price = prices.get("CH", {}).get(product, PRIX_CH[product])
+        text += f"  • {product} : {current_price}€\n"
+    
+    text += "\n💡 *Commande :*\n"
+    text += "`/setprice <code> <pays> <prix>`\n\n"
+    text += "*Exemples :*\n"
+    text += "`/setprice coco fr 85`\n"
+    text += "`/setprice weed ch 12`\n\n"
+    text += "*Codes produits :*\n"
+    for code, name in sorted(PRODUCT_CODES.items()):
+        text += f"  • `{code}` → {name}\n"
+    
+    await update.message.reply_text(text, parse_mode='Markdown')
+
+@error_handler
+async def admin_setprice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Modifie le prix d'un produit"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return
+    
+    if len(context.args) != 3:
+        text = "❌ *Usage :* `/setprice <code> <pays> <prix>`\n\n"
+        text += "*Exemples :*\n"
+        text += "• `/setprice coco fr 85`\n"
+        text += "• `/setprice weed ch 12`\n"
+        text += "• `/setprice squid fr 8`\n\n"
+        text += "*Pays :* `fr` ou `ch`\n\n"
+        text += "*Codes disponibles :*\n"
+        for code, name in sorted(PRODUCT_CODES.items()):
+            text += f"  • `{code}` → {name}\n"
+        await update.message.reply_text(text, parse_mode='Markdown')
+        return
+    
+    code = context.args[0].lower()
+    country_code = context.args[1].lower()
+    
+    product_name = PRODUCT_CODES.get(code)
+    if not product_name:
+        await update.message.reply_text(
+            f"❌ Code invalide: `{code}`\n\nUtilisez `/prices` pour voir les codes.",
+            parse_mode='Markdown'
+        )
+        return
+    
+    if country_code not in ['fr', 'ch']:
+        await update.message.reply_text(
+            "❌ Pays invalide. Utilisez `fr` ou `ch`.",
+            parse_mode='Markdown'
+        )
+        return
+    
+    country = "FR" if country_code == "fr" else "CH"
+    
+    try:
+        new_price = float(context.args[2])
+        if new_price <= 0:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text(
+            "❌ Prix invalide. Entrez un nombre positif.",
+            parse_mode='Markdown'
+        )
+        return
+    
+    prices = load_prices()
+    old_price = prices.get(country, {}).get(product_name, 
+                PRIX_FR[product_name] if country == "FR" else PRIX_CH[product_name])
+    
+    if set_price(product_name, country, new_price):
+        flag = "🇫🇷" if country == "FR" else "🇨🇭"
+        text = f"✅ *Prix modifié*\n\n"
+        text += f"{flag} {product_name}\n"
+        text += f"Ancien : {old_price}€\n"
+        text += f"Nouveau : {new_price}€"
+        await update.message.reply_text(text, parse_mode='Markdown')
+        logger.info(f"💰 Prix modifié: {product_name} ({country}) {old_price}€ → {new_price}€")
+    else:
+        await update.message.reply_text("❌ Erreur lors de la modification du prix.")
+
 @error_handler
 async def admin_horaires_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
@@ -1679,68 +2173,49 @@ async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def error_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Exception: {context.error}", exc_info=context.error)
 
-
 # ==================== FONCTION PRINCIPALE ====================
 
 async def main_async():
     logger.info("=" * 60)
-    logger.info("🤖 BOT TELEGRAM V2.1 - GESTION PRODUITS ET PRIX DYNAMIQUES")
+    logger.info("🤖 BOT TELEGRAM V2.2 - 100% COMPLET")
     logger.info("=" * 60)
-    logger.info(f"📱 Token: {TOKEN[:5]}***[MASKED]")
+    logger.info(f"📱 Token: {TOKEN[:5]}***")
     logger.info(f"👤 Admin: ***{str(ADMIN_ID)[-3:]}")
     logger.info(f"⏰ Horaires: {get_horaires_text()}")
     logger.info(f"📁 Dossier médias: {MEDIA_DIR}")
     
-    # Vérification des fichiers
-    logger.info("\n📂 Vérification des médias disponibles:")
+    logger.info("\n📂 Vérification des médias:")
     for product, path in IMAGES_PRODUITS.items():
         exists = "✅" if path.exists() else "❌"
-        logger.info(f"  {exists} Image {product}: {path.name}")
-    for product, path in VIDEOS_PRODUITS.items():
-        exists = "✅" if path.exists() else "❌"
-        logger.info(f"  {exists} Vidéo {product}: {path.name}")
+        logger.info(f"  {exists} Image {product}")
     
-    # Afficher les produits disponibles
     available = get_available_products()
     logger.info("\n📦 Produits disponibles:")
     for product in sorted(available):
         logger.info(f"  ✅ {product}")
     
-    unavailable = [p for p in PRIX_FR.keys() if p not in available]
-    if unavailable:
-        logger.info("\n❌ Produits en rupture de stock:")
-        for product in sorted(unavailable):
-            logger.info(f"  ❌ {product}")
-    
-    # Afficher les prix actuels
     prices = load_prices()
-    logger.info("\n💰 Prix France:")
+    logger.info("\n💰 Prix actuels:")
+    logger.info("  France:")
     for product in sorted(PRIX_FR.keys()):
         price = prices.get("FR", {}).get(product, PRIX_FR[product])
-        logger.info(f"  • {product}: {price}€")
-    
-    logger.info("\n💰 Prix Suisse:")
-    for product in sorted(PRIX_CH.keys()):
-        price = prices.get("CH", {}).get(product, PRIX_CH[product])
-        logger.info(f"  • {product}: {price}€")
+        logger.info(f"    • {product}: {price}€")
     
     logger.info("=" * 60)
     
     application = Application.builder().token(TOKEN).concurrent_updates(True).build()
     logger.info("✅ Application créée")
     
-    if application.job_queue is None:
-        logger.warning("⚠️ Job queue indisponible")
-    
     await application.bot.delete_webhook(drop_pending_updates=True)
     logger.info("✅ Webhook supprimé")
     
     try:
         await application.bot.get_updates(offset=-1, timeout=1)
-        logger.info("✅ Connexions précédentes libérées")
-    except Exception as e:
-        logger.warning(f"⚠️ Tentative de libération: {e}")
+        logger.info("✅ Connexions libérées")
+    except:
+        pass
     
+    # Handler horaires
     horaires_handler = ConversationHandler(
         entry_points=[CommandHandler('horaires', admin_horaires_command)],
         states={ADMIN_HORAIRES_INPUT: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_horaires_input)]},
@@ -1749,6 +2224,7 @@ async def main_async():
         name="horaires_conv"
     )
     
+    # Handler principal
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start_command)],
         states={
@@ -1795,36 +2271,70 @@ async def main_async():
         name="main_conv"
     )
     
+    # Handler gestion produits (NOUVEAU)
+    product_management_handler = ConversationHandler(
+        entry_points=[
+            CallbackQueryHandler(admin_create_product, pattern="^admin_create_product$"),
+            CallbackQueryHandler(admin_archive_product, pattern="^admin_archive_product$"),
+            CallbackQueryHandler(admin_restore_product, pattern="^admin_restore_product$"),
+        ],
+        states={
+            ADMIN_NEW_PRODUCT_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_product_name)],
+            ADMIN_NEW_PRODUCT_CODE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_product_code)],
+            ADMIN_NEW_PRODUCT_CATEGORY: [CallbackQueryHandler(receive_product_category, pattern="^category_")],
+            ADMIN_NEW_PRODUCT_PRICE_FR: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_product_price_fr)],
+            ADMIN_NEW_PRODUCT_PRICE_CH: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_product_price_ch)],
+            ADMIN_CONFIRM_PRODUCT: [
+                CallbackQueryHandler(confirm_create_product, pattern="^admin_confirm_create$"),
+                CallbackQueryHandler(admin_cancel_product, pattern="^admin_cancel_product$"),
+            ],
+        },
+        fallbacks=[
+            CallbackQueryHandler(admin_cancel_product, pattern="^admin_cancel_product$"),
+            CallbackQueryHandler(admin_close, pattern="^admin_close$"),
+        ],
+        name="product_management",
+        persistent=False,
+        per_message=False
+    )
+    
+    # Ajout des handlers
     application.add_handler(horaires_handler)
     application.add_handler(conv_handler)
+    application.add_handler(product_management_handler)
+    
+    # Commandes admin
     application.add_handler(CommandHandler('stats', admin_stats_command))
     application.add_handler(CommandHandler('products', admin_products_command))
     application.add_handler(CommandHandler('del', admin_del_product_command))
     application.add_handler(CommandHandler('add', admin_add_product_command))
     application.add_handler(CommandHandler('prices', admin_prices_command))
     application.add_handler(CommandHandler('setprice', admin_setprice_command))
+    application.add_handler(CommandHandler('users', users_command))
+    
+    # Callbacks
     application.add_handler(CallbackQueryHandler(admin_validation_livraison, pattern='^admin_validate_'))
+    application.add_handler(CallbackQueryHandler(confirm_archive_product, pattern="^archive_"))
+    application.add_handler(CallbackQueryHandler(execute_archive, pattern="^confirmarchive_"))
+    application.add_handler(CallbackQueryHandler(execute_restore, pattern="^restore_"))
+    application.add_handler(CallbackQueryHandler(admin_close, pattern="^admin_close$"))
+    application.add_handler(CallbackQueryHandler(user_stats_callback, pattern="^user_stats$"))
+    application.add_handler(CallbackQueryHandler(refresh_users_callback, pattern="^refresh_users$"))
+    
     application.add_error_handler(error_callback)
     
     if application.job_queue is not None:
         application.job_queue.run_repeating(check_pending_deletions, interval=60, first=10)
         application.job_queue.run_repeating(schedule_reports, interval=60, first=10)
         logger.info("✅ Tasks programmées")
-    else:
-        logger.warning("⚠️ Tasks désactivées")
     
     logger.info("✅ Handlers configurés")
     logger.info("=" * 60)
-    logger.info("🚀 BOT EN LIGNE")
+    logger.info("🚀 BOT V2.2 EN LIGNE (100%)")
     logger.info("=" * 60)
-    logger.info("\n📋 Commandes admin disponibles:")
-    logger.info("  • /products - Voir l'état des produits")
-    logger.info("  • /del <code> - Masquer un produit")
-    logger.info("  • /add <code> - Activer un produit")
-    logger.info("  • /prices - Voir tous les prix")
-    logger.info("  • /setprice <code> <pays> <prix> - Modifier un prix")
-    logger.info("  • /horaires - Gérer les horaires")
-    logger.info("  • /stats - Voir les statistiques")
+    logger.info("\n📋 Nouvelles commandes:")
+    logger.info("  • /products - Menu gestion produits (créer/archiver/restaurer)")
+    logger.info("  • /users - Liste utilisateurs + stats")
     logger.info("=" * 60 + "\n")
     
     await application.initialize()

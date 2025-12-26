@@ -85,9 +85,6 @@ if DISTANCE_METHOD == "simulation":
 
 if DISTANCE_METHOD == "simulation":
     logger.warning("⚠️ DISTANCE SIMULÉE")
-    logger.warning("   Pour activer: pip install openrouteservice")
-    logger.warning("   Clé gratuite: https://openrouteservice.org/dev/#/signup")
-
 
 # ==================== CONFIGURATION MÉDIAS ====================
 
@@ -130,6 +127,8 @@ ADMIN_NEW_PRODUCT_CATEGORY = 16
 ADMIN_NEW_PRODUCT_PRICE_FR = 17
 ADMIN_NEW_PRODUCT_PRICE_CH = 18
 ADMIN_CONFIRM_PRODUCT = 19
+ADMIN_NEW_PRODUCT_IMAGE = 20
+ADMIN_NEW_PRODUCT_VIDEO = 21
 
 PILL_SUBCATEGORIES = {"squid_game": "💊 Squid Game", "punisher": "💊 Punisher"}
 ROCK_SUBCATEGORIES = {"mdma": "🪨 MDMA", "fourmmc": "🪨 4MMC"}
@@ -137,12 +136,12 @@ ROCK_SUBCATEGORIES = {"mdma": "🪨 MDMA", "fourmmc": "🪨 4MMC"}
 # Mapping des codes produits
 PRODUCT_CODES = {
     "coco": "❄️ Coco",
-    "squid": "💊 Squid Game",
+    "squid_game": "💊 Squid Game",
     "punisher": "💊 Punisher",
     "hash": "🫒 Hash",
     "weed": "🍀 Weed",
     "mdma": "🪨 MDMA",
-    "4mmc": "🪨 4MMC"
+    "fourmmc": "🪨 4MMC"
 }
 
 # Prix par défaut
@@ -174,6 +173,7 @@ AVAILABLE_PRODUCTS_FILE = Path(__file__).parent / "available_products.json"
 PRICES_FILE = Path(__file__).parent / "prices.json"
 ARCHIVED_PRODUCTS_FILE = Path(__file__).parent / "archived_products.json"
 USERS_FILE = Path(__file__).parent / "users.json"
+PRODUCT_REGISTRY_FILE = Path(__file__).parent / "product_registry.json"
 
 TRANSLATIONS = {
     "fr": {
@@ -256,153 +256,191 @@ TRANSLATIONS = {
         "address_too_short": "❌ Address too short",
         "outside_hours": "⏰ Deliveries closed.\n\nHours: {hours}"
     },
-    "de": {
-        "welcome": "🌿 *WILLKOMMEN* 🌿\n\n⚠️ *VERSION 2.2*\n\nGespräche im *GEHEIMEN AUSTAUSCH*.\n\n🙏 *Danke* 💪💚",
-        "main_menu": "\n\n📱 *MENÜ:*",
-        "choose_country": "🌍 *Land:*",
-        "choose_product": "🛒 *Produkt:*",
-        "choose_pill_type": "💊 *Typ:*",
-        "choose_rock_type": "🪨 *Typ:*",
-        "enter_quantity": "🔢 *Menge:*",
-        "enter_address": "📍 *Adresse:*",
-        "choose_delivery": "📦 *Lieferung:*\n\n✉️ Post: 48-72h, 10€\n⚡ Express: 30min+",
-        "distance_calculated": "📏 {distance} km\n💶 {fee}€",
-        "choose_payment": "💳 *Zahlung:*",
-        "order_summary": "✅ *ZUSAMMENFASSUNG*",
-        "confirm": "✅ Bestätigen", 
-        "cancel": "❌ Abbrechen",
-        "order_confirmed": "✅ *Bestätigt!*\n\n📞 Kontakt in Kürze.",
-        "order_cancelled": "❌ *Abgebrochen.*",
-        "add_more": "➕ Mehr hinzufügen", 
-        "proceed": "✅ Weiter",
-        "invalid_quantity": "❌ Ungültig (1-{max}).",
-        "cart_title": "🛒 *WARENKORB:*",
-        "start_order": "🛒 Bestellen",
-        "contact_admin": "📞 Kontakt",
-        "contact_message": "📞 *KONTAKT*\n\nSchreiben Sie Ihre Nachricht.\n\n💬 Nachricht?",
-        "contact_sent": "✅ *Gesendet!*\n\nAntwort in Kürze.",
-        "france": "🇫🇷 Frankreich", 
-        "switzerland": "🇨🇭 Schweiz",
-        "postal": "✉️ Post", 
-        "express": "⚡ Express",
-        "cash": "💵 Bargeld", 
-        "crypto": "₿ Krypto",
-        "total": "💰 *GESAMT:*", 
-        "delivery_fee": "📦 *Gebühr:*",
-        "subtotal": "💵 *Zwischensumme:*", 
-        "back": "🔙 Zurück",
-        "pirate_card": "🏴‍☠️ Piratenkarte",
-        "choose_country_prices": "🏴‍☠️ *PIRATENKARTE*\n\nWählen Sie Ihr Land:",
-        "prices_france": "🇫🇷 Preise Frankreich",
-        "prices_switzerland": "🇨🇭 Preise Schweiz",
-        "back_to_card": "🔙 Zurück zur Karte",
-        "main_menu_btn": "🏠 Hauptmenü",
-        "price_list_fr": "🇫🇷 *PREISE FRANKREICH*\n\n",
-        "price_list_ch": "🇨🇭 *PREISE SCHWEIZ*\n\n",
-        "new_order": "🔄 Neue Bestellung",
-        "address_too_short": "❌ Adresse zu kurz",
-        "outside_hours": "⏰ Lieferungen geschlossen.\n\nÖffnungszeiten: {hours}"
-    },
-    "es": {
-        "welcome": "🌿 *BIENVENIDO* 🌿\n\n⚠️ *VERSIÓN 2.2*\n\nConversaciones en *INTERCAMBIO SECRETO*.\n\n🙏 *Gracias* 💪💚",
-        "main_menu": "\n\n📱 *MENÚ:*",
-        "choose_country": "🌍 *País:*",
-        "choose_product": "🛒 *Producto:*",
-        "choose_pill_type": "💊 *Tipo:*",
-        "choose_rock_type": "🪨 *Tipo:*",
-        "enter_quantity": "🔢 *Cantidad:*",
-        "enter_address": "📍 *Dirección:*",
-        "choose_delivery": "📦 *Entrega:*\n\n✉️ Postal: 48-72h, 10€\n⚡ Express: 30min+",
-        "distance_calculated": "📏 {distance} km\n💶 {fee}€",
-        "choose_payment": "💳 *Pago:*",
-        "order_summary": "✅ *RESUMEN*",
-        "confirm": "✅ Confirmar", 
-        "cancel": "❌ Cancelar",
-        "order_confirmed": "✅ *¡Confirmado!*\n\n📞 Contacto pronto.",
-        "order_cancelled": "❌ *Cancelado.*",
-        "add_more": "➕ Añadir más", 
-        "proceed": "✅ Continuar",
-        "invalid_quantity": "❌ Inválido (1-{max}).",
-        "cart_title": "🛒 *CARRITO:*",
-        "start_order": "🛒 Pedir",
-        "contact_admin": "📞 Contacto",
-        "contact_message": "📞 *CONTACTO*\n\nEscriba su mensaje.\n\n💬 ¿Mensaje?",
-        "contact_sent": "✅ *¡Enviado!*\n\nRespuesta pronto.",
-        "france": "🇫🇷 Francia", 
-        "switzerland": "🇨🇭 Suiza",
-        "postal": "✉️ Postal", 
-        "express": "⚡ Express",
-        "cash": "💵 Efectivo", 
-        "crypto": "₿ Cripto",
-        "total": "💰 *TOTAL:*", 
-        "delivery_fee": "📦 *Gastos:*",
-        "subtotal": "💵 *Subtotal:*", 
-        "back": "🔙 Volver",
-        "pirate_card": "🏴‍☠️ Carta del Pirata",
-        "choose_country_prices": "🏴‍☠️ *CARTA DEL PIRATA*\n\nElija su país:",
-        "prices_france": "🇫🇷 Precios Francia",
-        "prices_switzerland": "🇨🇭 Precios Suiza",
-        "back_to_card": "🔙 Volver a carta",
-        "main_menu_btn": "🏠 Menú principal",
-        "price_list_fr": "🇪🇸 *PRECIOS FRANCIA*\n\n",
-        "price_list_ch": "🇨🇭 *PRECIOS SUIZA*\n\n",
-        "new_order": "🔄 Nuevo pedido",
-        "address_too_short": "❌ Dirección demasiado corta",
-        "outside_hours": "⏰ Entregas cerradas.\n\nHorario: {hours}"
-    },
-    "it": {
-        "welcome": "🌿 *BENVENUTO* 🌿\n\n⚠️ *VERSIONE 2.2*\n\nConversazioni in *SCAMBIO SEGRETO*.\n\n🙏 *Grazie* 💪💚",
-        "main_menu": "\n\n📱 *MENU:*",
-        "choose_country": "🌍 *Paese:*",
-        "choose_product": "🛒 *Prodotto:*",
-        "choose_pill_type": "💊 *Tipo:*",
-        "choose_rock_type": "🪨 *Tipo:*",
-        "enter_quantity": "🔢 *Quantità:*",
-        "enter_address": "📍 *Indirizzo:*",
-        "choose_delivery": "📦 *Consegna:*\n\n✉️ Postale: 48-72h, 10€\n⚡ Express: 30min+",
-        "distance_calculated": "📏 {distance} km\n💶 {fee}€",
-        "choose_payment": "💳 *Pagamento:*",
-        "order_summary": "✅ *RIEPILOGO*",
-        "confirm": "✅ Confermare", 
-        "cancel": "❌ Annullare",
-        "order_confirmed": "✅ *Confermato!*\n\n📞 Contatto a breve.",
-        "order_cancelled": "❌ *Annullato.*",
-        "add_more": "➕ Aggiungere", 
-        "proceed": "✅ Procedere",
-        "invalid_quantity": "❌ Non valido (1-{max}).",
-        "cart_title": "🛒 *CARRELLO:*",
-        "start_order": "🛒 Ordinare",
-        "contact_admin": "📞 Contatto",
-        "contact_message": "📞 *CONTATTO*\n\nScriva il suo messaggio.\n\n💬 Messaggio?",
-        "contact_sent": "✅ *Inviato!*\n\nRisposta a breve.",
-        "france": "🇫🇷 Francia", 
-        "switzerland": "🇨🇭 Svizzera",
-        "postal": "✉️ Postale", 
-        "express": "⚡ Express",
-        "cash": "💵 Contanti", 
-        "crypto": "₿ Cripto",
-        "total": "💰 *TOTALE:*", 
-        "delivery_fee": "📦 *Spese:*",
-        "subtotal": "💵 *Subtotale:*", 
-        "back": "🔙 Indietro",
-        "pirate_card": "🏴‍☠️ Carta del Pirata",
-        "choose_country_prices": "🏴‍☠️ *CARTA DEL PIRATA*\n\nScelga il suo paese:",
-        "prices_france": "🇫🇷 Prezzi Francia",
-        "prices_switzerland": "🇨🇭 Prezzi Svizzera",
-        "back_to_card": "🔙 Torna alla carta",
-        "main_menu_btn": "🏠 Menu principale",
-        "price_list_fr": "🇫🇷 *PREZZI FRANCIA*\n\n",
-        "price_list_ch": "🇨🇭 *PREZZI SVIZZERA*\n\n",
-        "new_order": "🔄 Nuovo ordine",
-        "address_too_short": "❌ Indirizzo troppo corto",
-        "outside_hours": "⏰ Consegne chiuse.\n\nOrari: {hours}"
-    }
+    "de": {"welcome": "🌿 *WILLKOMMEN* 🌿\n\n⚠️ *VERSION 2.2*\n\nGespräche im *GEHEIMEN AUSTAUSCH*.\n\n🙏 *Danke* 💪💚", "main_menu": "\n\n📱 *MENÜ:*", "choose_country": "🌍 *Land:*", "choose_product": "🛒 *Produkt:*", "choose_pill_type": "💊 *Typ:*", "choose_rock_type": "🪨 *Typ:*", "enter_quantity": "🔢 *Menge:*", "enter_address": "📍 *Adresse:*", "choose_delivery": "📦 *Lieferung:*\n\n✉️ Post: 48-72h, 10€\n⚡ Express: 30min+", "distance_calculated": "📏 {distance} km\n💶 {fee}€", "choose_payment": "💳 *Zahlung:*", "order_summary": "✅ *ZUSAMMENFASSUNG*", "confirm": "✅ Bestätigen", "cancel": "❌ Abbrechen", "order_confirmed": "✅ *Bestätigt!*\n\n📞 Kontakt in Kürze.", "order_cancelled": "❌ *Abgebrochen.*", "add_more": "➕ Mehr hinzufügen", "proceed": "✅ Weiter", "invalid_quantity": "❌ Ungültig (1-{max}).", "cart_title": "🛒 *WARENKORB:*", "start_order": "🛒 Bestellen", "contact_admin": "📞 Kontakt", "contact_message": "📞 *KONTAKT*\n\nSchreiben Sie Ihre Nachricht.\n\n💬 Nachricht?", "contact_sent": "✅ *Gesendet!*\n\nAntwort in Kürze.", "france": "🇫🇷 Frankreich", "switzerland": "🇨🇭 Schweiz", "postal": "✉️ Post", "express": "⚡ Express", "cash": "💵 Bargeld", "crypto": "₿ Krypto", "total": "💰 *GESAMT:*", "delivery_fee": "📦 *Gebühr:*", "subtotal": "💵 *Zwischensumme:*", "back": "🔙 Zurück", "pirate_card": "🏴‍☠️ Piratenkarte", "choose_country_prices": "🏴‍☠️ *PIRATENKARTE*\n\nWählen Sie Ihr Land:", "prices_france": "🇫🇷 Preise Frankreich", "prices_switzerland": "🇨🇭 Preise Schweiz", "back_to_card": "🔙 Zurück zur Karte", "main_menu_btn": "🏠 Hauptmenü", "price_list_fr": "🇫🇷 *PREISE FRANKREICH*\n\n", "price_list_ch": "🇨🇭 *PREISE SCHWEIZ*\n\n", "new_order": "🔄 Neue Bestellung", "address_too_short": "❌ Adresse zu kurz", "outside_hours": "⏰ Lieferungen geschlossen.\n\nÖffnungszeiten: {hours}"},
+    "es": {"welcome": "🌿 *BIENVENIDO* 🌿\n\n⚠️ *VERSIÓN 2.2*\n\nConversaciones en *INTERCAMBIO SECRETO*.\n\n🙏 *Gracias* 💪💚", "main_menu": "\n\n📱 *MENÚ:*", "choose_country": "🌍 *País:*", "choose_product": "🛒 *Producto:*", "choose_pill_type": "💊 *Tipo:*", "choose_rock_type": "🪨 *Tipo:*", "enter_quantity": "🔢 *Cantidad:*", "enter_address": "📍 *Dirección:*", "choose_delivery": "📦 *Entrega:*\n\n✉️ Postal: 48-72h, 10€\n⚡ Express: 30min+", "distance_calculated": "📏 {distance} km\n💶 {fee}€", "choose_payment": "💳 *Pago:*", "order_summary": "✅ *RESUMEN*", "confirm": "✅ Confirmar", "cancel": "❌ Cancelar", "order_confirmed": "✅ *¡Confirmado!*\n\n📞 Contacto pronto.", "order_cancelled": "❌ *Cancelado.*", "add_more": "➕ Añadir más", "proceed": "✅ Continuar", "invalid_quantity": "❌ Inválido (1-{max}).", "cart_title": "🛒 *CARRITO:*", "start_order": "🛒 Pedir", "contact_admin": "📞 Contacto", "contact_message": "📞 *CONTACTO*\n\nEscriba su mensaje.\n\n💬 ¿Mensaje?", "contact_sent": "✅ *¡Enviado!*\n\nRespuesta pronto.", "france": "🇫🇷 Francia", "switzerland": "🇨🇭 Suiza", "postal": "✉️ Postal", "express": "⚡ Express", "cash": "💵 Efectivo", "crypto": "₿ Cripto", "total": "💰 *TOTAL:*", "delivery_fee": "📦 *Gastos:*", "subtotal": "💵 *Subtotal:*", "back": "🔙 Volver", "pirate_card": "🏴‍☠️ Carta del Pirata", "choose_country_prices": "🏴‍☠️ *CARTA DEL PIRATA*\n\nElija su país:", "prices_france": "🇫🇷 Precios Francia", "prices_switzerland": "🇨🇭 Precios Suiza", "back_to_card": "🔙 Volver a carta", "main_menu_btn": "🏠 Menú principal", "price_list_fr": "🇪🇸 *PRECIOS FRANCIA*\n\n", "price_list_ch": "🇨🇭 *PRECIOS SUIZA*\n\n", "new_order": "🔄 Nuevo pedido", "address_too_short": "❌ Dirección demasiado corta", "outside_hours": "⏰ Entregas cerradas.\n\nHorario: {hours}"},
+    "it": {"welcome": "🌿 *BENVENUTO* 🌿\n\n⚠️ *VERSIONE 2.2*\n\nConversazioni in *SCAMBIO SEGRETO*.\n\n🙏 *Grazie* 💪💚", "main_menu": "\n\n📱 *MENU:*", "choose_country": "🌍 *Paese:*", "choose_product": "🛒 *Prodotto:*", "choose_pill_type": "💊 *Tipo:*", "choose_rock_type": "🪨 *Tipo:*", "enter_quantity": "🔢 *Quantità:*", "enter_address": "📍 *Indirizzo:*", "choose_delivery": "📦 *Consegna:*\n\n✉️ Postale: 48-72h, 10€\n⚡ Express: 30min+", "distance_calculated": "📏 {distance} km\n💶 {fee}€", "choose_payment": "💳 *Pagamento:*", "order_summary": "✅ *RIEPILOGO*", "confirm": "✅ Confermare", "cancel": "❌ Annullare", "order_confirmed": "✅ *Confermato!*\n\n📞 Contatto a breve.", "order_cancelled": "❌ *Annullato.*", "add_more": "➕ Aggiungere", "proceed": "✅ Procedere", "invalid_quantity": "❌ Non valido (1-{max}).", "cart_title": "🛒 *CARRELLO:*", "start_order": "🛒 Ordinare", "contact_admin": "📞 Contatto", "contact_message": "📞 *CONTATTO*\n\nScriva il suo messaggio.\n\n💬 Messaggio?", "contact_sent": "✅ *Inviato!*\n\nRisposta a breve.", "france": "🇫🇷 Francia", "switzerland": "🇨🇭 Svizzera", "postal": "✉️ Postale", "express": "⚡ Express", "cash": "💵 Contanti", "crypto": "₿ Cripto", "total": "💰 *TOTALE:*", "delivery_fee": "📦 *Spese:*", "subtotal": "💵 *Subtotale:*", "back": "🔙 Indietro", "pirate_card": "🏴‍☠️ Carta del Pirata", "choose_country_prices": "🏴‍☠️ *CARTA DEL PIRATA*\n\nScelga il suo paese:", "prices_france": "🇫🇷 Prezzi Francia", "prices_switzerland": "🇨🇭 Prezzi Svizzera", "back_to_card": "🔙 Torna alla carta", "main_menu_btn": "🏠 Menu principale", "price_list_fr": "🇫🇷 *PREZZI FRANCIA*\n\n", "price_list_ch": "🇨🇭 *PREZZI SVIZZERA*\n\n", "new_order": "🔄 Nuovo ordine", "address_too_short": "❌ Indirizzo troppo corto", "outside_hours": "⏰ Consegne chiuse.\n\nOrari: {hours}"}
 }
+
+# ==================== SYSTÈME DE PERSISTANCE ====================
+
+def load_product_registry():
+    """Charge le registre complet des produits"""
+    if PRODUCT_REGISTRY_FILE.exists():
+        try:
+            with open(PRODUCT_REGISTRY_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return data.get("products", {})
+        except Exception as e:
+            logger.error(f"Erreur chargement registre: {e}")
+    return {}
+
+def save_product_registry(registry):
+    """Sauvegarde le registre des produits"""
+    try:
+        with open(PRODUCT_REGISTRY_FILE, 'w', encoding='utf-8') as f:
+            json.dump({
+                "products": registry,
+                "last_updated": datetime.now().isoformat(),
+                "version": "2.2"
+            }, f, indent=2, ensure_ascii=False)
+        logger.info(f"✅ Registre sauvegardé: {len(registry)} produits")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Erreur sauvegarde registre: {e}")
+        return False
+
+def create_initial_registry():
+    """Crée le registre initial avec les produits de base"""
+    return {
+        "coco": {"name": "❄️ Coco", "code": "coco", "emoji": "❄️", "category": "powder", "image": "coco.jpg", "video": "coco_demo.mp4", "created_at": datetime.now().isoformat()},
+        "squid_game": {"name": "💊 Squid Game", "code": "squid_game", "emoji": "💊", "category": "pill", "image": "squid_game.jpg", "video": "squid_game_demo.mp4", "created_at": datetime.now().isoformat()},
+        "punisher": {"name": "💊 Punisher", "code": "punisher", "emoji": "💊", "category": "pill", "image": "punisher.jpg", "video": "punisher_demo.mp4", "created_at": datetime.now().isoformat()},
+        "hash": {"name": "🫒 Hash", "code": "hash", "emoji": "🫒", "category": "powder", "image": "hash.jpg", "video": "hash_demo.mp4", "created_at": datetime.now().isoformat()},
+        "weed": {"name": "🍀 Weed", "code": "weed", "emoji": "🍀", "category": "powder", "image": "weed.jpg", "video": "weed_demo.mp4", "created_at": datetime.now().isoformat()},
+        "mdma": {"name": "🪨 MDMA", "code": "mdma", "emoji": "🪨", "category": "rock", "image": "mdma.jpg", "video": "mdma_demo.mp4", "created_at": datetime.now().isoformat()},
+        "fourmmc": {"name": "🪨 4MMC", "code": "fourmmc", "emoji": "🪨", "category": "rock", "image": "fourmmc.jpg", "video": "fourmmc_demo.mp4", "created_at": datetime.now().isoformat()}
+    }
+
+def init_product_codes():
+    """Initialise tous les dictionnaires produits depuis le registre"""
+    global PRODUCT_CODES, PILL_SUBCATEGORIES, ROCK_SUBCATEGORIES, IMAGES_PRODUITS, VIDEOS_PRODUITS
+    
+    logger.info("🔄 Initialisation des produits depuis le registre...")
+    
+    registry = load_product_registry()
+    
+    if not registry:
+        logger.info("📦 Création du registre initial...")
+        registry = create_initial_registry()
+        save_product_registry(registry)
+    
+    PRODUCT_CODES.clear()
+    PILL_SUBCATEGORIES.clear()
+    ROCK_SUBCATEGORIES.clear()
+    IMAGES_PRODUITS.clear()
+    VIDEOS_PRODUITS.clear()
+    
+    for code, product_data in registry.items():
+        name = product_data["name"]
+        category = product_data.get("category", "powder")
+        
+        PRODUCT_CODES[code] = name
+        
+        if category == "pill":
+            PILL_SUBCATEGORIES[code] = name
+        elif category == "rock":
+            ROCK_SUBCATEGORIES[code] = name
+        
+        if product_data.get("image"):
+            image_path = MEDIA_DIR / product_data["image"]
+            IMAGES_PRODUITS[name] = image_path
+        
+        if product_data.get("video"):
+            video_path = MEDIA_DIR / product_data["video"]
+            VIDEOS_PRODUITS[name] = video_path
+    
+    logger.info(f"✅ {len(PRODUCT_CODES)} produits chargés")
+    logger.info(f"   • Pills: {len(PILL_SUBCATEGORIES)}")
+    logger.info(f"   • Crystal: {len(ROCK_SUBCATEGORIES)}")
+    logger.info(f"   • Images: {len(IMAGES_PRODUITS)}")
+    logger.info(f"   • Vidéos: {len(VIDEOS_PRODUITS)}")
+
+def add_product_to_registry(code, name, emoji, category, price_fr, price_ch, image_file=None, video_file=None):
+    """Ajoute un produit au registre"""
+    registry = load_product_registry()
+    
+    if not registry:
+        registry = create_initial_registry()
+    
+    registry[code] = {
+        "name": name,
+        "code": code,
+        "emoji": emoji,
+        "category": category,
+        "image": image_file,
+        "video": video_file,
+        "created_at": datetime.now().isoformat()
+    }
+    
+    success = save_product_registry(registry)
+    
+    if success:
+        PRODUCT_CODES[code] = name
+        
+        if category == "pill":
+            PILL_SUBCATEGORIES[code] = name
+        elif category == "rock":
+            ROCK_SUBCATEGORIES[code] = name
+        
+        if image_file:
+            IMAGES_PRODUITS[name] = MEDIA_DIR / image_file
+        if video_file:
+            VIDEOS_PRODUITS[name] = MEDIA_DIR / video_file
+        
+        logger.info(f"✅ Produit ajouté au registre: {name} ({code})")
+    
+    return success
+
+def remove_product_from_registry(code):
+    """Retire un produit du registre"""
+    registry = load_product_registry()
+    
+    if code in registry:
+        product_data = registry[code]
+        del registry[code]
+        save_product_registry(registry)
+        
+        name = product_data["name"]
+        
+        if code in PRODUCT_CODES:
+            del PRODUCT_CODES[code]
+        
+        if code in PILL_SUBCATEGORIES:
+            del PILL_SUBCATEGORIES[code]
+        
+        if code in ROCK_SUBCATEGORIES:
+            del ROCK_SUBCATEGORIES[code]
+        
+        if name in IMAGES_PRODUITS:
+            del IMAGES_PRODUITS[name]
+        
+        if name in VIDEOS_PRODUITS:
+            del VIDEOS_PRODUITS[name]
+        
+        logger.info(f"🗑️ Produit retiré du registre: {name} ({code})")
+        return product_data
+    
+    return None
+
+def get_product_from_registry(code):
+    """Récupère les infos d'un produit depuis le registre"""
+    registry = load_product_registry()
+    return registry.get(code)
+
+def update_product_media_in_registry(code, image_file=None, video_file=None):
+    """Met à jour les médias d'un produit dans le registre"""
+    registry = load_product_registry()
+    
+    if code in registry:
+        if image_file:
+            registry[code]["image"] = image_file
+            name = registry[code]["name"]
+            IMAGES_PRODUITS[name] = MEDIA_DIR / image_file
+        
+        if video_file:
+            registry[code]["video"] = video_file
+            name = registry[code]["name"]
+            VIDEOS_PRODUITS[name] = MEDIA_DIR / video_file
+        
+        save_product_registry(registry)
+        logger.info(f"✅ Médias mis à jour pour {code}")
+        return True
+    
+    return False
 
 # ==================== GESTION DES PRODUITS DISPONIBLES ====================
 
 def load_available_products():
-    """Charge la liste des produits disponibles"""
     if AVAILABLE_PRODUCTS_FILE.exists():
         try:
             with open(AVAILABLE_PRODUCTS_FILE, 'r', encoding='utf-8') as f:
@@ -413,7 +451,6 @@ def load_available_products():
     return set(PRIX_FR.keys())
 
 def save_available_products(products):
-    """Sauvegarde la liste des produits disponibles"""
     try:
         with open(AVAILABLE_PRODUCTS_FILE, 'w', encoding='utf-8') as f:
             json.dump({"available": list(products), "updated": datetime.now().isoformat()}, f, indent=2)
@@ -423,18 +460,15 @@ def save_available_products(products):
         return False
 
 def is_product_available(product_name):
-    """Vérifie si un produit est disponible"""
     available = load_available_products()
     return product_name in available
 
 def get_available_products():
-    """Retourne la liste des produits disponibles"""
     return load_available_products()
 
 # ==================== GESTION DES PRIX ====================
 
 def load_prices():
-    """Charge les prix personnalisés depuis le fichier"""
     if PRICES_FILE.exists():
         try:
             with open(PRICES_FILE, 'r', encoding='utf-8') as f:
@@ -444,7 +478,6 @@ def load_prices():
     return {"FR": PRIX_FR.copy(), "CH": PRIX_CH.copy()}
 
 def save_prices(prices):
-    """Sauvegarde les prix personnalisés"""
     try:
         with open(PRICES_FILE, 'w', encoding='utf-8') as f:
             json.dump(prices, f, indent=2, ensure_ascii=False)
@@ -454,22 +487,19 @@ def save_prices(prices):
         return False
 
 def get_price(product_name, country):
-    """Récupère le prix d'un produit pour un pays"""
     prices = load_prices()
     return prices.get(country, {}).get(product_name, 0)
 
 def set_price(product_name, country, new_price):
-    """Modifie le prix d'un produit"""
     prices = load_prices()
     if country not in prices:
         prices[country] = {}
     prices[country][product_name] = new_price
     return save_prices(prices)
 
-# ==================== GESTION AVANCÉE DES PRODUITS (NOUVEAU) ====================
+# ==================== GESTION AVANCÉE DES PRODUITS ====================
 
 def load_archived_products():
-    """Charge les produits archivés"""
     if ARCHIVED_PRODUCTS_FILE.exists():
         try:
             with open(ARCHIVED_PRODUCTS_FILE, 'r', encoding='utf-8') as f:
@@ -479,84 +509,112 @@ def load_archived_products():
     return {}
 
 def save_archived_products(archived):
-    """Sauvegarde les produits archivés"""
     with open(ARCHIVED_PRODUCTS_FILE, 'w', encoding='utf-8') as f:
         json.dump(archived, f, indent=2, ensure_ascii=False)
 
-def add_new_product(name, code, emoji, category, price_fr, price_ch):
-    """Ajoute un nouveau produit au système"""
-    PRODUCT_CODES[code] = name
+def add_new_product(name, code, emoji, category, price_fr, price_ch, image_file=None, video_file=None):
+    """Ajoute un nouveau produit (VERSION AVEC PERSISTANCE)"""
+    
+    success = add_product_to_registry(code, name, emoji, category, price_fr, price_ch, image_file, video_file)
+    
+    if not success:
+        logger.error(f"❌ Échec ajout registre: {name}")
+        return False
+    
     prices = load_prices()
     prices["FR"][name] = price_fr
     prices["CH"][name] = price_ch
     save_prices(prices)
+    
     available = load_available_products()
     available.add(name)
     save_available_products(available)
-    if category == "pill":
-        PILL_SUBCATEGORIES[code] = name
-    elif category == "rock":
-        ROCK_SUBCATEGORIES[code] = name
-    logger.info(f"✅ Produit créé: {name} ({code})")
+    
+    logger.info(f"✅ Produit créé avec persistance: {name} ({code})")
     return True
 
 def archive_product(product_name):
-    """Archive un produit (suppression réversible)"""
-    archived = load_archived_products()
-    prices = load_prices()
-    product_info = {
-        "name": product_name,
-        "price_fr": prices["FR"].get(product_name, 0),
-        "price_ch": prices["CH"].get(product_name, 0),
-        "archived_at": datetime.now().isoformat()
-    }
+    """Archive un produit (VERSION AVEC REGISTRE)"""
+    
+    product_code = None
     for code, name in PRODUCT_CODES.items():
         if name == product_name:
-            product_info["code"] = code
-            if code in PILL_SUBCATEGORIES:
-                product_info["category"] = "pill"
-            elif code in ROCK_SUBCATEGORIES:
-                product_info["category"] = "rock"
-            else:
-                product_info["category"] = "powder"
+            product_code = code
             break
-    archived[product_name] = product_info
+    
+    if not product_code:
+        logger.error(f"❌ Code non trouvé pour {product_name}")
+        return False
+    
+    product_data = get_product_from_registry(product_code)
+    
+    if not product_data:
+        logger.error(f"❌ Produit non trouvé dans le registre: {product_name}")
+        return False
+    
+    prices = load_prices()
+    
+    archived = load_archived_products()
+    archived[product_name] = {
+        "name": product_name,
+        "code": product_code,
+        "emoji": product_data.get("emoji", product_name.split()[0]),
+        "category": product_data.get("category", "powder"),
+        "price_fr": prices["FR"].get(product_name, 0),
+        "price_ch": prices["CH"].get(product_name, 0),
+        "image": product_data.get("image"),
+        "video": product_data.get("video"),
+        "archived_at": datetime.now().isoformat()
+    }
     save_archived_products(archived)
+    
+    remove_product_from_registry(product_code)
+    
     available = load_available_products()
     if product_name in available:
         available.remove(product_name)
     save_available_products(available)
+    
     if product_name in prices["FR"]:
         del prices["FR"][product_name]
     if product_name in prices["CH"]:
         del prices["CH"][product_name]
     save_prices(prices)
+    
     logger.info(f"📦 Produit archivé: {product_name}")
     return True
 
 def restore_product(product_name):
-    """Restaure un produit archivé"""
+    """Restaure un produit archivé (VERSION AVEC REGISTRE)"""
     archived = load_archived_products()
+    
     if product_name not in archived:
+        logger.error(f"❌ Produit non trouvé dans les archives: {product_name}")
         return False
+    
     info = archived[product_name]
-    add_new_product(
+    
+    success = add_new_product(
         name=info["name"],
         code=info["code"],
-        emoji=info["name"].split()[0],
+        emoji=info.get("emoji", info["name"].split()[0]),
         category=info["category"],
         price_fr=info["price_fr"],
-        price_ch=info["price_ch"]
+        price_ch=info["price_ch"],
+        image_file=info.get("image"),
+        video_file=info.get("video")
     )
-    del archived[product_name]
-    save_archived_products(archived)
-    logger.info(f"♻️ Produit restauré: {product_name}")
-    return True
+    
+    if success:
+        del archived[product_name]
+        save_archived_products(archived)
+        logger.info(f"♻️ Produit restauré: {product_name}")
+    
+    return success
 
-# ==================== NOTIFICATION CONNEXIONS (NOUVEAU) ====================
+# ==================== NOTIFICATION CONNEXIONS ====================
 
 def load_users():
-    """Charge la liste des utilisateurs"""
     if USERS_FILE.exists():
         try:
             with open(USERS_FILE, 'r', encoding='utf-8') as f:
@@ -566,17 +624,14 @@ def load_users():
     return {}
 
 def save_users(users):
-    """Sauvegarde la liste des utilisateurs"""
     with open(USERS_FILE, 'w', encoding='utf-8') as f:
         json.dump(users, f, indent=2, ensure_ascii=False)
 
 def is_new_user(user_id):
-    """Vérifie si c'est un nouvel utilisateur"""
     users = load_users()
     return str(user_id) not in users
 
 def add_user(user_id, user_data):
-    """Ajoute un utilisateur"""
     users = load_users()
     users[str(user_id)] = {
         "first_seen": datetime.now().isoformat(),
@@ -590,7 +645,6 @@ def add_user(user_id, user_data):
     return True
 
 def update_user_visit(user_id):
-    """Met à jour la visite d'un utilisateur"""
     users = load_users()
     if str(user_id) in users:
         users[str(user_id)]["last_seen"] = datetime.now().isoformat()
@@ -598,7 +652,6 @@ def update_user_visit(user_id):
         save_users(users)
 
 async def notify_admin_new_user(context, user_id, user_data):
-    """Notifie l'admin d'un nouvel utilisateur"""
     username = user_data.get("username", "N/A")
     first_name = user_data.get("first_name", "N/A")
     last_name = user_data.get("last_name", "")
@@ -623,21 +676,18 @@ async def notify_admin_new_user(context, user_id, user_data):
 # ==================== FONCTIONS UTILITAIRES ====================
 
 def get_formatted_price_list(country_code):
-    """Génère la liste formatée des prix pour un pays (uniquement produits disponibles)"""
+    """Génère la liste formatée des prix (AVEC FILTRE DISPONIBILITÉ)"""
     prices = load_prices()
     country = "FR" if country_code == "fr" else "CH"
     country_prices = prices.get(country, PRIX_FR if country == "FR" else PRIX_CH)
     
-    # Récupérer les produits disponibles
     available = get_available_products()
     
     text = ""
     
-    # Coco
     if "❄️ Coco" in available:
         text += f"❄️ *Coco* : {country_prices.get('❄️ Coco', 0)}€/g\n"
     
-    # Pills
     pills_available = []
     if "💊 Squid Game" in available:
         pills_available.append(f"  • Squid Game : {country_prices.get('💊 Squid Game', 0)}€")
@@ -648,15 +698,12 @@ def get_formatted_price_list(country_code):
         text += f"💊 *Pills* :\n"
         text += "\n".join(pills_available) + "\n"
     
-    # Hash
     if "🫒 Hash" in available:
         text += f"🫒 *Hash* : {country_prices.get('🫒 Hash', 0)}€/g\n"
     
-    # Weed
     if "🍀 Weed" in available:
         text += f"🍀 *Weed* : {country_prices.get('🍀 Weed', 0)}€/g\n"
     
-    # Crystal
     crystal_available = []
     if "🪨 MDMA" in available:
         crystal_available.append(f"  • MDMA : {country_prices.get('🪨 MDMA', 0)}€/g")
@@ -667,7 +714,6 @@ def get_formatted_price_list(country_code):
         text += f"🪨 *Crystal* :\n"
         text += "\n".join(crystal_available) + "\n"
     
-    # Livraison (toujours affichée)
     text += f"\n📦 *Livraison* :\n"
     text += f"  • Postale (48-72h) : 10€\n"
     text += f"  • Express (30min+) : 10€/km"
@@ -768,14 +814,7 @@ def save_stats(stats):
 
 def add_sale(amount, country, products, subtotal=0, delivery_fee=0):
     stats = load_stats()
-    sale_data = {
-        "date": datetime.now().isoformat(), 
-        "amount": amount, 
-        "subtotal": subtotal,
-        "delivery_fee": delivery_fee,
-        "country": country, 
-        "products": products
-    }
+    sale_data = {"date": datetime.now().isoformat(), "amount": amount, "subtotal": subtotal, "delivery_fee": delivery_fee, "country": country, "products": products}
     stats["weekly"].append(sale_data)
     stats["monthly"].append(sale_data)
     save_stats(stats)
@@ -793,15 +832,7 @@ async def send_weekly_report(context: ContextTypes.DEFAULT_TYPE):
     fr_count = sum(1 for sale in weekly_sales if sale.get("country") == "FR")
     ch_count = sum(1 for sale in weekly_sales if sale.get("country") == "CH")
     
-    report = f"📊 *RAPPORT HEBDOMADAIRE*\n\n"
-    report += f"📅 Semaine du {datetime.now().strftime('%d/%m/%Y')}\n\n"
-    report += f"💰 *Chiffre d'affaires TOTAL :* {total:.2f}€\n"
-    report += f"🛍️ *Ventes articles :* {total_subtotal:.2f}€\n"
-    report += f"📦 *Frais de port :* {total_delivery_fees:.2f}€\n\n"
-    report += f"📦 *Commandes :* {count}\n"
-    report += f"🇫🇷 France : {fr_count}\n"
-    report += f"🇨🇭 Suisse : {ch_count}\n"
-    report += f"💵 *Panier moyen :* {total/count:.2f}€\n"
+    report = f"📊 *RAPPORT HEBDOMADAIRE*\n\n📅 Semaine du {datetime.now().strftime('%d/%m/%Y')}\n\n💰 *CA TOTAL :* {total:.2f}€\n🛍️ *Ventes :* {total_subtotal:.2f}€\n📦 *Frais :* {total_delivery_fees:.2f}€\n\n📦 *Commandes :* {count}\n🇫🇷 France : {fr_count}\n🇨🇭 Suisse : {ch_count}\n💵 *Panier moyen :* {total/count:.2f}€\n"
     
     try:
         await context.bot.send_message(chat_id=ADMIN_ID, text=report, parse_mode='Markdown')
@@ -832,16 +863,7 @@ async def send_monthly_report(context: ContextTypes.DEFAULT_TYPE):
                 product_count[product.strip()] += 1
     top_products = sorted(product_count.items(), key=lambda x: x[1], reverse=True)[:5]
     
-    report = f"📊 *RAPPORT MENSUEL*\n\n"
-    report += f"📅 Mois de {datetime.now().strftime('%B %Y')}\n\n"
-    report += f"💰 *Chiffre d'affaires TOTAL :* {total:.2f}€\n"
-    report += f"🛍️ *Ventes articles :* {total_subtotal:.2f}€\n"
-    report += f"📦 *Frais de port :* {total_delivery_fees:.2f}€\n\n"
-    report += f"📦 *Commandes :* {count}\n"
-    report += f"🇫🇷 France : {fr_count}\n"
-    report += f"🇨🇭 Suisse : {ch_count}\n"
-    report += f"💵 *Panier moyen :* {total/count:.2f}€\n\n"
-    report += f"🏆 *Top 5 produits :*\n"
+    report = f"📊 *RAPPORT MENSUEL*\n\n📅 Mois de {datetime.now().strftime('%B %Y')}\n\n💰 *CA TOTAL :* {total:.2f}€\n🛍️ *Ventes :* {total_subtotal:.2f}€\n📦 *Frais :* {total_delivery_fees:.2f}€\n\n📦 *Commandes :* {count}\n🇫🇷 France : {fr_count}\n🇨🇭 Suisse : {ch_count}\n💵 *Panier moyen :* {total/count:.2f}€\n\n🏆 *Top 5 :*\n"
     
     for i, (product, qty) in enumerate(top_products, 1):
         report += f"{i}. {product} ({qty}x)\n"
@@ -892,7 +914,6 @@ def calculate_delivery_fee(delivery_type, distance=0, subtotal=0):
     return 0
 
 def calculate_distance_openroute(origin, destination):
-    """Calcul distance réelle avec OpenRouteService"""
     try:
         geocode_origin = distance_client.pelias_search(text=origin)
         geocode_dest = distance_client.pelias_search(text=destination)
@@ -903,11 +924,7 @@ def calculate_distance_openroute(origin, destination):
         coords_origin = geocode_origin["features"][0]["geometry"]["coordinates"]
         coords_dest = geocode_dest["features"][0]["geometry"]["coordinates"]
         
-        route = distance_client.directions(
-            coordinates=[coords_origin, coords_dest],
-            profile="driving-car",
-            format="geojson"
-        )
+        route = distance_client.directions(coordinates=[coords_origin, coords_dest], profile="driving-car", format="geojson")
         
         distance_m = route["features"][0]["properties"]["segments"][0]["distance"]
         distance_km = math.ceil(distance_m / 1000)
@@ -918,7 +935,6 @@ def calculate_distance_openroute(origin, destination):
         return None
 
 def calculate_distance_geopy(origin, destination):
-    """Calcul distance avec Geopy (vol d'oiseau + 30%)"""
     try:
         loc_origin = distance_client.geocode(origin)
         loc_dest = distance_client.geocode(destination)
@@ -938,7 +954,6 @@ def calculate_distance_geopy(origin, destination):
         return None
 
 def calculate_distance_simulation(address):
-    """Simulation distance par hash"""
     import hashlib
     hash_val = int(hashlib.md5(address.encode()).hexdigest()[:8], 16)
     distance = (hash_val % 50) + 5
@@ -946,7 +961,6 @@ def calculate_distance_simulation(address):
     return distance
 
 def calculate_distance_simple(address):
-    """Calcul distance avec fallback automatique"""
     distance = None
     
     if DISTANCE_METHOD == "openroute":
@@ -1009,52 +1023,30 @@ def error_handler(func):
             return ConversationHandler.END
     return wrapper
 
-# ==================== FONCTION D'ENVOI DE MÉDIA ====================
-
 async def send_product_media(context, chat_id, product_name, caption):
-    """Envoie le média d'un produit (vidéo prioritaire, sinon image, sinon texte)"""
     product_video_path = VIDEOS_PRODUITS.get(product_name)
     product_image_path = IMAGES_PRODUITS.get(product_name)
-    
-    logger.info(f"🎬 Produit: {product_name}")
-    logger.info(f"📹 Vidéo: {product_video_path} (existe: {product_video_path and product_video_path.exists()})")
-    logger.info(f"🖼️ Image: {product_image_path} (existe: {product_image_path and product_image_path.exists()})")
     
     if product_video_path and product_video_path.exists():
         try:
             with open(product_video_path, 'rb') as video:
-                await context.bot.send_video(
-                    chat_id=chat_id,
-                    video=video,
-                    caption=caption,
-                    parse_mode='Markdown',
-                    supports_streaming=True
-                )
+                await context.bot.send_video(chat_id=chat_id, video=video, caption=caption, parse_mode='Markdown', supports_streaming=True)
             logger.info(f"✅ Vidéo envoyée: {product_name}")
             return True
         except Exception as e:
-            logger.error(f"❌ Erreur envoi vidéo {product_name}: {e}")
+            logger.error(f"❌ Erreur vidéo {product_name}: {e}")
     
     if product_image_path and product_image_path.exists():
         try:
             with open(product_image_path, 'rb') as photo:
-                await context.bot.send_photo(
-                    chat_id=chat_id,
-                    photo=photo,
-                    caption=caption,
-                    parse_mode='Markdown'
-                )
+                await context.bot.send_photo(chat_id=chat_id, photo=photo, caption=caption, parse_mode='Markdown')
             logger.info(f"✅ Image envoyée: {product_name}")
             return True
         except Exception as e:
-            logger.error(f"❌ Erreur envoi image {product_name}: {e}")
+            logger.error(f"❌ Erreur image {product_name}: {e}")
     
-    logger.warning(f"⚠️ Aucun média trouvé pour {product_name}, envoi texte uniquement")
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text=caption,
-        parse_mode='Markdown'
-    )
+    logger.warning(f"⚠️ Aucun média pour {product_name}")
+    await context.bot.send_message(chat_id=chat_id, text=caption, parse_mode='Markdown')
     return False
 
 # ==================== SUITE DE LA PARTIE 1 ====================
@@ -2393,3 +2385,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

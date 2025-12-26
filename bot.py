@@ -623,21 +623,51 @@ async def notify_admin_new_user(context, user_id, user_data):
 # ==================== FONCTIONS UTILITAIRES ====================
 
 def get_formatted_price_list(country_code):
-    """Génère la liste formatée des prix pour un pays"""
+    """Génère la liste formatée des prix pour un pays (uniquement produits disponibles)"""
     prices = load_prices()
     country = "FR" if country_code == "fr" else "CH"
     country_prices = prices.get(country, PRIX_FR if country == "FR" else PRIX_CH)
     
+    # Récupérer les produits disponibles
+    available = get_available_products()
+    
     text = ""
-    text += f"❄️ *Coco* : {country_prices.get('❄️ Coco', 0)}€/g\n"
-    text += f"💊 *Pills* :\n"
-    text += f"  • Squid Game : {country_prices.get('💊 Squid Game', 0)}€\n"
-    text += f"  • Punisher : {country_prices.get('💊 Punisher', 0)}€\n"
-    text += f"🫒 *Hash* : {country_prices.get('🫒 Hash', 0)}€/g\n"
-    text += f"🍀 *Weed* : {country_prices.get('🍀 Weed', 0)}€/g\n"
-    text += f"🪨 *Crystal* :\n"
-    text += f"  • MDMA : {country_prices.get('🪨 MDMA', 0)}€/g\n"
-    text += f"  • 4MMC : {country_prices.get('🪨 4MMC', 0)}€/g\n"
+    
+    # Coco
+    if "❄️ Coco" in available:
+        text += f"❄️ *Coco* : {country_prices.get('❄️ Coco', 0)}€/g\n"
+    
+    # Pills
+    pills_available = []
+    if "💊 Squid Game" in available:
+        pills_available.append(f"  • Squid Game : {country_prices.get('💊 Squid Game', 0)}€")
+    if "💊 Punisher" in available:
+        pills_available.append(f"  • Punisher : {country_prices.get('💊 Punisher', 0)}€")
+    
+    if pills_available:
+        text += f"💊 *Pills* :\n"
+        text += "\n".join(pills_available) + "\n"
+    
+    # Hash
+    if "🫒 Hash" in available:
+        text += f"🫒 *Hash* : {country_prices.get('🫒 Hash', 0)}€/g\n"
+    
+    # Weed
+    if "🍀 Weed" in available:
+        text += f"🍀 *Weed* : {country_prices.get('🍀 Weed', 0)}€/g\n"
+    
+    # Crystal
+    crystal_available = []
+    if "🪨 MDMA" in available:
+        crystal_available.append(f"  • MDMA : {country_prices.get('🪨 MDMA', 0)}€/g")
+    if "🪨 4MMC" in available:
+        crystal_available.append(f"  • 4MMC : {country_prices.get('🪨 4MMC', 0)}€/g")
+    
+    if crystal_available:
+        text += f"🪨 *Crystal* :\n"
+        text += "\n".join(crystal_available) + "\n"
+    
+    # Livraison (toujours affichée)
     text += f"\n📦 *Livraison* :\n"
     text += f"  • Postale (48-72h) : 10€\n"
     text += f"  • Express (30min+) : 10€/km"

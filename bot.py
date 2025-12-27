@@ -533,6 +533,237 @@ def add_new_product(name, code, emoji, category, price_fr, price_ch, image_file=
     logger.info(f"✅ Produit créé avec persistance: {name} ({code})")
     return True
 
+# ==================== FONCTION DE RÉPARATION PRODUIT INVISIBLE ====================
+# Copier-coller ces 2 fonctions dans votre bot.py (après add_new_product)
+
+def repair_product_visibility(code):
+    """
+    Répare un produit invisible
+    Synchronise registry → available_products → prices → mémoire
+    """
+    logger.info(f"🔧 Réparation du produit : {code}")
+    
+    # 1. Vérifier dans le registre
+    registry = load_product_registry()
+    
+    if code not in registry:
+        logger.error(f"❌ Produit non trouvé dans le registre: {code}")
+        return False
+    
+    product_data = registry[code]
+    name = product_data["name"]
+    
+    logger.info(f"✅ Produit trouvé dans registre: {name}")
+    
+    # 2. Ajouter à available_products
+    available = load_available_products()
+    if not isinstance(available, set):
+        available = set(available) if available else set()
+    
+    if name not in available:
+        available.add(name)
+        save_available_products(available)
+        logger.info(f"✅ Ajouté à available_products: {name}")
+    else:
+        logger.info(f"⚠️ Déjà dans available_products: {name}")
+    
+    # 3. Vérifier/Ajouter les prix
+    prices = load_prices()
+    
+    if "FR" not in prices:
+        prices["FR"] = {}
+    if "CH" not in prices:
+        prices["CH"] = {}
+    
+    # Mettre des prix par défaut si manquants
+    if name not in prices["FR"]:
+        prices["FR"][name] = 50  # Prix par défaut FR
+        logger.warning(f"⚠️ Prix FR ajouté (par défaut 50€): {name}")
+    
+    if name not in prices["CH"]:
+        prices["CH"][name] = 70  # Prix par défaut CH
+        logger.warning(f"⚠️ Prix CH ajouté (par défaut 70€): {name}")
+    
+    save_prices(prices)
+    
+    # 4. Mettre à jour la mémoire (TRÈS IMPORTANT)
+    PRODUCT_CODES[code] = name
+    
+    category = product_data.get("category", "powder")
+    if category == "pill":
+        PILL_SUBCATEGORIES[code] = name
+        logger.info(f"✅ Ajouté aux PILL_SUBCATEGORIES")
+    elif category == "rock":
+        ROCK_SUBCATEGORIES[code] = name
+        logger.info(f"✅ Ajouté aux ROCK_SUBCATEGORIES")
+    
+    # Images/vidéos si présentes
+    if product_data.get("image"):
+        IMAGES_PRODUITS[name] = MEDIA_DIR / product_data["image"]
+    if product_data.get("video"):
+        VIDEOS_PRODUITS[name] = MEDIA_DIR / product_data["video"]
+    
+    logger.info(f"✅ Réparation terminée pour {name}")
+    logger.info(f"   └─ Visible dans /products : OUI")
+    logger.info(f"   └─ Visible dans Carte : OUI")
+    logger.info(f"   └─ Prix FR : {prices['FR'].get(name, 0)}€")
+    logger.info(f"   └─ Prix CH : {prices['CH'].get(name, 0)}€")
+    
+    return True
+
+
+@error_handler
+async def admin_repair_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Commande /repair <code> pour réparer un produit invisible
+    
+    Utilisation :
+    /repair k
+    /repair fourmmc
+    """
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return
+    
+    if not context.args:
+        # Afficher l'aide
+        text = "🔧 *RÉPARER UN PRODUIT*\n\n"
+        text += "Usage : `/repair <code>`\n\n"
+        text += "*Exemples :*\n"
+        text += "• `/repair k`\n"
+        text += "• `/repair fourmmc`\n\n"
+        text += "*Quand utiliser ?*\n"
+        text += "Quand un produit est créé mais n'apparaît pas dans :\n"
+        text += "  • `/products`\n"
+        text += "  • Carte du Pirate\n"
+        text += "  • Menu de commande\n\n"
+        text += "*Codes disponibles :*\n"
+        
+        registry = load_product_registry()
+        for code, data in sorted(registry.items()):
+            text += f"  • `{code}` → {data['name']}\n"
+        
+        await update.message.reply_text(text, parse_mode='Markdown')
+        return
+    
+    code = context.args[0].lower()
+    
+    await update.message.reply_text(f"🔧 Réparation de `{code}` en cours...", parse_mode='Markdown')
+    
+    if repair_product_visibility(code):
+        registry = load_product_registry()
+        product_data = registry.get(code, {})
+        name = product_data.get("name", code)
+        
+        text = f"✅ *Produit réparé !*\n\n"
+        text += f"📦 {name}\n"
+        text += f"Code : `{code}`\n\n"
+        text += f"*Vérifications :*\n"
+        
+        # Vérifier disponibilité
+        available = get_available_products()
+        if name in available:
+            text += f"✅ Visible dans `/products`\n"
+        else:
+            text += f"❌ Toujours invisible dans `/products`\n"
+        
+        # Vérifier prix
+        prices = load_prices()
+        price_fr = prices.get("FR", {}).get(name, 0)
+        price_ch = prices.get("CH", {}).get(name, 0)
+        text += f"✅ Prix FR : {price_fr}€\n"
+        text += f"✅ Prix CH : {price_ch}€\n\n"
+        
+        text += f"*Testez maintenant :*\n"
+        text += f"• `/products` pour voir la liste\n"
+        text += f"• Menu → Carte du Pirate\n"
+        
+        await update.message.reply_text(text, parse_mode='Markdown')
+    else:
+        text = f"❌ *Impossible de réparer* `{code}`\n\n"
+        text += f"*Raison :*\n"
+        text += f"Le produit n'existe pas dans `product_registry.json`\n\n"
+        text += f"*Solutions :*\n"
+        text += f"1. Recréer le produit avec `/products`\n"
+        text += f"2. Vérifier le code produit\n\n"
+        text += f"*Produits existants :*\n"
+        
+        registry = load_product_registry()
+        for c, data in sorted(registry.items()):
+            text += f"  • `{c}` → {data['name']}\n"
+        
+        await update.message.reply_text(text, parse_mode='Markdown')
+
+
+# ==================== COMMANDE DEBUG (OPTIONNELLE) ====================
+# Pour diagnostiquer les problèmes
+
+@error_handler
+async def admin_debug_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Commande /debug pour voir l'état des produits
+    Affiche PRODUCT_CODES, available_products, etc.
+    """
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return
+    
+    text = "🔍 *DEBUG PRODUITS*\n\n"
+    
+    # 1. PRODUCT_CODES (mémoire)
+    text += f"📦 *PRODUCT_CODES* (mémoire) : {len(PRODUCT_CODES)}\n"
+    for code, name in sorted(PRODUCT_CODES.items()):
+        text += f"  • `{code}` → {name}\n"
+    
+    # 2. Available products
+    text += f"\n✅ *Available Products* (fichier) : {len(get_available_products())}\n"
+    for name in sorted(get_available_products()):
+        text += f"  • {name}\n"
+    
+    # 3. Registre
+    registry = load_product_registry()
+    text += f"\n📋 *Product Registry* (fichier) : {len(registry)}\n"
+    for code, data in sorted(registry.items()):
+        text += f"  • `{code}` → {data['name']}\n"
+    
+    # 4. Prix
+    prices = load_prices()
+    text += f"\n💰 *Prix FR* : {len(prices.get('FR', {}))}\n"
+    text += f"💰 *Prix CH* : {len(prices.get('CH', {}))}\n"
+    
+    # 5. Problèmes détectés
+    text += f"\n⚠️ *Problèmes détectés :*\n"
+    
+    problems = []
+    
+    # Produits dans registre mais pas dans available
+    for code, data in registry.items():
+        name = data["name"]
+        if name not in get_available_products():
+            problems.append(f"  • `{code}` ({name}) : Pas dans available_products")
+    
+    # Produits dans registre mais pas de prix
+    for code, data in registry.items():
+        name = data["name"]
+        if name not in prices.get("FR", {}):
+            problems.append(f"  • `{code}` ({name}) : Pas de prix FR")
+        if name not in prices.get("CH", {}):
+            problems.append(f"  • `{code}` ({name}) : Pas de prix CH")
+    
+    # Produits dans registre mais pas en mémoire
+    for code, data in registry.items():
+        if code not in PRODUCT_CODES:
+            problems.append(f"  • `{code}` : Pas dans PRODUCT_CODES (mémoire)")
+    
+    if problems:
+        text += "\n".join(problems)
+        text += f"\n\n💡 Utilisez `/repair <code>` pour corriger"
+    else:
+        text += "Aucun problème détecté ✅"
+    
+    await update.message.reply_text(text, parse_mode='Markdown')
+
+
 def archive_product(product_name):
     """Archive un produit (VERSION AVEC REGISTRE)"""
     

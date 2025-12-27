@@ -676,44 +676,69 @@ async def notify_admin_new_user(context, user_id, user_data):
 # ==================== FONCTIONS UTILITAIRES ====================
 
 def get_formatted_price_list(country_code):
-    """Génère la liste formatée des prix (AVEC FILTRE DISPONIBILITÉ)"""
+    """Génère la liste formatée des prix - VERSION DYNAMIQUE depuis registre"""
     prices = load_prices()
     country = "FR" if country_code == "fr" else "CH"
     country_prices = prices.get(country, PRIX_FR if country == "FR" else PRIX_CH)
     
+    # Charger les produits disponibles
     available = get_available_products()
+    
+    # Charger le registre pour connaître les catégories
+    registry = load_product_registry()
     
     text = ""
     
-    if "❄️ Coco" in available:
-        text += f"❄️ *Coco* : {country_prices.get('❄️ Coco', 0)}€/g\n"
+    # Grouper les produits par catégorie
+    powders = []  # Poudres (Coco, Hash, Weed, etc.)
+    pills = []    # Pills
+    crystals = [] # Crystals
     
-    pills_available = []
-    if "💊 Squid Game" in available:
-        pills_available.append(f"  • Squid Game : {country_prices.get('💊 Squid Game', 0)}€")
-    if "💊 Punisher" in available:
-        pills_available.append(f"  • Punisher : {country_prices.get('💊 Punisher', 0)}€")
+    for product_name in sorted(available):
+        # Trouver le code du produit
+        product_code = None
+        for code, name in PRODUCT_CODES.items():
+            if name == product_name:
+                product_code = code
+                break
+        
+        if not product_code:
+            continue
+        
+        # Récupérer la catégorie depuis le registre
+        product_data = registry.get(product_code, {})
+        category = product_data.get("category", "powder")
+        price = country_prices.get(product_name, 0)
+        
+        # Classer par catégorie
+        if category == "pill":
+            pills.append((product_name, price))
+        elif category == "rock":
+            crystals.append((product_name, price))
+        else:  # powder ou autre
+            powders.append((product_name, price))
     
-    if pills_available:
+    # Afficher les poudres
+    for product_name, price in powders:
+        emoji = product_name.split()[0] if product_name else "•"
+        name_without_emoji = " ".join(product_name.split()[1:]) if len(product_name.split()) > 1 else product_name
+        text += f"{emoji} *{name_without_emoji}* : {price}€/g\n"
+    
+    # Afficher les pills
+    if pills:
         text += f"💊 *Pills* :\n"
-        text += "\n".join(pills_available) + "\n"
+        for product_name, price in pills:
+            name_without_emoji = " ".join(product_name.split()[1:]) if len(product_name.split()) > 1 else product_name
+            text += f"  • {name_without_emoji} : {price}€\n"
     
-    if "🫒 Hash" in available:
-        text += f"🫒 *Hash* : {country_prices.get('🫒 Hash', 0)}€/g\n"
-    
-    if "🍀 Weed" in available:
-        text += f"🍀 *Weed* : {country_prices.get('🍀 Weed', 0)}€/g\n"
-    
-    crystal_available = []
-    if "🪨 MDMA" in available:
-        crystal_available.append(f"  • MDMA : {country_prices.get('🪨 MDMA', 0)}€/g")
-    if "🪨 4MMC" in available:
-        crystal_available.append(f"  • 4MMC : {country_prices.get('🪨 4MMC', 0)}€/g")
-    
-    if crystal_available:
+    # Afficher les crystals
+    if crystals:
         text += f"🪨 *Crystal* :\n"
-        text += "\n".join(crystal_available) + "\n"
+        for product_name, price in crystals:
+            name_without_emoji = " ".join(product_name.split()[1:]) if len(product_name.split()) > 1 else product_name
+            text += f"  • {name_without_emoji} : {price}€/g\n"
     
+    # Livraison (toujours affichée)
     text += f"\n📦 *Livraison* :\n"
     text += f"  • Postale (48-72h) : 10€\n"
     text += f"  • Express (30min+) : 10€/km"

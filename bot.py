@@ -456,42 +456,38 @@ def save_archived_products(archived):
     with open(ARCHIVED_PRODUCTS_FILE, 'w', encoding='utf-8') as f:
         json.dump(archived, f, indent=2, ensure_ascii=False)
 
+# ==================== CORRECTIF COMPLET - CRÉATION PRODUITS ====================
+# Ce fichier contient les fonctions corrigées à remplacer dans la PARTIE 2
+
+# ==================== FONCTION add_new_product CORRIGÉE ====================
+
 def add_new_product(name, code, emoji, category, price_fr, price_ch, image_file=None, video_file=None):
-    """Ajoute un nouveau produit (VERSION AVEC PERSISTANCE)"""
+    """Ajoute un nouveau produit avec synchronisation COMPLÈTE et GARANTIE"""
     
+    logger.info(f"🔄 Création produit : {name} ({code})")
+    
+    # 1. REGISTRE
     success = add_product_to_registry(code, name, emoji, category, price_fr, price_ch, image_file, video_file)
     
     if not success:
         logger.error(f"❌ Échec ajout registre: {name}")
         return False
     
+    logger.info(f"✅ Étape 1/5 : Registre OK")
+    
+    # 2. PRIX
     prices = load_prices()
+    if "FR" not in prices:
+        prices["FR"] = {}
+    if "CH" not in prices:
+        prices["CH"] = {}
+    
     prices["FR"][name] = price_fr
     prices["CH"][name] = price_ch
     save_prices(prices)
+    logger.info(f"✅ Étape 2/5 : Prix OK (FR: {price_fr}€, CH: {price_ch}€)")
     
-    available = load_available_products()
-    available.add(name)
-    save_available_products(available)
-    
-    logger.info(f"✅ Produit créé avec persistance: {name} ({code})")
-    return True
-
-def repair_product_visibility(code):
-    """Répare un produit invisible"""
-    logger.info(f"🔧 Réparation du produit : {code}")
-    
-    registry = load_product_registry()
-    
-    if code not in registry:
-        logger.error(f"❌ Produit non trouvé dans le registre: {code}")
-        return False
-    
-    product_data = registry[code]
-    name = product_data["name"]
-    
-    logger.info(f"✅ Produit trouvé dans registre: {name}")
-    
+    # 3. AVAILABLE_PRODUCTS (CRITIQUE)
     available = load_available_products()
     if not isinstance(available, set):
         available = set(available) if available else set()
@@ -499,10 +495,109 @@ def repair_product_visibility(code):
     if name not in available:
         available.add(name)
         save_available_products(available)
-        logger.info(f"✅ Ajouté à available_products: {name}")
+        logger.info(f"✅ Étape 3/5 : Available_products OK")
     else:
-        logger.info(f"⚠️ Déjà dans available_products: {name}")
+        logger.info(f"⚠️ Étape 3/5 : Déjà dans available_products")
     
+    # 4. MÉMOIRE (CRITIQUE)
+    # Mise à jour des dictionnaires globaux
+    global PRODUCT_CODES, PILL_SUBCATEGORIES, ROCK_SUBCATEGORIES, IMAGES_PRODUITS, VIDEOS_PRODUITS
+    
+    PRODUCT_CODES[code] = name
+    
+    if category == "pill":
+        PILL_SUBCATEGORIES[code] = name
+        logger.info(f"✅ Étape 4/5 : Ajouté aux PILL_SUBCATEGORIES")
+    elif category == "rock":
+        ROCK_SUBCATEGORIES[code] = name
+        logger.info(f"✅ Étape 4/5 : Ajouté aux ROCK_SUBCATEGORIES")
+    else:
+        logger.info(f"✅ Étape 4/5 : Mémoire mise à jour (catégorie: {category})")
+    
+    # Mise à jour médias
+    if image_file:
+        IMAGES_PRODUITS[name] = MEDIA_DIR / image_file
+    if video_file:
+        VIDEOS_PRODUITS[name] = MEDIA_DIR / video_file
+    
+    # 5. VÉRIFICATION FINALE
+    verification_ok = True
+    
+    # Vérifier registre
+    registry = load_product_registry()
+    if code not in registry:
+        logger.error(f"❌ Vérification registre ÉCHOUÉE")
+        verification_ok = False
+    
+    # Vérifier available
+    available_check = get_available_products()
+    if name not in available_check:
+        logger.error(f"❌ Vérification available ÉCHOUÉE")
+        verification_ok = False
+    
+    # Vérifier prix
+    prices_check = load_prices()
+    if name not in prices_check.get("FR", {}) or name not in prices_check.get("CH", {}):
+        logger.error(f"❌ Vérification prix ÉCHOUÉE")
+        verification_ok = False
+    
+    # Vérifier mémoire
+    if code not in PRODUCT_CODES:
+        logger.error(f"❌ Vérification mémoire ÉCHOUÉE")
+        verification_ok = False
+    
+    if verification_ok:
+        logger.info(f"✅ Étape 5/5 : Vérification complète OK")
+        logger.info(f"🎉 Produit créé avec succès : {name} ({code})")
+        logger.info(f"   └─ Visible dans /products : OUI")
+        logger.info(f"   └─ Visible dans Carte : OUI")
+        logger.info(f"   └─ Visible dans menu client : OUI")
+        return True
+    else:
+        logger.error(f"❌ Échec vérification finale pour {name}")
+        return False
+
+
+# ==================== FONCTION repair_product_visibility AMÉLIORÉE ====================
+
+def repair_product_visibility(code):
+    """
+    Répare un produit invisible avec diagnostic complet
+    Synchronise registry → available_products → prices → mémoire
+    """
+    logger.info(f"🔧 ===== RÉPARATION PRODUIT : {code} =====")
+    
+    # 1. Vérifier dans le registre
+    registry = load_product_registry()
+    
+    if code not in registry:
+        logger.error(f"❌ Produit non trouvé dans le registre: {code}")
+        logger.info(f"💡 Produits dans le registre : {list(registry.keys())}")
+        return False
+    
+    product_data = registry[code]
+    name = product_data["name"]
+    category = product_data.get("category", "powder")
+    
+    logger.info(f"✅ 1/5 : Produit trouvé dans registre")
+    logger.info(f"   └─ Nom : {name}")
+    logger.info(f"   └─ Catégorie : {category}")
+    
+    # 2. Ajouter à available_products
+    available = load_available_products()
+    if not isinstance(available, set):
+        available = set(available) if available else set()
+    
+    was_missing = name not in available
+    
+    if was_missing:
+        available.add(name)
+        save_available_products(available)
+        logger.info(f"✅ 2/5 : Ajouté à available_products")
+    else:
+        logger.info(f"⚠️ 2/5 : Déjà dans available_products")
+    
+    # 3. Vérifier/Ajouter les prix
     prices = load_prices()
     
     if "FR" not in prices:
@@ -510,33 +605,265 @@ def repair_product_visibility(code):
     if "CH" not in prices:
         prices["CH"] = {}
     
+    prix_manquants = False
+    
     if name not in prices["FR"]:
-        prices["FR"][name] = 50
-        logger.warning(f"⚠️ Prix FR ajouté (par défaut 50€): {name}")
+        prices["FR"][name] = 50  # Prix par défaut FR
+        prix_manquants = True
+        logger.warning(f"⚠️ 3/5 : Prix FR ajouté (défaut 50€)")
+    else:
+        logger.info(f"✅ 3/5 : Prix FR existe ({prices['FR'][name]}€)")
     
     if name not in prices["CH"]:
-        prices["CH"][name] = 70
-        logger.warning(f"⚠️ Prix CH ajouté (par défaut 70€): {name}")
+        prices["CH"][name] = 70  # Prix par défaut CH
+        prix_manquants = True
+        logger.warning(f"⚠️ 3/5 : Prix CH ajouté (défaut 70€)")
+    else:
+        logger.info(f"✅ 3/5 : Prix CH existe ({prices['CH'][name]}€)")
     
-    save_prices(prices)
+    if prix_manquants:
+        save_prices(prices)
     
-    PRODUCT_CODES[code] = name
+    # 4. Mettre à jour la mémoire (TRÈS IMPORTANT)
+    global PRODUCT_CODES, PILL_SUBCATEGORIES, ROCK_SUBCATEGORIES, IMAGES_PRODUITS, VIDEOS_PRODUITS
     
-    category = product_data.get("category", "powder")
+    memoire_mise_a_jour = False
+    
+    if code not in PRODUCT_CODES:
+        PRODUCT_CODES[code] = name
+        memoire_mise_a_jour = True
+        logger.info(f"✅ 4/5 : Ajouté à PRODUCT_CODES")
+    else:
+        logger.info(f"⚠️ 4/5 : Déjà dans PRODUCT_CODES")
+    
     if category == "pill":
-        PILL_SUBCATEGORIES[code] = name
-        logger.info(f"✅ Ajouté aux PILL_SUBCATEGORIES")
+        if code not in PILL_SUBCATEGORIES:
+            PILL_SUBCATEGORIES[code] = name
+            memoire_mise_a_jour = True
+            logger.info(f"✅ 4/5 : Ajouté aux PILL_SUBCATEGORIES")
+        else:
+            logger.info(f"⚠️ 4/5 : Déjà dans PILL_SUBCATEGORIES")
     elif category == "rock":
-        ROCK_SUBCATEGORIES[code] = name
-        logger.info(f"✅ Ajouté aux ROCK_SUBCATEGORIES")
+        if code not in ROCK_SUBCATEGORIES:
+            ROCK_SUBCATEGORIES[code] = name
+            memoire_mise_a_jour = True
+            logger.info(f"✅ 4/5 : Ajouté aux ROCK_SUBCATEGORIES")
+        else:
+            logger.info(f"⚠️ 4/5 : Déjà dans ROCK_SUBCATEGORIES")
     
+    # Images/vidéos
     if product_data.get("image"):
         IMAGES_PRODUITS[name] = MEDIA_DIR / product_data["image"]
     if product_data.get("video"):
         VIDEOS_PRODUITS[name] = MEDIA_DIR / product_data["video"]
     
-    logger.info(f"✅ Réparation terminée pour {name}")
-    return True
+    # 5. VÉRIFICATION FINALE
+    logger.info(f"🔍 5/5 : Vérification finale...")
+    
+    verification = {
+        "registre": code in load_product_registry(),
+        "available": name in get_available_products(),
+        "prix_fr": name in load_prices().get("FR", {}),
+        "prix_ch": name in load_prices().get("CH", {}),
+        "memoire_code": code in PRODUCT_CODES,
+        "memoire_category": (
+            code in PILL_SUBCATEGORIES if category == "pill" 
+            else code in ROCK_SUBCATEGORIES if category == "rock" 
+            else True
+        )
+    }
+    
+    tous_ok = all(verification.values())
+    
+    logger.info(f"")
+    logger.info(f"📊 RÉSULTAT RÉPARATION :")
+    logger.info(f"   ✅ Registre : {verification['registre']}")
+    logger.info(f"   ✅ Available : {verification['available']}")
+    logger.info(f"   ✅ Prix FR : {verification['prix_fr']} ({prices['FR'].get(name, 0)}€)")
+    logger.info(f"   ✅ Prix CH : {verification['prix_ch']} ({prices['CH'].get(name, 0)}€)")
+    logger.info(f"   ✅ Mémoire code : {verification['memoire_code']}")
+    logger.info(f"   ✅ Mémoire catégorie : {verification['memoire_category']}")
+    logger.info(f"")
+    
+    if tous_ok:
+        logger.info(f"🎉 RÉPARATION RÉUSSIE pour {name}")
+        logger.info(f"   └─ Visible dans /products : OUI")
+        logger.info(f"   └─ Visible dans Carte du Pirate : OUI")
+        logger.info(f"   └─ Visible dans menu client : OUI")
+    else:
+        logger.error(f"❌ RÉPARATION INCOMPLÈTE pour {name}")
+        problemes = [k for k, v in verification.items() if not v]
+        logger.error(f"   └─ Problèmes restants : {problemes}")
+    
+    return tous_ok
+
+
+# ==================== COMMANDE /repair AMÉLIORÉE ====================
+
+@error_handler
+async def admin_repair_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Commande /repair <code> pour réparer un produit invisible
+    Version améliorée avec diagnostic complet
+    """
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return
+    
+    if not context.args:
+        # Afficher l'aide
+        text = "🔧 *RÉPARER UN PRODUIT*\n\n"
+        text += "Usage : `/repair <code>`\n\n"
+        text += "*Exemples :*\n"
+        text += "• `/repair k`\n"
+        text += "• `/repair fourmmc`\n\n"
+        text += "*Quand utiliser ?*\n"
+        text += "Quand un produit est créé mais n'apparaît pas dans :\n"
+        text += "  • `/products`\n"
+        text += "  • Carte du Pirate\n"
+        text += "  • Menu de commande\n\n"
+        text += "*Codes disponibles :*\n"
+        
+        registry = load_product_registry()
+        for code, data in sorted(registry.items()):
+            text += f"  • `{code}` → {data['name']}\n"
+        
+        await update.message.reply_text(text, parse_mode='Markdown')
+        return
+    
+    code = context.args[0].lower()
+    
+    await update.message.reply_text(f"🔧 Réparation de `{code}` en cours...\n\n_Analyse et correction en 5 étapes_", parse_mode='Markdown')
+    
+    if repair_product_visibility(code):
+        registry = load_product_registry()
+        product_data = registry.get(code, {})
+        name = product_data.get("name", code)
+        
+        text = f"✅ *PRODUIT RÉPARÉ !*\n\n"
+        text += f"📦 {name}\n"
+        text += f"Code : `{code}`\n\n"
+        text += f"*Vérifications :*\n"
+        
+        # Vérifier disponibilité
+        available = get_available_products()
+        text += f"{'✅' if name in available else '❌'} Visible dans `/products`\n"
+        
+        # Vérifier prix
+        prices = load_prices()
+        price_fr = prices.get("FR", {}).get(name, 0)
+        price_ch = prices.get("CH", {}).get(name, 0)
+        text += f"{'✅' if price_fr > 0 else '❌'} Prix FR : {price_fr}€\n"
+        text += f"{'✅' if price_ch > 0 else '❌'} Prix CH : {price_ch}€\n\n"
+        
+        text += f"*Testez maintenant :*\n"
+        text += f"• `/products` pour voir la liste\n"
+        text += f"• Menu → Carte du Pirate\n"
+        text += f"• Commande client\n"
+        
+        await update.message.reply_text(text, parse_mode='Markdown')
+    else:
+        text = f"❌ *IMPOSSIBLE DE RÉPARER* `{code}`\n\n"
+        text += f"*Raisons possibles :*\n"
+        text += f"• Le produit n'existe pas dans le registre\n"
+        text += f"• Erreur de code produit\n\n"
+        text += f"*Solutions :*\n"
+        text += f"1. Vérifiez le code avec `/debug`\n"
+        text += f"2. Recréez le produit avec `/products`\n\n"
+        text += f"*Produits existants :*\n"
+        
+        registry = load_product_registry()
+        for c, data in sorted(registry.items()):
+            text += f"  • `{c}` → {data['name']}\n"
+        
+        await update.message.reply_text(text, parse_mode='Markdown')
+
+
+# ==================== COMMANDE /debug AMÉLIORÉE ====================
+
+@error_handler
+async def admin_debug_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Commande /debug pour diagnostic complet des produits
+    """
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return
+    
+    text = "🔍 *DEBUG PRODUITS*\n\n"
+    
+    # 1. PRODUCT_CODES (mémoire)
+    text += f"📦 *PRODUCT_CODES* (mémoire) : {len(PRODUCT_CODES)}\n"
+    for code, name in sorted(PRODUCT_CODES.items()):
+        text += f"  • `{code}` → {name}\n"
+    
+    # 2. Available products
+    available = get_available_products()
+    text += f"\n✅ *Available Products* (fichier) : {len(available)}\n"
+    for name in sorted(available):
+        text += f"  • {name}\n"
+    
+    # 3. Registre
+    registry = load_product_registry()
+    text += f"\n📋 *Product Registry* (fichier) : {len(registry)}\n"
+    for code, data in sorted(registry.items()):
+        text += f"  • `{code}` → {data['name']}\n"
+    
+    # 4. Prix
+    prices = load_prices()
+    text += f"\n💰 *Prix FR* : {len(prices.get('FR', {}))}\n"
+    text += f"💰 *Prix CH* : {len(prices.get('CH', {}))}\n"
+    
+    # 5. Problèmes détectés
+    text += f"\n⚠️ *PROBLÈMES DÉTECTÉS :*\n"
+    
+    problems = []
+    
+    # Produits dans registre mais pas dans available
+    for code, data in registry.items():
+        name = data["name"]
+        if name not in available:
+            problems.append(f"  🔴 `{code}` ({name}) : Pas dans available_products")
+    
+    # Produits dans registre mais pas de prix
+    for code, data in registry.items():
+        name = data["name"]
+        if name not in prices.get("FR", {}):
+            problems.append(f"  🟡 `{code}` ({name}) : Pas de prix FR")
+        if name not in prices.get("CH", {}):
+            problems.append(f"  🟡 `{code}` ({name}) : Pas de prix CH")
+    
+    # Produits dans registre mais pas en mémoire
+    for code, data in registry.items():
+        if code not in PRODUCT_CODES:
+            problems.append(f"  🔴 `{code}` : Pas dans PRODUCT_CODES (mémoire)")
+    
+    if problems:
+        text += "\n".join(problems)
+        text += f"\n\n💡 *SOLUTION :*\n"
+        
+        # Grouper les codes problématiques
+        codes_a_reparer = set()
+        for problem in problems:
+            # Extraire le code entre backticks
+            import re
+            match = re.search(r'`([^`]+)`', problem)
+            if match:
+                codes_a_reparer.add(match.group(1))
+        
+        if codes_a_reparer:
+            text += f"Utilisez `/repair` pour chaque produit :\n"
+            for code in sorted(codes_a_reparer):
+                text += f"  • `/repair {code}`\n"
+    else:
+        text += "✅ Aucun problème détecté\n\n"
+        text += "Tous les produits sont correctement synchronisés !"
+    
+    await update.message.reply_text(text, parse_mode='Markdown')
+
+
+# ==================== FIN CORRECTIF ====================
+# Remplacez ces 4 fonctions dans votre PARTIE 2
 
 def archive_product(product_name):
     """Archive un produit (VERSION AVEC REGISTRE)"""
@@ -2239,9 +2566,11 @@ async def error_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ==================== MENU ADMIN COMPLET /admin ====================
 # CETTE PARTIE VA ENTRE LA PARTIE 3b ET LA PARTIE 3c
 
+# ==================== MENU ADMIN PRINCIPAL ====================
+
 @error_handler
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Commande /admin - Menu principal admin"""
+    """Commande /admin - Menu principal admin complet"""
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("❌ Admin uniquement.")
         return ConversationHandler.END
@@ -2260,6 +2589,10 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("🎨 Médias", callback_data="admin_menu_media")
         ],
         [
+            InlineKeyboardButton("📋 Commandes", callback_data="admin_menu_commandes"),
+            InlineKeyboardButton("📚 Tutoriel", callback_data="admin_menu_tutoriel"),
+        ],
+        [
             InlineKeyboardButton("🔄 Maintenance", callback_data="admin_menu_maintenance"),
             InlineKeyboardButton("❌ Fermer", callback_data="admin_close")
         ]
@@ -2267,6 +2600,41 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return ADMIN_MENU_MAIN
+
+
+@error_handler
+async def admin_menu_main_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Retour au menu principal admin"""
+    query = update.callback_query
+    await query.answer()
+    
+    text = "🎛️ *PANNEAU ADMIN*\n\nChoisissez une section :"
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("📦 Produits", callback_data="admin_menu_products"),
+            InlineKeyboardButton("💰 Prix", callback_data="admin_menu_prices"),
+            InlineKeyboardButton("📊 Stats", callback_data="admin_menu_stats")
+        ],
+        [
+            InlineKeyboardButton("👥 Users", callback_data="admin_menu_users"),
+            InlineKeyboardButton("⏰ Horaires", callback_data="admin_menu_horaires"),
+            InlineKeyboardButton("🎨 Médias", callback_data="admin_menu_media")
+        ],
+        [
+            InlineKeyboardButton("📋 Commandes", callback_data="admin_menu_commandes"),
+            InlineKeyboardButton("📚 Tutoriel", callback_data="admin_menu_tutoriel"),
+        ],
+        [
+            InlineKeyboardButton("🔄 Maintenance", callback_data="admin_menu_maintenance"),
+            InlineKeyboardButton("❌ Fermer", callback_data="admin_close")
+        ]
+    ]
+    
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    return ADMIN_MENU_MAIN
+
+# ==================== SOUS-MENUS ====================
 
 @error_handler
 async def admin_menu_main_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2676,10 +3044,441 @@ async def admin_system_info_callback(update: Update, context: ContextTypes.DEFAU
     await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return ADMIN_MENU_MAINTENANCE
 
+@error_handler
+async def admin_menu_tutoriel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu tutoriel client"""
+    query = update.callback_query
+    await query.answer()
+    
+    text = "📚 *TUTORIEL CLIENT*\n\n"
+    text += "Guide d'utilisation du bot pour vos clients.\n\n"
+    text += "Que voulez-vous consulter ?"
+    
+    keyboard = [
+        [InlineKeyboardButton("1️⃣ Démarrage & Langue", callback_data="tuto_step1")],
+        [InlineKeyboardButton("2️⃣ Consultation prix", callback_data="tuto_step2")],
+        [InlineKeyboardButton("3️⃣ Passer commande", callback_data="tuto_step3")],
+        [InlineKeyboardButton("4️⃣ Choix livraison", callback_data="tuto_step4")],
+        [InlineKeyboardButton("5️⃣ Paiement & Confirmation", callback_data="tuto_step5")],
+        [InlineKeyboardButton("6️⃣ Contacter le vendeur", callback_data="tuto_step6")],
+        [InlineKeyboardButton("📤 Envoyer tutoriel complet", callback_data="tuto_send_all")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_main")]
+    ]
+    
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    return ADMIN_MENU_MAIN
+
+@error_handler
+async def admin_menu_tutoriel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu tutoriel client"""
+    query = update.callback_query
+    await query.answer()
+    
+    text = "📚 *TUTORIEL CLIENT*\n\n"
+    text += "Guide d'utilisation du bot pour vos clients.\n\n"
+    text += "Que voulez-vous consulter ?"
+    
+    keyboard = [
+        [InlineKeyboardButton("1️⃣ Démarrage & Langue", callback_data="tuto_step1")],
+        [InlineKeyboardButton("2️⃣ Consultation prix", callback_data="tuto_step2")],
+        [InlineKeyboardButton("3️⃣ Passer commande", callback_data="tuto_step3")],
+        [InlineKeyboardButton("4️⃣ Choix livraison", callback_data="tuto_step4")],
+        [InlineKeyboardButton("5️⃣ Paiement & Confirmation", callback_data="tuto_step5")],
+        [InlineKeyboardButton("6️⃣ Contacter le vendeur", callback_data="tuto_step6")],
+        [InlineKeyboardButton("📤 Envoyer tutoriel complet", callback_data="tuto_send_all")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_main")]
+    ]
+    
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    return ADMIN_MENU_MAIN
+
+# ==================== ÉTAPES DU TUTORIEL ====================
+
+@error_handler
+async def admin_tuto_step1(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Tutoriel Étape 1 : Démarrage"""
+    query = update.callback_query
+    await query.answer()
+    
+    text = "1️⃣ *DÉMARRAGE & LANGUE*\n\n"
+    text += "📱 *Pour commencer :*\n"
+    text += "1. Ouvrez Telegram\n"
+    text += "2. Cherchez le bot\n"
+    text += "3. Cliquez sur *DÉMARRER* ou tapez `/start`\n\n"
+    
+    text += "🌍 *Choisir sa langue :*\n"
+    text += "• 🇫🇷 Français\n"
+    text += "• 🇬🇧 English\n"
+    text += "• 🇩🇪 Deutsch\n"
+    text += "• 🇪🇸 Español\n"
+    text += "• 🇮🇹 Italiano\n\n"
+    
+    text += "✅ *Après sélection :*\n"
+    text += "Le menu principal s'affiche avec 3 options :\n"
+    text += "• 🛒 Commander\n"
+    text += "• 🏴‍☠️ Carte du Pirate (voir les prix)\n"
+    text += "• 📞 Contacter\n"
+    
+    keyboard = [
+        [InlineKeyboardButton("➡️ Étape suivante", callback_data="tuto_step2")],
+        [InlineKeyboardButton("🔙 Retour tutoriel", callback_data="admin_menu_tutoriel")]
+    ]
+    
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    return ADMIN_MENU_MAIN
+
+
+@error_handler
+async def admin_tuto_step2(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Tutoriel Étape 2 : Consultation prix"""
+    query = update.callback_query
+    await query.answer()
+    
+    text = "2️⃣ *CONSULTATION DES PRIX*\n\n"
+    text += "🏴‍☠️ *Carte du Pirate :*\n"
+    text += "Pour voir les prix sans commander :\n\n"
+    
+    text += "1. Menu principal → *🏴‍☠️ Carte du Pirate*\n"
+    text += "2. Choisir votre pays :\n"
+    text += "   • 🇫🇷 Prix France\n"
+    text += "   • 🇨🇭 Prix Suisse\n\n"
+    
+    text += "📋 *Affichage :*\n"
+    text += "• Liste complète des produits disponibles\n"
+    text += "• Prix par gramme ou par unité\n"
+    text += "• Frais de livraison postale\n"
+    text += "• Information livraison express\n\n"
+    
+    text += "💡 *Astuce :*\n"
+    text += "Vous pouvez consulter les prix autant de fois que vous voulez avant de commander.\n"
+    
+    keyboard = [
+        [InlineKeyboardButton("⬅️ Étape précédente", callback_data="tuto_step1")],
+        [InlineKeyboardButton("➡️ Étape suivante", callback_data="tuto_step3")],
+        [InlineKeyboardButton("🔙 Retour tutoriel", callback_data="admin_menu_tutoriel")]
+    ]
+    
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    return ADMIN_MENU_MAIN
+
+
+@error_handler
+async def admin_tuto_step3(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Tutoriel Étape 3 : Passer commande"""
+    query = update.callback_query
+    await query.answer()
+    
+    text = "3️⃣ *PASSER UNE COMMANDE*\n\n"
+    text += "🛒 *Démarrer la commande :*\n"
+    text += "1. Menu principal → *🛒 Commander*\n\n"
+    
+    text += "🌍 *Étape 1 - Choisir le pays :*\n"
+    text += "• 🇫🇷 France\n"
+    text += "• 🇨🇭 Suisse\n\n"
+    
+    text += "📦 *Étape 2 - Choisir le produit :*\n"
+    text += "• ❄️ Coco (poudre)\n"
+    text += "• 💊 Pills (Squid Game / Punisher)\n"
+    text += "• 🫒 Hash\n"
+    text += "• 🍀 Weed\n"
+    text += "• 🪨 Crystal (MDMA / 4MMC)\n\n"
+    
+    text += "🔢 *Étape 3 - Indiquer la quantité :*\n"
+    text += "• Tapez le nombre souhaité (ex: 5)\n"
+    text += "• Maximum : 100 unités\n\n"
+    
+    text += "➕ *Ajouter d'autres produits :*\n"
+    text += "Cliquez sur *➕ Ajouter* pour un autre produit\n"
+    text += "OU\n"
+    text += "Cliquez sur *✅ Valider* pour continuer\n"
+    
+    keyboard = [
+        [InlineKeyboardButton("⬅️ Étape précédente", callback_data="tuto_step2")],
+        [InlineKeyboardButton("➡️ Étape suivante", callback_data="tuto_step4")],
+        [InlineKeyboardButton("🔙 Retour tutoriel", callback_data="admin_menu_tutoriel")]
+    ]
+    
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    return ADMIN_MENU_MAIN
+
+
+@error_handler
+async def admin_tuto_step4(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Tutoriel Étape 4 : Livraison"""
+    query = update.callback_query
+    await query.answer()
+    
+    horaires = get_horaires_text()
+    
+    text = "4️⃣ *CHOIX DE LIVRAISON*\n\n"
+    text += "📍 *Adresse de livraison :*\n"
+    text += "• Tapez votre adresse complète\n"
+    text += "• Format : Rue, Code postal, Ville\n"
+    text += "• Minimum 15 caractères\n"
+    text += "• Exemple : _123 Rue de Paris, 75001 Paris_\n\n"
+    
+    text += "📦 *Type de livraison :*\n\n"
+    
+    text += "✉️ *Livraison Postale :*\n"
+    text += "• Délai : 48-72 heures\n"
+    text += "• Prix fixe : 10€\n"
+    text += "• Discret et sûr\n\n"
+    
+    text += "⚡ *Livraison Express :*\n"
+    text += "• Délai : 30 minutes à 2 heures\n"
+    text += "• Prix : 10€ par kilomètre\n"
+    text += "• Distance calculée automatiquement\n"
+    text += "• Livraison en main propre\n\n"
+    
+    text += f"⏰ *Horaires de livraison :*\n"
+    text += f"• {horaires}\n\n"
+    
+    text += "💡 *Bon à savoir :*\n"
+    text += "Pour la livraison express, le bot calcule automatiquement la distance depuis votre adresse."
+    
+    keyboard = [
+        [InlineKeyboardButton("⬅️ Étape précédente", callback_data="tuto_step3")],
+        [InlineKeyboardButton("➡️ Étape suivante", callback_data="tuto_step5")],
+        [InlineKeyboardButton("🔙 Retour tutoriel", callback_data="admin_menu_tutoriel")]
+    ]
+    
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    return ADMIN_MENU_MAIN
+
+
+@error_handler
+async def admin_tuto_step5(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Tutoriel Étape 5 : Paiement"""
+    query = update.callback_query
+    await query.answer()
+    
+    text = "5️⃣ *PAIEMENT & CONFIRMATION*\n\n"
+    text += "💳 *Méthode de paiement :*\n\n"
+    
+    text += "💵 *Espèces :*\n"
+    text += "• Paiement en main propre\n"
+    text += "• Pour livraison express\n"
+    text += "• Montant exact apprécié\n\n"
+    
+    text += "₿ *Crypto-monnaie :*\n"
+    text += "• Bitcoin, Ethereum, etc.\n"
+    text += "• Adresse fournie après validation\n"
+    text += "• Livraison après confirmation du paiement\n\n"
+    
+    text += "✅ *Résumé de commande :*\n"
+    text += "Le bot affiche :\n"
+    text += "• 🛒 Liste des produits et quantités\n"
+    text += "• 💵 Sous-total\n"
+    text += "• 📦 Frais de livraison\n"
+    text += "• 💰 TOTAL\n"
+    text += "• 📍 Adresse\n"
+    text += "• 📦 Type de livraison\n"
+    text += "• 💳 Méthode de paiement\n\n"
+    
+    text += "🎯 *Validation :*\n"
+    text += "• Vérifiez attentivement\n"
+    text += "• Cliquez *✅ Confirmer*\n"
+    text += "• Ou *❌ Annuler* pour recommencer\n\n"
+    
+    text += "📞 *Après confirmation :*\n"
+    text += "• Vous recevez un numéro de commande\n"
+    text += "• L'admin est notifié immédiatement\n"
+    text += "• Il vous contactera sous peu\n"
+    
+    keyboard = [
+        [InlineKeyboardButton("⬅️ Étape précédente", callback_data="tuto_step4")],
+        [InlineKeyboardButton("➡️ Étape suivante", callback_data="tuto_step6")],
+        [InlineKeyboardButton("🔙 Retour tutoriel", callback_data="admin_menu_tutoriel")]
+    ]
+    
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    return ADMIN_MENU_MAIN
+
+
+@error_handler
+async def admin_tuto_step6(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Tutoriel Étape 6 : Contact"""
+    query = update.callback_query
+    await query.answer()
+    
+    text = "6️⃣ *CONTACTER LE VENDEUR*\n\n"
+    text += "📞 *Pour poser une question :*\n\n"
+    
+    text += "1. Menu principal → *📞 Contacter*\n\n"
+    
+    text += "2. Tapez votre message :\n"
+    text += "• Question sur un produit\n"
+    text += "• Demande de renseignement\n"
+    text += "• Problème avec une commande\n"
+    text += "• Information sur la livraison\n\n"
+    
+    text += "3. Envoyez le message\n\n"
+    
+    text += "✅ *Confirmation :*\n"
+    text += "• Message envoyé à l'admin\n"
+    text += "• Réponse sous peu\n"
+    text += "• L'admin vous contactera directement\n\n"
+    
+    text += "💡 *Conseils :*\n"
+    text += "• Soyez clair et précis\n"
+    text += "• Indiquez votre numéro de commande si besoin\n"
+    text += "• Privilégiez les messages courts\n\n"
+    
+    text += "🔄 *Nouvelle commande :*\n"
+    text += "Après une commande validée, cliquez sur *🔄 Nouvelle commande* pour recommencer.\n"
+    
+    keyboard = [
+        [InlineKeyboardButton("⬅️ Étape précédente", callback_data="tuto_step5")],
+        [InlineKeyboardButton("🔄 Retour au début", callback_data="tuto_step1")],
+        [InlineKeyboardButton("🔙 Retour tutoriel", callback_data="admin_menu_tutoriel")]
+    ]
+    
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    return ADMIN_MENU_MAIN
+
+
+@error_handler
+async def admin_tuto_send_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Envoyer le tutoriel complet"""
+    query = update.callback_query
+    await query.answer()
+    
+    text = "📤 *ENVOI DU TUTORIEL COMPLET*\n\n"
+    text += "Le tutoriel complet en 6 parties va être envoyé.\n\n"
+    text += "Vous pourrez :\n"
+    text += "• Le transférer à vos clients\n"
+    text += "• L'épingler dans un canal\n"
+    text += "• Le partager par message\n\n"
+    text += "⏳ Envoi en cours..."
+    
+    await query.message.edit_text(text, parse_mode='Markdown')
+    
+    horaires = get_horaires_text()
+    
+    # Partie 1
+    msg1 = "📚 *TUTORIEL BOT - PARTIE 1/6*\n\n"
+    msg1 += "1️⃣ *DÉMARRAGE & LANGUE*\n\n"
+    msg1 += "📱 Pour commencer :\n"
+    msg1 += "1. Ouvrez Telegram\n"
+    msg1 += "2. Cherchez le bot\n"
+    msg1 += "3. Cliquez sur DÉMARRER ou tapez /start\n\n"
+    msg1 += "🌍 Choisissez votre langue parmi 5 langues disponibles.\n\n"
+    msg1 += "✅ Le menu principal s'affiche avec :\n"
+    msg1 += "• 🛒 Commander\n"
+    msg1 += "• 🏴‍☠️ Carte du Pirate\n"
+    msg1 += "• 📞 Contacter"
+    
+    await context.bot.send_message(chat_id=query.message.chat_id, text=msg1, parse_mode='Markdown')
+    
+    # Partie 2
+    msg2 = "📚 *TUTORIEL BOT - PARTIE 2/6*\n\n"
+    msg2 += "2️⃣ *CONSULTATION DES PRIX*\n\n"
+    msg2 += "🏴‍☠️ Carte du Pirate :\n"
+    msg2 += "1. Menu → Carte du Pirate\n"
+    msg2 += "2. Choisissez votre pays (🇫🇷 France ou 🇨🇭 Suisse)\n\n"
+    msg2 += "📋 Vous verrez :\n"
+    msg2 += "• Tous les produits disponibles\n"
+    msg2 += "• Prix par gramme/unité\n"
+    msg2 += "• Frais de livraison\n\n"
+    msg2 += "💡 Consultez les prix autant que vous voulez !"
+    
+    await context.bot.send_message(chat_id=query.message.chat_id, text=msg2, parse_mode='Markdown')
+    
+    # Partie 3
+    msg3 = "📚 *TUTORIEL BOT - PARTIE 3/6*\n\n"
+    msg3 += "3️⃣ *PASSER UNE COMMANDE*\n\n"
+    msg3 += "🛒 Processus :\n\n"
+    msg3 += "1. Menu → Commander\n"
+    msg3 += "2. Choisissez votre pays\n"
+    msg3 += "3. Sélectionnez le produit\n"
+    msg3 += "4. Indiquez la quantité (max 100)\n"
+    msg3 += "5. Ajoutez d'autres produits ou validez\n\n"
+    msg3 += "📦 Produits disponibles :\n"
+    msg3 += "• ❄️ Coco\n"
+    msg3 += "• 💊 Pills (Squid Game / Punisher)\n"
+    msg3 += "• 🫒 Hash\n"
+    msg3 += "• 🍀 Weed\n"
+    msg3 += "• 🪨 Crystal (MDMA / 4MMC)"
+    
+    await context.bot.send_message(chat_id=query.message.chat_id, text=msg3, parse_mode='Markdown')
+    
+    # Partie 4
+    msg4 = "📚 *TUTORIEL BOT - PARTIE 4/6*\n\n"
+    msg4 += "4️⃣ *LIVRAISON*\n\n"
+    msg4 += "📍 Adresse :\n"
+    msg4 += "• Tapez votre adresse complète\n"
+    msg4 += "• Format : Rue, Code postal, Ville\n\n"
+    msg4 += "📦 Type de livraison :\n\n"
+    msg4 += "✉️ *Postale* (48-72h) : 10€\n"
+    msg4 += "⚡ *Express* (30min-2h) : 10€/km\n\n"
+    msg4 += f"⏰ Horaires : {horaires}\n\n"
+    msg4 += "💡 Distance calculée automatiquement pour Express"
+    
+    await context.bot.send_message(chat_id=query.message.chat_id, text=msg4, parse_mode='Markdown')
+    
+    # Partie 5
+    msg5 = "📚 *TUTORIEL BOT - PARTIE 5/6*\n\n"
+    msg5 += "5️⃣ *PAIEMENT*\n\n"
+    msg5 += "💳 Méthodes :\n\n"
+    msg5 += "💵 *Espèces* :\n"
+    msg5 += "• Paiement en main propre\n"
+    msg5 += "• Montant exact apprécié\n\n"
+    msg5 += "₿ *Crypto* :\n"
+    msg5 += "• Bitcoin, Ethereum, etc.\n"
+    msg5 += "• Adresse fournie après validation\n\n"
+    msg5 += "✅ *Résumé affiché* :\n"
+    msg5 += "• Produits et quantités\n"
+    msg5 += "• Total avec frais\n"
+    msg5 += "• Adresse et type de livraison\n\n"
+    msg5 += "📞 Après confirmation :\n"
+    msg5 += "• Numéro de commande\n"
+    msg5 += "• Contact sous peu"
+    
+    await context.bot.send_message(chat_id=query.message.chat_id, text=msg5, parse_mode='Markdown')
+    
+    # Partie 6
+    msg6 = "📚 *TUTORIEL BOT - PARTIE 6/6*\n\n"
+    msg6 += "6️⃣ *CONTACT*\n\n"
+    msg6 += "📞 Pour poser une question :\n\n"
+    msg6 += "1. Menu → Contacter\n"
+    msg6 += "2. Tapez votre message\n"
+    msg6 += "3. Envoyez\n\n"
+    msg6 += "✅ Message envoyé à l'admin\n"
+    msg6 += "✅ Réponse rapide\n\n"
+    msg6 += "💡 *Conseils* :\n"
+    msg6 += "• Soyez clair et précis\n"
+    msg6 += "• Indiquez votre n° de commande\n\n"
+    msg6 += "🔄 Pour une nouvelle commande :\n"
+    msg6 += "Cliquez sur *Nouvelle commande*\n\n"
+    msg6 += "━━━━━━━━━━━━━━━━━\n"
+    msg6 += "✅ Fin du tutoriel\n"
+    msg6 += "Bonne utilisation du bot ! 🌿"
+    
+    await context.bot.send_message(chat_id=query.message.chat_id, text=msg6, parse_mode='Markdown')
+    
+    # Message final
+    await asyncio.sleep(1)
+    final_text = "✅ *TUTORIEL ENVOYÉ*\n\n"
+    final_text += "Les 6 parties du tutoriel ont été envoyées avec succès.\n\n"
+    final_text += "Vous pouvez maintenant les transférer à vos clients."
+    
+    keyboard = [[InlineKeyboardButton("🔙 Retour tutoriel", callback_data="admin_menu_tutoriel")]]
+    
+    await context.bot.send_message(
+        chat_id=query.message.chat_id,
+        text=final_text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_MENU_MAIN
+
 # ==================== FIN PARTIE 4 - MENU ADMIN ====================
 # Cette partie doit être insérée ENTRE la partie 3b et la partie 3c
 # Dans la partie 3c (main_async), il faut AUSSI ajouter le ConversationHandler pour ce menu
 # ==================== FONCTION PRINCIPALE COMPLÈTE ====================
+
+# ==================== FONCTION PRINCIPALE COMPLÈTE - VERSION CORRIGÉE ====================
 
 async def main_async():
     # Initialiser les produits
@@ -2807,69 +3606,79 @@ async def main_async():
         per_message=False
     )
     
-    # Handler menu admin (NOUVEAU - PARTIE MANQUANTE)
-    admin_menu_handler = ConversationHandler(
-        entry_points=[CommandHandler('admin', admin_command)],
-        states={
-            ADMIN_MENU_MAIN: [
-                CallbackQueryHandler(admin_menu_products_callback, pattern="^admin_menu_products$"),
-                CallbackQueryHandler(admin_menu_prices_callback, pattern="^admin_menu_prices$"),
-                CallbackQueryHandler(admin_menu_stats_callback, pattern="^admin_menu_stats$"),
-                CallbackQueryHandler(admin_menu_users_callback, pattern="^admin_menu_users$"),
-                CallbackQueryHandler(admin_menu_horaires_callback, pattern="^admin_menu_horaires$"),
-                CallbackQueryHandler(admin_menu_media_callback, pattern="^admin_menu_media$"),
-                CallbackQueryHandler(admin_menu_maintenance_callback, pattern="^admin_menu_maintenance$"),
-            ],
-            ADMIN_MENU_PRODUCTS: [
-                CallbackQueryHandler(admin_list_products_callback, pattern="^admin_list_products$"),
-                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
-                CallbackQueryHandler(admin_create_product, pattern="^admin_create_product$"),
-                CallbackQueryHandler(admin_archive_product, pattern="^admin_archive_product$"),
-                CallbackQueryHandler(admin_restore_product, pattern="^admin_restore_product$"),
-            ],
-            ADMIN_MENU_PRICES: [
-                CallbackQueryHandler(admin_show_prices_callback, pattern="^admin_show_prices$"),
-                CallbackQueryHandler(admin_modify_price_callback, pattern="^admin_modify_price$"),
-                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
-            ],
-            ADMIN_MENU_STATS: [
-                CallbackQueryHandler(admin_stats_realtime_callback, pattern="^admin_stats_realtime$"),
-                CallbackQueryHandler(admin_stats_weekly_callback, pattern="^admin_stats_weekly$"),
-                CallbackQueryHandler(admin_stats_monthly_callback, pattern="^admin_stats_monthly$"),
-                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
-            ],
-            ADMIN_MENU_USERS: [
-                CallbackQueryHandler(admin_open_users_callback, pattern="^admin_open_users$"),
-                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
-            ],
-            ADMIN_MENU_HORAIRES: [
-                CallbackQueryHandler(admin_horaires_toggle_callback, pattern="^admin_horaires_toggle$"),
-                CallbackQueryHandler(admin_horaires_info_callback, pattern="^admin_horaires_info$"),
-                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
-            ],
-            ADMIN_MENU_MEDIA: [
-                CallbackQueryHandler(admin_media_list_callback, pattern="^admin_media_list$"),
-                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
-            ],
-            ADMIN_MENU_MAINTENANCE: [
-                CallbackQueryHandler(admin_system_info_callback, pattern="^admin_system_info$"),
-                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
-            ]
-        },
-        fallbacks=[CallbackQueryHandler(admin_close, pattern="^admin_close$")],
-        name="admin_menu",
-        persistent=False,
-        per_message=False
-    )
+   # Handler menu admin (VERSION COMPLÈTE AVEC TUTORIEL)
+admin_menu_handler = ConversationHandler(
+    entry_points=[CommandHandler('admin', admin_command)],
+    states={
+        ADMIN_MENU_MAIN: [
+            CallbackQueryHandler(admin_menu_products_callback, pattern="^admin_menu_products$"),
+            CallbackQueryHandler(admin_menu_prices_callback, pattern="^admin_menu_prices$"),
+            CallbackQueryHandler(admin_menu_stats_callback, pattern="^admin_menu_stats$"),
+            CallbackQueryHandler(admin_menu_users_callback, pattern="^admin_menu_users$"),
+            CallbackQueryHandler(admin_menu_horaires_callback, pattern="^admin_menu_horaires$"),
+            CallbackQueryHandler(admin_menu_media_callback, pattern="^admin_menu_media$"),
+            CallbackQueryHandler(admin_menu_maintenance_callback, pattern="^admin_menu_maintenance$"),
+            CallbackQueryHandler(admin_menu_commandes_callback, pattern="^admin_menu_commandes$"),  # ⭐ NOUVEAU
+            CallbackQueryHandler(admin_menu_tutoriel_callback, pattern="^admin_menu_tutoriel$"),    # ⭐ NOUVEAU
+            # Callbacks tutoriel (TOUS NOUVEAUX)
+            CallbackQueryHandler(admin_tuto_step1, pattern="^tuto_step1$"),
+            CallbackQueryHandler(admin_tuto_step2, pattern="^tuto_step2$"),
+            CallbackQueryHandler(admin_tuto_step3, pattern="^tuto_step3$"),
+            CallbackQueryHandler(admin_tuto_step4, pattern="^tuto_step4$"),
+            CallbackQueryHandler(admin_tuto_step5, pattern="^tuto_step5$"),
+            CallbackQueryHandler(admin_tuto_step6, pattern="^tuto_step6$"),
+            CallbackQueryHandler(admin_tuto_send_all, pattern="^tuto_send_all$"),
+        ],
+        ADMIN_MENU_PRODUCTS: [
+            CallbackQueryHandler(admin_list_products_callback, pattern="^admin_list_products$"),
+            CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
+            CallbackQueryHandler(admin_create_product, pattern="^admin_create_product$"),
+            CallbackQueryHandler(admin_archive_product, pattern="^admin_archive_product$"),
+            CallbackQueryHandler(admin_restore_product, pattern="^admin_restore_product$"),
+        ],
+        ADMIN_MENU_PRICES: [
+            CallbackQueryHandler(admin_show_prices_callback, pattern="^admin_show_prices$"),
+            CallbackQueryHandler(admin_modify_price_callback, pattern="^admin_modify_price$"),
+            CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
+        ],
+        ADMIN_MENU_STATS: [
+            CallbackQueryHandler(admin_stats_realtime_callback, pattern="^admin_stats_realtime$"),
+            CallbackQueryHandler(admin_stats_weekly_callback, pattern="^admin_stats_weekly$"),
+            CallbackQueryHandler(admin_stats_monthly_callback, pattern="^admin_stats_monthly$"),
+            CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
+        ],
+        ADMIN_MENU_USERS: [
+            CallbackQueryHandler(admin_open_users_callback, pattern="^admin_open_users$"),
+            CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
+        ],
+        ADMIN_MENU_HORAIRES: [
+            CallbackQueryHandler(admin_horaires_toggle_callback, pattern="^admin_horaires_toggle$"),
+            CallbackQueryHandler(admin_horaires_info_callback, pattern="^admin_horaires_info$"),
+            CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
+        ],
+        ADMIN_MENU_MEDIA: [
+            CallbackQueryHandler(admin_media_list_callback, pattern="^admin_media_list$"),
+            CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
+        ],
+        ADMIN_MENU_MAINTENANCE: [
+            CallbackQueryHandler(admin_system_info_callback, pattern="^admin_system_info$"),
+            CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
+        ]
+    },
+    fallbacks=[CallbackQueryHandler(admin_close, pattern="^admin_close$")],
+    name="admin_menu",
+    persistent=False,
+    per_message=False
+)
     
     # Ajout des handlers
     application.add_handler(horaires_handler)
     application.add_handler(conv_handler)
     application.add_handler(product_management_handler)
-    application.add_handler(admin_menu_handler)  # NOUVEAU
+    application.add_handler(admin_menu_handler)
     
-    # Commandes admin
-    application.add_handler(CommandHandler('admin', admin_command))  # NOUVEAU
+    # Commandes admin (SANS /admin en doublon - ❌ SUPPRIMÉ)
+    # application.add_handler(CommandHandler('admin', admin_command))  # ❌ LIGNE SUPPRIMÉE - CAUSE DE LA BOUCLE
     application.add_handler(CommandHandler('stats', admin_stats_command))
     application.add_handler(CommandHandler('products', admin_products_command))
     application.add_handler(CommandHandler('del', admin_del_product_command))
@@ -2901,7 +3710,7 @@ async def main_async():
     logger.info("🚀 BOT V2.2 EN LIGNE (100%)")
     logger.info("=" * 60)
     logger.info("\n📋 Commandes disponibles:")
-    logger.info("  • /admin - Menu admin complet")  # NOUVEAU
+    logger.info("  • /admin - Menu admin complet")
     logger.info("  • /products - Menu gestion produits")
     logger.info("  • /users - Liste utilisateurs + stats")
     logger.info("  • /repair - Réparer produit invisible")
@@ -2934,3 +3743,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+# ==================== FIN DU BOT V2.2 COMPLET ====================

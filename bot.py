@@ -1033,6 +1033,20 @@ def add_new_product(name, code, emoji, category, price_fr, price_ch, image_file=
 
 
 # ==================== FONCTION repair_product_visibility AMÉLIORÉE ====================
+def error_handler(func):
+    """Décorateur pour gérer les erreurs des fonctions async"""
+    async def wrapper(*args, **kwargs):
+        try:
+            return await func(*args, **kwargs)
+        except Exception as e:
+            logger.error(f"❌ Erreur dans {func.__name__}: {e}", exc_info=True)
+            # Optionnel: envoyer un message d'erreur à l'utilisateur
+            if args and hasattr(args[0], 'message'):
+                try:
+                    await args[0].message.reply_text(f"❌ Erreur : {str(e)}")
+                except:
+                    pass
+    return wrapper
 
 def repair_product_visibility(code):
     """

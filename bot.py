@@ -676,69 +676,44 @@ async def notify_admin_new_user(context, user_id, user_data):
 # ==================== FONCTIONS UTILITAIRES ====================
 
 def get_formatted_price_list(country_code):
-    """Génère la liste formatée des prix - VERSION DYNAMIQUE depuis registre"""
+    """Génère la liste formatée des prix (AVEC FILTRE DISPONIBILITÉ)"""
     prices = load_prices()
     country = "FR" if country_code == "fr" else "CH"
     country_prices = prices.get(country, PRIX_FR if country == "FR" else PRIX_CH)
     
-    # Charger les produits disponibles
     available = get_available_products()
-    
-    # Charger le registre pour connaître les catégories
-    registry = load_product_registry()
     
     text = ""
     
-    # Grouper les produits par catégorie
-    powders = []  # Poudres (Coco, Hash, Weed, etc.)
-    pills = []    # Pills
-    crystals = [] # Crystals
+    if "❄️ Coco" in available:
+        text += f"❄️ *Coco* : {country_prices.get('❄️ Coco', 0)}€/g\n"
     
-    for product_name in sorted(available):
-        # Trouver le code du produit
-        product_code = None
-        for code, name in PRODUCT_CODES.items():
-            if name == product_name:
-                product_code = code
-                break
-        
-        if not product_code:
-            continue
-        
-        # Récupérer la catégorie depuis le registre
-        product_data = registry.get(product_code, {})
-        category = product_data.get("category", "powder")
-        price = country_prices.get(product_name, 0)
-        
-        # Classer par catégorie
-        if category == "pill":
-            pills.append((product_name, price))
-        elif category == "rock":
-            crystals.append((product_name, price))
-        else:  # powder ou autre
-            powders.append((product_name, price))
+    pills_available = []
+    if "💊 Squid Game" in available:
+        pills_available.append(f"  • Squid Game : {country_prices.get('💊 Squid Game', 0)}€")
+    if "💊 Punisher" in available:
+        pills_available.append(f"  • Punisher : {country_prices.get('💊 Punisher', 0)}€")
     
-    # Afficher les poudres
-    for product_name, price in powders:
-        emoji = product_name.split()[0] if product_name else "•"
-        name_without_emoji = " ".join(product_name.split()[1:]) if len(product_name.split()) > 1 else product_name
-        text += f"{emoji} *{name_without_emoji}* : {price}€/g\n"
-    
-    # Afficher les pills
-    if pills:
+    if pills_available:
         text += f"💊 *Pills* :\n"
-        for product_name, price in pills:
-            name_without_emoji = " ".join(product_name.split()[1:]) if len(product_name.split()) > 1 else product_name
-            text += f"  • {name_without_emoji} : {price}€\n"
+        text += "\n".join(pills_available) + "\n"
     
-    # Afficher les crystals
-    if crystals:
+    if "🫒 Hash" in available:
+        text += f"🫒 *Hash* : {country_prices.get('🫒 Hash', 0)}€/g\n"
+    
+    if "🍀 Weed" in available:
+        text += f"🍀 *Weed* : {country_prices.get('🍀 Weed', 0)}€/g\n"
+    
+    crystal_available = []
+    if "🪨 MDMA" in available:
+        crystal_available.append(f"  • MDMA : {country_prices.get('🪨 MDMA', 0)}€/g")
+    if "🪨 4MMC" in available:
+        crystal_available.append(f"  • 4MMC : {country_prices.get('🪨 4MMC', 0)}€/g")
+    
+    if crystal_available:
         text += f"🪨 *Crystal* :\n"
-        for product_name, price in crystals:
-            name_without_emoji = " ".join(product_name.split()[1:]) if len(product_name.split()) > 1 else product_name
-            text += f"  • {name_without_emoji} : {price}€/g\n"
+        text += "\n".join(crystal_available) + "\n"
     
-    # Livraison (toujours affichée)
     text += f"\n📦 *Livraison* :\n"
     text += f"  • Postale (48-72h) : 10€\n"
     text += f"  • Express (30min+) : 10€/km"
@@ -1074,9 +1049,8 @@ async def send_product_media(context, chat_id, product_name, caption):
     await context.bot.send_message(chat_id=chat_id, text=caption, parse_mode='Markdown')
     return False
 
-# ==================== SUITE DE LA PARTIE 1 ====================
-# COLLEZ CE FICHIER JUSTE APRÈS bot_v2_2_PARTIE_1.py
-
+# ==================== FIN BLOC 1 ====================
+# CONTINUEZ AVEC bot_v2_2_PERSISTANCE_BLOC_2.py
 # ==================== HANDLERS PRINCIPAUX ====================
 
 @error_handler
@@ -2411,3 +2385,686 @@ def main():
 if __name__ == '__main__':
     main()
 
+# ==================== FIN DU BOT V2.2 COMPLET ====================
+# Pour assembler : coller PARTIE_1.py puis PARTIE_2.py dans un seul fichier
+# Nom final suggéré : telegram_bot_v2_2_COMPLET_100%.py
+# ==================== BLOC B : HANDLERS MENU ADMIN COMPLETS ====================
+# À COPIER-COLLER JUSTE AVANT "async def main_async():" (ligne ~2410)
+
+# ==================== MENU ADMIN COMPLET /admin ====================
+
+@error_handler
+async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /admin - Menu principal admin"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return ConversationHandler.END
+    
+    text = "🎛️ *PANNEAU ADMIN*\n\nChoisissez une section :"
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("📦 Produits", callback_data="admin_menu_products"),
+            InlineKeyboardButton("💰 Prix", callback_data="admin_menu_prices"),
+            InlineKeyboardButton("📊 Stats", callback_data="admin_menu_stats")
+        ],
+        [
+            InlineKeyboardButton("👥 Users", callback_data="admin_menu_users"),
+            InlineKeyboardButton("⏰ Horaires", callback_data="admin_menu_horaires"),
+            InlineKeyboardButton("🎨 Médias", callback_data="admin_menu_media")
+        ],
+        [
+            InlineKeyboardButton("🔄 Maintenance", callback_data="admin_menu_maintenance"),
+            InlineKeyboardButton("❌ Fermer", callback_data="admin_close")
+        ]
+    ]
+    
+    await update.message.reply_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_MENU_MAIN
+
+@error_handler
+async def admin_menu_main_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Retour au menu principal admin"""
+    query = update.callback_query
+    await query.answer()
+    
+    text = "🎛️ *PANNEAU ADMIN*\n\nChoisissez une section :"
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("📦 Produits", callback_data="admin_menu_products"),
+            InlineKeyboardButton("💰 Prix", callback_data="admin_menu_prices"),
+            InlineKeyboardButton("📊 Stats", callback_data="admin_menu_stats")
+        ],
+        [
+            InlineKeyboardButton("👥 Users", callback_data="admin_menu_users"),
+            InlineKeyboardButton("⏰ Horaires", callback_data="admin_menu_horaires"),
+            InlineKeyboardButton("🎨 Médias", callback_data="admin_menu_media")
+        ],
+        [
+            InlineKeyboardButton("🔄 Maintenance", callback_data="admin_menu_maintenance"),
+            InlineKeyboardButton("❌ Fermer", callback_data="admin_close")
+        ]
+    ]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_MENU_MAIN
+
+# ==================== SOUS-MENU PRODUITS ====================
+
+@error_handler
+async def admin_menu_products_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sous-menu gestion produits"""
+    query = update.callback_query
+    await query.answer()
+    
+    available = get_available_products()
+    archived = load_archived_products()
+    
+    text = f"📦 *GESTION PRODUITS*\n\n"
+    text += f"✅ *Disponibles :* {len(available)}\n"
+    text += f"📦 *Archivés :* {len(archived)}\n\n"
+    text += f"Que voulez-vous faire ?"
+    
+    keyboard = [
+        [InlineKeyboardButton("➕ Créer produit", callback_data="admin_create_product")],
+        [InlineKeyboardButton("🗑️ Archiver produit", callback_data="admin_archive_product")],
+        [InlineKeyboardButton("♻️ Restaurer produit", callback_data="admin_restore_product")],
+        [InlineKeyboardButton("📋 Liste produits", callback_data="admin_list_products")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_main")]
+    ]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_MENU_PRODUCTS
+
+@error_handler
+async def admin_list_products_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche la liste complète des produits"""
+    query = update.callback_query
+    await query.answer()
+    
+    available = get_available_products()
+    archived = load_archived_products()
+    registry = load_product_registry()
+    
+    text = "📋 *LISTE DES PRODUITS*\n\n"
+    
+    text += "✅ *DISPONIBLES :*\n"
+    for product_name in sorted(available):
+        code = None
+        for c, name in PRODUCT_CODES.items():
+            if name == product_name:
+                code = c
+                break
+        
+        if code:
+            product_data = registry.get(code, {})
+            category = product_data.get("category", "?")
+            category_icon = {"powder": "⚗️", "pill": "💊", "rock": "🪨"}.get(category, "•")
+            text += f"  {category_icon} {product_name} (`{code}`)\n"
+    
+    if archived:
+        text += f"\n📦 *ARCHIVÉS :* ({len(archived)})\n"
+        for product_name in sorted(archived.keys()):
+            info = archived[product_name]
+            code = info.get("code", "?")
+            text += f"  📦 {product_name} (`{code}`)\n"
+    
+    text += f"\n💡 Utilisez le code entre `` pour les commandes"
+    
+    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_products")]]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_MENU_PRODUCTS
+
+# ==================== SOUS-MENU PRIX ====================
+
+@error_handler
+async def admin_menu_prices_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sous-menu gestion prix"""
+    query = update.callback_query
+    await query.answer()
+    
+    text = "💰 *GESTION PRIX*\n\nQue voulez-vous faire ?"
+    
+    keyboard = [
+        [InlineKeyboardButton("📋 Voir tous les prix", callback_data="admin_show_prices")],
+        [InlineKeyboardButton("💵 Modifier un prix", callback_data="admin_modify_price")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_main")]
+    ]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_MENU_PRICES
+
+@error_handler
+async def admin_show_prices_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche tous les prix"""
+    query = update.callback_query
+    await query.answer()
+    
+    prices = load_prices()
+    available = get_available_products()
+    
+    text = "💰 *TOUS LES PRIX*\n\n"
+    
+    text += "🇫🇷 *FRANCE*\n"
+    for product in sorted(available):
+        price_fr = prices["FR"].get(product, 0)
+        text += f"  • {product} : {price_fr}€\n"
+    
+    text += "\n🇨🇭 *SUISSE*\n"
+    for product in sorted(available):
+        price_ch = prices["CH"].get(product, 0)
+        text += f"  • {product} : {price_ch}€\n"
+    
+    text += f"\n💡 Pour modifier : `/setprice <code> <pays> <prix>`"
+    
+    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_prices")]]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_MENU_PRICES
+
+@error_handler
+async def admin_modify_price_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Guide pour modifier un prix"""
+    query = update.callback_query
+    await query.answer()
+    
+    text = "💵 *MODIFIER UN PRIX*\n\n"
+    text += "Utilisez la commande :\n"
+    text += "`/setprice <code> <pays> <prix>`\n\n"
+    text += "*Exemples :*\n"
+    text += "• `/setprice coco fr 85`\n"
+    text += "• `/setprice mdma ch 20`\n\n"
+    text += "*Codes disponibles :*\n"
+    
+    for code, name in sorted(PRODUCT_CODES.items()):
+        text += f"  • `{code}` → {name}\n"
+    
+    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_prices")]]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_MENU_PRICES
+
+# ==================== SOUS-MENU STATS ====================
+
+@error_handler
+async def admin_menu_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sous-menu statistiques"""
+    query = update.callback_query
+    await query.answer()
+    
+    text = "📊 *STATISTIQUES*\n\nQue voulez-vous consulter ?"
+    
+    keyboard = [
+        [InlineKeyboardButton("📈 Stats en temps réel", callback_data="admin_stats_realtime")],
+        [InlineKeyboardButton("📅 Rapport hebdo", callback_data="admin_stats_weekly")],
+        [InlineKeyboardButton("📆 Rapport mensuel", callback_data="admin_stats_monthly")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_main")]
+    ]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_MENU_STATS
+
+@error_handler
+async def admin_stats_realtime_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche les stats en temps réel"""
+    query = update.callback_query
+    await query.answer()
+    
+    stats = load_stats()
+    users = load_users()
+    available = get_available_products()
+    archived = load_archived_products()
+    
+    weekly = stats.get("weekly", [])
+    weekly_total = sum(s["amount"] for s in weekly)
+    weekly_count = len(weekly)
+    
+    monthly = stats.get("monthly", [])
+    monthly_total = sum(s["amount"] for s in monthly)
+    monthly_count = len(monthly)
+    
+    total_users = len(users)
+    week_ago = datetime.now() - timedelta(days=7)
+    active_users = sum(1 for u in users.values() 
+                      if datetime.fromisoformat(u["last_seen"]) > week_ago)
+    
+    text = f"📈 *STATS EN TEMPS RÉEL*\n\n"
+    
+    text += f"📦 *PRODUITS*\n"
+    text += f"  • Disponibles : {len(available)}\n"
+    text += f"  • Archivés : {len(archived)}\n\n"
+    
+    text += f"👥 *UTILISATEURS*\n"
+    text += f"  • Total : {total_users}\n"
+    text += f"  • Actifs (7j) : {active_users}\n\n"
+    
+    text += f"💰 *VENTES SEMAINE*\n"
+    text += f"  • CA : {weekly_total:.2f}€\n"
+    text += f"  • Commandes : {weekly_count}\n"
+    if weekly_count > 0:
+        text += f"  • Panier moyen : {weekly_total/weekly_count:.2f}€\n"
+    
+    text += f"\n💰 *VENTES MOIS*\n"
+    text += f"  • CA : {monthly_total:.2f}€\n"
+    text += f"  • Commandes : {monthly_count}\n"
+    if monthly_count > 0:
+        text += f"  • Panier moyen : {monthly_total/monthly_count:.2f}€\n"
+    
+    text += f"\n📅 *Mis à jour :* {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+    
+    keyboard = [
+        [InlineKeyboardButton("🔄 Actualiser", callback_data="admin_stats_realtime")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_stats")]
+    ]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_MENU_STATS
+
+@error_handler
+async def admin_stats_weekly_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Envoie rapport hebdo"""
+    query = update.callback_query
+    await query.answer("Envoi du rapport...")
+    
+    await send_weekly_report(context)
+    
+    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_stats")]]
+    
+    await query.message.edit_text(
+        "✅ Rapport hebdomadaire envoyé",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    return ADMIN_MENU_STATS
+
+@error_handler
+async def admin_stats_monthly_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Envoie rapport mensuel"""
+    query = update.callback_query
+    await query.answer("Envoi du rapport...")
+    
+    await send_monthly_report(context)
+    
+    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_stats")]]
+    
+    await query.message.edit_text(
+        "✅ Rapport mensuel envoyé",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    return ADMIN_MENU_STATS
+
+# ==================== SOUS-MENU USERS ====================
+
+@error_handler
+async def admin_menu_users_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sous-menu utilisateurs"""
+    query = update.callback_query
+    await query.answer()
+    
+    users = load_users()
+    total = len(users)
+    
+    week_ago = datetime.now() - timedelta(days=7)
+    active_7d = sum(1 for u in users.values() 
+                    if datetime.fromisoformat(u["last_seen"]) > week_ago)
+    
+    day_ago = datetime.now() - timedelta(days=1)
+    new_24h = sum(1 for u in users.values() 
+                  if datetime.fromisoformat(u["first_seen"]) > day_ago)
+    
+    text = f"👥 *GESTION UTILISATEURS*\n\n"
+    text += f"📊 *Statistiques :*\n"
+    text += f"  • Total : {total}\n"
+    text += f"  • Actifs (7j) : {active_7d}\n"
+    text += f"  • Nouveaux (24h) : {new_24h}\n\n"
+    text += f"💡 Utilisez `/users` pour plus de détails"
+    
+    keyboard = [
+        [InlineKeyboardButton("📊 Ouvrir /users", callback_data="admin_open_users")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_main")]
+    ]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_MENU_USERS
+
+@error_handler
+async def admin_open_users_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Redirige vers la commande /users"""
+    query = update.callback_query
+    await query.answer()
+    
+    await users_command(update, context)
+    
+    return ConversationHandler.END
+
+# ==================== SOUS-MENU HORAIRES ====================
+
+@error_handler
+async def admin_menu_horaires_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sous-menu horaires"""
+    query = update.callback_query
+    await query.answer()
+    
+    horaires = load_horaires()
+    enabled = horaires.get("enabled", True)
+    
+    if enabled:
+        status = f"🟢 Activés : {get_horaires_text()}"
+    else:
+        status = "🔴 Désactivés (24h/24)"
+    
+    text = f"⏰ *GESTION HORAIRES*\n\n"
+    text += f"📊 *Statut actuel :*\n{status}\n\n"
+    text += f"💡 `/horaires` pour modifier"
+    
+    keyboard = [
+        [InlineKeyboardButton("🔄 Toggle On/Off", callback_data="admin_horaires_toggle")],
+        [InlineKeyboardButton("✏️ Modifier (via /horaires)", callback_data="admin_horaires_info")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_main")]
+    ]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_MENU_HORAIRES
+
+@error_handler
+async def admin_horaires_toggle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Toggle horaires on/off"""
+    query = update.callback_query
+    await query.answer()
+    
+    horaires = load_horaires()
+    horaires["enabled"] = not horaires.get("enabled", True)
+    save_horaires(horaires)
+    
+    if horaires["enabled"]:
+        status = f"🟢 Activés : {get_horaires_text()}"
+        await query.answer("✅ Horaires activés")
+    else:
+        status = "🔴 Désactivés (24h/24)"
+        await query.answer("✅ Horaires désactivés (24h/24)")
+    
+    text = f"⏰ *GESTION HORAIRES*\n\n"
+    text += f"📊 *Statut actuel :*\n{status}\n\n"
+    text += f"💡 `/horaires` pour modifier"
+    
+    keyboard = [
+        [InlineKeyboardButton("🔄 Toggle On/Off", callback_data="admin_horaires_toggle")],
+        [InlineKeyboardButton("✏️ Modifier (via /horaires)", callback_data="admin_horaires_info")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_main")]
+    ]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_MENU_HORAIRES
+
+@error_handler
+async def admin_horaires_info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Info pour modifier les horaires"""
+    query = update.callback_query
+    await query.answer()
+    
+    text = "✏️ *MODIFIER LES HORAIRES*\n\n"
+    text += "Utilisez la commande `/horaires`\n\n"
+    text += "Le bot vous guidera pour définir :\n"
+    text += "  • Heure de début\n"
+    text += "  • Heure de fin\n\n"
+    text += "Vous pouvez aussi activer/désactiver depuis ce menu"
+    
+    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_horaires")]]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_MENU_HORAIRES
+
+# ==================== SOUS-MENU MÉDIAS ====================
+
+@error_handler
+async def admin_menu_media_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sous-menu médias"""
+    query = update.callback_query
+    await query.answer()
+    
+    registry = load_product_registry()
+    images_count = sum(1 for p in registry.values() if p.get("image"))
+    videos_count = sum(1 for p in registry.values() if p.get("video"))
+    
+    text = f"🎨 *GESTION MÉDIAS*\n\n"
+    text += f"📊 *Statistiques :*\n"
+    text += f"  • Images : {images_count}\n"
+    text += f"  • Vidéos : {videos_count}\n\n"
+    text += f"💡 Utilisez `/setmedia <code>` pour ajouter/modifier"
+    
+    keyboard = [
+        [InlineKeyboardButton("📋 Liste médias", callback_data="admin_media_list")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_main")]
+    ]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_MENU_MEDIA
+
+@error_handler
+async def admin_media_list_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Liste tous les médias"""
+    query = update.callback_query
+    await query.answer()
+    
+    registry = load_product_registry()
+    
+    text = "📋 *LISTE DES MÉDIAS*\n\n"
+    
+    for code, data in sorted(registry.items()):
+        name = data["name"]
+        has_image = "✅" if data.get("image") else "❌"
+        has_video = "✅" if data.get("video") else "❌"
+        
+        text += f"{name} (`{code}`)\n"
+        text += f"  📸 {has_image}  🎬 {has_video}\n"
+    
+    text += f"\n💡 `/setmedia <code>` pour modifier"
+    
+    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_media")]]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_MENU_MEDIA
+
+# ==================== SOUS-MENU MAINTENANCE ====================
+
+@error_handler
+async def admin_menu_maintenance_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sous-menu maintenance"""
+    query = update.callback_query
+    await query.answer()
+    
+    text = "🔄 *MAINTENANCE*\n\nOutils de maintenance système"
+    
+    keyboard = [
+        [InlineKeyboardButton("📊 Infos système", callback_data="admin_system_info")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_main")]
+    ]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_MENU_MAINTENANCE
+
+@error_handler
+async def admin_system_info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche les infos système"""
+    query = update.callback_query
+    await query.answer()
+    
+    import sys
+    from pathlib import Path
+    
+    files_info = []
+    for file in [PRICES_FILE, USERS_FILE, PRODUCT_REGISTRY_FILE, STATS_FILE]:
+        if file.exists():
+            size = file.stat().st_size / 1024
+            files_info.append(f"  • {file.name} : {size:.1f} Ko")
+    
+    text = f"📊 *INFOS SYSTÈME*\n\n"
+    text += f"🐍 Python : {sys.version.split()[0]}\n"
+    text += f"📁 Répertoire : `{Path(__file__).parent.name}`\n\n"
+    text += f"💾 *Fichiers :*\n"
+    text += "\n".join(files_info)
+    
+    text += f"\n\n🔄 Distance : {DISTANCE_METHOD}"
+    
+    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_maintenance")]]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_MENU_MAINTENANCE
+
+# ==================== FIN BLOC B ====================
+
+# ==================== NOTE IMPORTANTE ====================
+# Le ConversationHandler pour le menu admin doit être ajouté
+# dans la fonction main_async() APRÈS application.add_handler(setmedia_handler)
+#
+# Copier le code suivant depuis BLOC_C_conversationhandler_menu_admin.py
+# =========================================================
+
+# ==================== BLOC C : CONVERSATIONHANDLER MENU ADMIN ====================
+# À COPIER-COLLER dans main_async() JUSTE APRÈS "application.add_handler(setmedia_handler)" (ligne ~2655)
+
+    # Handler menu admin (NOUVEAU)
+    admin_menu_handler = ConversationHandler(
+        entry_points=[CommandHandler('admin', admin_command)],
+        states={
+            ADMIN_MENU_MAIN: [
+                CallbackQueryHandler(admin_menu_products_callback, pattern="^admin_menu_products$"),
+                CallbackQueryHandler(admin_menu_prices_callback, pattern="^admin_menu_prices$"),
+                CallbackQueryHandler(admin_menu_stats_callback, pattern="^admin_menu_stats$"),
+                CallbackQueryHandler(admin_menu_users_callback, pattern="^admin_menu_users$"),
+                CallbackQueryHandler(admin_menu_horaires_callback, pattern="^admin_menu_horaires$"),
+                CallbackQueryHandler(admin_menu_media_callback, pattern="^admin_menu_media$"),
+                CallbackQueryHandler(admin_menu_maintenance_callback, pattern="^admin_menu_maintenance$"),
+            ],
+            ADMIN_MENU_PRODUCTS: [
+                CallbackQueryHandler(admin_list_products_callback, pattern="^admin_list_products$"),
+                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
+                CallbackQueryHandler(admin_create_product, pattern="^admin_create_product$"),
+                CallbackQueryHandler(admin_archive_product, pattern="^admin_archive_product$"),
+                CallbackQueryHandler(admin_restore_product, pattern="^admin_restore_product$"),
+            ],
+            ADMIN_MENU_PRICES: [
+                CallbackQueryHandler(admin_show_prices_callback, pattern="^admin_show_prices$"),
+                CallbackQueryHandler(admin_modify_price_callback, pattern="^admin_modify_price$"),
+                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
+            ],
+            ADMIN_MENU_STATS: [
+                CallbackQueryHandler(admin_stats_realtime_callback, pattern="^admin_stats_realtime$"),
+                CallbackQueryHandler(admin_stats_weekly_callback, pattern="^admin_stats_weekly$"),
+                CallbackQueryHandler(admin_stats_monthly_callback, pattern="^admin_stats_monthly$"),
+                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
+            ],
+            ADMIN_MENU_USERS: [
+                CallbackQueryHandler(admin_open_users_callback, pattern="^admin_open_users$"),
+                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
+            ],
+            ADMIN_MENU_HORAIRES: [
+                CallbackQueryHandler(admin_horaires_toggle_callback, pattern="^admin_horaires_toggle$"),
+                CallbackQueryHandler(admin_horaires_info_callback, pattern="^admin_horaires_info$"),
+                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
+            ],
+            ADMIN_MENU_MEDIA: [
+                CallbackQueryHandler(admin_media_list_callback, pattern="^admin_media_list$"),
+                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
+            ],
+            ADMIN_MENU_MAINTENANCE: [
+                CallbackQueryHandler(admin_system_info_callback, pattern="^admin_system_info$"),
+                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
+            ]
+        },
+        fallbacks=[CallbackQueryHandler(admin_close, pattern="^admin_close$")],
+        name="admin_menu",
+        persistent=False,
+        per_message=False
+    )
+    application.add_handler(admin_menu_handler)
+
+# ==================== FIN BLOC C ====================

@@ -1944,7 +1944,6 @@ async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Contact: {e}")
         await update.message.reply_text("❌ Erreur.")
     return ConversationHandler.END
-    # ==================== COMMANDES ADMIN ====================
 
 # ==================== COMMANDES ADMIN ====================
 
@@ -2117,6 +2116,92 @@ async def admin_back_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ADMIN_MENU_MAIN
 
 @error_handler
+async def admin_del_product_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /del <code> - Masque un produit (rupture de stock)"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return
+    
+    if not context.args:
+        text = "❌ *MASQUER UN PRODUIT*\n\n*Usage :* `/del <code>`\n\n*Codes disponibles :*\n"
+        
+        registry = load_product_registry()
+        available = get_available_products()
+        
+        for code, data in sorted(registry.items()):
+            name = data['name']
+            status = "✅" if name in available else "❌"
+            text += f"  {status} `{code}` → {name}\n"
+        
+        text += "\n*Exemple :* `/del weed`\n\n💡 Pour réactiver : `/add <code>`"
+        await update.message.reply_text(text, parse_mode='Markdown')
+        return
+    
+    code = context.args[0].lower()
+    product_name = PRODUCT_CODES.get(code)
+    
+    if not product_name:
+        await update.message.reply_text(f"❌ Code invalide: `{code}`\n\nUtilisez `/del` sans argument pour voir les codes.", parse_mode='Markdown')
+        return
+    
+    available = get_available_products()
+    
+    if product_name not in available:
+        await update.message.reply_text(f"⚠️ {product_name} est déjà masqué.\n\n💡 Pour réactiver : `/add {code}`", parse_mode='Markdown')
+        return
+    
+    available.remove(product_name)
+    save_available_products(available)
+    
+    text = f"✅ *PRODUIT MASQUÉ*\n\n❌ {product_name}\nCode : `{code}`\n\n*Effet :*\n• Invisible dans la Carte du Pirate\n• Impossible à commander\n• Prix conservés\n\n💡 Réactiver : `/add {code}`"
+    
+    await update.message.reply_text(text, parse_mode='Markdown')
+    logger.info(f"🔴 Produit masqué: {product_name} ({code})")
+
+@error_handler
+async def admin_add_product_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /add <code> - Affiche un produit (remise en stock)"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return
+    
+    if not context.args:
+        text = "❌ *ACTIVER UN PRODUIT*\n\n*Usage :* `/add <code>`\n\n*Codes disponibles :*\n"
+        
+        registry = load_product_registry()
+        available = get_available_products()
+        
+        for code, data in sorted(registry.items()):
+            name = data['name']
+            status = "✅" if name in available else "❌"
+            text += f"  {status} `{code}` → {name}\n"
+        
+        text += "\n*Exemple :* `/add weed`\n\n💡 Pour masquer : `/del <code>`"
+        await update.message.reply_text(text, parse_mode='Markdown')
+        return
+    
+    code = context.args[0].lower()
+    product_name = PRODUCT_CODES.get(code)
+    
+    if not product_name:
+        await update.message.reply_text(f"❌ Code invalide: `{code}`\n\nUtilisez `/add` sans argument pour voir les codes.", parse_mode='Markdown')
+        return
+    
+    available = get_available_products()
+    
+    if product_name in available:
+        await update.message.reply_text(f"⚠️ {product_name} est déjà disponible.\n\n💡 Pour masquer : `/del {code}`", parse_mode='Markdown')
+        return
+    
+    available.add(product_name)
+    save_available_products(available)
+    
+    text = f"✅ *PRODUIT ACTIVÉ*\n\n✅ {product_name}\nCode : `{code}`\n\n*Effet :*\n• Visible dans la Carte du Pirate\n• Les clients peuvent commander\n\n💡 Masquer : `/del {code}`"
+    
+    await update.message.reply_text(text, parse_mode='Markdown')
+    logger.info(f"🟢 Produit activé: {product_name} ({code})")
+
+@error_handler
 async def admin_repair_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("❌ Admin uniquement.")
@@ -2176,10 +2261,17 @@ async def admin_debug_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     for code, name in sorted(PRODUCT_CODES.items()):
         text += f"  • `{code}` → {name}\n"
     
-    text += f"\n✅ *Available* : {len(get_available_products())}\n"
+    available = get_available_products()
+    text += f"\n✅ *Available* : {len(available)}\n"
+    for name in sorted(available):
+        text += f"  • {name}\n"
     
     registry = load_product_registry()
     text += f"\n📋 *Registry* : {len(registry)}\n"
+    
+    prices = load_prices()
+    text += f"\n💰 *Prix FR* : {len(prices.get('FR', {}))}\n"
+    text += f"💰 *Prix CH* : {len(prices.get('CH', {}))}\n"
     
     await update.message.reply_text(text, parse_mode='Markdown')
 
@@ -2190,11 +2282,25 @@ async def admin_products_command(update: Update, context: ContextTypes.DEFAULT_T
         return
     
     available = get_available_products()
+    registry = load_product_registry()
+    all_products = set(PRODUCT_CODES.values())
     
-    text = "📦 *GESTION DES PRODUITS*\n\n*Produits actifs :*\n"
+    text = "📦 *GESTION DES PRODUITS*\n\n"
     
+    text += f"*Produits disponibles :* ({len(available)})\n"
     for product in sorted(available):
         text += f"✅ {product}\n"
+    
+    hidden = all_products - available
+    if hidden:
+        text += f"\n*Produits masqués :* ({len(hidden)})\n"
+        for product in sorted(hidden):
+            text += f"❌ {product}\n"
+    
+    text += f"\n💡 *Commandes :*\n"
+    text += f"• `/del <code>` - Masquer un produit\n"
+    text += f"• `/add <code>` - Activer un produit\n"
+    text += f"• `/repair <code>` - Réparer un produit"
     
     keyboard = [
         [InlineKeyboardButton("➕ Créer", callback_data="admin_create_product")],
@@ -2291,6 +2397,7 @@ async def confirm_create_product(update: Update, context: ContextTypes.DEFAULT_T
     query = update.callback_query
     await query.answer()
     product_data = context.user_data['creating_product']
+    
     success = add_new_product(
         name=product_data['name'],
         code=product_data['code'],
@@ -2299,10 +2406,12 @@ async def confirm_create_product(update: Update, context: ContextTypes.DEFAULT_T
         price_fr=product_data['price_fr'],
         price_ch=product_data['price_ch']
     )
+    
     if success:
-        text = f"✅ *PRODUIT CRÉÉ !*\n\n• {product_data['name']}\n• Code: `{product_data['code']}`"
+        text = f"✅ *PRODUIT CRÉÉ !*\n\n• {product_data['name']}\n• Code: `{product_data['code']}`\n• Prix FR: {product_data['price_fr']}€\n• Prix CH: {product_data['price_ch']}€\n\n*Le produit est maintenant :*\n✅ Visible dans la Carte du Pirate\n✅ Disponible à la commande\n\n💡 Pour masquer : `/del {product_data['code']}`"
     else:
         text = "❌ Erreur création."
+    
     await query.message.edit_text(text, parse_mode='Markdown')
     del context.user_data['creating_product']
     return ConversationHandler.END
@@ -2425,14 +2534,16 @@ async def admin_prices_command(update: Update, context: ContextTypes.DEFAULT_TYP
         return
     
     prices = load_prices()
+    available = get_available_products()
+    
     text = "💰 *PRIX*\n\n🇫🇷 *France :*\n"
-    for product in sorted(PRIX_FR.keys()):
-        current_price = prices.get("FR", {}).get(product, PRIX_FR[product])
+    for product in sorted(available):
+        current_price = prices.get("FR", {}).get(product, 0)
         text += f"  • {product} : {current_price}€\n"
     
     text += "\n🇨🇭 *Suisse :*\n"
-    for product in sorted(PRIX_CH.keys()):
-        current_price = prices.get("CH", {}).get(product, PRIX_CH[product])
+    for product in sorted(available):
+        current_price = prices.get("CH", {}).get(product, 0)
         text += f"  • {product} : {current_price}€\n"
     
     await update.message.reply_text(text, parse_mode='Markdown')
@@ -2673,6 +2784,8 @@ async def main_async():
     application.add_handler(CommandHandler('products', admin_products_command))
     application.add_handler(CommandHandler('prices', admin_prices_command))
     application.add_handler(CommandHandler('setprice', admin_setprice_command))
+    application.add_handler(CommandHandler('del', admin_del_product_command))
+    application.add_handler(CommandHandler('add', admin_add_product_command))
     application.add_handler(CommandHandler('users', users_command))
     application.add_handler(CommandHandler('repair', admin_repair_command))
     application.add_handler(CommandHandler('debug', admin_debug_command))

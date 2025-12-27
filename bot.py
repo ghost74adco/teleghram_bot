@@ -2505,16 +2505,22 @@ async def main_async():
     )
     
     admin_menu_handler = ConversationHandler(
-        entry_points=[CommandHandler('admin', admin_command)],
-        states={
-            ADMIN_MENU_MAIN: [
-                CallbackQueryHandler(admin_close, pattern="^admin_close$"),
-            ],
-        },
-        fallbacks=[CallbackQueryHandler(admin_close, pattern="^admin_close$")],
-        name="admin_menu",
-        persistent=False,
-        per_message=False
+    entry_points=[CommandHandler('admin', admin_command)],
+    states={
+        ADMIN_MENU_MAIN: [
+            CallbackQueryHandler(admin_menu_products_callback, pattern="^admin_menu_products$"),
+            CallbackQueryHandler(admin_menu_prices_callback, pattern="^admin_menu_prices$"),
+            CallbackQueryHandler(admin_menu_stats_callback, pattern="^admin_menu_stats$"),
+            CallbackQueryHandler(admin_menu_users_callback, pattern="^admin_menu_users$"),
+            CallbackQueryHandler(admin_menu_horaires_callback, pattern="^admin_menu_horaires$"),
+            CallbackQueryHandler(admin_close, pattern="^admin_close$"),
+        ],
+    },
+    fallbacks=[CallbackQueryHandler(admin_close, pattern="^admin_close$")],
+    name="admin_menu",
+    persistent=False,
+    per_message=False
+)
     )
     
     application.add_handler(horaires_handler)

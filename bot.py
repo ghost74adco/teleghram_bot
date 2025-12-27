@@ -1174,7 +1174,6 @@ def repair_product_visibility(code):
 
 # ==================== COMMANDE /repair AMÉLIORÉE ====================
 
-@error_handler
 async def admin_repair_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Commande /repair <code> pour réparer un produit invisible

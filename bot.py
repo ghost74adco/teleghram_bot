@@ -160,7 +160,6 @@ PRODUCT_REGISTRY_FILE = Path(__file__).parent / "product_registry.json"
 
 TRANSLATIONS = {
     "fr": {
-        # ==================== TRADUCTIONS EXISTANTES ====================
         "welcome": "🌿 *BIENVENUE* 🌿\n\n⚠️ *VERSION 2.2*\n\nConversations en *ÉCHANGE SECRET*.\n\n🙏 *Merci* 💪💚",
         "main_menu": "\n\n📱 *MENU :*",
         "choose_country": "🌍 *Pays :*",
@@ -206,8 +205,6 @@ TRANSLATIONS = {
         "new_order": "🔄 Nouvelle commande",
         "address_too_short": "❌ Adresse trop courte",
         "outside_hours": "⏰ Livraisons fermées.\n\nHoraires : {hours}",
-        
-        # ==================== TRADUCTIONS TUTORIEL ====================
         "tuto_menu_title": "📚 *TUTORIEL CLIENT*\n\nGuide d'utilisation du bot.\n\nQue voulez-vous consulter ?",
         "tuto_step1_btn": "1️⃣ Démarrage & Langue",
         "tuto_step2_btn": "2️⃣ Consultation prix",
@@ -262,9 +259,7 @@ TRANSLATIONS = {
         "tuto_part": "📚 *TUTORIEL BOT - PARTIE {n}/6*",
         "tuto_end": "━━━━━━━━━━━━━━━━━\n✅ Fin du tutoriel\nBonne utilisation du bot ! 🌿",
     },
-    
     "en": {
-        # ==================== TRADUCTIONS EXISTANTES ====================
         "welcome": "🌿 *WELCOME* 🌿\n\n⚠️ *VERSION 2.2*\n\nConversations in *SECRET EXCHANGE*.\n\n🙏 *Thank you* 💪💚",
         "main_menu": "\n\n📱 *MENU:*",
         "choose_country": "🌍 *Country:*",
@@ -310,65 +305,8 @@ TRANSLATIONS = {
         "new_order": "🔄 New order",
         "address_too_short": "❌ Address too short",
         "outside_hours": "⏰ Deliveries closed.\n\nHours: {hours}",
-        
-        # ==================== TRADUCTIONS TUTORIEL ====================
-        "tuto_menu_title": "📚 *CLIENT TUTORIAL*\n\nBot user guide.\n\nWhat would you like to view?",
-        "tuto_step1_btn": "1️⃣ Getting Started & Language",
-        "tuto_step2_btn": "2️⃣ Price Consultation",
-        "tuto_step3_btn": "3️⃣ Place an Order",
-        "tuto_step4_btn": "4️⃣ Delivery Choice",
-        "tuto_step5_btn": "5️⃣ Payment & Confirmation",
-        "tuto_step6_btn": "6️⃣ Contact the Seller",
-        "tuto_send_all_btn": "📤 Send Complete Tutorial",
-        "tuto_back": "🔙 Back to Tutorial",
-        "tuto_next": "➡️ Next Step",
-        "tuto_prev": "⬅️ Previous Step",
-        "tuto_restart": "🔄 Back to Start",
-        "tuto_step1_title": "1️⃣ *GETTING STARTED & LANGUAGE*",
-        "tuto_step1_start": "📱 *To begin:*\n1. Open Telegram\n2. Search for the bot\n3. Click *START* or type `/start`",
-        "tuto_step1_lang": "🌍 *Choose your language:*\n• 🇫🇷 Français\n• 🇬🇧 English\n• 🇩🇪 Deutsch\n• 🇪🇸 Español\n• 🇮🇹 Italiano",
-        "tuto_step1_menu": "✅ *After selection:*\nThe main menu displays with 3 options:\n• 🛒 Order\n• 🏴‍☠️ Pirate Card (view prices)\n• 📞 Contact",
-        "tuto_step2_title": "2️⃣ *PRICE CONSULTATION*",
-        "tuto_step2_intro": "🏴‍☠️ *Pirate Card:*\nTo view prices without ordering:",
-        "tuto_step2_how": "1. Main menu → *🏴‍☠️ Pirate Card*\n2. Choose your country:\n   • 🇫🇷 France Prices\n   • 🇨🇭 Switzerland Prices",
-        "tuto_step2_display": "📋 *Display:*\n• Complete list of available products\n• Price per gram or unit\n• Postal delivery fees\n• Express delivery information",
-        "tuto_step2_tip": "💡 *Tip:*\nYou can check prices as many times as you want before ordering.",
-        "tuto_step3_title": "3️⃣ *PLACE AN ORDER*",
-        "tuto_step3_start": "🛒 *Start ordering:*\n1. Main menu → *🛒 Order*",
-        "tuto_step3_country": "🌍 *Step 1 - Choose country:*\n• 🇫🇷 France\n• 🇨🇭 Switzerland",
-        "tuto_step3_product": "📦 *Step 2 - Choose product:*\n• ❄️ Coco (powder)\n• 💊 Pills (Squid Game / Punisher)\n• 🫒 Hash\n• 🍀 Weed\n• 🪨 Crystal (MDMA / 4MMC)",
-        "tuto_step3_quantity": "🔢 *Step 3 - Enter quantity:*\n• Type the desired number (e.g., 5)\n• Maximum: 100 units",
-        "tuto_step3_add": "➕ *Add more products:*\nClick *➕ Add* for another product\nOR\nClick *✅ Proceed* to continue",
-        "tuto_step4_title": "4️⃣ *DELIVERY CHOICE*",
-        "tuto_step4_address": "📍 *Delivery address:*\n• Enter your complete address\n• Format: Street, Postal code, City\n• Minimum 15 characters\n• Example: _123 Paris Street, 75001 Paris_",
-        "tuto_step4_type": "📦 *Delivery type:*",
-        "tuto_step4_postal": "✉️ *Postal Delivery:*\n• Time: 48-72 hours\n• Fixed price: 10€\n• Discreet and safe",
-        "tuto_step4_express": "⚡ *Express Delivery:*\n• Time: 30 minutes to 2 hours\n• Price: 10€ per kilometer\n• Distance calculated automatically\n• Hand delivery",
-        "tuto_step4_hours": "⏰ *Delivery hours:*\n• {hours}",
-        "tuto_step4_tip": "💡 *Good to know:*\nFor express delivery, the bot automatically calculates the distance from your address.",
-        "tuto_step5_title": "5️⃣ *PAYMENT & CONFIRMATION*",
-        "tuto_step5_method": "💳 *Payment method:*",
-        "tuto_step5_cash": "💵 *Cash:*\n• Hand payment\n• For express delivery\n• Exact amount appreciated",
-        "tuto_step5_crypto": "₿ *Cryptocurrency:*\n• Bitcoin, Ethereum, etc.\n• Address provided after validation\n• Delivery after payment confirmation",
-        "tuto_step5_summary": "✅ *Order summary:*\nThe bot displays:\n• 🛒 Product list and quantities\n• 💵 Subtotal\n• 📦 Delivery fees\n• 💰 TOTAL\n• 📍 Address\n• 📦 Delivery type\n• 💳 Payment method",
-        "tuto_step5_validate": "🎯 *Validation:*\n• Check carefully\n• Click *✅ Confirm*\n• Or *❌ Cancel* to start over",
-        "tuto_step5_after": "📞 *After confirmation:*\n• You receive an order number\n• Admin is notified immediately\n• They will contact you soon",
-        "tuto_step6_title": "6️⃣ *CONTACT THE SELLER*",
-        "tuto_step6_intro": "📞 *To ask a question:*",
-        "tuto_step6_step1": "1. Main menu → *📞 Contact*",
-        "tuto_step6_step2": "2. Type your message:\n• Question about a product\n• Information request\n• Problem with an order\n• Delivery information",
-        "tuto_step6_step3": "3. Send the message",
-        "tuto_step6_confirm": "✅ *Confirmation:*\n• Message sent to admin\n• Reply soon\n• Admin will contact you directly",
-        "tuto_step6_tips": "💡 *Tips:*\n• Be clear and precise\n• Include your order number if needed\n• Keep messages short",
-        "tuto_step6_new": "🔄 *New order:*\nAfter a validated order, click *🔄 New order* to start again.",
-        "tuto_sending": "📤 *SENDING COMPLETE TUTORIAL*\n\nThe complete tutorial in 6 parts will be sent.\n\nYou can:\n• Forward it to your clients\n• Pin it in a channel\n• Share it by message\n\n⏳ Sending...",
-        "tuto_sent": "✅ *TUTORIAL SENT*\n\nAll 6 parts of the tutorial have been sent successfully.\n\nYou can now forward them to your clients.",
-        "tuto_part": "📚 *BOT TUTORIAL - PART {n}/6*",
-        "tuto_end": "━━━━━━━━━━━━━━━━━\n✅ End of tutorial\nEnjoy using the bot! 🌿",
     },
-    
     "de": {
-        # ==================== TRADUCTIONS EXISTANTES ====================
         "welcome": "🌿 *WILLKOMMEN* 🌿\n\n⚠️ *VERSION 2.2*\n\nGespräche im *GEHEIMEN AUSTAUSCH*.\n\n🙏 *Danke* 💪💚",
         "main_menu": "\n\n📱 *MENÜ:*",
         "choose_country": "🌍 *Land:*",
@@ -414,65 +352,8 @@ TRANSLATIONS = {
         "new_order": "🔄 Neue Bestellung",
         "address_too_short": "❌ Adresse zu kurz",
         "outside_hours": "⏰ Lieferungen geschlossen.\n\nÖffnungszeiten: {hours}",
-        
-        # ==================== TRADUCTIONS TUTORIEL ====================
-        "tuto_menu_title": "📚 *KUNDEN-ANLEITUNG*\n\nBot-Bedienungsanleitung.\n\nWas möchten Sie ansehen?",
-        "tuto_step1_btn": "1️⃣ Erste Schritte & Sprache",
-        "tuto_step2_btn": "2️⃣ Preiskonsultation",
-        "tuto_step3_btn": "3️⃣ Bestellung aufgeben",
-        "tuto_step4_btn": "4️⃣ Lieferauswahl",
-        "tuto_step5_btn": "5️⃣ Zahlung & Bestätigung",
-        "tuto_step6_btn": "6️⃣ Verkäufer kontaktieren",
-        "tuto_send_all_btn": "📤 Vollständige Anleitung senden",
-        "tuto_back": "🔙 Zurück zur Anleitung",
-        "tuto_next": "➡️ Nächster Schritt",
-        "tuto_prev": "⬅️ Vorheriger Schritt",
-        "tuto_restart": "🔄 Zurück zum Anfang",
-        "tuto_step1_title": "1️⃣ *ERSTE SCHRITTE & SPRACHE*",
-        "tuto_step1_start": "📱 *Um zu beginnen:*\n1. Öffnen Sie Telegram\n2. Suchen Sie den Bot\n3. Klicken Sie auf *START* oder tippen Sie `/start`",
-        "tuto_step1_lang": "🌍 *Wählen Sie Ihre Sprache:*\n• 🇫🇷 Français\n• 🇬🇧 English\n• 🇩🇪 Deutsch\n• 🇪🇸 Español\n• 🇮🇹 Italiano",
-        "tuto_step1_menu": "✅ *Nach der Auswahl:*\nDas Hauptmenü wird mit 3 Optionen angezeigt:\n• 🛒 Bestellen\n• 🏴‍☠️ Piratenkarte (Preise anzeigen)\n• 📞 Kontakt",
-        "tuto_step2_title": "2️⃣ *PREISKONSULTATION*",
-        "tuto_step2_intro": "🏴‍☠️ *Piratenkarte:*\nUm Preise ohne Bestellung anzuzeigen:",
-        "tuto_step2_how": "1. Hauptmenü → *🏴‍☠️ Piratenkarte*\n2. Wählen Sie Ihr Land:\n   • 🇫🇷 Preise Frankreich\n   • 🇨🇭 Preise Schweiz",
-        "tuto_step2_display": "📋 *Anzeige:*\n• Vollständige Liste verfügbarer Produkte\n• Preis pro Gramm oder Einheit\n• Postversandgebühren\n• Express-Lieferinformationen",
-        "tuto_step2_tip": "💡 *Tipp:*\nSie können die Preise so oft überprüfen wie Sie möchten, bevor Sie bestellen.",
-        "tuto_step3_title": "3️⃣ *BESTELLUNG AUFGEBEN*",
-        "tuto_step3_start": "🛒 *Bestellung starten:*\n1. Hauptmenü → *🛒 Bestellen*",
-        "tuto_step3_country": "🌍 *Schritt 1 - Land wählen:*\n• 🇫🇷 Frankreich\n• 🇨🇭 Schweiz",
-        "tuto_step3_product": "📦 *Schritt 2 - Produkt wählen:*\n• ❄️ Coco (Pulver)\n• 💊 Pills (Squid Game / Punisher)\n• 🫒 Hash\n• 🍀 Weed\n• 🪨 Crystal (MDMA / 4MMC)",
-        "tuto_step3_quantity": "🔢 *Schritt 3 - Menge eingeben:*\n• Geben Sie die gewünschte Nummer ein (z.B. 5)\n• Maximum: 100 Einheiten",
-        "tuto_step3_add": "➕ *Weitere Produkte hinzufügen:*\nKlicken Sie auf *➕ Hinzufügen* für ein weiteres Produkt\nODER\nKlicken Sie auf *✅ Weiter* um fortzufahren",
-        "tuto_step4_title": "4️⃣ *LIEFERAUSWAHL*",
-        "tuto_step4_address": "📍 *Lieferadresse:*\n• Geben Sie Ihre vollständige Adresse ein\n• Format: Straße, Postleitzahl, Stadt\n• Mindestens 15 Zeichen\n• Beispiel: _123 Parisstraße, 75001 Paris_",
-        "tuto_step4_type": "📦 *Lieferart:*",
-        "tuto_step4_postal": "✉️ *Postversand:*\n• Zeit: 48-72 Stunden\n• Festpreis: 10€\n• Diskret und sicher",
-        "tuto_step4_express": "⚡ *Express-Lieferung:*\n• Zeit: 30 Minuten bis 2 Stunden\n• Preis: 10€ pro Kilometer\n• Entfernung wird automatisch berechnet\n• Handlieferung",
-        "tuto_step4_hours": "⏰ *Lieferzeiten:*\n• {hours}",
-        "tuto_step4_tip": "💡 *Gut zu wissen:*\nBei Express-Lieferung berechnet der Bot automatisch die Entfernung von Ihrer Adresse.",
-        "tuto_step5_title": "5️⃣ *ZAHLUNG & BESTÄTIGUNG*",
-        "tuto_step5_method": "💳 *Zahlungsmethode:*",
-        "tuto_step5_cash": "💵 *Bargeld:*\n• Handzahlung\n• Für Express-Lieferung\n• Genauer Betrag geschätzt",
-        "tuto_step5_crypto": "₿ *Kryptowährung:*\n• Bitcoin, Ethereum, usw.\n• Adresse nach Validierung bereitgestellt\n• Lieferung nach Zahlungsbestätigung",
-        "tuto_step5_summary": "✅ *Bestellübersicht:*\nDer Bot zeigt:\n• 🛒 Produktliste und Mengen\n• 💵 Zwischensumme\n• 📦 Liefergebühren\n• 💰 GESAMT\n• 📍 Adresse\n• 📦 Lieferart\n• 💳 Zahlungsmethode",
-        "tuto_step5_validate": "🎯 *Validierung:*\n• Sorgfältig prüfen\n• Klicken Sie auf *✅ Bestätigen*\n• Oder *❌ Abbrechen* um neu zu beginnen",
-        "tuto_step5_after": "📞 *Nach Bestätigung:*\n• Sie erhalten eine Bestellnummer\n• Admin wird sofort benachrichtigt\n• Sie werden bald kontaktiert",
-        "tuto_step6_title": "6️⃣ *VERKÄUFER KONTAKTIEREN*",
-        "tuto_step6_intro": "📞 *Um eine Frage zu stellen:*",
-        "tuto_step6_step1": "1. Hauptmenü → *📞 Kontakt*",
-        "tuto_step6_step2": "2. Geben Sie Ihre Nachricht ein:\n• Frage zu einem Produkt\n• Informationsanfrage\n• Problem mit einer Bestellung\n• Lieferinformationen",
-        "tuto_step6_step3": "3. Senden Sie die Nachricht",
-        "tuto_step6_confirm": "✅ *Bestätigung:*\n• Nachricht an Admin gesendet\n• Antwort in Kürze\n• Admin wird Sie direkt kontaktieren",
-        "tuto_step6_tips": "💡 *Tipps:*\n• Seien Sie klar und präzise\n• Geben Sie Ihre Bestellnummer an, falls erforderlich\n• Halten Sie Nachrichten kurz",
-        "tuto_step6_new": "🔄 *Neue Bestellung:*\nNach einer validierten Bestellung klicken Sie auf *🔄 Neue Bestellung* um neu zu starten.",
-        "tuto_sending": "📤 *VOLLSTÄNDIGE ANLEITUNG SENDEN*\n\nDie vollständige Anleitung in 6 Teilen wird gesendet.\n\nSie können:\n• Sie an Ihre Kunden weiterleiten\n• Sie in einem Kanal anheften\n• Sie per Nachricht teilen\n\n⏳ Wird gesendet...",
-        "tuto_sent": "✅ *ANLEITUNG GESENDET*\n\nAlle 6 Teile der Anleitung wurden erfolgreich gesendet.\n\nSie können sie jetzt an Ihre Kunden weiterleiten.",
-        "tuto_part": "📚 *BOT-ANLEITUNG - TEIL {n}/6*",
-        "tuto_end": "━━━━━━━━━━━━━━━━━\n✅ Ende der Anleitung\nViel Spaß mit dem Bot! 🌿",
     },
-    
     "es": {
-        # ==================== TRADUCTIONS EXISTANTES ====================
         "welcome": "🌿 *BIENVENIDO* 🌿\n\n⚠️ *VERSIÓN 2.2*\n\nConversaciones en *INTERCAMBIO SECRETO*.\n\n🙏 *Gracias* 💪💚",
         "main_menu": "\n\n📱 *MENÚ:*",
         "choose_country": "🌍 *País:*",
@@ -518,65 +399,8 @@ TRANSLATIONS = {
         "new_order": "🔄 Nuevo pedido",
         "address_too_short": "❌ Dirección demasiado corta",
         "outside_hours": "⏰ Entregas cerradas.\n\nHorario: {hours}",
-        
-        # ==================== TRADUCTIONS TUTORIEL ====================
-        "tuto_menu_title": "📚 *TUTORIAL CLIENTE*\n\nGuía de uso del bot.\n\n¿Qué desea consultar?",
-        "tuto_step1_btn": "1️⃣ Inicio e Idioma",
-        "tuto_step2_btn": "2️⃣ Consulta de precios",
-        "tuto_step3_btn": "3️⃣ Realizar pedido",
-        "tuto_step4_btn": "4️⃣ Elección de entrega",
-        "tuto_step5_btn": "5️⃣ Pago y Confirmación",
-        "tuto_step6_btn": "6️⃣ Contactar al vendedor",
-        "tuto_send_all_btn": "📤 Enviar tutorial completo",
-        "tuto_back": "🔙 Volver al tutorial",
-        "tuto_next": "➡️ Siguiente paso",
-        "tuto_prev": "⬅️ Paso anterior",
-        "tuto_restart": "🔄 Volver al inicio",
-        "tuto_step1_title": "1️⃣ *INICIO E IDIOMA*",
-        "tuto_step1_start": "📱 *Para comenzar:*\n1. Abra Telegram\n2. Busque el bot\n3. Haga clic en *INICIAR* o escriba `/start`",
-        "tuto_step1_lang": "🌍 *Elija su idioma:*\n• 🇫🇷 Français\n• 🇬🇧 English\n• 🇩🇪 Deutsch\n• 🇪🇸 Español\n• 🇮🇹 Italiano",
-        "tuto_step1_menu": "✅ *Después de la selección:*\nEl menú principal se muestra con 3 opciones:\n• 🛒 Pedir\n• 🏴‍☠️ Carta del Pirata (ver precios)\n• 📞 Contacto",
-        "tuto_step2_title": "2️⃣ *CONSULTA DE PRECIOS*",
-        "tuto_step2_intro": "🏴‍☠️ *Carta del Pirata:*\nPara ver precios sin pedir:",
-        "tuto_step2_how": "1. Menú principal → *🏴‍☠️ Carta del Pirata*\n2. Elija su país:\n   • 🇫🇷 Precios Francia\n   • 🇨🇭 Precios Suiza",
-        "tuto_step2_display": "📋 *Visualización:*\n• Lista completa de productos disponibles\n• Precio por gramo o unidad\n• Gastos de envío postal\n• Información de entrega exprés",
-        "tuto_step2_tip": "💡 *Consejo:*\nPuede consultar los precios tantas veces como quiera antes de pedir.",
-        "tuto_step3_title": "3️⃣ *REALIZAR PEDIDO*",
-        "tuto_step3_start": "🛒 *Iniciar pedido:*\n1. Menú principal → *🛒 Pedir*",
-        "tuto_step3_country": "🌍 *Paso 1 - Elegir país:*\n• 🇫🇷 Francia\n• 🇨🇭 Suiza",
-        "tuto_step3_product": "📦 *Paso 2 - Elegir producto:*\n• ❄️ Coco (polvo)\n• 💊 Pills (Squid Game / Punisher)\n• 🫒 Hash\n• 🍀 Weed\n• 🪨 Crystal (MDMA / 4MMC)",
-        "tuto_step3_quantity": "🔢 *Paso 3 - Indicar cantidad:*\n• Escriba el número deseado (ej: 5)\n• Máximo: 100 unidades",
-        "tuto_step3_add": "➕ *Añadir más productos:*\nHaga clic en *➕ Añadir* para otro producto\nO\nHaga clic en *✅ Continuar* para seguir",
-        "tuto_step4_title": "4️⃣ *ELECCIÓN DE ENTREGA*",
-        "tuto_step4_address": "📍 *Dirección de entrega:*\n• Ingrese su dirección completa\n• Formato: Calle, Código postal, Ciudad\n• Mínimo 15 caracteres\n• Ejemplo: _123 Calle París, 75001 París_",
-        "tuto_step4_type": "📦 *Tipo de entrega:*",
-        "tuto_step4_postal": "✉️ *Entrega Postal:*\n• Tiempo: 48-72 horas\n• Precio fijo: 10€\n• Discreto y seguro",
-        "tuto_step4_express": "⚡ *Entrega Exprés:*\n• Tiempo: 30 minutos a 2 horas\n• Precio: 10€ por kilómetro\n• Distancia calculada automáticamente\n• Entrega en mano",
-        "tuto_step4_hours": "⏰ *Horario de entrega:*\n• {hours}",
-        "tuto_step4_tip": "💡 *Bueno saber:*\nPara entrega exprés, el bot calcula automáticamente la distancia desde su dirección.",
-        "tuto_step5_title": "5️⃣ *PAGO Y CONFIRMACIÓN*",
-        "tuto_step5_method": "💳 *Método de pago:*",
-        "tuto_step5_cash": "💵 *Efectivo:*\n• Pago en mano\n• Para entrega exprés\n• Monto exacto apreciado",
-        "tuto_step5_crypto": "₿ *Criptomoneda:*\n• Bitcoin, Ethereum, etc.\n• Dirección proporcionada después de validación\n• Entrega después de confirmación de pago",
-        "tuto_step5_summary": "✅ *Resumen del pedido:*\nEl bot muestra:\n• 🛒 Lista de productos y cantidades\n• 💵 Subtotal\n• 📦 Gastos de entrega\n• 💰 TOTAL\n• 📍 Dirección\n• 📦 Tipo de entrega\n• 💳 Método de pago",
-        "tuto_step5_validate": "🎯 *Validación:*\n• Verifique cuidadosamente\n• Haga clic en *✅ Confirmar*\n• O *❌ Cancelar* para empezar de nuevo",
-        "tuto_step5_after": "📞 *Después de la confirmación:*\n• Recibirá un número de pedido\n• El admin es notificado inmediatamente\n• Lo contactarán pronto",
-        "tuto_step6_title": "6️⃣ *CONTACTAR AL VENDEDOR*",
-        "tuto_step6_intro": "📞 *Para hacer una pregunta:*",
-        "tuto_step6_step1": "1. Menú principal → *📞 Contacto*",
-        "tuto_step6_step2": "2. Escriba su mensaje:\n• Pregunta sobre un producto\n• Solicitud de información\n• Problema con un pedido\n• Información de entrega",
-        "tuto_step6_step3": "3. Envíe el mensaje",
-        "tuto_step6_confirm": "✅ *Confirmación:*\n• Mensaje enviado al admin\n• Respuesta pronto\n• El admin lo contactará directamente",
-        "tuto_step6_tips": "💡 *Consejos:*\n• Sea claro y preciso\n• Indique su número de pedido si es necesario\n• Prefiera mensajes cortos",
-        "tuto_step6_new": "🔄 *Nuevo pedido:*\nDespués de un pedido validado, haga clic en *🔄 Nuevo pedido* para empezar de nuevo.",
-        "tuto_sending": "📤 *ENVIANDO TUTORIAL COMPLETO*\n\nEl tutorial completo en 6 partes será enviado.\n\nPodrá:\n• Reenviarlo a sus clientes\n• Fijarlo en un canal\n• Compartirlo por mensaje\n\n⏳ Enviando...",
-        "tuto_sent": "✅ *TUTORIAL ENVIADO*\n\nLas 6 partes del tutorial han sido enviadas exitosamente.\n\nAhora puede reenviarlas a sus clientes.",
-        "tuto_part": "📚 *TUTORIAL BOT - PARTE {n}/6*",
-        "tuto_end": "━━━━━━━━━━━━━━━━━\n✅ Fin del tutorial\n¡Disfrute usando el bot! 🌿",
     },
-    
     "it": {
-        # ==================== TRADUCTIONS EXISTANTES ====================
         "welcome": "🌿 *BENVENUTO* 🌿\n\n⚠️ *VERSIONE 2.2*\n\nConversazioni in *SCAMBIO SEGRETO*.\n\n🙏 *Grazie* 💪💚",
         "main_menu": "\n\n📱 *MENU:*",
         "choose_country": "🌍 *Paese:*",
@@ -622,64 +446,27 @@ TRANSLATIONS = {
         "new_order": "🔄 Nuovo ordine",
         "address_too_short": "❌ Indirizzo troppo corto",
         "outside_hours": "⏰ Consegne chiuse.\n\nOrari: {hours}",
-        
-        # ==================== TRADUCTIONS TUTORIEL ====================
-        "tuto_menu_title": "📚 *TUTORIAL CLIENTE*\n\nGuida all'uso del bot.\n\nCosa desidera consultare?",
-        "tuto_step1_btn": "1️⃣ Inizio e Lingua",
-        "tuto_step2_btn": "2️⃣ Consultazione prezzi",
-        "tuto_step3_btn": "3️⃣ Effettuare ordine",
-        "tuto_step4_btn": "4️⃣ Scelta consegna",
-        "tuto_step5_btn": "5️⃣ Pagamento e Conferma",
-        "tuto_step6_btn": "6️⃣ Contattare il venditore",
-        "tuto_send_all_btn": "📤 Inviare tutorial completo",
-        "tuto_back": "🔙 Torna al tutorial",
-        "tuto_next": "➡️ Passo successivo",
-        "tuto_prev": "⬅️ Passo precedente",
-        "tuto_restart": "🔄 Torna all'inizio",
-        "tuto_step1_title": "1️⃣ *INIZIO E LINGUA*",
-        "tuto_step1_start": "📱 *Per iniziare:*\n1. Apra Telegram\n2. Cerchi il bot\n3. Clicchi su *AVVIA* o digiti `/start`",
-        "tuto_step1_lang": "🌍 *Scelga la sua lingua:*\n• 🇫🇷 Français\n• 🇬🇧 English\n• 🇩🇪 Deutsch\n• 🇪🇸 Español\n• 🇮🇹 Italiano",
-        "tuto_step1_menu": "✅ *Dopo la selezione:*\nIl menu principale si visualizza con 3 opzioni:\n• 🛒 Ordinare\n• 🏴‍☠️ Carta del Pirata (vedere prezzi)\n• 📞 Contatto",
-        "tuto_step2_title": "2️⃣ *CONSULTAZIONE PREZZI*",
-        "tuto_step2_intro": "🏴‍☠️ *Carta del Pirata:*\nPer vedere i prezzi senza ordinare:",
-        "tuto_step2_how": "1. Menu principale → *🏴‍☠️ Carta del Pirata*\n2. Scelga il suo paese:\n   • 🇫🇷 Prezzi Francia\n   • 🇨🇭 Prezzi Svizzera",
-        "tuto_step2_display": "📋 *Visualizzazione:*\n• Lista completa dei prodotti disponibili\n• Prezzo per grammo o unità\n• Spese di spedizione postale\n• Informazioni consegna express",
-        "tuto_step2_tip": "💡 *Consiglio:*\nPuò consultare i prezzi quante volte vuole prima di ordinare.",
-        "tuto_step3_title": "3️⃣ *EFFETTUARE ORDINE*",
-        "tuto_step3_start": "🛒 *Iniziare ordine:*\n1. Menu principale → *🛒 Ordinare*",
-        "tuto_step3_country": "🌍 *Passo 1 - Scegliere paese:*\n• 🇫🇷 Francia\n• 🇨🇭 Svizzera",
-        "tuto_step3_product": "📦 *Passo 2 - Scegliere prodotto:*\n• ❄️ Coco (polvere)\n• 💊 Pills (Squid Game / Punisher)\n• 🫒 Hash\n• 🍀 Weed\n• 🪨 Crystal (MDMA / 4MMC)",
-        "tuto_step3_quantity": "🔢 *Passo 3 - Indicare quantità:*\n• Digiti il numero desiderato (es: 5)\n• Massimo: 100 unità",
-        "tuto_step3_add": "➕ *Aggiungere altri prodotti:*\nClicchi su *➕ Aggiungere* per un altro prodotto\nOPPURE\nClicchi su *✅ Procedere* per continuare",
-        "tuto_step4_title": "4️⃣ *SCELTA CONSEGNA*",
-        "tuto_step4_address": "📍 *Indirizzo di consegna:*\n• Inserisca il suo indirizzo completo\n• Formato: Via, Codice postale, Città\n• Minimo 15 caratteri\n• Esempio: _123 Via Parigi, 75001 Parigi_",
-        "tuto_step4_type": "📦 *Tipo di consegna:*",
-        "tuto_step4_postal": "✉️ *Consegna Postale:*\n• Tempo: 48-72 ore\n• Prezzo fisso: 10€\n• Discreto e sicuro",
-        "tuto_step4_express": "⚡ *Consegna Express:*\n• Tempo: 30 minuti a 2 ore\n• Prezzo: 10€ per chilometro\n• Distanza calcolata automaticamente\n• Consegna in mano",
-        "tuto_step4_hours": "⏰ *Orari di consegna:*\n• {hours}",
-        "tuto_step4_tip": "💡 *Buono a sapersi:*\nPer la consegna express, il bot calcola automaticamente la distanza dal suo indirizzo.",
-        "tuto_step5_title": "5️⃣ *PAGAMENTO E CONFERMA*",
-        "tuto_step5_method": "💳 *Metodo di pagamento:*",
-        "tuto_step5_cash": "💵 *Contanti:*\n• Pagamento in mano\n• Per consegna express\n• Importo esatto apprezzato",
-        "tuto_step5_crypto": "₿ *Criptovaluta:*\n• Bitcoin, Ethereum, ecc.\n• Indirizzo fornito dopo validazione\n• Consegna dopo conferma pagamento",
-        "tuto_step5_summary": "✅ *Riepilogo ordine:*\nIl bot visualizza:\n• 🛒 Lista prodotti e quantità\n• 💵 Subtotale\n• 📦 Spese di consegna\n• 💰 TOTALE\n• 📍 Indirizzo\n• 📦 Tipo di consegna\n• 💳 Metodo di pagamento",
-        "tuto_step5_validate": "🎯 *Validazione:*\n• Verifichi attentamente\n• Clicchi su *✅ Confermare*\n• O *❌ Annullare* per ricominciare",
-        "tuto_step5_after": "📞 *Dopo la conferma:*\n• Riceverà un numero d'ordine\n• L'admin è notificato immediatamente\n• La contatteranno a breve",
-        "tuto_step6_title": "6️⃣ *CONTATTARE IL VENDITORE*",
-        "tuto_step6_intro": "📞 *Per fare una domanda:*",
-        "tuto_step6_step1": "1. Menu principale → *📞 Contatto*",
-        "tuto_step6_step2": "2. Digiti il suo messaggio:\n• Domanda su un prodotto\n• Richiesta di informazioni\n• Problema con un ordine\n• Informazioni sulla consegna",
-        "tuto_step6_step3": "3. Invii il messaggio",
-        "tuto_step6_confirm": "✅ *Conferma:*\n• Messaggio inviato all'admin\n• Risposta a breve\n• L'admin la contatterà direttamente",
-        "tuto_step6_tips": "💡 *Consigli:*\n• Sia chiaro e preciso\n• Indichi il suo numero d'ordine se necessario\n• Preferisca messaggi brevi",
-        "tuto_step6_new": "🔄 *Nuovo ordine:*\nDopo un ordine validato, clicchi su *🔄 Nuovo ordine* per ricominciare.",
-        "tuto_sending": "📤 *INVIO TUTORIAL COMPLETO*\n\nIl tutorial completo in 6 parti sarà inviato.\n\nPotrà:\n• Inoltrarlo ai suoi clienti\n• Fissarlo in un canale\n• Condividerlo per messaggio\n\n⏳ Invio in corso...",
-        "tuto_sent": "✅ *TUTORIAL INVIATO*\n\nTutte le 6 parti del tutorial sono state inviate con successo.\n\nOra può inoltrarle ai suoi clienti.",
-        "tuto_part": "📚 *TUTORIAL BOT - PARTE {n}/6*",
-        "tuto_end": "━━━━━━━━━━━━━━━━━\n✅ Fine del tutorial\nBuon utilizzo del bot! 🌿",
     }
 }
-# ==================== SYSTÈME DE PERSISTANCE ====================
+
+def error_handler(func):
+    """Décorateur pour gérer les erreurs"""
+    @wraps(func)
+    async def wrapper(update, context):
+        try:
+            return await func(update, context)
+        except Exception as e:
+            logger.error(f"{func.__name__}: {e}", exc_info=True)
+            try:
+                if update.callback_query:
+                    await update.callback_query.answer("❌ Erreur")
+                elif update.message:
+                    await update.message.reply_text("❌ Erreur. /start")
+            except:
+                pass
+            return ConversationHandler.END
+    return wrapper
+    # ==================== SYSTÈME DE PERSISTANCE ====================
 
 def load_product_registry():
     """Charge le registre complet des produits"""
@@ -856,8 +643,6 @@ def update_product_media_in_registry(code, image_file=None, video_file=None):
     
     return False
 
-# ==================== GESTION DES PRODUITS DISPONIBLES ====================
-
 def load_available_products():
     if AVAILABLE_PRODUCTS_FILE.exists():
         try:
@@ -883,8 +668,6 @@ def is_product_available(product_name):
 
 def get_available_products():
     return load_available_products()
-
-# ==================== GESTION DES PRIX ====================
 
 def load_prices():
     if PRICES_FILE.exists():
@@ -915,8 +698,6 @@ def set_price(product_name, country, new_price):
     prices[country][product_name] = new_price
     return save_prices(prices)
 
-# ==================== GESTION AVANCÉE DES PRODUITS ====================
-
 def load_archived_products():
     if ARCHIVED_PRODUCTS_FILE.exists():
         try:
@@ -930,17 +711,11 @@ def save_archived_products(archived):
     with open(ARCHIVED_PRODUCTS_FILE, 'w', encoding='utf-8') as f:
         json.dump(archived, f, indent=2, ensure_ascii=False)
 
-# ==================== CORRECTIF COMPLET - CRÉATION PRODUITS ====================
-# Ce fichier contient les fonctions corrigées à remplacer dans la PARTIE 2
-
-# ==================== FONCTION add_new_product CORRIGÉE ====================
-
 def add_new_product(name, code, emoji, category, price_fr, price_ch, image_file=None, video_file=None):
-    """Ajoute un nouveau produit avec synchronisation COMPLÈTE et GARANTIE"""
+    """Ajoute un nouveau produit avec synchronisation COMPLÈTE"""
     
     logger.info(f"🔄 Création produit : {name} ({code})")
     
-    # 1. REGISTRE
     success = add_product_to_registry(code, name, emoji, category, price_fr, price_ch, image_file, video_file)
     
     if not success:
@@ -949,7 +724,6 @@ def add_new_product(name, code, emoji, category, price_fr, price_ch, image_file=
     
     logger.info(f"✅ Étape 1/5 : Registre OK")
     
-    # 2. PRIX
     prices = load_prices()
     if "FR" not in prices:
         prices["FR"] = {}
@@ -961,7 +735,6 @@ def add_new_product(name, code, emoji, category, price_fr, price_ch, image_file=
     save_prices(prices)
     logger.info(f"✅ Étape 2/5 : Prix OK (FR: {price_fr}€, CH: {price_ch}€)")
     
-    # 3. AVAILABLE_PRODUCTS (CRITIQUE)
     available = load_available_products()
     if not isinstance(available, set):
         available = set(available) if available else set()
@@ -973,8 +746,6 @@ def add_new_product(name, code, emoji, category, price_fr, price_ch, image_file=
     else:
         logger.info(f"⚠️ Étape 3/5 : Déjà dans available_products")
     
-    # 4. MÉMOIRE (CRITIQUE)
-    # Mise à jour des dictionnaires globaux
     global PRODUCT_CODES, PILL_SUBCATEGORIES, ROCK_SUBCATEGORIES, IMAGES_PRODUITS, VIDEOS_PRODUITS
     
     PRODUCT_CODES[code] = name
@@ -988,34 +759,28 @@ def add_new_product(name, code, emoji, category, price_fr, price_ch, image_file=
     else:
         logger.info(f"✅ Étape 4/5 : Mémoire mise à jour (catégorie: {category})")
     
-    # Mise à jour médias
     if image_file:
         IMAGES_PRODUITS[name] = MEDIA_DIR / image_file
     if video_file:
         VIDEOS_PRODUITS[name] = MEDIA_DIR / video_file
     
-    # 5. VÉRIFICATION FINALE
     verification_ok = True
     
-    # Vérifier registre
     registry = load_product_registry()
     if code not in registry:
         logger.error(f"❌ Vérification registre ÉCHOUÉE")
         verification_ok = False
     
-    # Vérifier available
     available_check = get_available_products()
     if name not in available_check:
         logger.error(f"❌ Vérification available ÉCHOUÉE")
         verification_ok = False
     
-    # Vérifier prix
     prices_check = load_prices()
     if name not in prices_check.get("FR", {}) or name not in prices_check.get("CH", {}):
         logger.error(f"❌ Vérification prix ÉCHOUÉE")
         verification_ok = False
     
-    # Vérifier mémoire
     if code not in PRODUCT_CODES:
         logger.error(f"❌ Vérification mémoire ÉCHOUÉE")
         verification_ok = False
@@ -1031,31 +796,10 @@ def add_new_product(name, code, emoji, category, price_fr, price_ch, image_file=
         logger.error(f"❌ Échec vérification finale pour {name}")
         return False
 
-
-# ==================== FONCTION repair_product_visibility AMÉLIORÉE ====================
-def error_handler(func):
-    """Décorateur pour gérer les erreurs des fonctions async"""
-    async def wrapper(*args, **kwargs):
-        try:
-            return await func(*args, **kwargs)
-        except Exception as e:
-            logger.error(f"❌ Erreur dans {func.__name__}: {e}", exc_info=True)
-            # Optionnel: envoyer un message d'erreur à l'utilisateur
-            if args and hasattr(args[0], 'message'):
-                try:
-                    await args[0].message.reply_text(f"❌ Erreur : {str(e)}")
-                except:
-                    pass
-    return wrapper
-
 def repair_product_visibility(code):
-    """
-    Répare un produit invisible avec diagnostic complet
-    Synchronise registry → available_products → prices → mémoire
-    """
+    """Répare un produit invisible avec diagnostic complet"""
     logger.info(f"🔧 ===== RÉPARATION PRODUIT : {code} =====")
     
-    # 1. Vérifier dans le registre
     registry = load_product_registry()
     
     if code not in registry:
@@ -1071,7 +815,6 @@ def repair_product_visibility(code):
     logger.info(f"   └─ Nom : {name}")
     logger.info(f"   └─ Catégorie : {category}")
     
-    # 2. Ajouter à available_products
     available = load_available_products()
     if not isinstance(available, set):
         available = set(available) if available else set()
@@ -1085,7 +828,6 @@ def repair_product_visibility(code):
     else:
         logger.info(f"⚠️ 2/5 : Déjà dans available_products")
     
-    # 3. Vérifier/Ajouter les prix
     prices = load_prices()
     
     if "FR" not in prices:
@@ -1096,14 +838,14 @@ def repair_product_visibility(code):
     prix_manquants = False
     
     if name not in prices["FR"]:
-        prices["FR"][name] = 50  # Prix par défaut FR
+        prices["FR"][name] = 50
         prix_manquants = True
         logger.warning(f"⚠️ 3/5 : Prix FR ajouté (défaut 50€)")
     else:
         logger.info(f"✅ 3/5 : Prix FR existe ({prices['FR'][name]}€)")
     
     if name not in prices["CH"]:
-        prices["CH"][name] = 70  # Prix par défaut CH
+        prices["CH"][name] = 70
         prix_manquants = True
         logger.warning(f"⚠️ 3/5 : Prix CH ajouté (défaut 70€)")
     else:
@@ -1112,7 +854,6 @@ def repair_product_visibility(code):
     if prix_manquants:
         save_prices(prices)
     
-    # 4. Mettre à jour la mémoire (TRÈS IMPORTANT)
     global PRODUCT_CODES, PILL_SUBCATEGORIES, ROCK_SUBCATEGORIES, IMAGES_PRODUITS, VIDEOS_PRODUITS
     
     memoire_mise_a_jour = False
@@ -1139,13 +880,11 @@ def repair_product_visibility(code):
         else:
             logger.info(f"⚠️ 4/5 : Déjà dans ROCK_SUBCATEGORIES")
     
-    # Images/vidéos
     if product_data.get("image"):
         IMAGES_PRODUITS[name] = MEDIA_DIR / product_data["image"]
     if product_data.get("video"):
         VIDEOS_PRODUITS[name] = MEDIA_DIR / product_data["video"]
     
-    # 5. VÉRIFICATION FINALE
     logger.info(f"🔍 5/5 : Vérification finale...")
     
     verification = {
@@ -1185,175 +924,8 @@ def repair_product_visibility(code):
     
     return tous_ok
 
-
-# ==================== COMMANDE /repair AMÉLIORÉE ====================
-
-async def admin_repair_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Commande /repair <code> pour réparer un produit invisible
-    Version améliorée avec diagnostic complet
-    """
-    if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ Admin uniquement.")
-        return
-    
-    if not context.args:
-        # Afficher l'aide
-        text = "🔧 *RÉPARER UN PRODUIT*\n\n"
-        text += "Usage : `/repair <code>`\n\n"
-        text += "*Exemples :*\n"
-        text += "• `/repair k`\n"
-        text += "• `/repair fourmmc`\n\n"
-        text += "*Quand utiliser ?*\n"
-        text += "Quand un produit est créé mais n'apparaît pas dans :\n"
-        text += "  • `/products`\n"
-        text += "  • Carte du Pirate\n"
-        text += "  • Menu de commande\n\n"
-        text += "*Codes disponibles :*\n"
-        
-        registry = load_product_registry()
-        for code, data in sorted(registry.items()):
-            text += f"  • `{code}` → {data['name']}\n"
-        
-        await update.message.reply_text(text, parse_mode='Markdown')
-        return
-    
-    code = context.args[0].lower()
-    
-    await update.message.reply_text(f"🔧 Réparation de `{code}` en cours...\n\n_Analyse et correction en 5 étapes_", parse_mode='Markdown')
-    
-    if repair_product_visibility(code):
-        registry = load_product_registry()
-        product_data = registry.get(code, {})
-        name = product_data.get("name", code)
-        
-        text = f"✅ *PRODUIT RÉPARÉ !*\n\n"
-        text += f"📦 {name}\n"
-        text += f"Code : `{code}`\n\n"
-        text += f"*Vérifications :*\n"
-        
-        # Vérifier disponibilité
-        available = get_available_products()
-        text += f"{'✅' if name in available else '❌'} Visible dans `/products`\n"
-        
-        # Vérifier prix
-        prices = load_prices()
-        price_fr = prices.get("FR", {}).get(name, 0)
-        price_ch = prices.get("CH", {}).get(name, 0)
-        text += f"{'✅' if price_fr > 0 else '❌'} Prix FR : {price_fr}€\n"
-        text += f"{'✅' if price_ch > 0 else '❌'} Prix CH : {price_ch}€\n\n"
-        
-        text += f"*Testez maintenant :*\n"
-        text += f"• `/products` pour voir la liste\n"
-        text += f"• Menu → Carte du Pirate\n"
-        text += f"• Commande client\n"
-        
-        await update.message.reply_text(text, parse_mode='Markdown')
-    else:
-        text = f"❌ *IMPOSSIBLE DE RÉPARER* `{code}`\n\n"
-        text += f"*Raisons possibles :*\n"
-        text += f"• Le produit n'existe pas dans le registre\n"
-        text += f"• Erreur de code produit\n\n"
-        text += f"*Solutions :*\n"
-        text += f"1. Vérifiez le code avec `/debug`\n"
-        text += f"2. Recréez le produit avec `/products`\n\n"
-        text += f"*Produits existants :*\n"
-        
-        registry = load_product_registry()
-        for c, data in sorted(registry.items()):
-            text += f"  • `{c}` → {data['name']}\n"
-        
-        await update.message.reply_text(text, parse_mode='Markdown')
-
-
-# ==================== COMMANDE /debug AMÉLIORÉE ====================
-
-@error_handler
-async def admin_debug_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Commande /debug pour diagnostic complet des produits
-    """
-    if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ Admin uniquement.")
-        return
-    
-    text = "🔍 *DEBUG PRODUITS*\n\n"
-    
-    # 1. PRODUCT_CODES (mémoire)
-    text += f"📦 *PRODUCT_CODES* (mémoire) : {len(PRODUCT_CODES)}\n"
-    for code, name in sorted(PRODUCT_CODES.items()):
-        text += f"  • `{code}` → {name}\n"
-    
-    # 2. Available products
-    available = get_available_products()
-    text += f"\n✅ *Available Products* (fichier) : {len(available)}\n"
-    for name in sorted(available):
-        text += f"  • {name}\n"
-    
-    # 3. Registre
-    registry = load_product_registry()
-    text += f"\n📋 *Product Registry* (fichier) : {len(registry)}\n"
-    for code, data in sorted(registry.items()):
-        text += f"  • `{code}` → {data['name']}\n"
-    
-    # 4. Prix
-    prices = load_prices()
-    text += f"\n💰 *Prix FR* : {len(prices.get('FR', {}))}\n"
-    text += f"💰 *Prix CH* : {len(prices.get('CH', {}))}\n"
-    
-    # 5. Problèmes détectés
-    text += f"\n⚠️ *PROBLÈMES DÉTECTÉS :*\n"
-    
-    problems = []
-    
-    # Produits dans registre mais pas dans available
-    for code, data in registry.items():
-        name = data["name"]
-        if name not in available:
-            problems.append(f"  🔴 `{code}` ({name}) : Pas dans available_products")
-    
-    # Produits dans registre mais pas de prix
-    for code, data in registry.items():
-        name = data["name"]
-        if name not in prices.get("FR", {}):
-            problems.append(f"  🟡 `{code}` ({name}) : Pas de prix FR")
-        if name not in prices.get("CH", {}):
-            problems.append(f"  🟡 `{code}` ({name}) : Pas de prix CH")
-    
-    # Produits dans registre mais pas en mémoire
-    for code, data in registry.items():
-        if code not in PRODUCT_CODES:
-            problems.append(f"  🔴 `{code}` : Pas dans PRODUCT_CODES (mémoire)")
-    
-    if problems:
-        text += "\n".join(problems)
-        text += f"\n\n💡 *SOLUTION :*\n"
-        
-        # Grouper les codes problématiques
-        codes_a_reparer = set()
-        for problem in problems:
-            # Extraire le code entre backticks
-            import re
-            match = re.search(r'`([^`]+)`', problem)
-            if match:
-                codes_a_reparer.add(match.group(1))
-        
-        if codes_a_reparer:
-            text += f"Utilisez `/repair` pour chaque produit :\n"
-            for code in sorted(codes_a_reparer):
-                text += f"  • `/repair {code}`\n"
-    else:
-        text += "✅ Aucun problème détecté\n\n"
-        text += "Tous les produits sont correctement synchronisés !"
-    
-    await update.message.reply_text(text, parse_mode='Markdown')
-
-
-# ==================== FIN CORRECTIF ====================
-# Remplacez ces 4 fonctions dans votre PARTIE 2
-
 def archive_product(product_name):
-    """Archive un produit (VERSION AVEC REGISTRE)"""
+    """Archive un produit"""
     
     product_code = None
     for code, name in PRODUCT_CODES.items():
@@ -1404,7 +976,7 @@ def archive_product(product_name):
     return True
 
 def restore_product(product_name):
-    """Restaure un produit archivé (VERSION AVEC REGISTRE)"""
+    """Restaure un produit archivé"""
     archived = load_archived_products()
     
     if product_name not in archived:
@@ -1430,8 +1002,6 @@ def restore_product(product_name):
         logger.info(f"♻️ Produit restauré: {product_name}")
     
     return success
-
-# ==================== NOTIFICATION CONNEXIONS ====================
 
 def load_users():
     if USERS_FILE.exists():
@@ -1478,9 +1048,9 @@ async def notify_admin_new_user(context, user_id, user_data):
     notification = f"""🆕 *NOUVELLE CONNEXION*
 
 👤 *Utilisateur :*
-• Nom : {full_name}
-• Username : @{username if username != 'N/A' else 'Non défini'}
-• ID : `{user_id}`
+- Nom : {full_name}
+- Username : @{username if username != 'N/A' else 'Non défini'}
+- ID : `{user_id}`
 
 📅 *Date :* {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
 
@@ -1492,10 +1062,8 @@ async def notify_admin_new_user(context, user_id, user_data):
     except Exception as e:
         logger.error(f"❌ Erreur notification admin: {e}")
 
-# ==================== FONCTIONS UTILITAIRES ====================
-
 def get_formatted_price_list(country_code):
-    """Génère la liste formatée des prix (AVEC FILTRE DISPONIBILITÉ)"""
+    """Génère la liste formatée des prix"""
     prices = load_prices()
     country = "FR" if country_code == "fr" else "CH"
     country_prices = prices.get(country, PRIX_FR if country == "FR" else PRIX_CH)
@@ -1825,23 +1393,6 @@ def save_order_to_csv(order_data):
         logger.error(f"CSV: {e}")
         return False
 
-def error_handler(func):
-    @wraps(func)
-    async def wrapper(update, context):
-        try:
-            return await func(update, context)
-        except Exception as e:
-            logger.error(f"{func.__name__}: {e}", exc_info=True)
-            try:
-                if update.callback_query:
-                    await update.callback_query.answer("❌ Erreur")
-                elif update.message:
-                    await update.message.reply_text("❌ Erreur. /start")
-            except:
-                pass
-            return ConversationHandler.END
-    return wrapper
-
 async def send_product_media(context, chat_id, product_name, caption):
     product_video_path = VIDEOS_PRODUITS.get(product_name)
     product_image_path = IMAGES_PRODUITS.get(product_name)
@@ -1867,9 +1418,7 @@ async def send_product_media(context, chat_id, product_name, caption):
     logger.warning(f"⚠️ Aucun média pour {product_name}")
     await context.bot.send_message(chat_id=chat_id, text=caption, parse_mode='Markdown')
     return False
-
-# ==================== FIN PARTIE 2 - CONTINUEZ AVEC PARTIE 3 ====================
-# ==================== HANDLERS PRINCIPAUX ====================
+    # ==================== HANDLERS PRINCIPAUX ====================
 
 @error_handler
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2395,8 +1944,34 @@ async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Contact: {e}")
         await update.message.reply_text("❌ Erreur.")
     return ConversationHandler.END
+    # ==================== COMMANDES ADMIN ====================
 
-# ==================== COMMANDES ADMIN ====================
+@error_handler
+async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /admin - Menu principal admin"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return ConversationHandler.END
+    
+    text = "🎛️ *PANNEAU ADMIN*\n\nChoisissez une section :"
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("📦 Produits", callback_data="admin_menu_products"),
+            InlineKeyboardButton("💰 Prix", callback_data="admin_menu_prices")
+        ],
+        [
+            InlineKeyboardButton("📊 Stats", callback_data="admin_menu_stats"),
+            InlineKeyboardButton("👥 Users", callback_data="admin_menu_users")
+        ],
+        [
+            InlineKeyboardButton("⏰ Horaires", callback_data="admin_menu_horaires"),
+            InlineKeyboardButton("❌ Fermer", callback_data="admin_close")
+        ]
+    ]
+    
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    return ADMIN_MENU_MAIN
 
 @error_handler
 async def admin_repair_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2405,7 +1980,7 @@ async def admin_repair_command(update: Update, context: ContextTypes.DEFAULT_TYP
         return
     
     if not context.args:
-        text = "🔧 *RÉPARER UN PRODUIT*\n\nUsage : `/repair <code>`\n\n*Exemples :*\n• `/repair k`\n• `/repair fourmmc`\n\n*Quand utiliser ?*\nQuand un produit est créé mais n'apparaît pas dans :\n  • `/products`\n  • Carte du Pirate\n  • Menu de commande\n\n*Codes disponibles :*\n"
+        text = "🔧 *RÉPARER UN PRODUIT*\n\nUsage : `/repair <code>`\n\n*Exemples :*\n• `/repair coco`\n• `/repair fourmmc`\n\n*Codes disponibles :*\n"
         
         registry = load_product_registry()
         for code, data in sorted(registry.items()):
@@ -2426,19 +2001,19 @@ async def admin_repair_command(update: Update, context: ContextTypes.DEFAULT_TYP
         text = f"✅ *Produit réparé !*\n\n📦 {name}\nCode : `{code}`\n\n*Vérifications :*\n"
         
         available = get_available_products()
-        if name in available:
-            text += f"✅ Visible dans `/products`\n"
-        else:
-            text += f"❌ Toujours invisible dans `/products`\n"
+        text += f"{'✅' if name in available else '❌'} Visible dans `/products`\n"
         
         prices = load_prices()
         price_fr = prices.get("FR", {}).get(name, 0)
         price_ch = prices.get("CH", {}).get(name, 0)
-        text += f"✅ Prix FR : {price_fr}€\n✅ Prix CH : {price_ch}€\n\n*Testez maintenant :*\n• `/products` pour voir la liste\n• Menu → Carte du Pirate\n"
+        text += f"{'✅' if price_fr > 0 else '❌'} Prix FR : {price_fr}€\n"
+        text += f"{'✅' if price_ch > 0 else '❌'} Prix CH : {price_ch}€\n\n"
+        
+        text += f"*Testez maintenant :*\n• `/products`\n• Carte du Pirate\n"
         
         await update.message.reply_text(text, parse_mode='Markdown')
     else:
-        text = f"❌ *Impossible de réparer* `{code}`\n\n*Raison :*\nLe produit n'existe pas dans `product_registry.json`\n\n*Solutions :*\n1. Recréer le produit avec `/products`\n2. Vérifier le code produit\n\n*Produits existants :*\n"
+        text = f"❌ *Impossible de réparer* `{code}`\n\n*Produits existants :*\n"
         
         registry = load_product_registry()
         for c, data in sorted(registry.items()):
@@ -2454,52 +2029,16 @@ async def admin_debug_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     text = "🔍 *DEBUG PRODUITS*\n\n"
     
-    text += f"📦 *PRODUCT_CODES* (mémoire) : {len(PRODUCT_CODES)}\n"
+    text += f"📦 *PRODUCT_CODES* : {len(PRODUCT_CODES)}\n"
     for code, name in sorted(PRODUCT_CODES.items()):
         text += f"  • `{code}` → {name}\n"
     
-    text += f"\n✅ *Available Products* (fichier) : {len(get_available_products())}\n"
-    for name in sorted(get_available_products()):
-        text += f"  • {name}\n"
+    text += f"\n✅ *Available* : {len(get_available_products())}\n"
     
     registry = load_product_registry()
-    text += f"\n📋 *Product Registry* (fichier) : {len(registry)}\n"
-    for code, data in sorted(registry.items()):
-        text += f"  • `{code}` → {data['name']}\n"
-    
-    prices = load_prices()
-    text += f"\n💰 *Prix FR* : {len(prices.get('FR', {}))}\n💰 *Prix CH* : {len(prices.get('CH', {}))}\n"
-    
-    text += f"\n⚠️ *Problèmes détectés :*\n"
-    
-    problems = []
-    
-    for code, data in registry.items():
-        name = data["name"]
-        if name not in get_available_products():
-            problems.append(f"  • `{code}` ({name}) : Pas dans available_products")
-    
-    for code, data in registry.items():
-        name = data["name"]
-        if name not in prices.get("FR", {}):
-            problems.append(f"  • `{code}` ({name}) : Pas de prix FR")
-        if name not in prices.get("CH", {}):
-            problems.append(f"  • `{code}` ({name}) : Pas de prix CH")
-    
-    for code, data in registry.items():
-        if code not in PRODUCT_CODES:
-            problems.append(f"  • `{code}` : Pas dans PRODUCT_CODES (mémoire)")
-    
-    if problems:
-        text += "\n".join(problems)
-        text += f"\n\n💡 Utilisez `/repair <code>` pour corriger"
-    else:
-        text += "Aucun problème détecté ✅"
+    text += f"\n📋 *Registry* : {len(registry)}\n"
     
     await update.message.reply_text(text, parse_mode='Markdown')
-
-# ==================== SUITE PARTIE 3 - VOIR FICHIER SUIVANT ====================
-# ==================== SUITE HANDLERS ADMIN ====================
 
 @error_handler
 async def admin_products_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2511,13 +2050,8 @@ async def admin_products_command(update: Update, context: ContextTypes.DEFAULT_T
     
     text = "📦 *GESTION DES PRODUITS*\n\n*Produits actifs :*\n"
     
-    for product in sorted(PRIX_FR.keys()):
-        status = "✅" if product in available else "❌"
-        text += f"{status} {product}\n"
-    
-    archived = load_archived_products()
-    if archived:
-        text += f"\n📦 *Archivés :* {len(archived)}\n"
+    for product in sorted(available):
+        text += f"✅ {product}\n"
     
     keyboard = [
         [InlineKeyboardButton("➕ Créer", callback_data="admin_create_product")],
@@ -2533,7 +2067,7 @@ async def admin_create_product(update: Update, context: ContextTypes.DEFAULT_TYP
     query = update.callback_query
     await query.answer()
     context.user_data['creating_product'] = {}
-    text = "➕ *CRÉER UN PRODUIT*\n\nÉtape 1/7\n\nQuel est le *nom complet* du produit ?\n_(Incluez l'emoji, ex: 🔥 Crack)_"
+    text = "➕ *CRÉER UN PRODUIT*\n\nÉtape 1/5\n\nQuel est le *nom complet* du produit ?\n_(Incluez l'emoji, ex: 🔥 Crack)_"
     keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_cancel_product")]]
     await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return ADMIN_NEW_PRODUCT_NAME
@@ -2542,7 +2076,7 @@ async def admin_create_product(update: Update, context: ContextTypes.DEFAULT_TYP
 async def receive_product_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = update.message.text.strip()
     context.user_data['creating_product']['name'] = name
-    text = f"➕ *CRÉER UN PRODUIT*\n\nNom: {name}\n\nÉtape 2/7\n\nQuel est le *code* du produit ?\n_(Ex: crack, heroine)_\n_(Lettres minuscules, sans espaces)_"
+    text = f"➕ *CRÉER UN PRODUIT*\n\nNom: {name}\n\nÉtape 2/5\n\nQuel est le *code* ?\n_(Ex: crack, heroine)_"
     keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_cancel_product")]]
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return ADMIN_NEW_PRODUCT_CODE
@@ -2551,11 +2085,10 @@ async def receive_product_name(update: Update, context: ContextTypes.DEFAULT_TYP
 async def receive_product_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     code = update.message.text.strip().lower()
     if code in PRODUCT_CODES:
-        await update.message.reply_text(f"❌ Le code '{code}' existe déjà.\n\nChoisissez un autre code :", parse_mode='Markdown')
+        await update.message.reply_text(f"❌ Le code '{code}' existe déjà.")
         return ADMIN_NEW_PRODUCT_CODE
     context.user_data['creating_product']['code'] = code
-    name = context.user_data['creating_product']['name']
-    text = f"➕ *CRÉER UN PRODUIT*\n\nNom: {name}\nCode: {code}\n\nÉtape 3/7\n\nQuelle est la *catégorie* ?"
+    text = f"➕ *CRÉER UN PRODUIT*\n\nÉtape 3/5\n\nQuelle est la *catégorie* ?"
     keyboard = [
         [InlineKeyboardButton("❄️ Poudre", callback_data="category_powder")],
         [InlineKeyboardButton("💊 Pilule", callback_data="category_pill")],
@@ -2571,10 +2104,7 @@ async def receive_product_category(update: Update, context: ContextTypes.DEFAULT
     await query.answer()
     category = query.data.replace("category_", "")
     context.user_data['creating_product']['category'] = category
-    name = context.user_data['creating_product']['name']
-    code = context.user_data['creating_product']['code']
-    category_name = {"powder": "Poudre", "pill": "Pilule", "rock": "Crystal"}[category]
-    text = f"➕ *CRÉER UN PRODUIT*\n\nNom: {name}\nCode: {code}\nCatégorie: {category_name}\n\nÉtape 4/7\n\nQuel est le *prix en France* (en €) ?\n_(Ex: 50)_"
+    text = f"➕ *CRÉER UN PRODUIT*\n\nÉtape 4/5\n\n*Prix en France* (€) ?\n_(Ex: 50)_"
     keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_cancel_product")]]
     await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return ADMIN_NEW_PRODUCT_PRICE_FR
@@ -2586,13 +2116,10 @@ async def receive_product_price_fr(update: Update, context: ContextTypes.DEFAULT
         if price_fr <= 0:
             raise ValueError
     except:
-        await update.message.reply_text("❌ Prix invalide. Entrez un nombre positif (ex: 50) :", parse_mode='Markdown')
+        await update.message.reply_text("❌ Prix invalide.")
         return ADMIN_NEW_PRODUCT_PRICE_FR
     context.user_data['creating_product']['price_fr'] = price_fr
-    name = context.user_data['creating_product']['name']
-    code = context.user_data['creating_product']['code']
-    category_name = {"powder": "Poudre", "pill": "Pilule", "rock": "Crystal"}[context.user_data['creating_product']['category']]
-    text = f"➕ *CRÉER UN PRODUIT*\n\nNom: {name}\nCode: {code}\nCatégorie: {category_name}\nPrix FR: {price_fr}€\n\nÉtape 5/7\n\nQuel est le *prix en Suisse* (en €) ?\n_(Ex: 70)_"
+    text = f"➕ *CRÉER UN PRODUIT*\n\nÉtape 5/5\n\n*Prix en Suisse* (€) ?\n_(Ex: 70)_"
     keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_cancel_product")]]
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return ADMIN_NEW_PRODUCT_PRICE_CH
@@ -2604,12 +2131,11 @@ async def receive_product_price_ch(update: Update, context: ContextTypes.DEFAULT
         if price_ch <= 0:
             raise ValueError
     except:
-        await update.message.reply_text("❌ Prix invalide. Entrez un nombre positif (ex: 70) :", parse_mode='Markdown')
+        await update.message.reply_text("❌ Prix invalide.")
         return ADMIN_NEW_PRODUCT_PRICE_CH
     context.user_data['creating_product']['price_ch'] = price_ch
     product_data = context.user_data['creating_product']
-    category_name = {"powder": "Poudre", "pill": "Pilule", "rock": "Crystal"}[product_data['category']]
-    text = f"➕ *CRÉER UN PRODUIT*\n\n*Récapitulatif :*\n\n• Nom: {product_data['name']}\n• Code: {product_data['code']}\n• Catégorie: {category_name}\n• Prix FR: {product_data['price_fr']}€\n• Prix CH: {price_ch}€\n\nConfirmer la création ?"
+    text = f"➕ *CRÉER UN PRODUIT*\n\n*Récapitulatif :*\n\n• Nom: {product_data['name']}\n• Code: {product_data['code']}\n• Prix FR: {product_data['price_fr']}€\n• Prix CH: {price_ch}€\n\nConfirmer ?"
     keyboard = [
         [InlineKeyboardButton("✅ Créer", callback_data="admin_confirm_create")],
         [InlineKeyboardButton("❌ Annuler", callback_data="admin_cancel_product")]
@@ -2631,9 +2157,9 @@ async def confirm_create_product(update: Update, context: ContextTypes.DEFAULT_T
         price_ch=product_data['price_ch']
     )
     if success:
-        text = f"✅ *PRODUIT CRÉÉ !*\n\n• {product_data['name']}\n• Code: `{product_data['code']}`\n• Prix FR: {product_data['price_fr']}€\n• Prix CH: {product_data['price_ch']}€\n\nLe produit est maintenant disponible !"
+        text = f"✅ *PRODUIT CRÉÉ !*\n\n• {product_data['name']}\n• Code: `{product_data['code']}`"
     else:
-        text = "❌ Erreur lors de la création."
+        text = "❌ Erreur création."
     await query.message.edit_text(text, parse_mode='Markdown')
     del context.user_data['creating_product']
     return ConversationHandler.END
@@ -2646,7 +2172,7 @@ async def admin_archive_product(update: Update, context: ContextTypes.DEFAULT_TY
     if not available:
         await query.message.edit_text("❌ Aucun produit disponible.")
         return ConversationHandler.END
-    text = "🗑️ *ARCHIVER UN PRODUIT*\n\nSélectionnez le produit à archiver :\n_(L'archivage est réversible)_"
+    text = "🗑️ *ARCHIVER UN PRODUIT*\n\nSélectionnez :"
     keyboard = []
     for product in sorted(available):
         keyboard.append([InlineKeyboardButton(f"🗑️ {product}", callback_data=f"archive_{product[:30]}")])
@@ -2667,7 +2193,7 @@ async def confirm_archive_product(update: Update, context: ContextTypes.DEFAULT_
     if not full_name:
         await query.message.edit_text("❌ Produit non trouvé.")
         return ConversationHandler.END
-    text = f"🗑️ *ARCHIVER*\n\nProduit: {full_name}\n\n⚠️ Sera retiré du catalogue (réversible).\n\nConfirmer ?"
+    text = f"🗑️ Archiver {full_name} ?\n\nConfirmer ?"
     keyboard = [
         [InlineKeyboardButton("✅ Archiver", callback_data=f"confirmarchive_{full_name[:30]}")],
         [InlineKeyboardButton("❌ Annuler", callback_data="admin_close")]
@@ -2686,9 +2212,9 @@ async def execute_archive(update: Update, context: ContextTypes.DEFAULT_TYPE):
             full_name = name
             break
     if full_name and archive_product(full_name):
-        text = f"✅ *PRODUIT ARCHIVÉ*\n\n{full_name}\n\nRetiré du catalogue.\nRestauration: /products → ♻️"
+        text = f"✅ *ARCHIVÉ*\n\n{full_name}"
     else:
-        text = "❌ Erreur lors de l'archivage."
+        text = "❌ Erreur."
     await query.message.edit_text(text, parse_mode='Markdown')
     return ConversationHandler.END
 
@@ -2700,7 +2226,7 @@ async def admin_restore_product(update: Update, context: ContextTypes.DEFAULT_TY
     if not archived:
         await query.message.edit_text("❌ Aucun produit archivé.")
         return ConversationHandler.END
-    text = "♻️ *RESTAURER UN PRODUIT*\n\nSélectionnez le produit :"
+    text = "♻️ *RESTAURER UN PRODUIT*\n\nSélectionnez :"
     keyboard = []
     for product_name in archived.keys():
         keyboard.append([InlineKeyboardButton(f"♻️ {product_name}", callback_data=f"restore_{product_name[:30]}")])
@@ -2719,9 +2245,9 @@ async def execute_restore(update: Update, context: ContextTypes.DEFAULT_TYPE):
             full_name = name
             break
     if full_name and restore_product(full_name):
-        text = f"✅ *PRODUIT RESTAURÉ*\n\n{full_name}\n\nDe nouveau disponible !"
+        text = f"✅ *RESTAURÉ*\n\n{full_name}"
     else:
-        text = "❌ Erreur lors de la restauration."
+        text = "❌ Erreur."
     await query.message.edit_text(text, parse_mode='Markdown')
     return ConversationHandler.END
 
@@ -2746,160 +2272,8 @@ async def users_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
     users = load_users()
-    if not users:
-        await update.message.reply_text("📊 Aucun utilisateur enregistré.")
-        return
-    sorted_users = sorted(users.items(), key=lambda x: x[1].get("first_seen", ""), reverse=True)
-    text = f"👥 *UTILISATEURS DU BOT*\n\n📊 *Total :* {len(users)} utilisateurs\n\n"
-    for i, (user_id, data) in enumerate(sorted_users[:20], 1):
-        username = data.get("username", "N/A")
-        first_name = data.get("first_name", "N/A")
-        visit_count = data.get("visit_count", 1)
-        first_seen = data.get("first_seen", "")
-        try:
-            date = datetime.fromisoformat(first_seen).strftime("%d/%m/%Y")
-        except:
-            date = "N/A"
-        text += f"{i}. {first_name} (@{username})\n   └ ID: `{user_id}` | Visites: {visit_count} | Depuis: {date}\n\n"
-    if len(users) > 20:
-        text += f"_... et {len(users) - 20} autres utilisateurs_\n"
-    keyboard = [
-        [InlineKeyboardButton("📊 Statistiques", callback_data="user_stats")],
-        [InlineKeyboardButton("🔄 Actualiser", callback_data="refresh_users")]
-    ]
-    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-
-@error_handler
-async def user_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    if query.from_user.id != ADMIN_ID:
-        return
-    users = load_users()
-    if not users:
-        await query.message.edit_text("📊 Aucune statistique disponible.")
-        return
-    total_users = len(users)
-    total_visits = sum(u.get("visit_count", 1) for u in users.values())
-    avg_visits = total_visits / total_users if total_users > 0 else 0
-    now = datetime.now()
-    active_users = 0
-    for user_data in users.values():
-        try:
-            last_seen = datetime.fromisoformat(user_data.get("last_seen", ""))
-            if (now - last_seen).days <= 7:
-                active_users += 1
-        except:
-            pass
-    new_users_24h = 0
-    for user_data in users.values():
-        try:
-            first_seen = datetime.fromisoformat(user_data.get("first_seen", ""))
-            if (now - first_seen).days < 1:
-                new_users_24h += 1
-        except:
-            pass
-    text = "📊 *STATISTIQUES UTILISATEURS*\n\n"
-    text += f"👥 *Total utilisateurs :* {total_users}\n"
-    text += f"🟢 *Actifs (7j) :* {active_users}\n"
-    text += f"🆕 *Nouveaux (24h) :* {new_users_24h}\n"
-    text += f"📈 *Total visites :* {total_visits}\n"
-    text += f"📊 *Moy. visites/user :* {avg_visits:.1f}\n"
-    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="refresh_users")]]
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-
-@error_handler
-async def refresh_users_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer("🔄 Actualisation...")
-    if query.from_user.id != ADMIN_ID:
-        return
-    users = load_users()
-    sorted_users = sorted(users.items(), key=lambda x: x[1].get("first_seen", ""), reverse=True)
-    text = f"👥 *UTILISATEURS DU BOT*\n\n📊 *Total :* {len(users)} utilisateurs\n\n"
-    for i, (user_id, data) in enumerate(sorted_users[:20], 1):
-        username = data.get("username", "N/A")
-        first_name = data.get("first_name", "N/A")
-        visit_count = data.get("visit_count", 1)
-        first_seen = data.get("first_seen", "")
-        try:
-            date = datetime.fromisoformat(first_seen).strftime("%d/%m/%Y")
-        except:
-            date = "N/A"
-        text += f"{i}. {first_name} (@{username})\n   └ ID: `{user_id}` | Visites: {visit_count} | Depuis: {date}\n\n"
-    if len(users) > 20:
-        text += f"_... et {len(users) - 20} autres utilisateurs_\n"
-    keyboard = [
-        [InlineKeyboardButton("📊 Statistiques", callback_data="user_stats")],
-        [InlineKeyboardButton("🔄 Actualiser", callback_data="refresh_users")]
-    ]
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-
-@error_handler
-async def admin_del_product_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ Admin uniquement.")
-        return
-    
-    if not context.args:
-        text = "❌ *Usage :* `/del <code>`\n\n*Codes disponibles :*\n"
-        for code, name in sorted(PRODUCT_CODES.items()):
-            text += f"  • `{code}` → {name}\n"
-        text += "\n*Exemple :* `/del weed`"
-        await update.message.reply_text(text, parse_mode='Markdown')
-        return
-    
-    code = context.args[0].lower()
-    product_name = PRODUCT_CODES.get(code)
-    
-    if not product_name:
-        await update.message.reply_text(f"❌ Code invalide: `{code}`\n\nUtilisez `/products` pour voir les codes.", parse_mode='Markdown')
-        return
-    
-    available = get_available_products()
-    
-    if product_name not in available:
-        await update.message.reply_text(f"⚠️ {product_name} est déjà en rupture de stock.", parse_mode='Markdown')
-        return
-    
-    available.remove(product_name)
-    save_available_products(available)
-    
-    await update.message.reply_text(f"✅ *Produit masqué*\n\n❌ {product_name}\n\n_Les clients ne verront plus ce produit._", parse_mode='Markdown')
-    logger.info(f"🔴 Produit masqué: {product_name}")
-
-@error_handler
-async def admin_add_product_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ Admin uniquement.")
-        return
-    
-    if not context.args:
-        text = "❌ *Usage :* `/add <code>`\n\n*Codes disponibles :*\n"
-        for code, name in sorted(PRODUCT_CODES.items()):
-            text += f"  • `{code}` → {name}\n"
-        text += "\n*Exemple :* `/add weed`"
-        await update.message.reply_text(text, parse_mode='Markdown')
-        return
-    
-    code = context.args[0].lower()
-    product_name = PRODUCT_CODES.get(code)
-    
-    if not product_name:
-        await update.message.reply_text(f"❌ Code invalide: `{code}`\n\nUtilisez `/products` pour voir les codes.", parse_mode='Markdown')
-        return
-    
-    available = get_available_products()
-    
-    if product_name in available:
-        await update.message.reply_text(f"⚠️ {product_name} est déjà disponible.", parse_mode='Markdown')
-        return
-    
-    available.add(product_name)
-    save_available_products(available)
-    
-    await update.message.reply_text(f"✅ *Produit disponible*\n\n✅ {product_name}\n\n_Les clients peuvent maintenant commander ce produit._", parse_mode='Markdown')
-    logger.info(f"🟢 Produit activé: {product_name}")
+    text = f"👥 *UTILISATEURS*\n\n📊 Total : {len(users)}"
+    await update.message.reply_text(text, parse_mode='Markdown')
 
 @error_handler
 async def admin_prices_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2908,22 +2282,15 @@ async def admin_prices_command(update: Update, context: ContextTypes.DEFAULT_TYP
         return
     
     prices = load_prices()
-    
-    text = "💰 *GESTION DES PRIX*\n\n"
-    
-    text += "🇫🇷 *FRANCE :*\n"
+    text = "💰 *PRIX*\n\n🇫🇷 *France :*\n"
     for product in sorted(PRIX_FR.keys()):
         current_price = prices.get("FR", {}).get(product, PRIX_FR[product])
         text += f"  • {product} : {current_price}€\n"
     
-    text += "\n🇨🇭 *SUISSE :*\n"
+    text += "\n🇨🇭 *Suisse :*\n"
     for product in sorted(PRIX_CH.keys()):
         current_price = prices.get("CH", {}).get(product, PRIX_CH[product])
         text += f"  • {product} : {current_price}€\n"
-    
-    text += "\n💡 *Commande :*\n`/setprice <code> <pays> <prix>`\n\n*Exemples :*\n`/setprice coco fr 85`\n`/setprice weed ch 12`\n\n*Codes produits :*\n"
-    for code, name in sorted(PRODUCT_CODES.items()):
-        text += f"  • `{code}` → {name}\n"
     
     await update.message.reply_text(text, parse_mode='Markdown')
 
@@ -2934,9 +2301,7 @@ async def admin_setprice_command(update: Update, context: ContextTypes.DEFAULT_T
         return
     
     if len(context.args) != 3:
-        text = "❌ *Usage :* `/setprice <code> <pays> <prix>`\n\n*Exemples :*\n• `/setprice coco fr 85`\n• `/setprice weed ch 12`\n• `/setprice squid fr 8`\n\n*Pays :* `fr` ou `ch`\n\n*Codes disponibles :*\n"
-        for code, name in sorted(PRODUCT_CODES.items()):
-            text += f"  • `{code}` → {name}\n"
+        text = "❌ *Usage :* `/setprice <code> <pays> <prix>`\n\n*Exemple :* `/setprice coco fr 85`"
         await update.message.reply_text(text, parse_mode='Markdown')
         return
     
@@ -2945,7 +2310,7 @@ async def admin_setprice_command(update: Update, context: ContextTypes.DEFAULT_T
     
     product_name = PRODUCT_CODES.get(code)
     if not product_name:
-        await update.message.reply_text(f"❌ Code invalide: `{code}`\n\nUtilisez `/prices` pour voir les codes.", parse_mode='Markdown')
+        await update.message.reply_text(f"❌ Code invalide: `{code}`", parse_mode='Markdown')
         return
     
     if country_code not in ['fr', 'ch']:
@@ -2959,19 +2324,14 @@ async def admin_setprice_command(update: Update, context: ContextTypes.DEFAULT_T
         if new_price <= 0:
             raise ValueError
     except ValueError:
-        await update.message.reply_text("❌ Prix invalide. Entrez un nombre positif.", parse_mode='Markdown')
+        await update.message.reply_text("❌ Prix invalide.")
         return
     
-    prices = load_prices()
-    old_price = prices.get(country, {}).get(product_name, PRIX_FR.get(product_name, 0) if country == "FR" else PRIX_CH.get(product_name, 0))
-    
     if set_price(product_name, country, new_price):
-        flag = "🇫🇷" if country == "FR" else "🇨🇭"
-        text = f"✅ *Prix modifié*\n\n{flag} {product_name}\nAncien : {old_price}€\nNouveau : {new_price}€"
+        text = f"✅ *Prix modifié*\n\n{product_name}\nNouveau : {new_price}€"
         await update.message.reply_text(text, parse_mode='Markdown')
-        logger.info(f"💰 Prix modifié: {product_name} ({country}) {old_price}€ → {new_price}€")
     else:
-        await update.message.reply_text("❌ Erreur lors de la modification du prix.")
+        await update.message.reply_text("❌ Erreur.")
 
 @error_handler
 async def admin_horaires_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2980,8 +2340,7 @@ async def admin_horaires_command(update: Update, context: ContextTypes.DEFAULT_T
         return ConversationHandler.END
     horaires = load_horaires()
     current = get_horaires_text()
-    enabled_text = "✅ Activés" if horaires.get("enabled", True) else "❌ Désactivés"
-    text = f"⏰ *GESTION HORAIRES*\n\n📋 Actuels : {current}\n🔔 Statut : {enabled_text}\n\nFormat :\n`HH:MM-HH:MM`\n\nExemples :\n• `09:00-23:00`\n• `10:30-22:30`\n\nCommandes :\n• `off` désactiver\n• `on` réactiver\n• `cancel` annuler"
+    text = f"⏰ *HORAIRES*\n\nActuels : {current}\n\nFormat : `HH:MM-HH:MM`\nExemple : `09:00-23:00`\n\nCommandes : `off` | `on` | `cancel`"
     await update.message.reply_text(text, parse_mode='Markdown')
     return ADMIN_HORAIRES_INPUT
 
@@ -3006,10 +2365,10 @@ async def admin_horaires_input(update: Update, context: ContextTypes.DEFAULT_TYP
         return ConversationHandler.END
     match = re.match(r'^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$', text)
     if not match:
-        await update.message.reply_text("❌ Format invalide. HH:MM-HH:MM")
+        await update.message.reply_text("❌ Format invalide.")
         return ADMIN_HORAIRES_INPUT
     start_h, start_m, end_h, end_m = map(int, match.groups())
-    if not (0 <= start_h < 24 and 0 <= end_h < 24 and 0 <= start_m < 60 and 0 <= end_m < 60):
+    if not (0 <= start_h < 24 and 0 <= end_h < 24):
         await update.message.reply_text("❌ Heures invalides.")
         return ADMIN_HORAIRES_INPUT
     horaires.update({"start_hour": start_h, "start_minute": start_m, "end_hour": end_h, "end_minute": end_m, "enabled": True})
@@ -3024,978 +2383,33 @@ async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     stats = load_stats()
     weekly = stats.get("weekly", [])
-    monthly = stats.get("monthly", [])
     
     text = "📊 *STATISTIQUES*\n\n"
     
     if weekly:
         total_week = sum(s["amount"] for s in weekly)
-        total_subtotal_week = sum(s.get("subtotal", s["amount"]) for s in weekly)
-        total_delivery_week = sum(s.get("delivery_fee", 0) for s in weekly)
-        text += f"📅 *Cette semaine :*\n💰 Total : {total_week:.2f}€\n🛍️ Articles : {total_subtotal_week:.2f}€\n📦 Frais port : {total_delivery_week:.2f}€\n📦 Commandes : {len(weekly)}\n\n"
+        text += f"📅 *Cette semaine :*\n💰 Total : {total_week:.2f}€\n📦 Commandes : {len(weekly)}"
     else:
-        text += f"📅 *Cette semaine :* Aucune vente\n\n"
-    
-    if monthly:
-        total_month = sum(s["amount"] for s in monthly)
-        total_subtotal_month = sum(s.get("subtotal", s["amount"]) for s in monthly)
-        total_delivery_month = sum(s.get("delivery_fee", 0) for s in monthly)
-        text += f"📆 *Ce mois :*\n💰 Total : {total_month:.2f}€\n🛍️ Articles : {total_subtotal_month:.2f}€\n📦 Frais port : {total_delivery_month:.2f}€\n📦 Commandes : {len(monthly)}\n"
-    else:
-        text += f"📆 *Ce mois :* Aucune vente\n"
+        text += f"📅 *Cette semaine :* Aucune vente"
     
     await update.message.reply_text(text, parse_mode='Markdown')
 
 async def error_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Exception: {context.error}", exc_info=context.error)
 
-# ==================== SUITE AVEC FONCTION MAIN - VOIR FICHIER SUIVANT ====================
-# ==================== MENU ADMIN COMPLET /admin ====================
-# CETTE PARTIE VA ENTRE LA PARTIE 3b ET LA PARTIE 3c
-
-# ==================== MENU ADMIN PRINCIPAL ====================
-
-@error_handler
-async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Commande /admin - Menu principal admin complet"""
-    if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ Admin uniquement.")
-        return ConversationHandler.END
-    
-    text = "🎛️ *PANNEAU ADMIN*\n\nChoisissez une section :"
-    
-    keyboard = [
-        [
-            InlineKeyboardButton("📦 Produits", callback_data="admin_menu_products"),
-            InlineKeyboardButton("💰 Prix", callback_data="admin_menu_prices"),
-            InlineKeyboardButton("📊 Stats", callback_data="admin_menu_stats")
-        ],
-        [
-            InlineKeyboardButton("👥 Users", callback_data="admin_menu_users"),
-            InlineKeyboardButton("⏰ Horaires", callback_data="admin_menu_horaires"),
-            InlineKeyboardButton("🎨 Médias", callback_data="admin_menu_media")
-        ],
-        [
-            InlineKeyboardButton("📋 Commandes", callback_data="admin_menu_commandes"),
-            InlineKeyboardButton("📚 Tutoriel", callback_data="admin_menu_tutoriel"),
-        ],
-        [
-            InlineKeyboardButton("🔄 Maintenance", callback_data="admin_menu_maintenance"),
-            InlineKeyboardButton("❌ Fermer", callback_data="admin_close")
-        ]
-    ]
-    
-    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_MAIN
-
-
-@error_handler
-async def admin_menu_main_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Retour au menu principal admin"""
-    query = update.callback_query
-    await query.answer()
-    
-    text = "🎛️ *PANNEAU ADMIN*\n\nChoisissez une section :"
-    
-    keyboard = [
-        [
-            InlineKeyboardButton("📦 Produits", callback_data="admin_menu_products"),
-            InlineKeyboardButton("💰 Prix", callback_data="admin_menu_prices"),
-            InlineKeyboardButton("📊 Stats", callback_data="admin_menu_stats")
-        ],
-        [
-            InlineKeyboardButton("👥 Users", callback_data="admin_menu_users"),
-            InlineKeyboardButton("⏰ Horaires", callback_data="admin_menu_horaires"),
-            InlineKeyboardButton("🎨 Médias", callback_data="admin_menu_media")
-        ],
-        [
-            InlineKeyboardButton("📋 Commandes", callback_data="admin_menu_commandes"),
-            InlineKeyboardButton("📚 Tutoriel", callback_data="admin_menu_tutoriel"),
-        ],
-        [
-            InlineKeyboardButton("🔄 Maintenance", callback_data="admin_menu_maintenance"),
-            InlineKeyboardButton("❌ Fermer", callback_data="admin_close")
-        ]
-    ]
-    
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_MAIN
-
-# ==================== SOUS-MENUS ====================
-
-@error_handler
-async def admin_menu_main_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Retour au menu principal admin"""
-    query = update.callback_query
-    await query.answer()
-    
-    text = "🎛️ *PANNEAU ADMIN*\n\nChoisissez une section :"
-    
-    keyboard = [
-        [
-            InlineKeyboardButton("📦 Produits", callback_data="admin_menu_products"),
-            InlineKeyboardButton("💰 Prix", callback_data="admin_menu_prices"),
-            InlineKeyboardButton("📊 Stats", callback_data="admin_menu_stats")
-        ],
-        [
-            InlineKeyboardButton("👥 Users", callback_data="admin_menu_users"),
-            InlineKeyboardButton("⏰ Horaires", callback_data="admin_menu_horaires"),
-            InlineKeyboardButton("🎨 Médias", callback_data="admin_menu_media")
-        ],
-        [
-            InlineKeyboardButton("🔄 Maintenance", callback_data="admin_menu_maintenance"),
-            InlineKeyboardButton("❌ Fermer", callback_data="admin_close")
-        ]
-    ]
-    
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_MAIN
-
-# ==================== SOUS-MENU PRODUITS ====================
-
-@error_handler
-async def admin_menu_products_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Sous-menu gestion produits"""
-    query = update.callback_query
-    await query.answer()
-    
-    available = get_available_products()
-    archived = load_archived_products()
-    
-    text = f"📦 *GESTION PRODUITS*\n\n✅ *Disponibles :* {len(available)}\n📦 *Archivés :* {len(archived)}\n\nQue voulez-vous faire ?"
-    
-    keyboard = [
-        [InlineKeyboardButton("➕ Créer produit", callback_data="admin_create_product")],
-        [InlineKeyboardButton("🗑️ Archiver produit", callback_data="admin_archive_product")],
-        [InlineKeyboardButton("♻️ Restaurer produit", callback_data="admin_restore_product")],
-        [InlineKeyboardButton("📋 Liste produits", callback_data="admin_list_products")],
-        [InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_main")]
-    ]
-    
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_PRODUCTS
-
-@error_handler
-async def admin_list_products_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Affiche la liste complète des produits"""
-    query = update.callback_query
-    await query.answer()
-    
-    available = get_available_products()
-    archived = load_archived_products()
-    registry = load_product_registry()
-    
-    text = "📋 *LISTE DES PRODUITS*\n\n✅ *DISPONIBLES :*\n"
-    for product_name in sorted(available):
-        code = None
-        for c, name in PRODUCT_CODES.items():
-            if name == product_name:
-                code = c
-                break
-        
-        if code:
-            product_data = registry.get(code, {})
-            category = product_data.get("category", "?")
-            category_icon = {"powder": "⚗️", "pill": "💊", "rock": "🪨"}.get(category, "•")
-            text += f"  {category_icon} {product_name} (`{code}`)\n"
-    
-    if archived:
-        text += f"\n📦 *ARCHIVÉS :* ({len(archived)})\n"
-        for product_name in sorted(archived.keys()):
-            info = archived[product_name]
-            code = info.get("code", "?")
-            text += f"  📦 {product_name} (`{code}`)\n"
-    
-    text += f"\n💡 Utilisez le code entre `` pour les commandes"
-    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_products")]]
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_PRODUCTS
-
-# ==================== SOUS-MENU PRIX ====================
-
-@error_handler
-async def admin_menu_prices_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Sous-menu gestion prix"""
-    query = update.callback_query
-    await query.answer()
-    
-    text = "💰 *GESTION PRIX*\n\nQue voulez-vous faire ?"
-    
-    keyboard = [
-        [InlineKeyboardButton("📋 Voir tous les prix", callback_data="admin_show_prices")],
-        [InlineKeyboardButton("💵 Modifier un prix", callback_data="admin_modify_price")],
-        [InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_main")]
-    ]
-    
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_PRICES
-
-@error_handler
-async def admin_show_prices_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Affiche tous les prix"""
-    query = update.callback_query
-    await query.answer()
-    
-    prices = load_prices()
-    available = get_available_products()
-    
-    text = "💰 *TOUS LES PRIX*\n\n🇫🇷 *FRANCE*\n"
-    for product in sorted(available):
-        price_fr = prices["FR"].get(product, 0)
-        text += f"  • {product} : {price_fr}€\n"
-    
-    text += "\n🇨🇭 *SUISSE*\n"
-    for product in sorted(available):
-        price_ch = prices["CH"].get(product, 0)
-        text += f"  • {product} : {price_ch}€\n"
-    
-    text += f"\n💡 Pour modifier : `/setprice <code> <pays> <prix>`"
-    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_prices")]]
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_PRICES
-
-@error_handler
-async def admin_modify_price_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Guide pour modifier un prix"""
-    query = update.callback_query
-    await query.answer()
-    
-    text = "💵 *MODIFIER UN PRIX*\n\nUtilisez la commande :\n`/setprice <code> <pays> <prix>`\n\n*Exemples :*\n• `/setprice coco fr 85`\n• `/setprice mdma ch 20`\n\n*Codes disponibles :*\n"
-    
-    for code, name in sorted(PRODUCT_CODES.items()):
-        text += f"  • `{code}` → {name}\n"
-    
-    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_prices")]]
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_PRICES
-
-# ==================== SOUS-MENU STATS ====================
-
-@error_handler
-async def admin_menu_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Sous-menu statistiques"""
-    query = update.callback_query
-    await query.answer()
-    
-    text = "📊 *STATISTIQUES*\n\nQue voulez-vous consulter ?"
-    
-    keyboard = [
-        [InlineKeyboardButton("📈 Stats en temps réel", callback_data="admin_stats_realtime")],
-        [InlineKeyboardButton("📅 Rapport hebdo", callback_data="admin_stats_weekly")],
-        [InlineKeyboardButton("📆 Rapport mensuel", callback_data="admin_stats_monthly")],
-        [InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_main")]
-    ]
-    
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_STATS
-
-@error_handler
-async def admin_stats_realtime_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Affiche les stats en temps réel"""
-    query = update.callback_query
-    await query.answer()
-    
-    stats = load_stats()
-    users = load_users()
-    available = get_available_products()
-    archived = load_archived_products()
-    
-    weekly = stats.get("weekly", [])
-    weekly_total = sum(s["amount"] for s in weekly)
-    weekly_count = len(weekly)
-    
-    monthly = stats.get("monthly", [])
-    monthly_total = sum(s["amount"] for s in monthly)
-    monthly_count = len(monthly)
-    
-    total_users = len(users)
-    week_ago = datetime.now() - timedelta(days=7)
-    active_users = sum(1 for u in users.values() if datetime.fromisoformat(u["last_seen"]) > week_ago)
-    
-    text = f"📈 *STATS EN TEMPS RÉEL*\n\n📦 *PRODUITS*\n  • Disponibles : {len(available)}\n  • Archivés : {len(archived)}\n\n👥 *UTILISATEURS*\n  • Total : {total_users}\n  • Actifs (7j) : {active_users}\n\n💰 *VENTES SEMAINE*\n  • CA : {weekly_total:.2f}€\n  • Commandes : {weekly_count}\n"
-    if weekly_count > 0:
-        text += f"  • Panier moyen : {weekly_total/weekly_count:.2f}€\n"
-    
-    text += f"\n💰 *VENTES MOIS*\n  • CA : {monthly_total:.2f}€\n  • Commandes : {monthly_count}\n"
-    if monthly_count > 0:
-        text += f"  • Panier moyen : {monthly_total/monthly_count:.2f}€\n"
-    
-    text += f"\n📅 *Mis à jour :* {datetime.now().strftime('%d/%m/%Y %H:%M')}"
-    
-    keyboard = [
-        [InlineKeyboardButton("🔄 Actualiser", callback_data="admin_stats_realtime")],
-        [InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_stats")]
-    ]
-    
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_STATS
-
-@error_handler
-async def admin_stats_weekly_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Envoie rapport hebdo"""
-    query = update.callback_query
-    await query.answer("Envoi du rapport...")
-    await send_weekly_report(context)
-    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_stats")]]
-    await query.message.edit_text("✅ Rapport hebdomadaire envoyé", reply_markup=InlineKeyboardMarkup(keyboard))
-    return ADMIN_MENU_STATS
-
-@error_handler
-async def admin_stats_monthly_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Envoie rapport mensuel"""
-    query = update.callback_query
-    await query.answer("Envoi du rapport...")
-    await send_monthly_report(context)
-    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_stats")]]
-    await query.message.edit_text("✅ Rapport mensuel envoyé", reply_markup=InlineKeyboardMarkup(keyboard))
-    return ADMIN_MENU_STATS
-
-# ==================== SOUS-MENU USERS ====================
-
-@error_handler
-async def admin_menu_users_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Sous-menu utilisateurs"""
-    query = update.callback_query
-    await query.answer()
-    
-    users = load_users()
-    total = len(users)
-    week_ago = datetime.now() - timedelta(days=7)
-    active_7d = sum(1 for u in users.values() if datetime.fromisoformat(u["last_seen"]) > week_ago)
-    day_ago = datetime.now() - timedelta(days=1)
-    new_24h = sum(1 for u in users.values() if datetime.fromisoformat(u["first_seen"]) > day_ago)
-    
-    text = f"👥 *GESTION UTILISATEURS*\n\n📊 *Statistiques :*\n  • Total : {total}\n  • Actifs (7j) : {active_7d}\n  • Nouveaux (24h) : {new_24h}\n\n💡 Utilisez `/users` pour plus de détails"
-    
-    keyboard = [
-        [InlineKeyboardButton("📊 Ouvrir /users", callback_data="admin_open_users")],
-        [InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_main")]
-    ]
-    
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_USERS
-
-@error_handler
-async def admin_open_users_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Redirige vers la commande /users"""
-    query = update.callback_query
-    await query.answer()
-    await users_command(update, context)
-    return ConversationHandler.END
-
-# ==================== SOUS-MENU HORAIRES ====================
-
-@error_handler
-async def admin_menu_horaires_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Sous-menu horaires"""
-    query = update.callback_query
-    await query.answer()
-    
-    horaires = load_horaires()
-    enabled = horaires.get("enabled", True)
-    
-    if enabled:
-        status = f"🟢 Activés : {get_horaires_text()}"
-    else:
-        status = "🔴 Désactivés (24h/24)"
-    
-    text = f"⏰ *GESTION HORAIRES*\n\n📊 *Statut actuel :*\n{status}\n\n💡 `/horaires` pour modifier"
-    
-    keyboard = [
-        [InlineKeyboardButton("🔄 Toggle On/Off", callback_data="admin_horaires_toggle")],
-        [InlineKeyboardButton("✏️ Modifier (via /horaires)", callback_data="admin_horaires_info")],
-        [InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_main")]
-    ]
-    
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_HORAIRES
-
-@error_handler
-async def admin_horaires_toggle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Toggle horaires on/off"""
-    query = update.callback_query
-    await query.answer()
-    
-    horaires = load_horaires()
-    horaires["enabled"] = not horaires.get("enabled", True)
-    save_horaires(horaires)
-    
-    if horaires["enabled"]:
-        status = f"🟢 Activés : {get_horaires_text()}"
-        await query.answer("✅ Horaires activés")
-    else:
-        status = "🔴 Désactivés (24h/24)"
-        await query.answer("✅ Horaires désactivés (24h/24)")
-    
-    text = f"⏰ *GESTION HORAIRES*\n\n📊 *Statut actuel :*\n{status}\n\n💡 `/horaires` pour modifier"
-    
-    keyboard = [
-        [InlineKeyboardButton("🔄 Toggle On/Off", callback_data="admin_horaires_toggle")],
-        [InlineKeyboardButton("✏️ Modifier (via /horaires)", callback_data="admin_horaires_info")],
-        [InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_main")]
-    ]
-    
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_HORAIRES
-
-@error_handler
-async def admin_horaires_info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Info pour modifier les horaires"""
-    query = update.callback_query
-    await query.answer()
-    
-    text = "✏️ *MODIFIER LES HORAIRES*\n\nUtilisez la commande `/horaires`\n\nLe bot vous guidera pour définir :\n  • Heure de début\n  • Heure de fin\n\nVous pouvez aussi activer/désactiver depuis ce menu"
-    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_horaires")]]
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_HORAIRES
-
-# ==================== SOUS-MENU MÉDIAS ====================
-
-@error_handler
-async def admin_menu_media_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Sous-menu médias"""
-    query = update.callback_query
-    await query.answer()
-    
-    registry = load_product_registry()
-    images_count = sum(1 for p in registry.values() if p.get("image"))
-    videos_count = sum(1 for p in registry.values() if p.get("video"))
-    
-    text = f"🎨 *GESTION MÉDIAS*\n\n📊 *Statistiques :*\n  • Images : {images_count}\n  • Vidéos : {videos_count}\n\n💡 Utilisez `/setmedia <code>` pour ajouter/modifier"
-    
-    keyboard = [
-        [InlineKeyboardButton("📋 Liste médias", callback_data="admin_media_list")],
-        [InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_main")]
-    ]
-    
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_MEDIA
-
-@error_handler
-async def admin_media_list_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Liste tous les médias"""
-    query = update.callback_query
-    await query.answer()
-    
-    registry = load_product_registry()
-    
-    text = "📋 *LISTE DES MÉDIAS*\n\n"
-    for code, data in sorted(registry.items()):
-        name = data["name"]
-        has_image = "✅" if data.get("image") else "❌"
-        has_video = "✅" if data.get("video") else "❌"
-        text += f"{name} (`{code}`)\n  📸 {has_image}  🎬 {has_video}\n"
-    
-    text += f"\n💡 `/setmedia <code>` pour modifier"
-    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_media")]]
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_MEDIA
-
-# ==================== SOUS-MENU MAINTENANCE ====================
-
-@error_handler
-async def admin_menu_maintenance_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Sous-menu maintenance"""
-    query = update.callback_query
-    await query.answer()
-    
-    text = "🔄 *MAINTENANCE*\n\nOutils de maintenance système"
-    keyboard = [
-        [InlineKeyboardButton("📊 Infos système", callback_data="admin_system_info")],
-        [InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_main")]
-    ]
-    
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_MAINTENANCE
-
-@error_handler
-async def admin_system_info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Affiche les infos système"""
-    query = update.callback_query
-    await query.answer()
-    
-    import sys
-    from pathlib import Path
-    
-    files_info = []
-    for file in [PRICES_FILE, USERS_FILE, PRODUCT_REGISTRY_FILE, STATS_FILE]:
-        if file.exists():
-            size = file.stat().st_size / 1024
-            files_info.append(f"  • {file.name} : {size:.1f} Ko")
-    
-    text = f"📊 *INFOS SYSTÈME*\n\n🐍 Python : {sys.version.split()[0]}\n📁 Répertoire : `{Path(__file__).parent.name}`\n\n💾 *Fichiers :*\n"
-    text += "\n".join(files_info)
-    text += f"\n\n🔄 Distance : {DISTANCE_METHOD}"
-    
-    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_maintenance")]]
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_MAINTENANCE
-
-@error_handler
-async def admin_menu_tutoriel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menu tutoriel client"""
-    query = update.callback_query
-    await query.answer()
-    
-    text = "📚 *TUTORIEL CLIENT*\n\n"
-    text += "Guide d'utilisation du bot pour vos clients.\n\n"
-    text += "Que voulez-vous consulter ?"
-    
-    keyboard = [
-        [InlineKeyboardButton("1️⃣ Démarrage & Langue", callback_data="tuto_step1")],
-        [InlineKeyboardButton("2️⃣ Consultation prix", callback_data="tuto_step2")],
-        [InlineKeyboardButton("3️⃣ Passer commande", callback_data="tuto_step3")],
-        [InlineKeyboardButton("4️⃣ Choix livraison", callback_data="tuto_step4")],
-        [InlineKeyboardButton("5️⃣ Paiement & Confirmation", callback_data="tuto_step5")],
-        [InlineKeyboardButton("6️⃣ Contacter le vendeur", callback_data="tuto_step6")],
-        [InlineKeyboardButton("📤 Envoyer tutoriel complet", callback_data="tuto_send_all")],
-        [InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_main")]
-    ]
-    
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_MAIN
-
-@error_handler
-async def admin_menu_tutoriel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menu tutoriel client"""
-    query = update.callback_query
-    await query.answer()
-    
-    text = "📚 *TUTORIEL CLIENT*\n\n"
-    text += "Guide d'utilisation du bot pour vos clients.\n\n"
-    text += "Que voulez-vous consulter ?"
-    
-    keyboard = [
-        [InlineKeyboardButton("1️⃣ Démarrage & Langue", callback_data="tuto_step1")],
-        [InlineKeyboardButton("2️⃣ Consultation prix", callback_data="tuto_step2")],
-        [InlineKeyboardButton("3️⃣ Passer commande", callback_data="tuto_step3")],
-        [InlineKeyboardButton("4️⃣ Choix livraison", callback_data="tuto_step4")],
-        [InlineKeyboardButton("5️⃣ Paiement & Confirmation", callback_data="tuto_step5")],
-        [InlineKeyboardButton("6️⃣ Contacter le vendeur", callback_data="tuto_step6")],
-        [InlineKeyboardButton("📤 Envoyer tutoriel complet", callback_data="tuto_send_all")],
-        [InlineKeyboardButton("🔙 Retour", callback_data="admin_menu_main")]
-    ]
-    
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_MAIN
-
-# ==================== ÉTAPES DU TUTORIEL ====================
-
-@error_handler
-async def admin_tuto_step1(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Tutoriel Étape 1 : Démarrage"""
-    query = update.callback_query
-    await query.answer()
-    
-    text = "1️⃣ *DÉMARRAGE & LANGUE*\n\n"
-    text += "📱 *Pour commencer :*\n"
-    text += "1. Ouvrez Telegram\n"
-    text += "2. Cherchez le bot\n"
-    text += "3. Cliquez sur *DÉMARRER* ou tapez `/start`\n\n"
-    
-    text += "🌍 *Choisir sa langue :*\n"
-    text += "• 🇫🇷 Français\n"
-    text += "• 🇬🇧 English\n"
-    text += "• 🇩🇪 Deutsch\n"
-    text += "• 🇪🇸 Español\n"
-    text += "• 🇮🇹 Italiano\n\n"
-    
-    text += "✅ *Après sélection :*\n"
-    text += "Le menu principal s'affiche avec 3 options :\n"
-    text += "• 🛒 Commander\n"
-    text += "• 🏴‍☠️ Carte du Pirate (voir les prix)\n"
-    text += "• 📞 Contacter\n"
-    
-    keyboard = [
-        [InlineKeyboardButton("➡️ Étape suivante", callback_data="tuto_step2")],
-        [InlineKeyboardButton("🔙 Retour tutoriel", callback_data="admin_menu_tutoriel")]
-    ]
-    
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_MAIN
-
-
-@error_handler
-async def admin_tuto_step2(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Tutoriel Étape 2 : Consultation prix"""
-    query = update.callback_query
-    await query.answer()
-    
-    text = "2️⃣ *CONSULTATION DES PRIX*\n\n"
-    text += "🏴‍☠️ *Carte du Pirate :*\n"
-    text += "Pour voir les prix sans commander :\n\n"
-    
-    text += "1. Menu principal → *🏴‍☠️ Carte du Pirate*\n"
-    text += "2. Choisir votre pays :\n"
-    text += "   • 🇫🇷 Prix France\n"
-    text += "   • 🇨🇭 Prix Suisse\n\n"
-    
-    text += "📋 *Affichage :*\n"
-    text += "• Liste complète des produits disponibles\n"
-    text += "• Prix par gramme ou par unité\n"
-    text += "• Frais de livraison postale\n"
-    text += "• Information livraison express\n\n"
-    
-    text += "💡 *Astuce :*\n"
-    text += "Vous pouvez consulter les prix autant de fois que vous voulez avant de commander.\n"
-    
-    keyboard = [
-        [InlineKeyboardButton("⬅️ Étape précédente", callback_data="tuto_step1")],
-        [InlineKeyboardButton("➡️ Étape suivante", callback_data="tuto_step3")],
-        [InlineKeyboardButton("🔙 Retour tutoriel", callback_data="admin_menu_tutoriel")]
-    ]
-    
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_MAIN
-
-
-@error_handler
-async def admin_tuto_step3(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Tutoriel Étape 3 : Passer commande"""
-    query = update.callback_query
-    await query.answer()
-    
-    text = "3️⃣ *PASSER UNE COMMANDE*\n\n"
-    text += "🛒 *Démarrer la commande :*\n"
-    text += "1. Menu principal → *🛒 Commander*\n\n"
-    
-    text += "🌍 *Étape 1 - Choisir le pays :*\n"
-    text += "• 🇫🇷 France\n"
-    text += "• 🇨🇭 Suisse\n\n"
-    
-    text += "📦 *Étape 2 - Choisir le produit :*\n"
-    text += "• ❄️ Coco (poudre)\n"
-    text += "• 💊 Pills (Squid Game / Punisher)\n"
-    text += "• 🫒 Hash\n"
-    text += "• 🍀 Weed\n"
-    text += "• 🪨 Crystal (MDMA / 4MMC)\n\n"
-    
-    text += "🔢 *Étape 3 - Indiquer la quantité :*\n"
-    text += "• Tapez le nombre souhaité (ex: 5)\n"
-    text += "• Maximum : 100 unités\n\n"
-    
-    text += "➕ *Ajouter d'autres produits :*\n"
-    text += "Cliquez sur *➕ Ajouter* pour un autre produit\n"
-    text += "OU\n"
-    text += "Cliquez sur *✅ Valider* pour continuer\n"
-    
-    keyboard = [
-        [InlineKeyboardButton("⬅️ Étape précédente", callback_data="tuto_step2")],
-        [InlineKeyboardButton("➡️ Étape suivante", callback_data="tuto_step4")],
-        [InlineKeyboardButton("🔙 Retour tutoriel", callback_data="admin_menu_tutoriel")]
-    ]
-    
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_MAIN
-
-
-@error_handler
-async def admin_tuto_step4(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Tutoriel Étape 4 : Livraison"""
-    query = update.callback_query
-    await query.answer()
-    
-    horaires = get_horaires_text()
-    
-    text = "4️⃣ *CHOIX DE LIVRAISON*\n\n"
-    text += "📍 *Adresse de livraison :*\n"
-    text += "• Tapez votre adresse complète\n"
-    text += "• Format : Rue, Code postal, Ville\n"
-    text += "• Minimum 15 caractères\n"
-    text += "• Exemple : _123 Rue de Paris, 75001 Paris_\n\n"
-    
-    text += "📦 *Type de livraison :*\n\n"
-    
-    text += "✉️ *Livraison Postale :*\n"
-    text += "• Délai : 48-72 heures\n"
-    text += "• Prix fixe : 10€\n"
-    text += "• Discret et sûr\n\n"
-    
-    text += "⚡ *Livraison Express :*\n"
-    text += "• Délai : 30 minutes à 2 heures\n"
-    text += "• Prix : 10€ par kilomètre\n"
-    text += "• Distance calculée automatiquement\n"
-    text += "• Livraison en main propre\n\n"
-    
-    text += f"⏰ *Horaires de livraison :*\n"
-    text += f"• {horaires}\n\n"
-    
-    text += "💡 *Bon à savoir :*\n"
-    text += "Pour la livraison express, le bot calcule automatiquement la distance depuis votre adresse."
-    
-    keyboard = [
-        [InlineKeyboardButton("⬅️ Étape précédente", callback_data="tuto_step3")],
-        [InlineKeyboardButton("➡️ Étape suivante", callback_data="tuto_step5")],
-        [InlineKeyboardButton("🔙 Retour tutoriel", callback_data="admin_menu_tutoriel")]
-    ]
-    
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_MAIN
-
-
-@error_handler
-async def admin_tuto_step5(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Tutoriel Étape 5 : Paiement"""
-    query = update.callback_query
-    await query.answer()
-    
-    text = "5️⃣ *PAIEMENT & CONFIRMATION*\n\n"
-    text += "💳 *Méthode de paiement :*\n\n"
-    
-    text += "💵 *Espèces :*\n"
-    text += "• Paiement en main propre\n"
-    text += "• Pour livraison express\n"
-    text += "• Montant exact apprécié\n\n"
-    
-    text += "₿ *Crypto-monnaie :*\n"
-    text += "• Bitcoin, Ethereum, etc.\n"
-    text += "• Adresse fournie après validation\n"
-    text += "• Livraison après confirmation du paiement\n\n"
-    
-    text += "✅ *Résumé de commande :*\n"
-    text += "Le bot affiche :\n"
-    text += "• 🛒 Liste des produits et quantités\n"
-    text += "• 💵 Sous-total\n"
-    text += "• 📦 Frais de livraison\n"
-    text += "• 💰 TOTAL\n"
-    text += "• 📍 Adresse\n"
-    text += "• 📦 Type de livraison\n"
-    text += "• 💳 Méthode de paiement\n\n"
-    
-    text += "🎯 *Validation :*\n"
-    text += "• Vérifiez attentivement\n"
-    text += "• Cliquez *✅ Confirmer*\n"
-    text += "• Ou *❌ Annuler* pour recommencer\n\n"
-    
-    text += "📞 *Après confirmation :*\n"
-    text += "• Vous recevez un numéro de commande\n"
-    text += "• L'admin est notifié immédiatement\n"
-    text += "• Il vous contactera sous peu\n"
-    
-    keyboard = [
-        [InlineKeyboardButton("⬅️ Étape précédente", callback_data="tuto_step4")],
-        [InlineKeyboardButton("➡️ Étape suivante", callback_data="tuto_step6")],
-        [InlineKeyboardButton("🔙 Retour tutoriel", callback_data="admin_menu_tutoriel")]
-    ]
-    
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_MAIN
-
-
-@error_handler
-async def admin_tuto_step6(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Tutoriel Étape 6 : Contact"""
-    query = update.callback_query
-    await query.answer()
-    
-    text = "6️⃣ *CONTACTER LE VENDEUR*\n\n"
-    text += "📞 *Pour poser une question :*\n\n"
-    
-    text += "1. Menu principal → *📞 Contacter*\n\n"
-    
-    text += "2. Tapez votre message :\n"
-    text += "• Question sur un produit\n"
-    text += "• Demande de renseignement\n"
-    text += "• Problème avec une commande\n"
-    text += "• Information sur la livraison\n\n"
-    
-    text += "3. Envoyez le message\n\n"
-    
-    text += "✅ *Confirmation :*\n"
-    text += "• Message envoyé à l'admin\n"
-    text += "• Réponse sous peu\n"
-    text += "• L'admin vous contactera directement\n\n"
-    
-    text += "💡 *Conseils :*\n"
-    text += "• Soyez clair et précis\n"
-    text += "• Indiquez votre numéro de commande si besoin\n"
-    text += "• Privilégiez les messages courts\n\n"
-    
-    text += "🔄 *Nouvelle commande :*\n"
-    text += "Après une commande validée, cliquez sur *🔄 Nouvelle commande* pour recommencer.\n"
-    
-    keyboard = [
-        [InlineKeyboardButton("⬅️ Étape précédente", callback_data="tuto_step5")],
-        [InlineKeyboardButton("🔄 Retour au début", callback_data="tuto_step1")],
-        [InlineKeyboardButton("🔙 Retour tutoriel", callback_data="admin_menu_tutoriel")]
-    ]
-    
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_MAIN
-
-
-@error_handler
-async def admin_tuto_send_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Envoyer le tutoriel complet"""
-    query = update.callback_query
-    await query.answer()
-    
-    text = "📤 *ENVOI DU TUTORIEL COMPLET*\n\n"
-    text += "Le tutoriel complet en 6 parties va être envoyé.\n\n"
-    text += "Vous pourrez :\n"
-    text += "• Le transférer à vos clients\n"
-    text += "• L'épingler dans un canal\n"
-    text += "• Le partager par message\n\n"
-    text += "⏳ Envoi en cours..."
-    
-    await query.message.edit_text(text, parse_mode='Markdown')
-    
-    horaires = get_horaires_text()
-    
-    # Partie 1
-    msg1 = "📚 *TUTORIEL BOT - PARTIE 1/6*\n\n"
-    msg1 += "1️⃣ *DÉMARRAGE & LANGUE*\n\n"
-    msg1 += "📱 Pour commencer :\n"
-    msg1 += "1. Ouvrez Telegram\n"
-    msg1 += "2. Cherchez le bot\n"
-    msg1 += "3. Cliquez sur DÉMARRER ou tapez /start\n\n"
-    msg1 += "🌍 Choisissez votre langue parmi 5 langues disponibles.\n\n"
-    msg1 += "✅ Le menu principal s'affiche avec :\n"
-    msg1 += "• 🛒 Commander\n"
-    msg1 += "• 🏴‍☠️ Carte du Pirate\n"
-    msg1 += "• 📞 Contacter"
-    
-    await context.bot.send_message(chat_id=query.message.chat_id, text=msg1, parse_mode='Markdown')
-    
-    # Partie 2
-    msg2 = "📚 *TUTORIEL BOT - PARTIE 2/6*\n\n"
-    msg2 += "2️⃣ *CONSULTATION DES PRIX*\n\n"
-    msg2 += "🏴‍☠️ Carte du Pirate :\n"
-    msg2 += "1. Menu → Carte du Pirate\n"
-    msg2 += "2. Choisissez votre pays (🇫🇷 France ou 🇨🇭 Suisse)\n\n"
-    msg2 += "📋 Vous verrez :\n"
-    msg2 += "• Tous les produits disponibles\n"
-    msg2 += "• Prix par gramme/unité\n"
-    msg2 += "• Frais de livraison\n\n"
-    msg2 += "💡 Consultez les prix autant que vous voulez !"
-    
-    await context.bot.send_message(chat_id=query.message.chat_id, text=msg2, parse_mode='Markdown')
-    
-    # Partie 3
-    msg3 = "📚 *TUTORIEL BOT - PARTIE 3/6*\n\n"
-    msg3 += "3️⃣ *PASSER UNE COMMANDE*\n\n"
-    msg3 += "🛒 Processus :\n\n"
-    msg3 += "1. Menu → Commander\n"
-    msg3 += "2. Choisissez votre pays\n"
-    msg3 += "3. Sélectionnez le produit\n"
-    msg3 += "4. Indiquez la quantité (max 100)\n"
-    msg3 += "5. Ajoutez d'autres produits ou validez\n\n"
-    msg3 += "📦 Produits disponibles :\n"
-    msg3 += "• ❄️ Coco\n"
-    msg3 += "• 💊 Pills (Squid Game / Punisher)\n"
-    msg3 += "• 🫒 Hash\n"
-    msg3 += "• 🍀 Weed\n"
-    msg3 += "• 🪨 Crystal (MDMA / 4MMC)"
-    
-    await context.bot.send_message(chat_id=query.message.chat_id, text=msg3, parse_mode='Markdown')
-    
-    # Partie 4
-    msg4 = "📚 *TUTORIEL BOT - PARTIE 4/6*\n\n"
-    msg4 += "4️⃣ *LIVRAISON*\n\n"
-    msg4 += "📍 Adresse :\n"
-    msg4 += "• Tapez votre adresse complète\n"
-    msg4 += "• Format : Rue, Code postal, Ville\n\n"
-    msg4 += "📦 Type de livraison :\n\n"
-    msg4 += "✉️ *Postale* (48-72h) : 10€\n"
-    msg4 += "⚡ *Express* (30min-2h) : 10€/km\n\n"
-    msg4 += f"⏰ Horaires : {horaires}\n\n"
-    msg4 += "💡 Distance calculée automatiquement pour Express"
-    
-    await context.bot.send_message(chat_id=query.message.chat_id, text=msg4, parse_mode='Markdown')
-    
-    # Partie 5
-    msg5 = "📚 *TUTORIEL BOT - PARTIE 5/6*\n\n"
-    msg5 += "5️⃣ *PAIEMENT*\n\n"
-    msg5 += "💳 Méthodes :\n\n"
-    msg5 += "💵 *Espèces* :\n"
-    msg5 += "• Paiement en main propre\n"
-    msg5 += "• Montant exact apprécié\n\n"
-    msg5 += "₿ *Crypto* :\n"
-    msg5 += "• Bitcoin, Ethereum, etc.\n"
-    msg5 += "• Adresse fournie après validation\n\n"
-    msg5 += "✅ *Résumé affiché* :\n"
-    msg5 += "• Produits et quantités\n"
-    msg5 += "• Total avec frais\n"
-    msg5 += "• Adresse et type de livraison\n\n"
-    msg5 += "📞 Après confirmation :\n"
-    msg5 += "• Numéro de commande\n"
-    msg5 += "• Contact sous peu"
-    
-    await context.bot.send_message(chat_id=query.message.chat_id, text=msg5, parse_mode='Markdown')
-    
-    # Partie 6
-    msg6 = "📚 *TUTORIEL BOT - PARTIE 6/6*\n\n"
-    msg6 += "6️⃣ *CONTACT*\n\n"
-    msg6 += "📞 Pour poser une question :\n\n"
-    msg6 += "1. Menu → Contacter\n"
-    msg6 += "2. Tapez votre message\n"
-    msg6 += "3. Envoyez\n\n"
-    msg6 += "✅ Message envoyé à l'admin\n"
-    msg6 += "✅ Réponse rapide\n\n"
-    msg6 += "💡 *Conseils* :\n"
-    msg6 += "• Soyez clair et précis\n"
-    msg6 += "• Indiquez votre n° de commande\n\n"
-    msg6 += "🔄 Pour une nouvelle commande :\n"
-    msg6 += "Cliquez sur *Nouvelle commande*\n\n"
-    msg6 += "━━━━━━━━━━━━━━━━━\n"
-    msg6 += "✅ Fin du tutoriel\n"
-    msg6 += "Bonne utilisation du bot ! 🌿"
-    
-    await context.bot.send_message(chat_id=query.message.chat_id, text=msg6, parse_mode='Markdown')
-    
-    # Message final
-    await asyncio.sleep(1)
-    final_text = "✅ *TUTORIEL ENVOYÉ*\n\n"
-    final_text += "Les 6 parties du tutoriel ont été envoyées avec succès.\n\n"
-    final_text += "Vous pouvez maintenant les transférer à vos clients."
-    
-    keyboard = [[InlineKeyboardButton("🔙 Retour tutoriel", callback_data="admin_menu_tutoriel")]]
-    
-    await context.bot.send_message(
-        chat_id=query.message.chat_id,
-        text=final_text,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
-    
-    return ADMIN_MENU_MAIN
-
-# ==================== FIN PARTIE 4 - MENU ADMIN ====================
-# Cette partie doit être insérée ENTRE la partie 3b et la partie 3c
-# Dans la partie 3c (main_async), il faut AUSSI ajouter le ConversationHandler pour ce menu
-# ==================== FONCTION PRINCIPALE COMPLÈTE ====================
-
-# ==================== FONCTION PRINCIPALE COMPLÈTE - VERSION CORRIGÉE ====================
+# ==================== FONCTION PRINCIPALE ====================
 
 async def main_async():
-    # Initialiser les produits
+    """Fonction principale asynchrone"""
+    
     init_product_codes()
     
     logger.info("=" * 60)
-    logger.info("🤖 BOT TELEGRAM V2.2 - 100% COMPLET")
+    logger.info("🤖 BOT TELEGRAM V2.2 - COMPLET")
     logger.info("=" * 60)
     logger.info(f"📱 Token: {TOKEN[:5]}***")
     logger.info(f"👤 Admin: ***{str(ADMIN_ID)[-3:]}")
     logger.info(f"⏰ Horaires: {get_horaires_text()}")
-    logger.info(f"📁 Dossier médias: {MEDIA_DIR}")
-    
-    logger.info("\n📂 Vérification des médias:")
-    for product, path in IMAGES_PRODUITS.items():
-        exists = "✅" if path.exists() else "❌"
-        logger.info(f"  {exists} Image {product}")
-    
-    available = get_available_products()
-    logger.info("\n📦 Produits disponibles:")
-    for product in sorted(available):
-        logger.info(f"  ✅ {product}")
-    
-    prices = load_prices()
-    logger.info("\n💰 Prix actuels:")
-    logger.info("  France:")
-    for product in sorted(PRIX_FR.keys()):
-        price = prices.get("FR", {}).get(product, PRIX_FR[product])
-        logger.info(f"    • {product}: {price}€")
-    
     logger.info("=" * 60)
     
     application = Application.builder().token(TOKEN).concurrent_updates(True).build()
@@ -4010,13 +2424,6 @@ async def main_async():
     except:
         pass
     
-    # ==================== LIGNES 4000-4218 CORRIGÉES ====================
-# Remplacez tout depuis la ligne 4000 jusqu'à la fin
-
-async def main_async():
-    """Fonction principale asynchrone"""
-    
-    # Handler horaires
     horaires_handler = ConversationHandler(
         entry_points=[CommandHandler('horaires', admin_horaires_command)],
         states={ADMIN_HORAIRES_INPUT: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_horaires_input)]},
@@ -4025,7 +2432,6 @@ async def main_async():
         name="horaires_conv"
     )
     
-    # Handler principal
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start_command)],
         states={
@@ -4072,7 +2478,6 @@ async def main_async():
         name="main_conv"
     )
     
-    # Handler gestion produits
     product_management_handler = ConversationHandler(
         entry_points=[
             CallbackQueryHandler(admin_create_product, pattern="^admin_create_product$"),
@@ -4099,63 +2504,12 @@ async def main_async():
         per_message=False
     )
     
-    # Handler menu admin
     admin_menu_handler = ConversationHandler(
         entry_points=[CommandHandler('admin', admin_command)],
         states={
             ADMIN_MENU_MAIN: [
-                CallbackQueryHandler(admin_menu_products_callback, pattern="^admin_menu_products$"),
-                CallbackQueryHandler(admin_menu_prices_callback, pattern="^admin_menu_prices$"),
-                CallbackQueryHandler(admin_menu_stats_callback, pattern="^admin_menu_stats$"),
-                CallbackQueryHandler(admin_menu_users_callback, pattern="^admin_menu_users$"),
-                CallbackQueryHandler(admin_menu_horaires_callback, pattern="^admin_menu_horaires$"),
-                CallbackQueryHandler(admin_menu_media_callback, pattern="^admin_menu_media$"),
-                CallbackQueryHandler(admin_menu_maintenance_callback, pattern="^admin_menu_maintenance$"),
-                CallbackQueryHandler(admin_menu_commandes_callback, pattern="^admin_menu_commandes$"),
-                CallbackQueryHandler(admin_menu_tutoriel_callback, pattern="^admin_menu_tutoriel$"),
-                CallbackQueryHandler(admin_tuto_step1, pattern="^tuto_step1$"),
-                CallbackQueryHandler(admin_tuto_step2, pattern="^tuto_step2$"),
-                CallbackQueryHandler(admin_tuto_step3, pattern="^tuto_step3$"),
-                CallbackQueryHandler(admin_tuto_step4, pattern="^tuto_step4$"),
-                CallbackQueryHandler(admin_tuto_step5, pattern="^tuto_step5$"),
-                CallbackQueryHandler(admin_tuto_step6, pattern="^tuto_step6$"),
-                CallbackQueryHandler(admin_tuto_send_all, pattern="^tuto_send_all$"),
+                CallbackQueryHandler(admin_close, pattern="^admin_close$"),
             ],
-            ADMIN_MENU_PRODUCTS: [
-                CallbackQueryHandler(admin_list_products_callback, pattern="^admin_list_products$"),
-                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
-                CallbackQueryHandler(admin_create_product, pattern="^admin_create_product$"),
-                CallbackQueryHandler(admin_archive_product, pattern="^admin_archive_product$"),
-                CallbackQueryHandler(admin_restore_product, pattern="^admin_restore_product$"),
-            ],
-            ADMIN_MENU_PRICES: [
-                CallbackQueryHandler(admin_show_prices_callback, pattern="^admin_show_prices$"),
-                CallbackQueryHandler(admin_modify_price_callback, pattern="^admin_modify_price$"),
-                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
-            ],
-            ADMIN_MENU_STATS: [
-                CallbackQueryHandler(admin_stats_realtime_callback, pattern="^admin_stats_realtime$"),
-                CallbackQueryHandler(admin_stats_weekly_callback, pattern="^admin_stats_weekly$"),
-                CallbackQueryHandler(admin_stats_monthly_callback, pattern="^admin_stats_monthly$"),
-                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
-            ],
-            ADMIN_MENU_USERS: [
-                CallbackQueryHandler(admin_open_users_callback, pattern="^admin_open_users$"),
-                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
-            ],
-            ADMIN_MENU_HORAIRES: [
-                CallbackQueryHandler(admin_horaires_toggle_callback, pattern="^admin_horaires_toggle$"),
-                CallbackQueryHandler(admin_horaires_info_callback, pattern="^admin_horaires_info$"),
-                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
-            ],
-            ADMIN_MENU_MEDIA: [
-                CallbackQueryHandler(admin_media_list_callback, pattern="^admin_media_list$"),
-                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
-            ],
-            ADMIN_MENU_MAINTENANCE: [
-                CallbackQueryHandler(admin_system_info_callback, pattern="^admin_system_info$"),
-                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
-            ]
         },
         fallbacks=[CallbackQueryHandler(admin_close, pattern="^admin_close$")],
         name="admin_menu",
@@ -4163,29 +2517,23 @@ async def main_async():
         per_message=False
     )
     
-    # Ajout des handlers
     application.add_handler(horaires_handler)
     application.add_handler(conv_handler)
     application.add_handler(product_management_handler)
     application.add_handler(admin_menu_handler)
-    application.add_handler(CommandHandler('stats', admin_stats_command))
     application.add_handler(CommandHandler('products', admin_products_command))
-    application.add_handler(CommandHandler('del', admin_del_product_command))
-    application.add_handler(CommandHandler('add', admin_add_product_command))
     application.add_handler(CommandHandler('prices', admin_prices_command))
     application.add_handler(CommandHandler('setprice', admin_setprice_command))
     application.add_handler(CommandHandler('users', users_command))
     application.add_handler(CommandHandler('repair', admin_repair_command))
     application.add_handler(CommandHandler('debug', admin_debug_command))
+    application.add_handler(CommandHandler('stats', admin_stats_command))
     
-    # Callbacks
     application.add_handler(CallbackQueryHandler(admin_validation_livraison, pattern='^admin_validate_'))
     application.add_handler(CallbackQueryHandler(confirm_archive_product, pattern="^archive_"))
     application.add_handler(CallbackQueryHandler(execute_archive, pattern="^confirmarchive_"))
     application.add_handler(CallbackQueryHandler(execute_restore, pattern="^restore_"))
     application.add_handler(CallbackQueryHandler(admin_close, pattern="^admin_close$"))
-    application.add_handler(CallbackQueryHandler(user_stats_callback, pattern="^user_stats$"))
-    application.add_handler(CallbackQueryHandler(refresh_users_callback, pattern="^refresh_users$"))
     
     application.add_error_handler(error_callback)
     
@@ -4196,15 +2544,8 @@ async def main_async():
     
     logger.info("✅ Handlers configurés")
     logger.info("=" * 60)
-    logger.info("🚀 BOT V2.2 EN LIGNE (100%)")
+    logger.info("🚀 BOT V2.2 EN LIGNE")
     logger.info("=" * 60)
-    logger.info("\n📋 Commandes disponibles:")
-    logger.info("  • /admin - Menu admin complet")
-    logger.info("  • /products - Menu gestion produits")
-    logger.info("  • /users - Liste utilisateurs + stats")
-    logger.info("  • /repair - Réparer produit invisible")
-    logger.info("  • /debug - Debug produits")
-    logger.info("=" * 60 + "\n")
     
     await application.initialize()
     await application.start()
@@ -4234,6 +2575,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-# ==================== FIN DU BOT V2.2 COMPLET ====================
-
-# ==================== FIN DU BOT V2.2 COMPLET ====================

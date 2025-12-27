@@ -4001,227 +4001,224 @@ async def main_async():
 # Remplacez tout depuis la ligne 4000 jusqu'à la fin
 
 async def main_async():
-    """Fonction principale asynchrone"""
-    
-    # Handler horaires
-    horaires_handler = ConversationHandler(
-        entry_points=[CommandHandler('horaires', admin_horaires_command)],
-        states={ADMIN_HORAIRES_INPUT: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_horaires_input)]},
-        fallbacks=[],
-        allow_reentry=False,
-        name="horaires_conv"
-    )
-    
-    # Handler principal
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start_command)],
-        states={
-            LANGUE: [CallbackQueryHandler(set_langue, pattern='^lang_')],
-            PAYS: [
-                CallbackQueryHandler(menu_navigation, pattern='^start_order$'),
-                CallbackQueryHandler(choix_pays, pattern='^country_'),
-                CallbackQueryHandler(restart_order, pattern='^restart_order$'),
-                CallbackQueryHandler(voir_carte, pattern='^voir_carte$'),
-                CallbackQueryHandler(afficher_prix, pattern='^prix_(france|suisse)$'),
-                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$'),
-                CallbackQueryHandler(menu_navigation, pattern='^contact_admin$'),
-                CallbackQueryHandler(back_navigation, pattern='^back_to_country_choice$')
-            ],
-            CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, contact_handler)],
-            PRODUIT: [
-                CallbackQueryHandler(choix_produit, pattern='^product_'),
-                CallbackQueryHandler(back_navigation, pattern='^back_(to_main|to_country_choice|to_products)$'),
-                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')
-            ],
-            PILL_SUBCATEGORY: [
-                CallbackQueryHandler(choix_pill_subcategory, pattern='^pill_'),
-                CallbackQueryHandler(back_navigation, pattern='^back_to_products$'),
-                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')
-            ],
-            ROCK_SUBCATEGORY: [
-                CallbackQueryHandler(choix_rock_subcategory, pattern='^rock_'),
-                CallbackQueryHandler(back_navigation, pattern='^back_to_products$'),
-                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')
-            ],
-            QUANTITE: [MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_quantite)],
-            CART_MENU: [
-                CallbackQueryHandler(cart_menu, pattern='^(add_more|proceed_checkout)$'),
-                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')
-            ],
-            ADRESSE: [MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_adresse)],
-            LIVRAISON: [CallbackQueryHandler(choix_livraison, pattern='^delivery_')],
-            PAIEMENT: [CallbackQueryHandler(choix_paiement, pattern='^payment_')],
-            CONFIRMATION: [CallbackQueryHandler(confirmation, pattern='^(confirm_order|cancel)$')]
-        },
-        fallbacks=[CommandHandler('start', start_command)],
-        allow_reentry=True,
-        per_message=False,
-        name="main_conv"
-    )
-    
-    # Handler gestion produits
-    product_management_handler = ConversationHandler(
-        entry_points=[
-            CallbackQueryHandler(admin_create_product, pattern="^admin_create_product$"),
-            CallbackQueryHandler(admin_archive_product, pattern="^admin_archive_product$"),
-            CallbackQueryHandler(admin_restore_product, pattern="^admin_restore_product$"),
-        ],
-        states={
-            ADMIN_NEW_PRODUCT_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_product_name)],
-            ADMIN_NEW_PRODUCT_CODE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_product_code)],
-            ADMIN_NEW_PRODUCT_CATEGORY: [CallbackQueryHandler(receive_product_category, pattern="^category_")],
-            ADMIN_NEW_PRODUCT_PRICE_FR: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_product_price_fr)],
-            ADMIN_NEW_PRODUCT_PRICE_CH: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_product_price_ch)],
-            ADMIN_CONFIRM_PRODUCT: [
-                CallbackQueryHandler(confirm_create_product, pattern="^admin_confirm_create$"),
-                CallbackQueryHandler(admin_cancel_product, pattern="^admin_cancel_product$"),
-            ],
-        },
-        fallbacks=[
-            CallbackQueryHandler(admin_cancel_product, pattern="^admin_cancel_product$"),
-            CallbackQueryHandler(admin_close, pattern="^admin_close$"),
-        ],
-        name="product_management",
-        persistent=False,
-        per_message=False
-    )
-    
-    # Handler menu admin (VERSION COMPLÈTE AVEC TUTORIEL)
-    admin_menu_handler = ConversationHandler(
-        entry_points=[CommandHandler('admin', admin_command)],
-        states={
-            ADMIN_MENU_MAIN: [
-                CallbackQueryHandler(admin_menu_products_callback, pattern="^admin_menu_products$"),
-                CallbackQueryHandler(admin_menu_prices_callback, pattern="^admin_menu_prices$"),
-                CallbackQueryHandler(admin_menu_stats_callback, pattern="^admin_menu_stats$"),
-                CallbackQueryHandler(admin_menu_users_callback, pattern="^admin_menu_users$"),
-                CallbackQueryHandler(admin_menu_horaires_callback, pattern="^admin_menu_horaires$"),
-                CallbackQueryHandler(admin_menu_media_callback, pattern="^admin_menu_media$"),
-                CallbackQueryHandler(admin_menu_maintenance_callback, pattern="^admin_menu_maintenance$"),
-                CallbackQueryHandler(admin_menu_commandes_callback, pattern="^admin_menu_commandes$"),
-                CallbackQueryHandler(admin_menu_tutoriel_callback, pattern="^admin_menu_tutoriel$"),
-                # Callbacks tutoriel
-                CallbackQueryHandler(admin_tuto_step1, pattern="^tuto_step1$"),
-                CallbackQueryHandler(admin_tuto_step2, pattern="^tuto_step2$"),
-                CallbackQueryHandler(admin_tuto_step3, pattern="^tuto_step3$"),
-                CallbackQueryHandler(admin_tuto_step4, pattern="^tuto_step4$"),
-                CallbackQueryHandler(admin_tuto_step5, pattern="^tuto_step5$"),
-                CallbackQueryHandler(admin_tuto_step6, pattern="^tuto_step6$"),
-                CallbackQueryHandler(admin_tuto_send_all, pattern="^tuto_send_all$"),
-            ],
-            ADMIN_MENU_PRODUCTS: [
-                CallbackQueryHandler(admin_list_products_callback, pattern="^admin_list_products$"),
-                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
-                CallbackQueryHandler(admin_create_product, pattern="^admin_create_product$"),
-                CallbackQueryHandler(admin_archive_product, pattern="^admin_archive_product$"),
-                CallbackQueryHandler(admin_restore_product, pattern="^admin_restore_product$"),
-            ],
-            ADMIN_MENU_PRICES: [
-                CallbackQueryHandler(admin_show_prices_callback, pattern="^admin_show_prices$"),
-                CallbackQueryHandler(admin_modify_price_callback, pattern="^admin_modify_price$"),
-                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
-            ],
-            ADMIN_MENU_STATS: [
-                CallbackQueryHandler(admin_stats_realtime_callback, pattern="^admin_stats_realtime$"),
-                CallbackQueryHandler(admin_stats_weekly_callback, pattern="^admin_stats_weekly$"),
-                CallbackQueryHandler(admin_stats_monthly_callback, pattern="^admin_stats_monthly$"),
-                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
-            ],
-            ADMIN_MENU_USERS: [
-                CallbackQueryHandler(admin_open_users_callback, pattern="^admin_open_users$"),
-                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
-            ],
-            ADMIN_MENU_HORAIRES: [
-                CallbackQueryHandler(admin_horaires_toggle_callback, pattern="^admin_horaires_toggle$"),
-                CallbackQueryHandler(admin_horaires_info_callback, pattern="^admin_horaires_info$"),
-                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
-            ],
-            ADMIN_MENU_MEDIA: [
-                CallbackQueryHandler(admin_media_list_callback, pattern="^admin_media_list$"),
-                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
-            ],
-            ADMIN_MENU_MAINTENANCE: [
-                CallbackQueryHandler(admin_system_info_callback, pattern="^admin_system_info$"),
-                CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
-            ]
-        },
-        fallbacks=[CallbackQueryHandler(admin_close, pattern="^admin_close$")],
-        name="admin_menu",
-        persistent=False,
-        per_message=False
-    )
-    
-    # Ajout des handlers
-    application.add_handler(horaires_handler)
-    application.add_handler(conv_handler)
-    application.add_handler(product_management_handler)
-    application.add_handler(admin_menu_handler)
-    application.add_handler(CommandHandler('stats', admin_stats_command))
-    application.add_handler(CommandHandler('products', admin_products_command))
-    application.add_handler(CommandHandler('del', admin_del_product_command))
-    application.add_handler(CommandHandler('add', admin_add_product_command))
-    application.add_handler(CommandHandler('prices', admin_prices_command))
-    application.add_handler(CommandHandler('setprice', admin_setprice_command))
-    application.add_handler(CommandHandler('users', users_command))
-    application.add_handler(CommandHandler('repair', admin_repair_command))
-    application.add_handler(CommandHandler('debug', admin_debug_command))
-    
-    # Callbacks
-    application.add_handler(CallbackQueryHandler(admin_validation_livraison, pattern='^admin_validate_'))
-    application.add_handler(CallbackQueryHandler(confirm_archive_product, pattern="^archive_"))
-    application.add_handler(CallbackQueryHandler(execute_archive, pattern="^confirmarchive_"))
-    application.add_handler(CallbackQueryHandler(execute_restore, pattern="^restore_"))
-    application.add_handler(CallbackQueryHandler(admin_close, pattern="^admin_close$"))
-    application.add_handler(CallbackQueryHandler(user_stats_callback, pattern="^user_stats$"))
-    application.add_handler(CallbackQueryHandler(refresh_users_callback, pattern="^refresh_users$"))
-    
-    application.add_error_handler(error_callback)
-    
-    if application.job_queue is not None:
-        application.job_queue.run_repeating(check_pending_deletions, interval=60, first=10)
-        application.job_queue.run_repeating(schedule_reports, interval=60, first=10)
-        logger.info("✅ Tasks programmées")
-    
-    logger.info("✅ Handlers configurés")
-    logger.info("=" * 60)
-    logger.info("🚀 BOT V2.2 EN LIGNE (100%)")
-    logger.info("=" * 60)
-    logger.info("\n📋 Commandes disponibles:")
-    logger.info("  • /admin - Menu admin complet")
-    logger.info("  • /products - Menu gestion produits")
-    logger.info("  • /users - Liste utilisateurs + stats")
-    logger.info("  • /repair - Réparer produit invisible")
-    logger.info("  • /debug - Debug produits")
-    logger.info("=" * 60 + "\n")
-    
-    await application.initialize()
-    await application.start()
-    await application.updater.start_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
-    
-    import signal
-    stop_event = asyncio.Event()
-    def stop_handler(signum, frame):
-        stop_event.set()
-    signal.signal(signal.SIGINT, stop_handler)
-    signal.signal(signal.SIGTERM, stop_handler)
-    await stop_event.wait()
-    await application.updater.stop()
-    await application.stop()
-    await application.shutdown()
+"""Fonction principale asynchrone"""
+
+# Handler horaires
+horaires_handler = ConversationHandler(
+entry_points=[CommandHandler('horaires', admin_horaires_command)],
+states={ADMIN_HORAIRES_INPUT: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_horaires_input)]},
+fallbacks=[],
+allow_reentry=False,
+name="horaires_conv"
+)
+
+# Handler principal
+conv_handler = ConversationHandler(
+entry_points=[CommandHandler('start', start_command)],
+states={
+LANGUE: [CallbackQueryHandler(set_langue, pattern='^lang_')],
+PAYS: [
+CallbackQueryHandler(menu_navigation, pattern='^start_order$'),
+CallbackQueryHandler(choix_pays, pattern='^country_'),
+CallbackQueryHandler(restart_order, pattern='^restart_order$'),
+CallbackQueryHandler(voir_carte, pattern='^voir_carte$'),
+CallbackQueryHandler(afficher_prix, pattern='^prix_(france|suisse)$'),
+CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$'),
+CallbackQueryHandler(menu_navigation, pattern='^contact_admin$'),
+CallbackQueryHandler(back_navigation, pattern='^back_to_country_choice$')
+],
+CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, contact_handler)],
+PRODUIT: [
+CallbackQueryHandler(choix_produit, pattern='^product_'),
+CallbackQueryHandler(back_navigation, pattern='^back_(to_main|to_country_choice|to_products)$'),
+CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')
+],
+PILL_SUBCATEGORY: [
+CallbackQueryHandler(choix_pill_subcategory, pattern='^pill_'),
+CallbackQueryHandler(back_navigation, pattern='^back_to_products$'),
+CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')
+],
+ROCK_SUBCATEGORY: [
+CallbackQueryHandler(choix_rock_subcategory, pattern='^rock_'),
+CallbackQueryHandler(back_navigation, pattern='^back_to_products$'),
+CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')
+],
+QUANTITE: [MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_quantite)],
+CART_MENU: [
+CallbackQueryHandler(cart_menu, pattern='^(add_more|proceed_checkout)$'),
+CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')
+],
+ADRESSE: [MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_adresse)],
+LIVRAISON: [CallbackQueryHandler(choix_livraison, pattern='^delivery_')],
+PAIEMENT: [CallbackQueryHandler(choix_paiement, pattern='^payment_')],
+CONFIRMATION: [CallbackQueryHandler(confirmation, pattern='^(confirm_order|cancel)$')]
+},
+fallbacks=[CommandHandler('start', start_command)],
+allow_reentry=True,
+per_message=False,
+name="main_conv"
+)
+
+# Handler gestion produits
+product_management_handler = ConversationHandler(
+entry_points=[
+CallbackQueryHandler(admin_create_product, pattern="^admin_create_product$"),
+CallbackQueryHandler(admin_archive_product, pattern="^admin_archive_product$"),
+CallbackQueryHandler(admin_restore_product, pattern="^admin_restore_product$"),
+],
+states={
+ADMIN_NEW_PRODUCT_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_product_name)],
+ADMIN_NEW_PRODUCT_CODE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_product_code)],
+ADMIN_NEW_PRODUCT_CATEGORY: [CallbackQueryHandler(receive_product_category, pattern="^category_")],
+ADMIN_NEW_PRODUCT_PRICE_FR: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_product_price_fr)],
+ADMIN_NEW_PRODUCT_PRICE_CH: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_product_price_ch)],
+ADMIN_CONFIRM_PRODUCT: [
+CallbackQueryHandler(confirm_create_product, pattern="^admin_confirm_create$"),
+CallbackQueryHandler(admin_cancel_product, pattern="^admin_cancel_product$"),
+],
+},
+fallbacks=[
+CallbackQueryHandler(admin_cancel_product, pattern="^admin_cancel_product$"),
+CallbackQueryHandler(admin_close, pattern="^admin_close$"),
+],
+name="product_management",
+persistent=False,
+per_message=False
+)
+
+# Handler menu admin
+admin_menu_handler = ConversationHandler(
+entry_points=[CommandHandler('admin', admin_command)],
+states={
+ADMIN_MENU_MAIN: [
+CallbackQueryHandler(admin_menu_products_callback, pattern="^admin_menu_products$"),
+CallbackQueryHandler(admin_menu_prices_callback, pattern="^admin_menu_prices$"),
+CallbackQueryHandler(admin_menu_stats_callback, pattern="^admin_menu_stats$"),
+CallbackQueryHandler(admin_menu_users_callback, pattern="^admin_menu_users$"),
+CallbackQueryHandler(admin_menu_horaires_callback, pattern="^admin_menu_horaires$"),
+CallbackQueryHandler(admin_menu_media_callback, pattern="^admin_menu_media$"),
+CallbackQueryHandler(admin_menu_maintenance_callback, pattern="^admin_menu_maintenance$"),
+CallbackQueryHandler(admin_menu_commandes_callback, pattern="^admin_menu_commandes$"),
+CallbackQueryHandler(admin_menu_tutoriel_callback, pattern="^admin_menu_tutoriel$"),
+CallbackQueryHandler(admin_tuto_step1, pattern="^tuto_step1$"),
+CallbackQueryHandler(admin_tuto_step2, pattern="^tuto_step2$"),
+CallbackQueryHandler(admin_tuto_step3, pattern="^tuto_step3$"),
+CallbackQueryHandler(admin_tuto_step4, pattern="^tuto_step4$"),
+CallbackQueryHandler(admin_tuto_step5, pattern="^tuto_step5$"),
+CallbackQueryHandler(admin_tuto_step6, pattern="^tuto_step6$"),
+CallbackQueryHandler(admin_tuto_send_all, pattern="^tuto_send_all$"),
+],
+ADMIN_MENU_PRODUCTS: [
+CallbackQueryHandler(admin_list_products_callback, pattern="^admin_list_products$"),
+CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
+CallbackQueryHandler(admin_create_product, pattern="^admin_create_product$"),
+CallbackQueryHandler(admin_archive_product, pattern="^admin_archive_product$"),
+CallbackQueryHandler(admin_restore_product, pattern="^admin_restore_product$"),
+],
+ADMIN_MENU_PRICES: [
+CallbackQueryHandler(admin_show_prices_callback, pattern="^admin_show_prices$"),
+CallbackQueryHandler(admin_modify_price_callback, pattern="^admin_modify_price$"),
+CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
+],
+ADMIN_MENU_STATS: [
+CallbackQueryHandler(admin_stats_realtime_callback, pattern="^admin_stats_realtime$"),
+CallbackQueryHandler(admin_stats_weekly_callback, pattern="^admin_stats_weekly$"),
+CallbackQueryHandler(admin_stats_monthly_callback, pattern="^admin_stats_monthly$"),
+CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
+],
+ADMIN_MENU_USERS: [
+CallbackQueryHandler(admin_open_users_callback, pattern="^admin_open_users$"),
+CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
+],
+ADMIN_MENU_HORAIRES: [
+CallbackQueryHandler(admin_horaires_toggle_callback, pattern="^admin_horaires_toggle$"),
+CallbackQueryHandler(admin_horaires_info_callback, pattern="^admin_horaires_info$"),
+CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
+],
+ADMIN_MENU_MEDIA: [
+CallbackQueryHandler(admin_media_list_callback, pattern="^admin_media_list$"),
+CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
+],
+ADMIN_MENU_MAINTENANCE: [
+CallbackQueryHandler(admin_system_info_callback, pattern="^admin_system_info$"),
+CallbackQueryHandler(admin_menu_main_callback, pattern="^admin_menu_main$"),
+]
+},
+fallbacks=[CallbackQueryHandler(admin_close, pattern="^admin_close$")],
+name="admin_menu",
+persistent=False,
+per_message=False
+)
+
+application.add_handler(horaires_handler)
+application.add_handler(conv_handler)
+application.add_handler(product_management_handler)
+application.add_handler(admin_menu_handler)
+application.add_handler(CommandHandler('stats', admin_stats_command))
+application.add_handler(CommandHandler('products', admin_products_command))
+application.add_handler(CommandHandler('del', admin_del_product_command))
+application.add_handler(CommandHandler('add', admin_add_product_command))
+application.add_handler(CommandHandler('prices', admin_prices_command))
+application.add_handler(CommandHandler('setprice', admin_setprice_command))
+application.add_handler(CommandHandler('users', users_command))
+application.add_handler(CommandHandler('repair', admin_repair_command))
+application.add_handler(CommandHandler('debug', admin_debug_command))
+
+application.add_handler(CallbackQueryHandler(admin_validation_livraison, pattern='^admin_validate_'))
+application.add_handler(CallbackQueryHandler(confirm_archive_product, pattern="^archive_"))
+application.add_handler(CallbackQueryHandler(execute_archive, pattern="^confirmarchive_"))
+application.add_handler(CallbackQueryHandler(execute_restore, pattern="^restore_"))
+application.add_handler(CallbackQueryHandler(admin_close, pattern="^admin_close$"))
+application.add_handler(CallbackQueryHandler(user_stats_callback, pattern="^user_stats$"))
+application.add_handler(CallbackQueryHandler(refresh_users_callback, pattern="^refresh_users$"))
+
+application.add_error_handler(error_callback)
+
+if application.job_queue is not None:
+application.job_queue.run_repeating(check_pending_deletions, interval=60, first=10)
+application.job_queue.run_repeating(schedule_reports, interval=60, first=10)
+logger.info("✅ Tasks programmées")
+
+logger.info("✅ Handlers configurés")
+logger.info("=" * 60)
+logger.info("🚀 BOT V2.2 EN LIGNE (100%)")
+logger.info("=" * 60)
+logger.info("\n📋 Commandes disponibles:")
+logger.info("  • /admin - Menu admin complet")
+logger.info("  • /products - Menu gestion produits")
+logger.info("  • /users - Liste utilisateurs + stats")
+logger.info("  • /repair - Réparer produit invisible")
+logger.info("  • /debug - Debug produits")
+logger.info("=" * 60 + "\n")
+
+await application.initialize()
+await application.start()
+await application.updater.start_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
+
+import signal
+stop_event = asyncio.Event()
+def stop_handler(signum, frame):
+stop_event.set()
+signal.signal(signal.SIGINT, stop_handler)
+signal.signal(signal.SIGTERM, stop_handler)
+await stop_event.wait()
+await application.updater.stop()
+await application.stop()
+await application.shutdown()
 
 
 def main():
-    try:
-        asyncio.run(main_async())
-    except KeyboardInterrupt:
-        logger.info("\n⏹️  Arrêt...")
-    except Exception as e:
-        logger.error(f"❌ Erreur: {e}", exc_info=True)
-        sys.exit(1)
+try:
+asyncio.run(main_async())
+except KeyboardInterrupt:
+logger.info("\n⏹️  Arrêt...")
+except Exception as e:
+logger.error(f"❌ Erreur: {e}", exc_info=True)
+sys.exit(1)
 
 
 if __name__ == '__main__':
-    main()
+main()
 
 # ==================== FIN DU BOT V2.2 COMPLET ====================
 

@@ -1070,6 +1070,9 @@ def get_formatted_price_list(country_code):
     
     available = get_available_products()
     
+    if not available:
+        return "_Aucun produit disponible_"
+    
     text = ""
     
     if "❄️ Coco" in available:
@@ -1100,6 +1103,10 @@ def get_formatted_price_list(country_code):
     if crystal_available:
         text += f"🪨 *Crystal* :\n"
         text += "\n".join(crystal_available) + "\n"
+    
+    for product_name in sorted(available):
+        price = country_prices.get(product_name, 0)
+        text += f"{product_name} : {price}€/g\n"
     
     text += f"\n📦 *Livraison* :\n"
     text += f"  • Postale (48-72h) : 10€\n"

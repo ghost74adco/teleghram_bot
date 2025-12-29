@@ -466,7 +466,7 @@ def error_handler(func):
                 pass
             return ConversationHandler.END
     return wrapper
-    # ==================== SYSTÈME DE PERSISTANCE ====================
+# ==================== SYSTÈME DE PERSISTANCE ====================
 
 def load_product_registry():
     """Charge le registre complet des produits"""
@@ -1063,7 +1063,7 @@ async def notify_admin_new_user(context, user_id, user_data):
         logger.error(f"❌ Erreur notification admin: {e}")
 
 def get_formatted_price_list(country_code):
-    """Génère la liste formatée des prix"""
+    """Génère la liste formatée des prix - VERSION CORRIGÉE SANS DOUBLONS"""
     prices = load_prices()
     country = "FR" if country_code == "fr" else "CH"
     country_prices = prices.get(country, PRIX_FR if country == "FR" else PRIX_CH)
@@ -1075,39 +1075,12 @@ def get_formatted_price_list(country_code):
     
     text = ""
     
-    if "❄️ Coco" in available:
-        text += f"❄️ *Coco* : {country_prices.get('❄️ Coco', 0)}€/g\n"
-    
-    pills_available = []
-    if "💊 Squid Game" in available:
-        pills_available.append(f"  • Squid Game : {country_prices.get('💊 Squid Game', 0)}€")
-    if "💊 Punisher" in available:
-        pills_available.append(f"  • Punisher : {country_prices.get('💊 Punisher', 0)}€")
-    
-    if pills_available:
-        text += f"💊 *Pills* :\n"
-        text += "\n".join(pills_available) + "\n"
-    
-    if "🫒 Hash" in available:
-        text += f"🫒 *Hash* : {country_prices.get('🫒 Hash', 0)}€/g\n"
-    
-    if "🍀 Weed" in available:
-        text += f"🍀 *Weed* : {country_prices.get('🍀 Weed', 0)}€/g\n"
-    
-    crystal_available = []
-    if "🪨 MDMA" in available:
-        crystal_available.append(f"  • MDMA : {country_prices.get('🪨 MDMA', 0)}€/g")
-    if "🪨 4MMC" in available:
-        crystal_available.append(f"  • 4MMC : {country_prices.get('🪨 4MMC', 0)}€/g")
-    
-    if crystal_available:
-        text += f"🪨 *Crystal* :\n"
-        text += "\n".join(crystal_available) + "\n"
-    
+    # Afficher TOUS les produits disponibles, triés par ordre alphabétique
     for product_name in sorted(available):
         price = country_prices.get(product_name, 0)
         text += f"{product_name} : {price}€/g\n"
     
+    # Informations de livraison
     text += f"\n📦 *Livraison* :\n"
     text += f"  • Postale (48-72h) : 10€\n"
     text += f"  • Express (30min+) : 10€/km"
@@ -1607,15 +1580,40 @@ async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
     available = get_available_products()
     keyboard = []
     
-    if "❄️ Coco" in available:
-        keyboard.append([InlineKeyboardButton("❄️ COCO", callback_data="product_snow")])
-    if "💊 Squid Game" in available or "💊 Punisher" in available:
-        keyboard.append([InlineKeyboardButton("💊 Pills", callback_data="product_pill")])
-    if "🫒 Hash" in available:
-        keyboard.append([InlineKeyboardButton("🫒 Hash", callback_data="product_olive")])
-    if "🍀 Weed" in available:
-        keyboard.append([InlineKeyboardButton("🍀 Weed", callback_data="product_clover")])
-    if "🪨 MDMA" in available or "🪨 4MMC" in available:
+    # Groupes pour Pills et Crystal
+    has_pills = False
+    has_crystals = False
+    
+    # Parcourir tous les produits disponibles
+    for product_name in sorted(available):
+        # Trouver le code du produit
+        code = None
+        for c, name in PRODUCT_CODES.items():
+            if name == product_name:
+                code = c
+                break
+        
+        if not code:
+            continue
+        
+        # Vérifier la catégorie
+        if product_name in PILL_SUBCATEGORIES.values():
+            # C'est une pill
+            has_pills = True
+        elif product_name in ROCK_SUBCATEGORIES.values():
+            # C'est un crystal
+            has_crystals = True
+        else:
+            # Produit direct (Coco, Hash, Weed, K, etc.)
+            emoji = product_name.split()[0] if product_name else ""
+            keyboard.append([InlineKeyboardButton(product_name, callback_data=f"product_{code}")])
+    
+    # Ajouter Pills si disponibles
+    if has_pills:
+        keyboard.insert(0, [InlineKeyboardButton("💊 Pills", callback_data="product_pill")])
+    
+    # Ajouter Crystal si disponibles
+    if has_crystals:
         keyboard.append([InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")])
     
     keyboard.append([InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_country_choice")])
@@ -1633,10 +1631,17 @@ async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if product_code == "pill":
         keyboard = []
-        if "💊 Squid Game" in available:
-            keyboard.append([InlineKeyboardButton("💊 Squid Game", callback_data="pill_squid_game")])
-        if "💊 Punisher" in available:
-            keyboard.append([InlineKeyboardButton("💊 Punisher", callback_data="pill_punisher")])
+        # Chercher tous les produits de type "pill" dans available
+        for name in available:
+            if name in PILL_SUBCATEGORIES.values():
+                # Trouver le code correspondant
+                code = [k for k, v in PILL_SUBCATEGORIES.items() if v == name][0]
+                keyboard.append([InlineKeyboardButton(name, callback_data=f"pill_{code}")])
+        
+        if not keyboard:
+            await query.answer("❌ Aucune pilule disponible", show_alert=True)
+            return PRODUIT
+        
         keyboard.append([InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_products")])
         keyboard.append([InlineKeyboardButton(tr(context.user_data, "main_menu_btn"), callback_data="back_to_main_menu")])
         
@@ -1645,18 +1650,29 @@ async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     elif product_code == "rock":
         keyboard = []
-        if "🪨 MDMA" in available:
-            keyboard.append([InlineKeyboardButton("🪨 MDMA", callback_data="rock_mdma")])
-        if "🪨 4MMC" in available:
-            keyboard.append([InlineKeyboardButton("🪨 4MMC", callback_data="rock_fourmmc")])
+        # Chercher tous les produits de type "rock" dans available
+        for name in available:
+            if name in ROCK_SUBCATEGORIES.values():
+                # Trouver le code correspondant
+                code = [k for k, v in ROCK_SUBCATEGORIES.items() if v == name][0]
+                keyboard.append([InlineKeyboardButton(name, callback_data=f"rock_{code}")])
+        
+        if not keyboard:
+            await query.answer("❌ Aucun crystal disponible", show_alert=True)
+            return PRODUIT
+        
         keyboard.append([InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_products")])
         keyboard.append([InlineKeyboardButton(tr(context.user_data, "main_menu_btn"), callback_data="back_to_main_menu")])
         
         await query.message.edit_text(tr(context.user_data, "choose_rock_type"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return ROCK_SUBCATEGORY
     
-    product_names = {"snow": "❄️ Coco", "olive": "🫒 Hash", "clover": "🍀 Weed"}
-    product_name = product_names.get(product_code, product_code)
+    # Produits directs - chercher par code
+    product_name = PRODUCT_CODES.get(product_code)
+    
+    if not product_name:
+        await query.answer("❌ Produit non trouvé", show_alert=True)
+        return PRODUIT
     
     if not is_product_available(product_name):
         await query.answer("❌ Produit indisponible", show_alert=True)
@@ -1728,15 +1744,37 @@ async def cart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         available = get_available_products()
         keyboard = []
         
-        if "❄️ Coco" in available:
-            keyboard.append([InlineKeyboardButton("❄️ COCO", callback_data="product_snow")])
-        if "💊 Squid Game" in available or "💊 Punisher" in available:
-            keyboard.append([InlineKeyboardButton("💊 Pills", callback_data="product_pill")])
-        if "🫒 Hash" in available:
-            keyboard.append([InlineKeyboardButton("🫒 Hash", callback_data="product_olive")])
-        if "🍀 Weed" in available:
-            keyboard.append([InlineKeyboardButton("🍀 Weed", callback_data="product_clover")])
-        if "🪨 MDMA" in available or "🪨 4MMC" in available:
+        # Groupes pour Pills et Crystal
+        has_pills = False
+        has_crystals = False
+        
+        # Parcourir tous les produits disponibles
+        for product_name in sorted(available):
+            # Trouver le code du produit
+            code = None
+            for c, name in PRODUCT_CODES.items():
+                if name == product_name:
+                    code = c
+                    break
+            
+            if not code:
+                continue
+            
+            # Vérifier la catégorie
+            if product_name in PILL_SUBCATEGORIES.values():
+                has_pills = True
+            elif product_name in ROCK_SUBCATEGORIES.values():
+                has_crystals = True
+            else:
+                # Produit direct
+                keyboard.append([InlineKeyboardButton(product_name, callback_data=f"product_{code}")])
+        
+        # Ajouter Pills si disponibles
+        if has_pills:
+            keyboard.insert(0, [InlineKeyboardButton("💊 Pills", callback_data="product_pill")])
+        
+        # Ajouter Crystal si disponibles
+        if has_crystals:
             keyboard.append([InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")])
         
         keyboard.append([InlineKeyboardButton(tr(context.user_data, "main_menu_btn"), callback_data="back_to_main_menu")])
@@ -1900,15 +1938,30 @@ async def back_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         available = get_available_products()
         keyboard = []
         
-        if "❄️ Coco" in available:
-            keyboard.append([InlineKeyboardButton("❄️ COCO", callback_data="product_snow")])
-        if "💊 Squid Game" in available or "💊 Punisher" in available:
-            keyboard.append([InlineKeyboardButton("💊 Pills", callback_data="product_pill")])
-        if "🫒 Hash" in available:
-            keyboard.append([InlineKeyboardButton("🫒 Hash", callback_data="product_olive")])
-        if "🍀 Weed" in available:
-            keyboard.append([InlineKeyboardButton("🍀 Weed", callback_data="product_clover")])
-        if "🪨 MDMA" in available or "🪨 4MMC" in available:
+        has_pills = False
+        has_crystals = False
+        
+        for product_name in sorted(available):
+            code = None
+            for c, name in PRODUCT_CODES.items():
+                if name == product_name:
+                    code = c
+                    break
+            
+            if not code:
+                continue
+            
+            if product_name in PILL_SUBCATEGORIES.values():
+                has_pills = True
+            elif product_name in ROCK_SUBCATEGORIES.values():
+                has_crystals = True
+            else:
+                keyboard.append([InlineKeyboardButton(product_name, callback_data=f"product_{code}")])
+        
+        if has_pills:
+            keyboard.insert(0, [InlineKeyboardButton("💊 Pills", callback_data="product_pill")])
+        
+        if has_crystals:
             keyboard.append([InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")])
         
         keyboard.append([InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_country_choice")])
@@ -1951,8 +2004,7 @@ async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Contact: {e}")
         await update.message.reply_text("❌ Erreur.")
     return ConversationHandler.END
-
-# ==================== COMMANDES ADMIN ====================
+    # ==================== COMMANDES ADMIN ====================
 
 @error_handler
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

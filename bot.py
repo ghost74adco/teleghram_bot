@@ -3095,19 +3095,39 @@ async def admin_failover_command(update: Update, context: ContextTypes.DEFAULT_T
     
     if IS_BACKUP_BOT:
         text += f"🟡 *Vous êtes sur : BOT BACKUP*\n"
-        text += f"🎯 Bot principal : {PRIMARY_BOT_USERNAME}\n\n"
+        text += f"🎯 Bot principal : `{PRIMARY_BOT_USERNAME}`\n\n"
         
         is_down = status.get("failover_active", False)
         text += f"Statut principal : {'🔴 DOWN' if is_down else '🟢 ONLINE'}\n"
-        text += f"Dernière vérif : {status.get('last_primary_check', 'N/A')}\n"
+        
+        # Formater la date proprement
+        last_check = status.get('last_primary_check', 'N/A')
+        if last_check != 'N/A':
+            try:
+                check_time = datetime.fromisoformat(last_check)
+                last_check = check_time.strftime('%Y-%m-%d %H:%M:%S')
+            except:
+                pass
+        
+        text += f"Dernière vérif : `{last_check}`\n"
         text += f"Échecs consécutifs : {status.get('consecutive_failures', 0)}/{PRIMARY_BOT_DOWN_THRESHOLD}\n"
         
         if is_down:
             text += f"\n⚠️ *FAILOVER ACTIF*\n"
-            text += f"Depuis : {status.get('last_failover_time', 'N/A')}\n"
+            
+            # Formater la date du failover
+            failover_time = status.get('last_failover_time', 'N/A')
+            if failover_time != 'N/A':
+                try:
+                    ft = datetime.fromisoformat(failover_time)
+                    failover_time = ft.strftime('%Y-%m-%d %H:%M:%S')
+                except:
+                    pass
+            
+            text += f"Depuis : `{failover_time}`\n"
     else:
         text += f"🟢 *Vous êtes sur : BOT PRINCIPAL*\n"
-        text += f"🔄 Bot backup : {BACKUP_BOT_USERNAME}\n\n"
+        text += f"🔄 Bot backup : `{BACKUP_BOT_USERNAME}`\n\n"
         text += f"✅ Mode normal - Pas de failover actif"
     
     await update.message.reply_text(text, parse_mode='Markdown')

@@ -1,471 +1,538 @@
 import os
-import sys
-import logging
 import re
+import sys
+import json
 import csv
 import math
 import asyncio
-import json
-from dotenv import load_dotenv
+import logging
 from pathlib import Path
-from functools import wraps
-from collections import defaultdict
 from datetime import datetime, timedelta, time
+from collections import defaultdict
+from functools import wraps
 
-# FIX PYTHON 3.13
-if sys.version_info >= (3, 13):
-    try:
-        asyncio.get_event_loop()
-    except RuntimeError:
-        asyncio.set_event_loop(asyncio.new_event_loop())
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    CallbackQueryHandler,
+    MessageHandler,
+    ConversationHandler,
+    ContextTypes,
+    filters
+)
 
+# Configuration du logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO,
-    handlers=[logging.StreamHandler()]
+    level=logging.INFO
 )
 logger = logging.getLogger(__name__)
-logging.getLogger("httpx").setLevel(logging.WARNING)
 
-for env_file in ['.env', 'infos.env']:
-    dotenv_path = Path(__file__).parent / env_file
-    if dotenv_path.exists():
-        load_dotenv(dotenv_path)
-        logger.info(f"✅ Variables: {env_file}")
-        break
+# ==================== CHARGEMENT VARIABLES D'ENVIRONNEMENT ====================
+
+from dotenv import load_dotenv
+
+env_file = Path(__file__).parent / "infos.env"
+if env_file.exists():
+    load_dotenv(env_file)
+    logger.info("✅ Variables: infos.env")
 else:
-    load_dotenv()
+    logger.warning("⚠️ Fichier infos.env non trouvé")
 
-TOKEN = (os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("BOT_TOKEN") or "").strip()
-ADMIN_ID_STR = (os.getenv("ADMIN_ID") or os.getenv("ADMIN_USER_IDS") or "").strip()
-ADMIN_ADDRESS = (os.getenv("ADMIN_ADDRESS") or "858 Rte du Chef Lieu, 74250 Fillinges").strip()
-OPENROUTE_API_KEY = os.getenv("OPENROUTE_API_KEY", "").strip()
+# Variables d'environnement obligatoires
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+ADMIN_ID = int(os.getenv("ADMIN_TELEGRAM_ID", "0"))
 
-if not TOKEN or ':' not in TOKEN:
-    logger.error("❌ TOKEN invalide")
-    sys.exit(1)
-if not ADMIN_ID_STR or not ADMIN_ID_STR.isdigit():
-    logger.error(f"❌ ADMIN_ID invalide")
+if not TOKEN or ADMIN_ID == 0:
+    logger.error("❌ Variables manquantes!")
     sys.exit(1)
 
-ADMIN_ID = int(ADMIN_ID_STR)
+# Configuration BOT PRINCIPAL vs BACKUP (pour système failover)
+IS_BACKUP_BOT = os.getenv("IS_BACKUP_BOT", "false").lower() == "true"
+PRIMARY_BOT_USERNAME = os.getenv("PRIMARY_BOT_USERNAME", "@votre_bot_principal_bot")
+BACKUP_BOT_USERNAME = os.getenv("BACKUP_BOT_USERNAME", "@votre_bot_backup_bot")
+PRIMARY_BOT_TOKEN = os.getenv("PRIMARY_BOT_TOKEN", "")
 
-try:
-    from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-    from telegram.ext import Application, ContextTypes, CallbackQueryHandler, ConversationHandler, MessageHandler, CommandHandler, filters
-except ImportError:
-    logger.error("❌ pip install python-telegram-bot")
-    sys.exit(1)
+# Health check (pour failover)
+HEALTH_CHECK_INTERVAL = 60
+PRIMARY_BOT_DOWN_THRESHOLD = 3
 
-# ==================== CONFIGURATION CALCUL DE DISTANCE ====================
+# Configuration distance
+DISTANCE_METHOD = os.getenv("DISTANCE_METHOD", "geopy")
 
-distance_client = None
-DISTANCE_METHOD = "simulation"
-
-if OPENROUTE_API_KEY:
+# Import selon méthode choisie
+if DISTANCE_METHOD == "openroute":
     try:
         import openrouteservice
-        distance_client = openrouteservice.Client(key=OPENROUTE_API_KEY)
-        DISTANCE_METHOD = "openroute"
-        logger.info("✅ OpenRouteService - Distance réelle activée")
+        ORS_API_KEY = os.getenv("OPENROUTESERVICE_API_KEY", "")
+        if ORS_API_KEY:
+            distance_client = openrouteservice.Client(key=ORS_API_KEY)
+            logger.info("✅ OpenRouteService configuré")
+        else:
+            logger.warning("⚠️ ORS_API_KEY manquant")
+            DISTANCE_METHOD = "geopy"
     except ImportError:
         logger.warning("⚠️ pip install openrouteservice")
-    except Exception as e:
-        logger.error(f"❌ OpenRouteService: {e}")
+        DISTANCE_METHOD = "geopy"
 
-if DISTANCE_METHOD == "simulation":
+if DISTANCE_METHOD == "geopy":
     try:
         from geopy.geocoders import Nominatim
         from geopy.distance import geodesic
-        distance_client = Nominatim(user_agent="telegram_bot_v2_2")
-        DISTANCE_METHOD = "geopy"
+        distance_client = Nominatim(user_agent="telegram_bot")
         logger.info("✅ Geopy - Distance approximative")
-    except:
-        pass
+    except ImportError:
+        logger.error("❌ pip install geopy")
+        sys.exit(1)
 
-if DISTANCE_METHOD == "simulation":
-    logger.warning("⚠️ DISTANCE SIMULÉE")
+# ==================== CHEMINS DES FICHIERS - DISQUE PERSISTANT ====================
 
-# ==================== CONFIGURATION MÉDIAS ====================
+# UTILISE LE DISQUE PERSISTANT RENDER (/data)
+# Si le disque /data existe (production), l'utiliser
+# Sinon utiliser ./data (développement local)
+if Path("/data").exists():
+    DATA_DIR = Path("/data")
+    logger.info("✅ Utilisation du disque persistant : /data")
+else:
+    DATA_DIR = Path(__file__).parent / "data"
+    logger.info("⚠️ Utilisation du dossier local : ./data")
 
-MEDIA_DIR = Path(__file__).parent / "sampleFolder"
+# Créer le dossier s'il n'existe pas
+DATA_DIR.mkdir(exist_ok=True)
 
-IMAGES_PRODUITS = {}
-VIDEOS_PRODUITS = {}
+# Fichiers JSON
+PRODUCT_REGISTRY_FILE = DATA_DIR / "product_registry.json"
+AVAILABLE_PRODUCTS_FILE = DATA_DIR / "available_products.json"
+PRICES_FILE = DATA_DIR / "prices.json"
+ARCHIVED_PRODUCTS_FILE = DATA_DIR / "archived_products.json"
+USERS_FILE = DATA_DIR / "users.json"
+HORAIRES_FILE = DATA_DIR / "horaires.json"
+STATS_FILE = DATA_DIR / "stats.json"
+PENDING_MESSAGES_FILE = DATA_DIR / "pending_messages.json"
 
-IMAGE_PRIX_FRANCE = MEDIA_DIR / "catalogue.png"
-IMAGE_PRIX_SUISSE = MEDIA_DIR / "catalogue.png"
+# Dossier média
+MEDIA_DIR = Path(__file__).parent / "media"
 
-MAX_QUANTITY_PER_PRODUCT = 100
+# Images prix
+IMAGE_PRIX_FRANCE = MEDIA_DIR / "prix_france.jpg"
+IMAGE_PRIX_SUISSE = MEDIA_DIR / "prix_suisse.jpg"
+
+# ==================== CONSTANTS ====================
+
+# États de conversation
+(LANGUE, PAYS, PRODUIT, PILL_SUBCATEGORY, ROCK_SUBCATEGORY, QUANTITE, 
+ CART_MENU, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION, CONTACT,
+ ADMIN_MENU_MAIN, ADMIN_NEW_PRODUCT_NAME, ADMIN_NEW_PRODUCT_CODE,
+ ADMIN_NEW_PRODUCT_CATEGORY, ADMIN_NEW_PRODUCT_PRICE_FR, 
+ ADMIN_NEW_PRODUCT_PRICE_CH, ADMIN_CONFIRM_PRODUCT,
+ ADMIN_HORAIRES_INPUT) = range(19)
+
+# Configuration
+MAX_QUANTITY_PER_PRODUCT = 1000
 FRAIS_POSTAL = 10
+ADMIN_ADDRESS = "Genève, Suisse"
 
-# États de la conversation
-LANGUE, PAYS, PRODUIT, PILL_SUBCATEGORY, ROCK_SUBCATEGORY = range(5)
-QUANTITE, CART_MENU, ADRESSE, LIVRAISON, PAIEMENT, CONFIRMATION, CONTACT = range(5, 12)
-ADMIN_HORAIRES_INPUT = 12
-ADMIN_PRODUCT_MENU = 13
-ADMIN_NEW_PRODUCT_NAME = 14
-ADMIN_NEW_PRODUCT_CODE = 15
-ADMIN_NEW_PRODUCT_CATEGORY = 16
-ADMIN_NEW_PRODUCT_PRICE_FR = 17
-ADMIN_NEW_PRODUCT_PRICE_CH = 18
-ADMIN_CONFIRM_PRODUCT = 19
-ADMIN_NEW_PRODUCT_IMAGE = 20
-ADMIN_NEW_PRODUCT_VIDEO = 21
-ADMIN_MENU_MAIN = 22
-ADMIN_MENU_PRODUCTS = 23
-ADMIN_MENU_PRICES = 24
-ADMIN_MENU_STATS = 25
-ADMIN_MENU_USERS = 26
-ADMIN_MENU_HORAIRES = 27
-ADMIN_MENU_MEDIA = 28
-ADMIN_MENU_MAINTENANCE = 29
-
-PILL_SUBCATEGORIES = {}
-ROCK_SUBCATEGORIES = {}
-
-# Mapping des codes produits
-PRODUCT_CODES = {}
-
-# Prix par défaut
+# Prix par défaut (BACKUP seulement, utilise prices.json en priorité)
 PRIX_FR = {
-    "❄️ Coco": 80, 
-    "💊 Squid Game": 10, 
-    "💊 Punisher": 10, 
-    "🫒 Hash": 7, 
-    "🍀 Weed": 8,
-    "🪨 MDMA": 12,
-    "🪨 4MMC": 12
+    "❄️ Coco": 50,
+    "💊 Squid Game": 15,
+    "💊 Punisher": 15,
+    "🫒 Hash": 8,
+    "🍀 Weed": 50,
+    "🪨 MDMA": 50,
+    "🪨 4MMC": 40
 }
 
 PRIX_CH = {
-    "❄️ Coco": 100, 
-    "💊 Squid Game": 15, 
-    "💊 Punisher": 15, 
-    "🫒 Hash": 8, 
-    "🍀 Weed": 10,
-    "🪨 MDMA": 18,
-    "🪨 4MMC": 18
+    "❄️ Coco": 100,
+    "💊 Squid Game": 15,
+    "💊 Punisher": 15,
+    "🫒 Hash": 8,
+    "🍀 Weed": 50,
+    "🪨 MDMA": 100,
+    "🪨 4MMC": 60
 }
 
-# Fichiers de configuration
-HORAIRES_FILE = Path(__file__).parent / "horaires.json"
-STATS_FILE = Path(__file__).parent / "stats.json"
-PENDING_MESSAGES_FILE = Path(__file__).parent / "pending_messages.json"
-AVAILABLE_PRODUCTS_FILE = Path(__file__).parent / "available_products.json"
-PRICES_FILE = Path(__file__).parent / "prices.json"
-ARCHIVED_PRODUCTS_FILE = Path(__file__).parent / "archived_products.json"
-USERS_FILE = Path(__file__).parent / "users.json"
-PRODUCT_REGISTRY_FILE = Path(__file__).parent / "product_registry.json"
+# Dictionnaires globaux (initialisés dynamiquement depuis le registre)
+PRODUCT_CODES = {}
+PILL_SUBCATEGORIES = {}
+ROCK_SUBCATEGORIES = {}
+IMAGES_PRODUITS = {}
+VIDEOS_PRODUITS = {}
+
+# ==================== TRADUCTIONS - PARTIE 1 ====================
 
 TRANSLATIONS = {
     "fr": {
-        "welcome": "🌿 *BIENVENUE* 🌿\n\n⚠️ *VERSION 2.2*\n\nConversations en *ÉCHANGE SECRET*.\n\n🙏 *Merci* 💪💚",
-        "main_menu": "\n\n📱 *MENU :*",
-        "choose_country": "🌍 *Pays :*",
-        "choose_product": "🛒 *Produit :*",
-        "choose_pill_type": "💊 *Type :*",
-        "choose_rock_type": "🪨 *Type :*",
-        "enter_quantity": "🔢 *Quantité :*",
-        "enter_address": "📍 *Adresse :*",
-        "choose_delivery": "📦 *Livraison :*\n\n✉️ Postale: 48-72h, 10€\n⚡ Express: 30min+",
-        "distance_calculated": "📏 {distance} km\n💶 {fee}€",
-        "choose_payment": "💳 *Paiement :*",
-        "order_summary": "✅ *RÉSUMÉ*",
-        "confirm": "✅ Confirmer",
-        "cancel": "❌ Annuler",
-        "order_confirmed": "✅ *Confirmé !*\n\n📞 Contact sous peu.",
-        "order_cancelled": "❌ *Annulé.*",
-        "add_more": "➕ Ajouter",
-        "proceed": "✅ Valider",
-        "invalid_quantity": "❌ Invalide (1-{max}).",
-        "cart_title": "🛒 *PANIER :*",
+        # Messages principaux
+        "welcome": "🏴‍☠️ *Bienvenue !*\n\n",
+        "main_menu": "Que souhaitez-vous faire ?",
         "start_order": "🛒 Commander",
-        "contact_admin": "📞 Contacter",
-        "contact_message": "📞 *CONTACT*\n\nÉcrivez votre message.\n\n💬 Message ?",
-        "contact_sent": "✅ *Envoyé !*\n\nRéponse sous peu.",
+        "pirate_card": "🏴‍☠️ Carte du Pirate",
+        "contact_admin": "📞 Contact",
+        
+        # Sélection pays
+        "choose_country": "🌍 *Choix du pays*\n\nSélectionnez votre pays :",
         "france": "🇫🇷 France",
         "switzerland": "🇨🇭 Suisse",
-        "postal": "✉️ Postale",
-        "express": "⚡ Express",
+        
+        # Sélection produit
+        "choose_product": "📦 *Produit*\n\nQue souhaitez-vous commander ?",
+        "choose_pill_type": "💊 *Type de pilule*\n\nChoisissez :",
+        "choose_rock_type": "🪨 *Type de crystal*\n\nChoisissez :",
+        
+        # Quantité
+        "enter_quantity": "📊 *Quantité*\n\nCombien en voulez-vous ?\n_(Maximum : {max} unités)_",
+        "invalid_quantity": "❌ Quantité invalide.\n\n📊 Entre 1 et {max} unités.",
+        
+        # Panier
+        "cart_title": "🛒 *Panier :*",
+        "add_more": "➕ Ajouter un produit",
+        "proceed": "✅ Valider le panier",
+        
+        # Adresse
+        "enter_address": "📍 *Adresse de livraison*\n\nEntrez votre adresse complète :\n_(Rue, Code postal, Ville)_",
+        "address_too_short": "❌ Adresse trop courte.\n\nVeuillez entrer une adresse complète.",
+        
+        # Livraison
+        "choose_delivery": "📦 *Mode de livraison*\n\nChoisissez :",
+        "postal": "📬 Postale (48-72h) - 10€",
+        "express": "⚡ Express (30min+) - 10€/km",
+        "distance_calculated": "📍 *Distance calculée*\n\n🚗 {distance} km\n💰 Frais : {fee}€",
+        
+        # Paiement
+        "choose_payment": "💳 *Mode de paiement*\n\nChoisissez :",
         "cash": "💵 Espèces",
         "crypto": "₿ Crypto",
+        
+        # Confirmation
+        "order_summary": "📋 *Récapitulatif commande*",
+        "subtotal": "💵 Sous-total :",
+        "delivery_fee": "📦 Frais de livraison :",
         "total": "💰 *TOTAL :*",
-        "delivery_fee": "📦 *Frais :*",
-        "subtotal": "💵 *Sous-total :*",
-        "back": "🔙 Retour",
-        "pirate_card": "🏴‍☠️ Carte du Pirate",
-        "choose_country_prices": "🏴‍☠️ *CARTE DU PIRATE*\n\nChoisissez votre pays :",
+        "confirm": "✅ Confirmer",
+        "cancel": "❌ Annuler",
+        "order_confirmed": "✅ *Commande confirmée !*\n\nMerci ! Vous recevrez une confirmation.",
+        "order_cancelled": "❌ *Commande annulée*",
+        "new_order": "🔄 Nouvelle commande",
+        
+        # Carte du Pirate
+        "choose_country_prices": "🏴‍☠️ *Carte du Pirate*\n\nConsultez nos prix :",
         "prices_france": "🇫🇷 Prix France",
         "prices_switzerland": "🇨🇭 Prix Suisse",
-        "back_to_card": "🔙 Retour carte",
-        "main_menu_btn": "🏠 Menu principal",
         "price_list_fr": "🇫🇷 *PRIX FRANCE*\n\n",
         "price_list_ch": "🇨🇭 *PRIX SUISSE*\n\n",
-        "new_order": "🔄 Nouvelle commande",
-        "address_too_short": "❌ Adresse trop courte",
-        "outside_hours": "⏰ Livraisons fermées.\n\nHoraires : {hours}",
-        "tuto_menu_title": "📚 *TUTORIEL CLIENT*\n\nGuide d'utilisation du bot.\n\nQue voulez-vous consulter ?",
-        "tuto_step1_btn": "1️⃣ Démarrage & Langue",
-        "tuto_step2_btn": "2️⃣ Consultation prix",
-        "tuto_step3_btn": "3️⃣ Passer commande",
-        "tuto_step4_btn": "4️⃣ Choix livraison",
-        "tuto_step5_btn": "5️⃣ Paiement & Confirmation",
-        "tuto_step6_btn": "6️⃣ Contacter le vendeur",
-        "tuto_send_all_btn": "📤 Envoyer tutoriel complet",
-        "tuto_back": "🔙 Retour tutoriel",
-        "tuto_next": "➡️ Étape suivante",
-        "tuto_prev": "⬅️ Étape précédente",
-        "tuto_restart": "🔄 Retour au début",
-        "tuto_step1_title": "1️⃣ *DÉMARRAGE & LANGUE*",
-        "tuto_step1_start": "📱 *Pour commencer :*\n1. Ouvrez Telegram\n2. Cherchez le bot\n3. Cliquez sur *DÉMARRER* ou tapez `/start`",
-        "tuto_step1_lang": "🌍 *Choisir sa langue :*\n• 🇫🇷 Français\n• 🇬🇧 English\n• 🇩🇪 Deutsch\n• 🇪🇸 Español\n• 🇮🇹 Italiano",
-        "tuto_step1_menu": "✅ *Après sélection :*\nLe menu principal s'affiche avec 3 options :\n• 🛒 Commander\n• 🏴‍☠️ Carte du Pirate (voir les prix)\n• 📞 Contacter",
-        "tuto_step2_title": "2️⃣ *CONSULTATION DES PRIX*",
-        "tuto_step2_intro": "🏴‍☠️ *Carte du Pirate :*\nPour voir les prix sans commander :",
-        "tuto_step2_how": "1. Menu principal → *🏴‍☠️ Carte du Pirate*\n2. Choisir votre pays :\n   • 🇫🇷 Prix France\n   • 🇨🇭 Prix Suisse",
-        "tuto_step2_display": "📋 *Affichage :*\n• Liste complète des produits disponibles\n• Prix par gramme ou par unité\n• Frais de livraison postale\n• Information livraison express",
-        "tuto_step2_tip": "💡 *Astuce :*\nVous pouvez consulter les prix autant de fois que vous voulez avant de commander.",
-        "tuto_step3_title": "3️⃣ *PASSER UNE COMMANDE*",
-        "tuto_step3_start": "🛒 *Démarrer la commande :*\n1. Menu principal → *🛒 Commander*",
-        "tuto_step3_country": "🌍 *Étape 1 - Choisir le pays :*\n• 🇫🇷 France\n• 🇨🇭 Suisse",
-        "tuto_step3_product": "📦 *Étape 2 - Choisir le produit :*\n• ❄️ Coco (poudre)\n• 💊 Pills (Squid Game / Punisher)\n• 🫒 Hash\n• 🍀 Weed\n• 🪨 Crystal (MDMA / 4MMC)",
-        "tuto_step3_quantity": "🔢 *Étape 3 - Indiquer la quantité :*\n• Tapez le nombre souhaité (ex: 5)\n• Maximum : 100 unités",
-        "tuto_step3_add": "➕ *Ajouter d'autres produits :*\nCliquez sur *➕ Ajouter* pour un autre produit\nOU\nCliquez sur *✅ Valider* pour continuer",
-        "tuto_step4_title": "4️⃣ *CHOIX DE LIVRAISON*",
-        "tuto_step4_address": "📍 *Adresse de livraison :*\n• Tapez votre adresse complète\n• Format : Rue, Code postal, Ville\n• Minimum 15 caractères\n• Exemple : _123 Rue de Paris, 75001 Paris_",
-        "tuto_step4_type": "📦 *Type de livraison :*",
-        "tuto_step4_postal": "✉️ *Livraison Postale :*\n• Délai : 48-72 heures\n• Prix fixe : 10€\n• Discret et sûr",
-        "tuto_step4_express": "⚡ *Livraison Express :*\n• Délai : 30 minutes à 2 heures\n• Prix : 10€ par kilomètre\n• Distance calculée automatiquement\n• Livraison en main propre",
-        "tuto_step4_hours": "⏰ *Horaires de livraison :*\n• {hours}",
-        "tuto_step4_tip": "💡 *Bon à savoir :*\nPour la livraison express, le bot calcule automatiquement la distance depuis votre adresse.",
-        "tuto_step5_title": "5️⃣ *PAIEMENT & CONFIRMATION*",
-        "tuto_step5_method": "💳 *Méthode de paiement :*",
-        "tuto_step5_cash": "💵 *Espèces :*\n• Paiement en main propre\n• Pour livraison express\n• Montant exact apprécié",
-        "tuto_step5_crypto": "₿ *Crypto-monnaie :*\n• Bitcoin, Ethereum, etc.\n• Adresse fournie après validation\n• Livraison après confirmation du paiement",
-        "tuto_step5_summary": "✅ *Résumé de commande :*\nLe bot affiche :\n• 🛒 Liste des produits et quantités\n• 💵 Sous-total\n• 📦 Frais de livraison\n• 💰 TOTAL\n• 📍 Adresse\n• 📦 Type de livraison\n• 💳 Méthode de paiement",
-        "tuto_step5_validate": "🎯 *Validation :*\n• Vérifiez attentivement\n• Cliquez *✅ Confirmer*\n• Ou *❌ Annuler* pour recommencer",
-        "tuto_step5_after": "📞 *Après confirmation :*\n• Vous recevez un numéro de commande\n• L'admin est notifié immédiatement\n• Il vous contactera sous peu",
-        "tuto_step6_title": "6️⃣ *CONTACTER LE VENDEUR*",
-        "tuto_step6_intro": "📞 *Pour poser une question :*",
-        "tuto_step6_step1": "1. Menu principal → *📞 Contacter*",
-        "tuto_step6_step2": "2. Tapez votre message :\n• Question sur un produit\n• Demande de renseignement\n• Problème avec une commande\n• Information sur la livraison",
-        "tuto_step6_step3": "3. Envoyez le message",
-        "tuto_step6_confirm": "✅ *Confirmation :*\n• Message envoyé à l'admin\n• Réponse sous peu\n• L'admin vous contactera directement",
-        "tuto_step6_tips": "💡 *Conseils :*\n• Soyez clair et précis\n• Indiquez votre numéro de commande si besoin\n• Privilégiez les messages courts",
-        "tuto_step6_new": "🔄 *Nouvelle commande :*\nAprès une commande validée, cliquez sur *🔄 Nouvelle commande* pour recommencer.",
-        "tuto_sending": "📤 *ENVOI DU TUTORIEL COMPLET*\n\nLe tutoriel complet en 6 parties va être envoyé.\n\nVous pourrez :\n• Le transférer à vos clients\n• L'épingler dans un canal\n• Le partager par message\n\n⏳ Envoi en cours...",
-        "tuto_sent": "✅ *TUTORIEL ENVOYÉ*\n\nLes 6 parties du tutoriel ont été envoyées avec succès.\n\nVous pouvez maintenant les transférer à vos clients.",
-        "tuto_part": "📚 *TUTORIEL BOT - PARTIE {n}/6*",
-        "tuto_end": "━━━━━━━━━━━━━━━━━\n✅ Fin du tutoriel\nBonne utilisation du bot ! 🌿",
-    },
-    "en": {
-        "welcome": "🌿 *WELCOME* 🌿\n\n⚠️ *VERSION 2.2*\n\nConversations in *SECRET EXCHANGE*.\n\n🙏 *Thank you* 💪💚",
-        "main_menu": "\n\n📱 *MENU:*",
-        "choose_country": "🌍 *Country:*",
-        "choose_product": "🛒 *Product:*",
-        "choose_pill_type": "💊 *Type:*",
-        "choose_rock_type": "🪨 *Type:*",
-        "enter_quantity": "🔢 *Quantity:*",
-        "enter_address": "📍 *Address:*",
-        "choose_delivery": "📦 *Delivery:*\n\n✉️ Postal: 48-72h, 10€\n⚡ Express: 30min+",
-        "distance_calculated": "📏 {distance} km\n💶 {fee}€",
-        "choose_payment": "💳 *Payment:*",
-        "order_summary": "✅ *SUMMARY*",
-        "confirm": "✅ Confirm",
-        "cancel": "❌ Cancel",
-        "order_confirmed": "✅ *Confirmed!*\n\n📞 Contact soon.",
-        "order_cancelled": "❌ *Cancelled.*",
-        "add_more": "➕ Add more",
-        "proceed": "✅ Proceed",
-        "invalid_quantity": "❌ Invalid (1-{max}).",
-        "cart_title": "🛒 *CART:*",
-        "start_order": "🛒 Order",
-        "contact_admin": "📞 Contact",
-        "contact_message": "📞 *CONTACT*\n\nWrite your message.\n\n💬 Message?",
-        "contact_sent": "✅ *Sent!*\n\nReply soon.",
-        "france": "🇫🇷 France",
-        "switzerland": "🇨🇭 Switzerland",
-        "postal": "✉️ Postal",
-        "express": "⚡ Express",
-        "cash": "💵 Cash",
-        "crypto": "₿ Crypto",
-        "total": "💰 *TOTAL:*",
-        "delivery_fee": "📦 *Fee:*",
-        "subtotal": "💵 *Subtotal:*",
-        "back": "🔙 Back",
-        "pirate_card": "🏴‍☠️ Pirate Card",
-        "choose_country_prices": "🏴‍☠️ *PIRATE CARD*\n\nChoose your country:",
-        "prices_france": "🇫🇷 France Prices",
-        "prices_switzerland": "🇨🇭 Switzerland Prices",
-        "back_to_card": "🔙 Back to card",
-        "main_menu_btn": "🏠 Main menu",
-        "price_list_fr": "🇫🇷 *FRANCE PRICES*\n\n",
-        "price_list_ch": "🇨🇭 *SWITZERLAND PRICES*\n\n",
-        "new_order": "🔄 New order",
-        "address_too_short": "❌ Address too short",
-        "outside_hours": "⏰ Deliveries closed.\n\nHours: {hours}",
-    },
-    "de": {
-        "welcome": "🌿 *WILLKOMMEN* 🌿\n\n⚠️ *VERSION 2.2*\n\nGespräche im *GEHEIMEN AUSTAUSCH*.\n\n🙏 *Danke* 💪💚",
-        "main_menu": "\n\n📱 *MENÜ:*",
-        "choose_country": "🌍 *Land:*",
-        "choose_product": "🛒 *Produkt:*",
-        "choose_pill_type": "💊 *Typ:*",
-        "choose_rock_type": "🪨 *Typ:*",
-        "enter_quantity": "🔢 *Menge:*",
-        "enter_address": "📍 *Adresse:*",
-        "choose_delivery": "📦 *Lieferung:*\n\n✉️ Post: 48-72h, 10€\n⚡ Express: 30min+",
-        "distance_calculated": "📏 {distance} km\n💶 {fee}€",
-        "choose_payment": "💳 *Zahlung:*",
-        "order_summary": "✅ *ZUSAMMENFASSUNG*",
-        "confirm": "✅ Bestätigen",
-        "cancel": "❌ Abbrechen",
-        "order_confirmed": "✅ *Bestätigt!*\n\n📞 Kontakt in Kürze.",
-        "order_cancelled": "❌ *Abgebrochen.*",
-        "add_more": "➕ Mehr hinzufügen",
-        "proceed": "✅ Weiter",
-        "invalid_quantity": "❌ Ungültig (1-{max}).",
-        "cart_title": "🛒 *WARENKORB:*",
-        "start_order": "🛒 Bestellen",
-        "contact_admin": "📞 Kontakt",
-        "contact_message": "📞 *KONTAKT*\n\nSchreiben Sie Ihre Nachricht.\n\n💬 Nachricht?",
-        "contact_sent": "✅ *Gesendet!*\n\nAntwort in Kürze.",
-        "france": "🇫🇷 Frankreich",
-        "switzerland": "🇨🇭 Schweiz",
-        "postal": "✉️ Post",
-        "express": "⚡ Express",
-        "cash": "💵 Bargeld",
-        "crypto": "₿ Krypto",
-        "total": "💰 *GESAMT:*",
-        "delivery_fee": "📦 *Gebühr:*",
-        "subtotal": "💵 *Zwischensumme:*",
-        "back": "🔙 Zurück",
-        "pirate_card": "🏴‍☠️ Piratenkarte",
-        "choose_country_prices": "🏴‍☠️ *PIRATENKARTE*\n\nWählen Sie Ihr Land:",
-        "prices_france": "🇫🇷 Preise Frankreich",
-        "prices_switzerland": "🇨🇭 Preise Schweiz",
-        "back_to_card": "🔙 Zurück zur Karte",
-        "main_menu_btn": "🏠 Hauptmenü",
-        "price_list_fr": "🇫🇷 *PREISE FRANKREICH*\n\n",
-        "price_list_ch": "🇨🇭 *PREISE SCHWEIZ*\n\n",
-        "new_order": "🔄 Neue Bestellung",
-        "address_too_short": "❌ Adresse zu kurz",
-        "outside_hours": "⏰ Lieferungen geschlossen.\n\nÖffnungszeiten: {hours}",
-    },
-    "es": {
-        "welcome": "🌿 *BIENVENIDO* 🌿\n\n⚠️ *VERSIÓN 2.2*\n\nConversaciones en *INTERCAMBIO SECRETO*.\n\n🙏 *Gracias* 💪💚",
-        "main_menu": "\n\n📱 *MENÚ:*",
-        "choose_country": "🌍 *País:*",
-        "choose_product": "🛒 *Producto:*",
-        "choose_pill_type": "💊 *Tipo:*",
-        "choose_rock_type": "🪨 *Tipo:*",
-        "enter_quantity": "🔢 *Cantidad:*",
-        "enter_address": "📍 *Dirección:*",
-        "choose_delivery": "📦 *Entrega:*\n\n✉️ Postal: 48-72h, 10€\n⚡ Express: 30min+",
-        "distance_calculated": "📏 {distance} km\n💶 {fee}€",
-        "choose_payment": "💳 *Pago:*",
-        "order_summary": "✅ *RESUMEN*",
-        "confirm": "✅ Confirmar",
-        "cancel": "❌ Cancelar",
-        "order_confirmed": "✅ *¡Confirmado!*\n\n📞 Contacto pronto.",
-        "order_cancelled": "❌ *Cancelado.*",
-        "add_more": "➕ Añadir más",
-        "proceed": "✅ Continuar",
-        "invalid_quantity": "❌ Inválido (1-{max}).",
-        "cart_title": "🛒 *CARRITO:*",
-        "start_order": "🛒 Pedir",
-        "contact_admin": "📞 Contacto",
-        "contact_message": "📞 *CONTACTO*\n\nEscriba su mensaje.\n\n💬 ¿Mensaje?",
-        "contact_sent": "✅ *¡Enviado!*\n\nRespuesta pronto.",
-        "france": "🇫🇷 Francia",
-        "switzerland": "🇨🇭 Suiza",
-        "postal": "✉️ Postal",
-        "express": "⚡ Express",
-        "cash": "💵 Efectivo",
-        "crypto": "₿ Cripto",
-        "total": "💰 *TOTAL:*",
-        "delivery_fee": "📦 *Gastos:*",
-        "subtotal": "💵 *Subtotal:*",
-        "back": "🔙 Volver",
-        "pirate_card": "🏴‍☠️ Carta del Pirata",
-        "choose_country_prices": "🏴‍☠️ *CARTA DEL PIRATA*\n\nElija su país:",
-        "prices_france": "🇫🇷 Precios Francia",
-        "prices_switzerland": "🇨🇭 Precios Suiza",
-        "back_to_card": "🔙 Volver a carta",
-        "main_menu_btn": "🏠 Menú principal",
-        "price_list_fr": "🇪🇸 *PRECIOS FRANCIA*\n\n",
-        "price_list_ch": "🇨🇭 *PRECIOS SUIZA*\n\n",
-        "new_order": "🔄 Nuevo pedido",
-        "address_too_short": "❌ Dirección demasiado corta",
-        "outside_hours": "⏰ Entregas cerradas.\n\nHorario: {hours}",
-    },
-    "it": {
-        "welcome": "🌿 *BENVENUTO* 🌿\n\n⚠️ *VERSIONE 2.2*\n\nConversazioni in *SCAMBIO SEGRETO*.\n\n🙏 *Grazie* 💪💚",
-        "main_menu": "\n\n📱 *MENU:*",
-        "choose_country": "🌍 *Paese:*",
-        "choose_product": "🛒 *Prodotto:*",
-        "choose_pill_type": "💊 *Tipo:*",
-        "choose_rock_type": "🪨 *Tipo:*",
-        "enter_quantity": "🔢 *Quantità:*",
-        "enter_address": "📍 *Indirizzo:*",
-        "choose_delivery": "📦 *Consegna:*\n\n✉️ Postale: 48-72h, 10€\n⚡ Express: 30min+",
-        "distance_calculated": "📏 {distance} km\n💶 {fee}€",
-        "choose_payment": "💳 *Pagamento:*",
-        "order_summary": "✅ *RIEPILOGO*",
-        "confirm": "✅ Confermare",
-        "cancel": "❌ Annullare",
-        "order_confirmed": "✅ *Confermato!*\n\n📞 Contatto a breve.",
-        "order_cancelled": "❌ *Annullato.*",
-        "add_more": "➕ Aggiungere",
-        "proceed": "✅ Procedere",
-        "invalid_quantity": "❌ Non valido (1-{max}).",
-        "cart_title": "🛒 *CARRELLO:*",
-        "start_order": "🛒 Ordinare",
-        "contact_admin": "📞 Contatto",
-        "contact_message": "📞 *CONTATTO*\n\nScriva il suo messaggio.\n\n💬 Messaggio?",
-        "contact_sent": "✅ *Inviato!*\n\nRisposta a breve.",
-        "france": "🇫🇷 Francia",
-        "switzerland": "🇨🇭 Svizzera",
-        "postal": "✉️ Postale",
-        "express": "⚡ Express",
-        "cash": "💵 Contanti",
-        "crypto": "₿ Cripto",
-        "total": "💰 *TOTALE:*",
-        "delivery_fee": "📦 *Spese:*",
-        "subtotal": "💵 *Subtotale:*",
-        "back": "🔙 Indietro",
-        "pirate_card": "🏴‍☠️ Carta del Pirata",
-        "choose_country_prices": "🏴‍☠️ *CARTA DEL PIRATA*\n\nScelga il suo paese:",
-        "prices_france": "🇫🇷 Prezzi Francia",
-        "prices_switzerland": "🇨🇭 Prezzi Svizzera",
-        "back_to_card": "🔙 Torna alla carta",
-        "main_menu_btn": "🏠 Menu principale",
-        "price_list_fr": "🇫🇷 *PREZZI FRANCIA*\n\n",
-        "price_list_ch": "🇨🇭 *PREZZI SVIZZERA*\n\n",
-        "new_order": "🔄 Nuovo ordine",
-        "address_too_short": "❌ Indirizzo troppo corto",
-        "outside_hours": "⏰ Consegne chiuse.\n\nOrari: {hours}",
+        "back_to_card": "🔙 Retour à la carte",
+        
+        # Navigation
+        "back": "🔙 Retour",
+        "main_menu_btn": "🏠 Menu principal",
+        
+        # Contact
+        "contact_message": "📞 *Contacter l'administrateur*\n\nÉcrivez votre message :",
+        "contact_sent": "✅ Message envoyé !\n\nL'admin vous répondra rapidement.",
+        
+        # Horaires
+        "outside_hours": "⏰ *Fermé*\n\nNous sommes ouverts de {hours}.\n\nRevenez pendant nos horaires !",
+        
+        # Maintenance
+        "maintenance_mode": "🔧 *MODE MAINTENANCE*\n\nLe bot est actuellement en maintenance.\n\n⏰ Retour prévu : Bientôt\n\n💬 Contactez @{admin} pour plus d'infos.",
+        "maintenance_activated": "🔧 Mode maintenance *ACTIVÉ*\n\nLes utilisateurs recevront un message de maintenance.",
+        "maintenance_deactivated": "✅ Mode maintenance *DÉSACTIVÉ*\n\nLe bot fonctionne normalement.",
+        
+        # Failover
+        "bot_redirected": "🔄 *REDIRECTION AUTOMATIQUE*\n\n⚠️ Le bot principal est temporairement indisponible.\n\n✅ *Utilisez le bot de secours :*\n{backup_bot}\n\n📱 Cliquez sur le lien ci-dessus pour continuer vos commandes.",
+        "backup_bot_active": "🟢 *BOT DE SECOURS ACTIF*\n\nVous utilisez actuellement le bot de backup.\n\n💡 Le bot principal : {primary_bot}\n\n_Vos données sont synchronisées._",
+        "primary_bot_down_alert": "🔴 *ALERTE ADMIN*\n\n⚠️ Le bot principal est DOWN !\n\nTemps d'arrêt : {downtime}\nDernière activité : {last_seen}\n\n🔄 Les utilisateurs sont redirigés vers {backup_bot}",
     }
 }
+# ==================== TRADUCTIONS - PARTIE 2 (SUITE) ====================
+
+# Traductions ANGLAIS
+TRANSLATIONS["en"] = {
+    "welcome": "🏴‍☠️ *Welcome!*\n\n",
+    "main_menu": "What would you like to do?",
+    "start_order": "🛒 Order",
+    "pirate_card": "🏴‍☠️ Pirate Card",
+    "contact_admin": "📞 Contact",
+    "choose_country": "🌍 *Country Selection*\n\nSelect your country:",
+    "france": "🇫🇷 France",
+    "switzerland": "🇨🇭 Switzerland",
+    "choose_product": "📦 *Product*\n\nWhat would you like to order?",
+    "choose_pill_type": "💊 *Pill Type*\n\nChoose:",
+    "choose_rock_type": "🪨 *Crystal Type*\n\nChoose:",
+    "enter_quantity": "📊 *Quantity*\n\nHow many do you want?\n_(Maximum: {max} units)_",
+    "invalid_quantity": "❌ Invalid quantity.\n\n📊 Between 1 and {max} units.",
+    "cart_title": "🛒 *Cart:*",
+    "add_more": "➕ Add product",
+    "proceed": "✅ Validate cart",
+    "enter_address": "📍 *Delivery Address*\n\nEnter your complete address:\n_(Street, Postal code, City)_",
+    "address_too_short": "❌ Address too short.\n\nPlease enter a complete address.",
+    "choose_delivery": "📦 *Delivery Method*\n\nChoose:",
+    "postal": "📬 Postal (48-72h) - 10€",
+    "express": "⚡ Express (30min+) - 10€/km",
+    "distance_calculated": "📍 *Calculated Distance*\n\n🚗 {distance} km\n💰 Fee: {fee}€",
+    "choose_payment": "💳 *Payment Method*\n\nChoose:",
+    "cash": "💵 Cash",
+    "crypto": "₿ Crypto",
+    "order_summary": "📋 *Order Summary*",
+    "subtotal": "💵 Subtotal:",
+    "delivery_fee": "📦 Delivery fee:",
+    "total": "💰 *TOTAL:*",
+    "confirm": "✅ Confirm",
+    "cancel": "❌ Cancel",
+    "order_confirmed": "✅ *Order confirmed!*\n\nThank you! You will receive a confirmation.",
+    "order_cancelled": "❌ *Order cancelled*",
+    "new_order": "🔄 New order",
+    "choose_country_prices": "🏴‍☠️ *Pirate Card*\n\nCheck our prices:",
+    "prices_france": "🇫🇷 France Prices",
+    "prices_switzerland": "🇨🇭 Switzerland Prices",
+    "price_list_fr": "🇫🇷 *FRANCE PRICES*\n\n",
+    "price_list_ch": "🇨🇭 *SWITZERLAND PRICES*\n\n",
+    "back_to_card": "🔙 Back to card",
+    "back": "🔙 Back",
+    "main_menu_btn": "🏠 Main menu",
+    "contact_message": "📞 *Contact Administrator*\n\nWrite your message:",
+    "contact_sent": "✅ Message sent!\n\nAdmin will reply soon.",
+    "outside_hours": "⏰ *Closed*\n\nWe are open from {hours}.\n\nCome back during our hours!",
+    "maintenance_mode": "🔧 *MAINTENANCE MODE*\n\nThe bot is currently under maintenance.\n\n⏰ Expected return: Soon\n\n💬 Contact @{admin} for more info.",
+    "maintenance_activated": "🔧 Maintenance mode *ENABLED*\n\nUsers will receive a maintenance message.",
+    "maintenance_deactivated": "✅ Maintenance mode *DISABLED*\n\nBot is operating normally.",
+    "bot_redirected": "🔄 *AUTOMATIC REDIRECT*\n\n⚠️ The main bot is temporarily unavailable.\n\n✅ *Use the backup bot:*\n{backup_bot}\n\n📱 Click the link above to continue.",
+    "backup_bot_active": "🟢 *BACKUP BOT ACTIVE*\n\nYou are currently using the backup bot.\n\n💡 Main bot: {primary_bot}\n\n_Your data is synchronized._",
+    "primary_bot_down_alert": "🔴 *ADMIN ALERT*\n\n⚠️ Main bot is DOWN!\n\nDowntime: {downtime}\nLast activity: {last_seen}\n\n🔄 Users are redirected to {backup_bot}",
+}
+
+# Traductions ALLEMAND
+TRANSLATIONS["de"] = {
+    "welcome": "🏴‍☠️ *Willkommen!*\n\n",
+    "main_menu": "Was möchten Sie tun?",
+    "start_order": "🛒 Bestellen",
+    "pirate_card": "🏴‍☠️ Piratenkarte",
+    "contact_admin": "📞 Kontakt",
+    "choose_country": "🌍 *Länderauswahl*\n\nWählen Sie Ihr Land:",
+    "france": "🇫🇷 Frankreich",
+    "switzerland": "🇨🇭 Schweiz",
+    "choose_product": "📦 *Produkt*\n\nWas möchten Sie bestellen?",
+    "choose_pill_type": "💊 *Pillenart*\n\nWählen Sie:",
+    "choose_rock_type": "🪨 *Kristallart*\n\nWählen Sie:",
+    "enter_quantity": "📊 *Menge*\n\nWie viele möchten Sie?\n_(Maximum: {max} Einheiten)_",
+    "invalid_quantity": "❌ Ungültige Menge.\n\n📊 Zwischen 1 und {max} Einheiten.",
+    "cart_title": "🛒 *Warenkorb:*",
+    "add_more": "➕ Produkt hinzufügen",
+    "proceed": "✅ Warenkorb bestätigen",
+    "enter_address": "📍 *Lieferadresse*\n\nGeben Sie Ihre vollständige Adresse ein:\n_(Straße, PLZ, Stadt)_",
+    "address_too_short": "❌ Adresse zu kurz.\n\nBitte geben Sie eine vollständige Adresse ein.",
+    "choose_delivery": "📦 *Liefermethode*\n\nWählen Sie:",
+    "postal": "📬 Post (48-72h) - 10€",
+    "express": "⚡ Express (30min+) - 10€/km",
+    "distance_calculated": "📍 *Berechnete Entfernung*\n\n🚗 {distance} km\n💰 Gebühr: {fee}€",
+    "choose_payment": "💳 *Zahlungsmethode*\n\nWählen Sie:",
+    "cash": "💵 Bargeld",
+    "crypto": "₿ Krypto",
+    "order_summary": "📋 *Bestellübersicht*",
+    "subtotal": "💵 Zwischensumme:",
+    "delivery_fee": "📦 Liefergebühr:",
+    "total": "💰 *GESAMT:*",
+    "confirm": "✅ Bestätigen",
+    "cancel": "❌ Abbrechen",
+    "order_confirmed": "✅ *Bestellung bestätigt!*\n\nDanke! Sie erhalten eine Bestätigung.",
+    "order_cancelled": "❌ *Bestellung storniert*",
+    "new_order": "🔄 Neue Bestellung",
+    "choose_country_prices": "🏴‍☠️ *Piratenkarte*\n\nPreise ansehen:",
+    "prices_france": "🇫🇷 Preise Frankreich",
+    "prices_switzerland": "🇨🇭 Preise Schweiz",
+    "price_list_fr": "🇫🇷 *PREISE FRANKREICH*\n\n",
+    "price_list_ch": "🇨🇭 *PREISE SCHWEIZ*\n\n",
+    "back_to_card": "🔙 Zurück zur Karte",
+    "back": "🔙 Zurück",
+    "main_menu_btn": "🏠 Hauptmenü",
+    "contact_message": "📞 *Administrator kontaktieren*\n\nSchreiben Sie Ihre Nachricht:",
+    "contact_sent": "✅ Nachricht gesendet!\n\nAdmin wird bald antworten.",
+    "outside_hours": "⏰ *Geschlossen*\n\nWir sind geöffnet von {hours}.\n\nKommen Sie während unserer Öffnungszeiten!",
+    "maintenance_mode": "🔧 *WARTUNGSMODUS*\n\nDer Bot befindet sich derzeit in Wartung.\n\n⏰ Voraussichtliche Rückkehr: Bald\n\n💬 Kontaktieren Sie @{admin} für weitere Informationen.",
+    "maintenance_activated": "🔧 Wartungsmodus *AKTIVIERT*\n\nBenutzer erhalten eine Wartungsnachricht.",
+    "maintenance_deactivated": "✅ Wartungsmodus *DEAKTIVIERT*\n\nBot funktioniert normal.",
+    "bot_redirected": "🔄 *AUTOMATISCHE UMLEITUNG*\n\n⚠️ Der Haupt-Bot ist vorübergehend nicht verfügbar.\n\n✅ *Verwenden Sie den Backup-Bot:*\n{backup_bot}\n\n📱 Klicken Sie auf den obigen Link, um fortzufahren.",
+    "backup_bot_active": "🟢 *BACKUP-BOT AKTIV*\n\nSie verwenden derzeit den Backup-Bot.\n\n💡 Haupt-Bot: {primary_bot}\n\n_Ihre Daten sind synchronisiert._",
+    "primary_bot_down_alert": "🔴 *ADMIN-ALARM*\n\n⚠️ Haupt-Bot ist DOWN!\n\nAusfallzeit: {downtime}\nLetzte Aktivität: {last_seen}\n\n🔄 Benutzer werden zu {backup_bot} umgeleitet",
+}
+
+# Traductions ESPAGNOL
+TRANSLATIONS["es"] = {
+    "welcome": "🏴‍☠️ *¡Bienvenido!*\n\n",
+    "main_menu": "¿Qué te gustaría hacer?",
+    "start_order": "🛒 Ordenar",
+    "pirate_card": "🏴‍☠️ Carta Pirata",
+    "contact_admin": "📞 Contacto",
+    "choose_country": "🌍 *Selección de país*\n\nSelecciona tu país:",
+    "france": "🇫🇷 Francia",
+    "switzerland": "🇨🇭 Suiza",
+    "choose_product": "📦 *Producto*\n\n¿Qué te gustaría ordenar?",
+    "choose_pill_type": "💊 *Tipo de píldora*\n\nElige:",
+    "choose_rock_type": "🪨 *Tipo de cristal*\n\nElige:",
+    "enter_quantity": "📊 *Cantidad*\n\n¿Cuántos quieres?\n_(Máximo: {max} unidades)_",
+    "invalid_quantity": "❌ Cantidad inválida.\n\n📊 Entre 1 y {max} unidades.",
+    "cart_title": "🛒 *Carrito:*",
+    "add_more": "➕ Agregar producto",
+    "proceed": "✅ Validar carrito",
+    "enter_address": "📍 *Dirección de entrega*\n\nIngresa tu dirección completa:\n_(Calle, Código postal, Ciudad)_",
+    "address_too_short": "❌ Dirección demasiado corta.\n\nPor favor ingresa una dirección completa.",
+    "choose_delivery": "📦 *Método de entrega*\n\nElige:",
+    "postal": "📬 Postal (48-72h) - 10€",
+    "express": "⚡ Express (30min+) - 10€/km",
+    "distance_calculated": "📍 *Distancia calculada*\n\n🚗 {distance} km\n💰 Tarifa: {fee}€",
+    "choose_payment": "💳 *Método de pago*\n\nElige:",
+    "cash": "💵 Efectivo",
+    "crypto": "₿ Cripto",
+    "order_summary": "📋 *Resumen del pedido*",
+    "subtotal": "💵 Subtotal:",
+    "delivery_fee": "📦 Tarifa de entrega:",
+    "total": "💰 *TOTAL:*",
+    "confirm": "✅ Confirmar",
+    "cancel": "❌ Cancelar",
+    "order_confirmed": "✅ *¡Pedido confirmado!*\n\n¡Gracias! Recibirás una confirmación.",
+    "order_cancelled": "❌ *Pedido cancelado*",
+    "new_order": "🔄 Nuevo pedido",
+    "choose_country_prices": "🏴‍☠️ *Carta Pirata*\n\nConsulta nuestros precios:",
+    "prices_france": "🇫🇷 Precios Francia",
+    "prices_switzerland": "🇨🇭 Precios Suiza",
+    "price_list_fr": "🇫🇷 *PRECIOS FRANCIA*\n\n",
+    "price_list_ch": "🇨🇭 *PRECIOS SUIZA*\n\n",
+    "back_to_card": "🔙 Volver a la carta",
+    "back": "🔙 Volver",
+    "main_menu_btn": "🏠 Menú principal",
+    "contact_message": "📞 *Contactar al administrador*\n\nEscribe tu mensaje:",
+    "contact_sent": "✅ ¡Mensaje enviado!\n\nEl admin responderá pronto.",
+    "outside_hours": "⏰ *Cerrado*\n\nEstamos abiertos de {hours}.\n\n¡Vuelve durante nuestro horario!",
+    "maintenance_mode": "🔧 *MODO MANTENIMIENTO*\n\nEl bot está actualmente en mantenimiento.\n\n⏰ Regreso previsto: Pronto\n\n💬 Contacta @{admin} para más información.",
+    "maintenance_activated": "🔧 Modo mantenimiento *ACTIVADO*\n\nLos usuarios recibirán un mensaje de mantenimiento.",
+    "maintenance_deactivated": "✅ Modo mantenimiento *DESACTIVADO*\n\nEl bot funciona normalmente.",
+    "bot_redirected": "🔄 *REDIRECCIÓN AUTOMÁTICA*\n\n⚠️ El bot principal está temporalmente no disponible.\n\n✅ *Usa el bot de respaldo:*\n{backup_bot}\n\n📱 Haz clic en el enlace de arriba para continuar.",
+    "backup_bot_active": "🟢 *BOT DE RESPALDO ACTIVO*\n\nEstás usando el bot de respaldo actualmente.\n\n💡 Bot principal: {primary_bot}\n\n_Tus datos están sincronizados._",
+    "primary_bot_down_alert": "🔴 *ALERTA ADMIN*\n\n⚠️ ¡El bot principal está DOWN!\n\nTiempo de inactividad: {downtime}\nÚltima actividad: {last_seen}\n\n🔄 Los usuarios son redirigidos a {backup_bot}",
+}
+
+# Traductions ITALIEN
+TRANSLATIONS["it"] = {
+    "welcome": "🏴‍☠️ *Benvenuto!*\n\n",
+    "main_menu": "Cosa vorresti fare?",
+    "start_order": "🛒 Ordinare",
+    "pirate_card": "🏴‍☠️ Carta Pirata",
+    "contact_admin": "📞 Contatto",
+    "choose_country": "🌍 *Selezione paese*\n\nSeleziona il tuo paese:",
+    "france": "🇫🇷 Francia",
+    "switzerland": "🇨🇭 Svizzera",
+    "choose_product": "📦 *Prodotto*\n\nCosa vorresti ordinare?",
+    "choose_pill_type": "💊 *Tipo di pillola*\n\nScegli:",
+    "choose_rock_type": "🪨 *Tipo di cristallo*\n\nScegli:",
+    "enter_quantity": "📊 *Quantità*\n\nQuanti ne vuoi?\n_(Massimo: {max} unità)_",
+    "invalid_quantity": "❌ Quantità non valida.\n\n📊 Tra 1 e {max} unità.",
+    "cart_title": "🛒 *Carrello:*",
+    "add_more": "➕ Aggiungi prodotto",
+    "proceed": "✅ Convalida carrello",
+    "enter_address": "📍 *Indirizzo di consegna*\n\nInserisci il tuo indirizzo completo:\n_(Via, CAP, Città)_",
+    "address_too_short": "❌ Indirizzo troppo corto.\n\nInserisci un indirizzo completo.",
+    "choose_delivery": "📦 *Metodo di consegna*\n\nScegli:",
+    "postal": "📬 Postale (48-72h) - 10€",
+    "express": "⚡ Express (30min+) - 10€/km",
+    "distance_calculated": "📍 *Distanza calcolata*\n\n🚗 {distance} km\n💰 Tariffa: {fee}€",
+    "choose_payment": "💳 *Metodo di pagamento*\n\nScegli:",
+    "cash": "💵 Contanti",
+    "crypto": "₿ Crypto",
+    "order_summary": "📋 *Riepilogo ordine*",
+    "subtotal": "💵 Subtotale:",
+    "delivery_fee": "📦 Spese di consegna:",
+    "total": "💰 *TOTALE:*",
+    "confirm": "✅ Conferma",
+    "cancel": "❌ Annulla",
+    "order_confirmed": "✅ *Ordine confermato!*\n\nGrazie! Riceverai una conferma.",
+    "order_cancelled": "❌ *Ordine annullato*",
+    "new_order": "🔄 Nuovo ordine",
+    "choose_country_prices": "🏴‍☠️ *Carta Pirata*\n\nConsulta i nostri prezzi:",
+    "prices_france": "🇫🇷 Prezzi Francia",
+    "prices_switzerland": "🇨🇭 Prezzi Svizzera",
+    "price_list_fr": "🇫🇷 *PREZZI FRANCIA*\n\n",
+    "price_list_ch": "🇨🇭 *PREZZI SVIZZERA*\n\n",
+    "back_to_card": "🔙 Torna alla carta",
+    "back": "🔙 Indietro",
+    "main_menu_btn": "🏠 Menu principale",
+    "contact_message": "📞 *Contatta l'amministratore*\n\nScrivi il tuo messaggio:",
+    "contact_sent": "✅ Messaggio inviato!\n\nL'admin risponderà presto.",
+    "outside_hours": "⏰ *Chiuso*\n\nSiamo aperti dalle {hours}.\n\nTorna durante i nostri orari!",
+    "maintenance_mode": "🔧 *MODALITÀ MANUTENZIONE*\n\nIl bot è attualmente in manutenzione.\n\n⏰ Ritorno previsto: Presto\n\n💬 Contatta @{admin} per maggiori informazioni.",
+    "maintenance_activated": "🔧 Modalità manutenzione *ATTIVATA*\n\nGli utenti riceveranno un messaggio di manutenzione.",
+    "maintenance_deactivated": "✅ Modalità manutenzione *DISATTIVATA*\n\nIl bot funziona normalmente.",
+    "bot_redirected": "🔄 *REINDIRIZZAMENTO AUTOMATICO*\n\n⚠️ Il bot principale è temporaneamente non disponibile.\n\n✅ *Usa il bot di backup:*\n{backup_bot}\n\n📱 Clicca sul link sopra per continuare.",
+    "backup_bot_active": "🟢 *BOT DI BACKUP ATTIVO*\n\nStai usando il bot di backup attualmente.\n\n💡 Bot principale: {primary_bot}\n\n_I tuoi dati sono sincronizzati._",
+    "primary_bot_down_alert": "🔴 *ALLERTA ADMIN*\n\n⚠️ Il bot principale è DOWN!\n\nTempo di inattività: {downtime}\nUltima attività: {last_seen}\n\n🔄 Gli utenti sono reindirizzati a {backup_bot}",
+}
+
+# ==================== ERROR HANDLER DECORATOR ====================
 
 def error_handler(func):
-    """Décorateur pour gérer les erreurs"""
+    """Décorateur pour gérer les erreurs de manière centralisée"""
     @wraps(func)
-    async def wrapper(update, context):
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             return await func(update, context)
         except Exception as e:
-            logger.error(f"{func.__name__}: {e}", exc_info=True)
+            logger.error(f"Erreur dans {func.__name__}: {e}", exc_info=True)
+            
+            # Message utilisateur
+            error_message = "❌ Une erreur s'est produite. Veuillez réessayer."
+            
             try:
-                if update.callback_query:
-                    await update.callback_query.answer("❌ Erreur")
-                elif update.message:
-                    await update.message.reply_text("❌ Erreur. /start")
+                if update.message:
+                    await update.message.reply_text(error_message)
+                elif update.callback_query:
+                    await update.callback_query.answer(error_message, show_alert=True)
             except:
                 pass
+            
             return ConversationHandler.END
+    
     return wrapper
+    # ==================== VÉRIFICATION DE LA PERSISTANCE DES DONNÉES ====================
+
+def verify_data_persistence():
+    """Vérifie que les données sont bien persistées"""
+    test_file = DATA_DIR / "persistence_test.txt"
+    
+    if test_file.exists():
+        try:
+            with open(test_file, 'r') as f:
+                boot_count = int(f.read().strip())
+            boot_count += 1
+        except:
+            boot_count = 1
+    else:
+        boot_count = 1
+    
+    with open(test_file, 'w') as f:
+        f.write(str(boot_count))
+    
+    logger.info(f"🔄 Démarrage #{boot_count} - Données dans: {DATA_DIR}")
+    
+    # Vérifier les fichiers existants
+    files_found = []
+    if (DATA_DIR / "product_registry.json").exists():
+        files_found.append("product_registry.json")
+    if (DATA_DIR / "prices.json").exists():
+        files_found.append("prices.json")
+    if (DATA_DIR / "available_products.json").exists():
+        files_found.append("available_products.json")
+    if (DATA_DIR / "users.json").exists():
+        files_found.append("users.json")
+    
+    if files_found:
+        logger.info(f"✅ Fichiers trouvés: {', '.join(files_found)}")
+    else:
+        logger.warning("⚠️ Aucun fichier de données trouvé - Premier démarrage")
+    
+    return boot_count
+
 # ==================== SYSTÈME DE PERSISTANCE ====================
 
 def load_product_registry():
@@ -1258,6 +1325,210 @@ async def schedule_reports(context: ContextTypes.DEFAULT_TYPE):
         if not last_monthly or (now - datetime.fromisoformat(last_monthly)).days >= 28:
             await send_monthly_report(context)
 
+# ==================== SYSTÈME DE MAINTENANCE ====================
+
+def load_maintenance_status():
+    """Charge l'état du mode maintenance"""
+    maintenance_file = DATA_DIR / "maintenance.json"
+    if maintenance_file.exists():
+        try:
+            with open(maintenance_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            pass
+    return {
+        "enabled": False,
+        "last_online": datetime.now().isoformat(),
+        "downtime_threshold": 300
+    }
+
+def save_maintenance_status(status):
+    """Sauvegarde l'état du mode maintenance"""
+    maintenance_file = DATA_DIR / "maintenance.json"
+    try:
+        with open(maintenance_file, 'w', encoding='utf-8') as f:
+            json.dump(status, f, indent=2)
+        return True
+    except Exception as e:
+        logger.error(f"Erreur sauvegarde maintenance: {e}")
+        return False
+
+def set_maintenance_mode(enabled, reason=None):
+    """Active/désactive le mode maintenance"""
+    status = load_maintenance_status()
+    status["enabled"] = enabled
+    status["last_updated"] = datetime.now().isoformat()
+    if reason:
+        status["reason"] = reason
+    save_maintenance_status(status)
+    logger.info(f"🔧 Mode maintenance: {'ACTIVÉ' if enabled else 'DÉSACTIVÉ'}")
+    return True
+
+def is_maintenance_mode(user_id=None):
+    """Vérifie si le mode maintenance est actif (admin bypass)"""
+    if user_id and user_id == ADMIN_ID:
+        return False
+    status = load_maintenance_status()
+    return status.get("enabled", False)
+
+def update_last_online():
+    """Met à jour le timestamp de dernière activité"""
+    status = load_maintenance_status()
+    status["last_online"] = datetime.now().isoformat()
+    save_maintenance_status(status)
+
+def check_downtime_and_activate_maintenance():
+    """Vérifie si le bot était hors ligne et active la maintenance si nécessaire"""
+    status = load_maintenance_status()
+    
+    if status.get("enabled", False):
+        logger.info("🔧 Mode maintenance déjà actif")
+        return True
+    
+    last_online = datetime.fromisoformat(status.get("last_online", datetime.now().isoformat()))
+    downtime = (datetime.now() - last_online).total_seconds()
+    threshold = status.get("downtime_threshold", 300)
+    
+    if downtime > threshold:
+        logger.warning(f"⚠️ Downtime détecté: {int(downtime)}s (seuil: {threshold}s)")
+        logger.info("🔧 Activation automatique du mode maintenance")
+        set_maintenance_mode(True, reason=f"Downtime de {int(downtime/60)} minutes détecté")
+        return True
+    else:
+        logger.info(f"✅ Uptime normal: {int(downtime)}s")
+        return False
+
+async def send_maintenance_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Envoie le message de maintenance à l'utilisateur"""
+    user_data = context.user_data or {}
+    status = load_maintenance_status()
+    reason = status.get("reason", "Maintenance en cours")
+    
+    admin_username = "votre_username_admin"
+    message = tr(user_data, "maintenance_mode").replace("{admin}", admin_username)
+    message += f"\n\n_Raison : {reason}_"
+    
+    await update.message.reply_text(message, parse_mode='Markdown')
+
+async def heartbeat_maintenance(context: ContextTypes.DEFAULT_TYPE):
+    """Met à jour régulièrement le timestamp pour éviter les faux positifs"""
+    update_last_online()
+
+# ==================== SYSTÈME DE HEALTH CHECK (FAILOVER) ====================
+
+def load_health_status():
+    """Charge l'état de santé du bot"""
+    health_file = DATA_DIR / "health_status.json"
+    if health_file.exists():
+        try:
+            with open(health_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            pass
+    return {
+        "primary_bot_online": True,
+        "last_primary_check": datetime.now().isoformat(),
+        "consecutive_failures": 0,
+        "failover_active": False,
+        "last_failover_time": None
+    }
+
+def save_health_status(status):
+    """Sauvegarde l'état de santé"""
+    health_file = DATA_DIR / "health_status.json"
+    try:
+        with open(health_file, 'w', encoding='utf-8') as f:
+            json.dump(status, f, indent=2)
+        return True
+    except Exception as e:
+        logger.error(f"Erreur sauvegarde health: {e}")
+        return False
+
+async def check_primary_bot_health():
+    """Vérifie si le bot principal est en ligne (via Telegram API)"""
+    if not PRIMARY_BOT_TOKEN:
+        logger.warning("⚠️ PRIMARY_BOT_TOKEN non configuré")
+        return True
+    
+    try:
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            url = f"https://api.telegram.org/bot{PRIMARY_BOT_TOKEN}/getMe"
+            async with session.get(url, timeout=10) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data.get("ok", False)
+                else:
+                    return False
+    except Exception as e:
+        logger.error(f"❌ Health check échoué: {e}")
+        return False
+
+async def health_check_job(context: ContextTypes.DEFAULT_TYPE):
+    """Job périodique qui vérifie la santé du bot principal (BOT 2 uniquement)"""
+    
+    if not IS_BACKUP_BOT:
+        return
+    
+    status = load_health_status()
+    is_online = await check_primary_bot_health()
+    
+    status["last_primary_check"] = datetime.now().isoformat()
+    
+    if is_online:
+        if status["consecutive_failures"] > 0:
+            logger.info(f"✅ Bot principal rétabli après {status['consecutive_failures']} échecs")
+        
+        status["primary_bot_online"] = True
+        status["consecutive_failures"] = 0
+        
+        if status.get("failover_active", False):
+            status["failover_active"] = False
+            logger.info("✅ Failover désactivé - Bot principal opérationnel")
+            
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=f"✅ *BOT PRINCIPAL RÉTABLI*\n\n{PRIMARY_BOT_USERNAME} est de nouveau en ligne.",
+                parse_mode='Markdown'
+            )
+    
+    else:
+        status["consecutive_failures"] += 1
+        
+        logger.warning(f"⚠️ Bot principal DOWN (tentative {status['consecutive_failures']}/{PRIMARY_BOT_DOWN_THRESHOLD})")
+        
+        if status["consecutive_failures"] >= PRIMARY_BOT_DOWN_THRESHOLD:
+            if not status.get("failover_active", False):
+                status["failover_active"] = True
+                status["last_failover_time"] = datetime.now().isoformat()
+                status["primary_bot_online"] = False
+                
+                logger.error(f"🔴 FAILOVER ACTIVÉ - Bot principal DOWN depuis {PRIMARY_BOT_DOWN_THRESHOLD} vérifications")
+                
+                last_check = datetime.fromisoformat(status["last_primary_check"])
+                downtime_minutes = (datetime.now() - last_check).total_seconds() / 60
+                
+                alert = tr({}, "primary_bot_down_alert").format(
+                    downtime=f"{int(downtime_minutes)} minutes",
+                    last_seen=status["last_primary_check"],
+                    backup_bot=BACKUP_BOT_USERNAME
+                )
+                
+                await context.bot.send_message(
+                    chat_id=ADMIN_ID,
+                    text=alert,
+                    parse_mode='Markdown'
+                )
+    
+    save_health_status(status)
+
+def is_primary_bot_down():
+    """Vérifie si le bot principal est considéré comme DOWN"""
+    status = load_health_status()
+    return status.get("failover_active", False)
+
+# ==================== FONCTIONS UTILITAIRES ====================
+
 def tr(user_data, key):
     lang = user_data.get('langue', 'fr')
     t = TRANSLATIONS.get(lang, TRANSLATIONS['fr']).get(key, key)
@@ -1359,7 +1630,7 @@ def format_cart(cart, user_data):
     return text
 
 def save_order_to_csv(order_data):
-    csv_path = Path(__file__).parent / "orders.csv"
+    csv_path = DATA_DIR / "orders.csv"
     try:
         file_exists = csv_path.exists()
         with open(csv_path, 'a', newline='', encoding='utf-8') as f:
@@ -1406,6 +1677,33 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = user.id
     is_admin = user_id == ADMIN_ID
     
+    # ========== GESTION FAILOVER (si activé) ==========
+    if 'IS_BACKUP_BOT' in globals():
+        # Si on est sur le BOT PRINCIPAL et qu'il est en maintenance
+        if not IS_BACKUP_BOT and is_maintenance_mode(user_id):
+            await send_maintenance_message(update, context)
+            return ConversationHandler.END
+        
+        # Si on est sur le BOT BACKUP, vérifier si le bot principal est DOWN
+        if IS_BACKUP_BOT:
+            if is_primary_bot_down():
+                # Bot principal DOWN, afficher message de failover
+                if not is_admin:
+                    failover_msg = f"🔄 *BOT DE SECOURS ACTIF*\n\n⚠️ Le bot principal {PRIMARY_BOT_USERNAME} est temporairement indisponible.\n\n✅ Vous utilisez actuellement le bot de secours.\n\n_Vos commandes fonctionnent normalement._\n\n💡 Une fois le bot principal rétabli, vous pourrez y retourner."
+                    await update.message.reply_text(failover_msg, parse_mode='Markdown')
+            else:
+                # Bot principal OK, suggérer de l'utiliser
+                if not is_admin:
+                    suggestion = f"💡 *INFORMATION*\n\nLe bot principal {PRIMARY_BOT_USERNAME} est disponible.\n\n_Vous pouvez l'utiliser pour une meilleure expérience._\n\n👉 Cliquez ici : {PRIMARY_BOT_USERNAME}\n\n✅ Ou continuez sur ce bot de secours."
+                    await update.message.reply_text(suggestion, parse_mode='Markdown')
+    else:
+        # Pas de failover configuré, vérifier juste la maintenance
+        if is_maintenance_mode(user_id):
+            await send_maintenance_message(update, context)
+            return ConversationHandler.END
+    
+    # ========== GESTION UTILISATEUR NORMALE ==========
+    
     is_new = is_new_user(user_id)
     if is_new:
         user_data_dict = {
@@ -1420,7 +1718,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update_user_visit(user_id)
         logger.info(f"🔄 Utilisateur connu: {user_id}")
     
-    logger.info(f"👤 /start: {user.first_name} (ID: {user.id}){' 🔑 ADMIN' if is_admin else ''}")
+    bot_name = "BACKUP" if 'IS_BACKUP_BOT' in globals() and IS_BACKUP_BOT else "PRIMARY"
+    logger.info(f"👤 [{bot_name}] /start: {user.first_name} (ID: {user.id}){' 🔑 ADMIN' if is_admin else ''}")
+    
     context.user_data.clear()
     keyboard = [
         [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
@@ -1459,12 +1759,27 @@ async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def voir_carte(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    
     keyboard = [
         [InlineKeyboardButton(tr(context.user_data, "prices_france"), callback_data="prix_france")],
         [InlineKeyboardButton(tr(context.user_data, "prices_switzerland"), callback_data="prix_suisse")],
         [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_main_menu")]
     ]
-    await query.message.edit_text(tr(context.user_data, "choose_country_prices"), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    
+    # Supprimer le message précédent s'il contient une image
+    try:
+        await query.message.delete()
+    except:
+        pass
+    
+    # Envoyer un nouveau message texte
+    await context.bot.send_message(
+        chat_id=query.message.chat_id,
+        text=tr(context.user_data, "choose_country_prices"),
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
     return PAYS
 
 @error_handler
@@ -1484,9 +1799,15 @@ async def afficher_prix(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(tr(context.user_data, "main_menu_btn"), callback_data="back_to_main_menu")]
     ]
     
+    # Supprimer le message précédent pour éviter les problèmes d'édition
+    try:
+        await query.message.delete()
+    except:
+        pass
+    
+    # Envoyer un nouveau message avec l'image
     if image_path.exists():
         try:
-            await query.message.delete()
             with open(image_path, 'rb') as photo:
                 await context.bot.send_photo(
                     chat_id=query.message.chat_id,
@@ -1505,7 +1826,13 @@ async def afficher_prix(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
     else:
         logger.warning(f"⚠️ Image non trouvée : {image_path}")
-        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text=text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    
     return PAYS
 
 @error_handler
@@ -1525,17 +1852,20 @@ async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(tr(context.user_data, "contact_admin"), callback_data="contact_admin")]
     ]
     
+    # Supprimer le message précédent (évite les problèmes avec images)
     try:
-        await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    except Exception as e:
-        logger.error(f"Erreur edit_text: {e}")
         await query.message.delete()
-        await context.bot.send_message(
-            chat_id=query.message.chat_id,
-            text=text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
-        )
+    except:
+        pass
+    
+    # Envoyer un nouveau message
+    await context.bot.send_message(
+        chat_id=query.message.chat_id,
+        text=text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
     return PAYS
 
 @error_handler
@@ -1605,7 +1935,6 @@ async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
             has_crystals = True
         else:
             # Produit direct (Coco, Hash, Weed, K, etc.)
-            emoji = product_name.split()[0] if product_name else ""
             keyboard.append([InlineKeyboardButton(product_name, callback_data=f"product_{code}")])
     
     # Ajouter Pills si disponibles
@@ -2707,6 +3036,82 @@ async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     await update.message.reply_text(text, parse_mode='Markdown')
 
+@error_handler
+async def admin_maintenance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /maintenance [on|off|status]"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return
+    
+    if not context.args:
+        status = load_maintenance_status()
+        enabled = status.get("enabled", False)
+        last_online = status.get("last_online", "Inconnu")
+        reason = status.get("reason", "N/A")
+        
+        text = f"🔧 *ÉTAT MAINTENANCE*\n\n"
+        text += f"Statut : {'🔴 ACTIVÉ' if enabled else '🟢 DÉSACTIVÉ'}\n"
+        text += f"Dernière activité : {last_online}\n"
+        text += f"Raison : {reason}\n\n"
+        text += f"*Commandes :*\n"
+        text += f"• `/maintenance on` - Activer\n"
+        text += f"• `/maintenance off` - Désactiver\n"
+        text += f"• `/maintenance status` - Voir l'état"
+        
+        await update.message.reply_text(text, parse_mode='Markdown')
+        return
+    
+    action = context.args[0].lower()
+    
+    if action == "on":
+        reason = " ".join(context.args[1:]) if len(context.args) > 1 else "Maintenance manuelle"
+        set_maintenance_mode(True, reason=reason)
+        await update.message.reply_text(tr(context.user_data, "maintenance_activated"), parse_mode='Markdown')
+    
+    elif action == "off":
+        set_maintenance_mode(False)
+        update_last_online()
+        await update.message.reply_text(tr(context.user_data, "maintenance_deactivated"), parse_mode='Markdown')
+    
+    elif action == "status":
+        status = load_maintenance_status()
+        enabled = status.get("enabled", False)
+        text = f"🔧 Maintenance : {'🔴 ACTIVÉ' if enabled else '🟢 DÉSACTIVÉ'}"
+        await update.message.reply_text(text, parse_mode='Markdown')
+    
+    else:
+        await update.message.reply_text("❌ Usage : `/maintenance [on|off|status]`", parse_mode='Markdown')
+
+@error_handler
+async def admin_failover_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /failover - Affiche l'état du système de failover"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return
+    
+    status = load_health_status()
+    
+    text = "🔄 *ÉTAT DU SYSTÈME FAILOVER*\n\n"
+    
+    if IS_BACKUP_BOT:
+        text += f"🟡 *Vous êtes sur : BOT BACKUP*\n"
+        text += f"🎯 Bot principal : {PRIMARY_BOT_USERNAME}\n\n"
+        
+        is_down = status.get("failover_active", False)
+        text += f"Statut principal : {'🔴 DOWN' if is_down else '🟢 ONLINE'}\n"
+        text += f"Dernière vérif : {status.get('last_primary_check', 'N/A')}\n"
+        text += f"Échecs consécutifs : {status.get('consecutive_failures', 0)}/{PRIMARY_BOT_DOWN_THRESHOLD}\n"
+        
+        if is_down:
+            text += f"\n⚠️ *FAILOVER ACTIF*\n"
+            text += f"Depuis : {status.get('last_failover_time', 'N/A')}\n"
+    else:
+        text += f"🟢 *Vous êtes sur : BOT PRINCIPAL*\n"
+        text += f"🔄 Bot backup : {BACKUP_BOT_USERNAME}\n\n"
+        text += f"✅ Mode normal - Pas de failover actif"
+    
+    await update.message.reply_text(text, parse_mode='Markdown')
+
 async def error_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Exception: {context.error}", exc_info=context.error)
 
@@ -2717,12 +3122,17 @@ async def main_async():
     
     init_product_codes()
     
+    # ✅ VÉRIFIER LA PERSISTANCE DES DONNÉES
+    boot_count = verify_data_persistence()
+    
     logger.info("=" * 60)
     logger.info("🤖 BOT TELEGRAM V2.2 - COMPLET")
     logger.info("=" * 60)
     logger.info(f"📱 Token: {TOKEN[:5]}***")
     logger.info(f"👤 Admin: ***{str(ADMIN_ID)[-3:]}")
     logger.info(f"⏰ Horaires: {get_horaires_text()}")
+    logger.info(f"🔄 Mode: {'🟡 BACKUP BOT' if IS_BACKUP_BOT else '🟢 PRIMARY BOT'}")
+    logger.info(f"💾 Données: {DATA_DIR}")
     logger.info("=" * 60)
     
     application = Application.builder().token(TOKEN).concurrent_updates(True).build()
@@ -2849,6 +3259,8 @@ async def main_async():
     application.add_handler(CommandHandler('repair', admin_repair_command))
     application.add_handler(CommandHandler('debug', admin_debug_command))
     application.add_handler(CommandHandler('stats', admin_stats_command))
+    application.add_handler(CommandHandler('maintenance', admin_maintenance_command))
+    application.add_handler(CommandHandler('failover', admin_failover_command))
     
     application.add_handler(CallbackQueryHandler(admin_validation_livraison, pattern='^admin_validate_'))
     application.add_handler(CallbackQueryHandler(confirm_archive_product, pattern="^archive_"))
@@ -2861,12 +3273,26 @@ async def main_async():
     if application.job_queue is not None:
         application.job_queue.run_repeating(check_pending_deletions, interval=60, first=10)
         application.job_queue.run_repeating(schedule_reports, interval=60, first=10)
+        application.job_queue.run_repeating(heartbeat_maintenance, interval=60, first=5)
+        
+        # ✅ HEALTH CHECK (BOT 2 uniquement)
+        if IS_BACKUP_BOT:
+            application.job_queue.run_repeating(health_check_job, interval=HEALTH_CHECK_INTERVAL, first=30)
+            logger.info("✅ Health check activé (BOT BACKUP)")
+        
         logger.info("✅ Tasks programmées")
     
     logger.info("✅ Handlers configurés")
     logger.info("=" * 60)
     logger.info("🚀 BOT V2.2 EN LIGNE")
     logger.info("=" * 60)
+    
+    # ✅ VÉRIFICATION DOWNTIME ET MAINTENANCE
+    if check_downtime_and_activate_maintenance():
+        logger.warning("🔧 MODE MAINTENANCE ACTIF - Redémarrage détecté")
+    else:
+        update_last_online()
+        logger.info("✅ Bot opérationnel - Maintenance désactivée")
     
     await application.initialize()
     await application.start()

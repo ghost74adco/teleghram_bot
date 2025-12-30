@@ -6610,13 +6610,18 @@ async def receive_tier_quantity(update: Update, context: ContextTypes.DEFAULT_TY
         if min_qty <= 0:
             raise ValueError
     except:
-        await update.message.reply_text("❌ Quantité invalide.")
-        return ADMIN_TIER_QUANTITY
+        await update.message.reply_text("❌ Quantité invalide. Entrez un nombre entier positif.")
+        return ADMIN_TIER_QUANTITY  # ✅ Rester dans le même état pour réessayer
     
     context.user_data['tier_min_qty'] = min_qty
     
     product_name = context.user_data.get('pricing_product')
     country = context.user_data.get('pricing_country')
+    
+    if not product_name or not country:
+        await update.message.reply_text("❌ Session expirée. Utilisez /pricing pour recommencer.")
+        return ConversationHandler.END
+    
     flag = "🇫🇷" if country == "FR" else "🇨🇭"
     
     text = f"💰 *{product_name}* {flag}\n\n➕ Palier à partir de {min_qty}g\n\nEntrez le prix (€/g) :\n\n_Exemple : 45_"
@@ -7275,7 +7280,7 @@ async def admin_debug_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     # Produits
     text += f"📦 *Produits :*\n"
-    text += f"• PRODUCT_CODES : {len(PRODUCT_CODES)}\n"
+    text += f"• PRODUCT\\_CODES : {len(PRODUCT_CODES)}\n"  # ✅ Échapper l'underscore
     text += f"• Available : {len(get_available_products())}\n"
     text += f"• Registry : {len(load_product_registry())}\n"
     text += f"• Pills : {len(PILL_SUBCATEGORIES)}\n"
@@ -7325,7 +7330,7 @@ async def admin_debug_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     text += f"⚙️ *Système :*\n"
     text += f"• Bot type : {'BACKUP' if IS_BACKUP_BOT else 'PRIMARY'}\n"
     text += f"• Maintenance : {'ON' if is_maintenance_mode() else 'OFF'}\n"
-    text += f"• Data dir : {DATA_DIR}\n"
+    text += f"• Data dir : `/data`"  # ✅ Pas besoin d'échapper dans backticks
     
     await update.message.reply_text(text, parse_mode='Markdown')
 

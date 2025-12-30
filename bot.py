@@ -104,6 +104,7 @@ DATA_DIR.mkdir(exist_ok=True)
 # Fichiers JSON
 PRODUCT_REGISTRY_FILE = DATA_DIR / "product_registry.json"
 AVAILABLE_PRODUCTS_FILE = DATA_DIR / "available_products.json"
+PRICING_TIERS_FILE = DATA_DIR / "pricing_tiers.json"
 PRICES_FILE = DATA_DIR / "prices.json"
 ARCHIVED_PRODUCTS_FILE = DATA_DIR / "archived_products.json"
 USERS_FILE = DATA_DIR / "users.json"
@@ -126,7 +127,7 @@ IMAGE_PRIX_SUISSE = MEDIA_DIR / "prix_suisse.jpg"
  ADMIN_MENU_MAIN, ADMIN_NEW_PRODUCT_NAME, ADMIN_NEW_PRODUCT_CODE,
  ADMIN_NEW_PRODUCT_CATEGORY, ADMIN_NEW_PRODUCT_PRICE_FR, 
  ADMIN_NEW_PRODUCT_PRICE_CH, ADMIN_CONFIRM_PRODUCT,
- ADMIN_HORAIRES_INPUT) = range(20)
+ ADMIN_HORAIRES_INPUT) = range(24)
 
 # Configuration
 MAX_QUANTITY_PER_PRODUCT = 1000
@@ -757,6 +758,113 @@ def save_prices(prices):
 def get_price(product_name, country):
     prices = load_prices()
     return prices.get(country, {}).get(product_name, 0)
+    # ==================== GESTION DES PRIX DÉGRESSIFS ====================
+
+def load_pricing_tiers():
+    """Charge les paliers de prix"""
+    if PRICING_TIERS_FILE.exists():
+        try:
+            with open(PRICING_TIERS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            pass
+    return {}
+
+def save_pricing_tiers(tiers):
+    """Sauvegarde les paliers de prix"""
+    try:
+        with open(PRICING_TIERS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(tiers, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        logger.error(f"Erreur sauvegarde pricing tiers: {e}")
+        return False
+
+def get_price_for_quantity(product_name, country, quantity):
+    """Retourne le prix en fonction de la quantité commandée"""
+    tiers = load_pricing_tiers()
+    
+    # Vérifier si le produit a des paliers configurés
+    product_key = f"{product_name}_{country}"
+    
+    if product_key in tiers and tiers[product_key]:
+        # Trier les paliers par quantité minimale (décroissant)
+        sorted_tiers = sorted(tiers[product_key], key=lambda x: x['min_qty'], reverse=True)
+        
+        # Trouver le palier applicable
+        for tier in sorted_tiers:
+            if quantity >= tier['min_qty']:
+                return tier['price']
+    
+    # Si pas de palier ou quantité trop faible, retourner prix de base
+    return get_price(product_name, country)
+
+def add_pricing_tier(product_name, country, min_qty, price):
+    """Ajoute un palier de prix"""
+    tiers = load_pricing_tiers()
+    
+    product_key = f"{product_name}_{country}"
+    
+    if product_key not in tiers:
+        tiers[product_key] = []
+    
+    # Vérifier si un palier existe déjà pour cette quantité
+    existing = [t for t in tiers[product_key] if t['min_qty'] == min_qty]
+    
+    if existing:
+        # Mettre à jour le prix
+        for t in tiers[product_key]:
+            if t['min_qty'] == min_qty:
+                t['price'] = price
+    else:
+        # Ajouter nouveau palier
+        tiers[product_key].append({
+            'min_qty': min_qty,
+            'price': price
+        })
+    
+    # Trier par quantité minimale
+    tiers[product_key] = sorted(tiers[product_key], key=lambda x: x['min_qty'])
+    
+    return save_pricing_tiers(tiers)
+
+def remove_pricing_tier(product_name, country, min_qty):
+    """Supprime un palier de prix"""
+    tiers = load_pricing_tiers()
+    
+    product_key = f"{product_name}_{country}"
+    
+    if product_key in tiers:
+        tiers[product_key] = [t for t in tiers[product_key] if t['min_qty'] != min_qty]
+        
+        # Si plus de paliers, supprimer la clé
+        if not tiers[product_key]:
+            del tiers[product_key]
+        
+        return save_pricing_tiers(tiers)
+    
+    return False
+
+def get_pricing_tiers_display(product_name, country):
+    """Retourne l'affichage formaté des paliers de prix"""
+    tiers = load_pricing_tiers()
+    
+    product_key = f"{product_name}_{country}"
+    
+    if product_key not in tiers or not tiers[product_key]:
+        base_price = get_price(product_name, country)
+        return f"Prix unique : {base_price}€/g"
+    
+    text = ""
+    sorted_tiers = sorted(tiers[product_key], key=lambda x: x['min_qty'])
+    
+    for i, tier in enumerate(sorted_tiers):
+        if i < len(sorted_tiers) - 1:
+            text += f"• {tier['min_qty']}-{sorted_tiers[i+1]['min_qty']-1}g : {tier['price']}€/g\n"
+        else:
+            text += f"• {tier['min_qty']}g+ : {tier['price']}€/g\n"
+    
+    return text
 
 def set_price(product_name, country, new_price):
     prices = load_prices()
@@ -1613,12 +1721,26 @@ def calculate_distance_simple(address):
     return distance
 
 def calculate_total(cart, country, delivery_type=None, distance=0):
+    """Calcule le total avec prix dégressifs"""
     prices = load_prices()
     prix_table = prices.get(country, PRIX_FR if country == "FR" else PRIX_CH)
-    subtotal = sum(prix_table.get(item["produit"], 0) * item["quantite"] for item in cart)
+    
+    subtotal = 0
+    
+    # Calculer avec prix dégressifs
+    for item in cart:
+        product_name = item["produit"]
+        quantity = item["quantite"]
+        
+        # Obtenir le prix pour cette quantité
+        price_per_unit = get_price_for_quantity(product_name, country, quantity)
+        
+        subtotal += price_per_unit * quantity
+    
     if delivery_type:
         delivery_fee = calculate_delivery_fee(delivery_type, distance, subtotal)
         return subtotal + delivery_fee, subtotal, delivery_fee
+    
     return subtotal, subtotal, 0
 
 def format_cart(cart, user_data):
@@ -2355,13 +2477,13 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ],
         [
             InlineKeyboardButton("⏰ Horaires", callback_data="admin_menu_horaires"),
+            InlineKeyboardButton("📚 Aide", callback_data="admin_menu_help")
+        ],
+        [
             InlineKeyboardButton("❌ Fermer", callback_data="admin_close")
         ]
     ]
     
-    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return ADMIN_MENU_MAIN
-
 @error_handler
 async def admin_menu_products_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Sous-menu produits"""
@@ -2471,6 +2593,77 @@ async def admin_menu_horaires_callback(update: Update, context: ContextTypes.DEF
         status = "🔴 Désactivés (24h/24)"
     
     text = f"⏰ *HORAIRES*\n\n{status}\n\n💡 Modifier : `/horaires`"
+    
+    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_back_main")]]
+    
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    return ADMIN_MENU_MAIN
+
+@error_handler
+async def admin_menu_help_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sous-menu aide - Liste des commandes"""
+    query = update.callback_query
+    await query.answer()
+    
+    text = """📚 *GUIDE DES COMMANDES ADMIN*
+
+🎛️ *MENU PRINCIPAL*
+`/admin` - Ouvre le panneau admin avec sous-menus
+
+📦 *GESTION PRODUITS*
+`/products` - Liste tous les produits disponibles et masqués
+`/del <code>` - Masque un produit (rupture de stock)
+  _Exemple : /del weed_
+`/add <code>` - Réactive un produit masqué
+  _Exemple : /add weed_
+`/repair <code>` - Répare la visibilité d'un produit
+  _Utile si un produit créé n'apparaît pas_
+
+💰 *GESTION DES PRIX*
+`/prices` - Affiche tous les prix (France et Suisse)
+`/setprice <code> <pays> <prix>` - Modifie un prix
+  _Exemple : /setprice coco fr 85_
+  _Pays : fr ou ch_
+`/pricing` - Configure les prix dégressifs par quantité
+  _Permet de définir des paliers de prix_
+  _Ex : 1-4g → 50€, 5-9g → 45€, 10g+ → 40€_
+
+👥 *UTILISATEURS*
+`/users` - Statistiques des utilisateurs
+  _Total, actifs (7 jours), nouveaux_
+
+📊 *STATISTIQUES*
+`/stats` - Chiffre d'affaires et commandes
+  _Ventes hebdomadaires et mensuelles_
+
+⏰ *HORAIRES*
+`/horaires` - Configure les horaires d'ouverture
+  _Format : HH:MM-HH:MM_
+  _Exemple : 09:00-23:00_
+  _Tapez "off" pour désactiver_
+  _Tapez "on" pour réactiver_
+
+🔧 *MAINTENANCE*
+`/maintenance on [raison]` - Active le mode maintenance
+  _Les clients voient un message de maintenance_
+`/maintenance off` - Désactive la maintenance
+`/maintenance status` - Voir l'état actuel
+
+🔄 *SYSTÈME DE FAILOVER*
+`/failover` - État du système de redondance
+  _Affiche si le bot principal/backup est en ligne_
+  _Détecte les pannes automatiquement_
+
+🐛 *DEBUG*
+`/debug` - Informations de débogage
+  _Affiche les dictionnaires produits, registre, etc._
+
+💡 *CONSEILS*
+- Les modifications sont sauvegardées automatiquement
+- Les prix dégressifs se calculent automatiquement
+- Le failover alerte après 3 min de panne
+- Les rapports sont envoyés automatiquement (hebdo/mensuel)
+"""
     
     keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_back_main")]]
     
@@ -3018,23 +3211,184 @@ async def admin_horaires_input(update: Update, context: ContextTypes.DEFAULT_TYP
     await update.message.reply_text(f"✅ Mis à jour : {get_horaires_text()}")
     return ConversationHandler.END
 
+# ==================== COMMANDE /pricing - GESTION PRIX DÉGRESSIFS ====================
+
 @error_handler
-async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def admin_pricing_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /pricing - Gérer les prix dégressifs"""
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("❌ Admin uniquement.")
-        return
-    stats = load_stats()
-    weekly = stats.get("weekly", [])
+        return ConversationHandler.END
     
-    text = "📊 *STATISTIQUES*\n\n"
+    available = get_available_products()
     
-    if weekly:
-        total_week = sum(s["amount"] for s in weekly)
-        text += f"📅 *Cette semaine :*\n💰 Total : {total_week:.2f}€\n📦 Commandes : {len(weekly)}"
-    else:
-        text += f"📅 *Cette semaine :* Aucune vente"
+    if not available:
+        await update.message.reply_text("❌ Aucun produit disponible.")
+        return ConversationHandler.END
+    
+    text = "💰 *PRIX DÉGRESSIFS*\n\nSélectionnez un produit :"
+    
+    keyboard = []
+    for product in sorted(available):
+        keyboard.append([InlineKeyboardButton(product, callback_data=f"pricing_{product[:30]}")])
+    
+    keyboard.append([InlineKeyboardButton("❌ Annuler", callback_data="admin_close")])
+    
+    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    
+    return ADMIN_SELECT_PRODUCT_PRICING
+
+@error_handler
+async def select_product_for_pricing(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sélection du produit pour configurer les prix"""
+    query = update.callback_query
+    await query.answer()
+    
+    product_name = query.data.replace("pricing_", "")
+    
+    # Trouver le nom complet
+    available = list(get_available_products())
+    full_name = None
+    for name in available:
+        if name.startswith(product_name):
+            full_name = name
+            break
+    
+    if not full_name:
+        await query.message.edit_text("❌ Produit non trouvé.")
+        return ConversationHandler.END
+    
+    context.user_data['pricing_product'] = full_name
+    
+    text = f"💰 *{full_name}*\n\nChoisissez un pays :"
+    
+    keyboard = [
+        [InlineKeyboardButton("🇫🇷 France", callback_data="pricing_country_FR")],
+        [InlineKeyboardButton("🇨🇭 Suisse", callback_data="pricing_country_CH")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_close")]
+    ]
+    
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    
+    return ADMIN_PRICING_TIERS
+
+@error_handler
+async def select_country_for_pricing(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sélection du pays pour les prix"""
+    query = update.callback_query
+    await query.answer()
+    
+    country = query.data.replace("pricing_country_", "")
+    context.user_data['pricing_country'] = country
+    
+    product_name = context.user_data.get('pricing_product')
+    
+    # Afficher les paliers actuels
+    tiers_display = get_pricing_tiers_display(product_name, country)
+    base_price = get_price(product_name, country)
+    
+    flag = "🇫🇷" if country == "FR" else "🇨🇭"
+    
+    text = f"💰 *{product_name}* {flag}\n\n"
+    text += f"📊 *Prix de base :* {base_price}€/g\n\n"
+    text += f"*Paliers actuels :*\n{tiers_display}\n\n"
+    text += f"Que faire ?"
+    
+    keyboard = [
+        [InlineKeyboardButton("➕ Ajouter palier", callback_data="pricing_add_tier")],
+        [InlineKeyboardButton("🗑️ Supprimer palier", callback_data="pricing_remove_tier")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="pricing_back")]
+    ]
+    
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    
+    return ADMIN_ADD_TIER
+
+@error_handler
+async def add_tier_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Demander la quantité minimale pour un nouveau palier"""
+    query = update.callback_query
+    await query.answer()
+    
+    product_name = context.user_data.get('pricing_product')
+    country = context.user_data.get('pricing_country')
+    flag = "🇫🇷" if country == "FR" else "🇨🇭"
+    
+    text = f"💰 *{product_name}* {flag}\n\n"
+    text += f"➕ *AJOUTER UN PALIER*\n\n"
+    text += f"Entrez la quantité minimale (en grammes) :\n\n"
+    text += f"_Exemple : 5 (pour 5g et plus)_"
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="pricing_back")]]
+    
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    
+    return ADMIN_TIER_QUANTITY
+
+@error_handler
+async def receive_tier_quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Recevoir la quantité minimale"""
+    try:
+        min_qty = int(update.message.text.strip())
+        if min_qty <= 0:
+            raise ValueError
+    except:
+        await update.message.reply_text("❌ Quantité invalide. Entrez un nombre entier positif.")
+        return ADMIN_TIER_QUANTITY
+    
+    context.user_data['tier_min_qty'] = min_qty
+    
+    product_name = context.user_data.get('pricing_product')
+    country = context.user_data.get('pricing_country')
+    flag = "🇫🇷" if country == "FR" else "🇨🇭"
+    
+    text = f"💰 *{product_name}* {flag}\n\n"
+    text += f"➕ Palier à partir de {min_qty}g\n\n"
+    text += f"Entrez le prix (€/g) :\n\n"
+    text += f"_Exemple : 45_"
     
     await update.message.reply_text(text, parse_mode='Markdown')
+    
+    return ADMIN_CONFIRM_PRODUCT
+
+@error_handler
+async def receive_tier_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Recevoir le prix du palier"""
+    try:
+        price = float(update.message.text.strip())
+        if price <= 0:
+            raise ValueError
+    except:
+        await update.message.reply_text("❌ Prix invalide.")
+        return ADMIN_CONFIRM_PRODUCT
+    
+    product_name = context.user_data.get('pricing_product')
+    country = context.user_data.get('pricing_country')
+    min_qty = context.user_data.get('tier_min_qty')
+    
+    # Ajouter le palier
+    success = add_pricing_tier(product_name, country, min_qty, price)
+    
+    if success:
+        flag = "🇫🇷" if country == "FR" else "🇨🇭"
+        
+        # Afficher les nouveaux paliers
+        tiers_display = get_pricing_tiers_display(product_name, country)
+        
+        text = f"✅ *PALIER AJOUTÉ*\n\n"
+        text += f"💰 *{product_name}* {flag}\n\n"
+        text += f"*Paliers configurés :*\n{tiers_display}"
+        
+        keyboard = [
+            [InlineKeyboardButton("➕ Ajouter autre palier", callback_data="pricing_add_tier")],
+            [InlineKeyboardButton("✅ Terminer", callback_data="admin_close")]
+        ]
+        
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    else:
+        await update.message.reply_text("❌ Erreur lors de l'ajout du palier.")
+    
+    return ADMIN_ADD_TIER
 
 @error_handler
 async def admin_maintenance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3281,7 +3635,26 @@ async def main_async():
     application.add_handler(CommandHandler('stats', admin_stats_command))
     application.add_handler(CommandHandler('maintenance', admin_maintenance_command))
     application.add_handler(CommandHandler('failover', admin_failover_command))
-    
+    # Handler prix dégressifs
+pricing_handler = ConversationHandler(
+    entry_points=[CommandHandler('pricing', admin_pricing_command)],
+    states={
+        ADMIN_SELECT_PRODUCT_PRICING: [CallbackQueryHandler(select_product_for_pricing, pattern="^pricing_")],
+        ADMIN_PRICING_TIERS: [CallbackQueryHandler(select_country_for_pricing, pattern="^pricing_country_")],
+        ADMIN_ADD_TIER: [
+            CallbackQueryHandler(add_tier_prompt, pattern="^pricing_add_tier$"),
+            CallbackQueryHandler(select_country_for_pricing, pattern="^pricing_back$"),
+        ],
+        ADMIN_TIER_QUANTITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_tier_quantity)],
+        ADMIN_CONFIRM_PRODUCT: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_tier_price)],
+    },
+    fallbacks=[CallbackQueryHandler(admin_close, pattern="^admin_close$")],
+    name="pricing_conv",
+    persistent=False,
+    per_message=False
+)
+
+application.add_handler(pricing_handler)
     application.add_handler(CallbackQueryHandler(admin_validation_livraison, pattern='^admin_validate_'))
     application.add_handler(CallbackQueryHandler(confirm_archive_product, pattern="^archive_"))
     application.add_handler(CallbackQueryHandler(execute_archive, pattern="^confirmarchive_"))
@@ -3330,7 +3703,33 @@ async def main_async():
     await application.shutdown()
 
 
+def run_health_server():
+    """Serveur HTTP minimal pour satisfaire Render"""
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+    
+    class HealthHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(b'Bot is running')
+        
+        def log_message(self, format, *args):
+            pass  # Désactive les logs HTTP
+    
+    port = int(os.getenv('PORT', '10000'))
+    server = HTTPServer(('0.0.0.0', port), HealthHandler)
+    logger.info(f"🌐 Serveur HTTP démarré sur le port {port}")
+    
+    import threading
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+
 def main():
+    # Démarrer le serveur HTTP en arrière-plan (pour Render)
+    run_health_server()
+    
     try:
         asyncio.run(main_async())
     except KeyboardInterrupt:

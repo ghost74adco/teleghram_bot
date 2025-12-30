@@ -3493,213 +3493,62 @@ async def error_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def main_async():
     """Fonction principale asynchrone"""
+    # ... code d'initialisation ...
     
+    # Vérifier persistance
+    verify_data_persistence()
+    
+    # Initialiser produits
     init_product_codes()
-    
-    # ✅ VÉRIFIER LA PERSISTANCE DES DONNÉES
-    boot_count = verify_data_persistence()
     
     logger.info("=" * 60)
     logger.info("🤖 BOT TELEGRAM V2.2 - COMPLET")
     logger.info("=" * 60)
-    logger.info(f"📱 Token: {TOKEN[:5]}***")
-    logger.info(f"👤 Admin: ***{str(ADMIN_ID)[-3:]}")
-    logger.info(f"⏰ Horaires: {get_horaires_text()}")
-    logger.info(f"🔄 Mode: {'🟡 BACKUP BOT' if IS_BACKUP_BOT else '🟢 PRIMARY BOT'}")
-    logger.info(f"💾 Données: {DATA_DIR}")
-    logger.info("=" * 60)
+    # ... logs ...
     
-    application = Application.builder().token(TOKEN).concurrent_updates(True).build()
+    # Créer l'application
+    application = Application.builder().token(TOKEN).build()
     logger.info("✅ Application créée")
     
-    await application.bot.delete_webhook(drop_pending_updates=True)
-    logger.info("✅ Webhook supprimé")
+    # ... handlers ...
     
-    try:
-        await application.bot.get_updates(offset=-1, timeout=1)
-        logger.info("✅ Connexions libérées")
-    except:
-        pass
+    if application.job_queue is not None:
+        application.job_queue.run_repeating(check_pending_deletions, interval=60, first=10)
+        application.job_queue.run_repeating(schedule_reports, interval=60, first=10)
+        application.job_queue.run_repeating(heartbeat_maintenance, interval=60, first=5)
+        
+        if IS_BACKUP_BOT:
+            application.job_queue.run_repeating(health_check_job, interval=HEALTH_CHECK_INTERVAL, first=30)
+            logger.info("✅ Health check activé (BOT BACKUP)")
+        
+        logger.info("✅ Tasks programmées")
     
-    horaires_handler = ConversationHandler(
-        entry_points=[CommandHandler('horaires', admin_horaires_command)],
-        states={ADMIN_HORAIRES_INPUT: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_horaires_input)]},
-        fallbacks=[],
-        allow_reentry=False,
-        name="horaires_conv"
-    )
+    logger.info("✅ Handlers configurés")
+    logger.info("=" * 60)
+    logger.info("🚀 BOT V2.2 EN LIGNE")
+    logger.info("=" * 60)
     
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start_command)],
-        states={
-            LANGUE: [CallbackQueryHandler(set_langue, pattern='^lang_')],
-            PAYS: [
-                CallbackQueryHandler(menu_navigation, pattern='^start_order$'),
-                CallbackQueryHandler(choix_pays, pattern='^country_'),
-                CallbackQueryHandler(restart_order, pattern='^restart_order$'),
-                CallbackQueryHandler(voir_carte, pattern='^voir_carte$'),
-                CallbackQueryHandler(afficher_prix, pattern='^prix_(france|suisse)$'),
-                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$'),
-                CallbackQueryHandler(menu_navigation, pattern='^contact_admin$'),
-                CallbackQueryHandler(back_navigation, pattern='^back_to_country_choice$')
-            ],
-            CONTACT: [MessageHandler(filters.TEXT & ~filters.COMMAND, contact_handler)],
-            PRODUIT: [
-                CallbackQueryHandler(choix_produit, pattern='^product_'),
-                CallbackQueryHandler(back_navigation, pattern='^back_(to_main|to_country_choice|to_products)$'),
-                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')
-            ],
-            PILL_SUBCATEGORY: [
-                CallbackQueryHandler(choix_pill_subcategory, pattern='^pill_'),
-                CallbackQueryHandler(back_navigation, pattern='^back_to_products$'),
-                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')
-            ],
-            ROCK_SUBCATEGORY: [
-                CallbackQueryHandler(choix_rock_subcategory, pattern='^rock_'),
-                CallbackQueryHandler(back_navigation, pattern='^back_to_products$'),
-                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')
-            ],
-            QUANTITE: [MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_quantite)],
-            CART_MENU: [
-                CallbackQueryHandler(cart_menu, pattern='^(add_more|proceed_checkout)$'),
-                CallbackQueryHandler(back_to_main_menu, pattern='^back_to_main_menu$')
-            ],
-            ADRESSE: [MessageHandler(filters.TEXT & ~filters.COMMAND, saisie_adresse)],
-            LIVRAISON: [CallbackQueryHandler(choix_livraison, pattern='^delivery_')],
-            PAIEMENT: [CallbackQueryHandler(choix_paiement, pattern='^payment_')],
-            CONFIRMATION: [CallbackQueryHandler(confirmation, pattern='^(confirm_order|cancel)$')]
-        },
-        fallbacks=[CommandHandler('start', start_command)],
-        allow_reentry=True,
-        per_message=False,
-        name="main_conv"
-    )
+    if check_downtime_and_activate_maintenance():
+        logger.warning("🔧 MODE MAINTENANCE ACTIF - Redémarrage détecté")
+    else:
+        update_last_online()
+        logger.info("✅ Bot opérationnel - Maintenance désactivée")
     
-    product_management_handler = ConversationHandler(
-        entry_points=[
-            CallbackQueryHandler(admin_create_product, pattern="^admin_create_product$"),
-            CallbackQueryHandler(admin_archive_product, pattern="^admin_archive_product$"),
-            CallbackQueryHandler(admin_restore_product, pattern="^admin_restore_product$"),
-        ],
-        states={
-            ADMIN_NEW_PRODUCT_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_product_name)],
-            ADMIN_NEW_PRODUCT_CODE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_product_code)],
-            ADMIN_NEW_PRODUCT_CATEGORY: [CallbackQueryHandler(receive_product_category, pattern="^category_")],
-            ADMIN_NEW_PRODUCT_PRICE_FR: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_product_price_fr)],
-            ADMIN_NEW_PRODUCT_PRICE_CH: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_product_price_ch)],
-            ADMIN_CONFIRM_PRODUCT: [
-                CallbackQueryHandler(confirm_create_product, pattern="^admin_confirm_create$"),
-                CallbackQueryHandler(admin_cancel_product, pattern="^admin_cancel_product$"),
-            ],
-        },
-        fallbacks=[
-            CallbackQueryHandler(admin_cancel_product, pattern="^admin_cancel_product$"),
-            CallbackQueryHandler(admin_close, pattern="^admin_close$"),
-        ],
-        name="product_management",
-        persistent=False,
-        per_message=False
-    )
+    # ✅ CES LIGNES DOIVENT ÊTRE ICI (DANS main_async)
+    await application.initialize()
+    await application.start()
+    await application.updater.start_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
     
-    admin_menu_handler = ConversationHandler(
-        entry_points=[CommandHandler('admin', admin_command)],
-        states={
-            ADMIN_MENU_MAIN: [
-                CallbackQueryHandler(admin_menu_products_callback, pattern="^admin_menu_products$"),
-                CallbackQueryHandler(admin_menu_prices_callback, pattern="^admin_menu_prices$"),
-                CallbackQueryHandler(admin_menu_stats_callback, pattern="^admin_menu_stats$"),
-                CallbackQueryHandler(admin_menu_users_callback, pattern="^admin_menu_users$"),
-                CallbackQueryHandler(admin_menu_horaires_callback, pattern="^admin_menu_horaires$"),
-                CallbackQueryHandler(admin_back_main, pattern="^admin_back_main$"),
-                CallbackQueryHandler(admin_close, pattern="^admin_close$"),
-            ],
-        },
-        fallbacks=[CallbackQueryHandler(admin_close, pattern="^admin_close$")],
-        name="admin_menu",
-        persistent=False,
-        per_message=False
-    )
-    
-    application.add_handler(horaires_handler)
-    application.add_handler(conv_handler)
-    application.add_handler(product_management_handler)
-    application.add_handler(admin_menu_handler)
-    application.add_handler(CommandHandler('products', admin_products_command))
-    application.add_handler(CommandHandler('prices', admin_prices_command))
-    application.add_handler(CommandHandler('setprice', admin_setprice_command))
-    application.add_handler(CommandHandler('del', admin_del_product_command))
-    application.add_handler(CommandHandler('add', admin_add_product_command))
-    application.add_handler(CommandHandler('users', users_command))
-    application.add_handler(CommandHandler('repair', admin_repair_command))
-    application.add_handler(CommandHandler('debug', admin_debug_command))
-    application.add_handler(CommandHandler('stats', admin_stats_command))
-    application.add_handler(CommandHandler('maintenance', admin_maintenance_command))
-    application.add_handler(CommandHandler('failover', admin_failover_command))
-    # Handler prix dégressifs
-pricing_handler = ConversationHandler(
-    entry_points=[CommandHandler('pricing', admin_pricing_command)],
-    states={
-        ADMIN_SELECT_PRODUCT_PRICING: [CallbackQueryHandler(select_product_for_pricing, pattern="^pricing_")],
-        ADMIN_PRICING_TIERS: [CallbackQueryHandler(select_country_for_pricing, pattern="^pricing_country_")],
-        ADMIN_ADD_TIER: [
-            CallbackQueryHandler(add_tier_prompt, pattern="^pricing_add_tier$"),
-            CallbackQueryHandler(select_country_for_pricing, pattern="^pricing_back$"),
-        ],
-        ADMIN_TIER_QUANTITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_tier_quantity)],
-        ADMIN_CONFIRM_PRODUCT: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_tier_price)],
-    },
-    fallbacks=[CallbackQueryHandler(admin_close, pattern="^admin_close$")],
-    name="pricing_conv",
-    persistent=False,
-    per_message=False
-)
-
-application.add_handler(pricing_handler)
-application.add_handler(CallbackQueryHandler(admin_validation_livraison, pattern='^admin_validate_'))
-application.add_handler(CallbackQueryHandler(confirm_archive_product, pattern="^archive_"))
-application.add_handler(CallbackQueryHandler(execute_archive, pattern="^confirmarchive_"))
-application.add_handler(CallbackQueryHandler(execute_restore, pattern="^restore_"))
-application.add_handler(CallbackQueryHandler(admin_close, pattern="^admin_close$"))
-
-application.add_error_handler(error_callback)
-if application.job_queue is not None:
-    application.job_queue.run_repeating(check_pending_deletions, interval=60, first=10)
-    application.job_queue.run_repeating(schedule_reports, interval=60, first=10)
-    application.job_queue.run_repeating(heartbeat_maintenance, interval=60, first=5)
-    
-    # ✅ HEALTH CHECK (BOT 2 uniquement)
-    if IS_BACKUP_BOT:
-        application.job_queue.run_repeating(health_check_job, interval=HEALTH_CHECK_INTERVAL, first=30)
-        logger.info("✅ Health check activé (BOT BACKUP)")
-    
-    logger.info("✅ Tasks programmées")
-
-logger.info("✅ Handlers configurés")
-logger.info("=" * 60)
-logger.info("🚀 BOT V2.2 EN LIGNE")
-logger.info("=" * 60)
-
-# ✅ VÉRIFICATION DOWNTIME ET MAINTENANCE
-if check_downtime_and_activate_maintenance():
-    logger.warning("🔧 MODE MAINTENANCE ACTIF - Redémarrage détecté")
-else:
-    update_last_online()
-    logger.info("✅ Bot opérationnel - Maintenance désactivée")
-
-await application.initialize()
-await application.start()
-await application.updater.start_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
-
-import signal
-stop_event = asyncio.Event()
-def stop_handler(signum, frame):
-    stop_event.set()
-signal.signal(signal.SIGINT, stop_handler)
-signal.signal(signal.SIGTERM, stop_handler)
-await stop_event.wait()
-await application.updater.stop()
-await application.stop()
-await application.shutdown()
+    import signal
+    stop_event = asyncio.Event()
+    def stop_handler(signum, frame):
+        stop_event.set()
+    signal.signal(signal.SIGINT, stop_handler)
+    signal.signal(signal.SIGTERM, stop_handler)
+    await stop_event.wait()
+    await application.updater.stop()
+    await application.stop()
+    await application.shutdown()
 
 
 def run_health_server():
@@ -3714,7 +3563,7 @@ def run_health_server():
             self.wfile.write(b'Bot is running')
         
         def log_message(self, format, *args):
-            pass  # Désactive les logs HTTP
+            pass
     
     port = int(os.getenv('PORT', '10000'))
     server = HTTPServer(('0.0.0.0', port), HealthHandler)
@@ -3726,7 +3575,6 @@ def run_health_server():
 
 
 def main():
-    # Démarrer le serveur HTTP en arrière-plan (pour Render)
     run_health_server()
     
     try:

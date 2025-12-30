@@ -3660,7 +3660,6 @@ application.add_handler(pricing_handler)
     application.add_handler(CallbackQueryHandler(execute_archive, pattern="^confirmarchive_"))
     application.add_handler(CallbackQueryHandler(execute_restore, pattern="^restore_"))
     application.add_handler(CallbackQueryHandler(admin_close, pattern="^admin_close$"))
-    
     application.add_error_handler(error_callback)
     
     if application.job_queue is not None:

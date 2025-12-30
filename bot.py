@@ -1487,9 +1487,8 @@ def update_last_online():
     save_maintenance_status(status)
 
 def check_downtime_and_activate_maintenance():
-    """Vérifie si le bot était hors ligne et active la maintenance si nécessaire"""
-    status = load_maintenance_status()
-        return False
+    """Vérifie le downtime et active la maintenance si nécessaire"""
+    return False
     
     if status.get("enabled", False):
         logger.info("🔧 Mode maintenance déjà actif")

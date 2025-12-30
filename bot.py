@@ -3503,6 +3503,713 @@ def restore_product(product_name):
     return success
 
 # FIN DU BLOC 5
+        # ==================== BLOC 5.5 : COMMANDES ADMIN PRINCIPALES ET GESTION PRODUITS ====================
+# Ajoutez ce bloc APRÈS le BLOC 5 et AVANT le BLOC 6
+
+# ==================== COMMANDE /admin - MENU PRINCIPAL ====================
+
+@error_handler
+async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /admin - Menu admin principal"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return ConversationHandler.END
+    
+    text = "🔑 *PANNEAU ADMIN V3.0*\n\n"
+    text += "Que voulez-vous gérer ?\n\n"
+    text += "_Toutes les nouvelles fonctionnalités sont disponibles !_"
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("📦 Produits", callback_data="admin_menu_products"),
+            InlineKeyboardButton("💰 Prix", callback_data="admin_menu_prices")
+        ],
+        [
+            InlineKeyboardButton("📊 Stocks", callback_data="admin_menu_stocks"),
+            InlineKeyboardButton("🎁 Promos", callback_data="admin_menu_promos")
+        ],
+        [
+            InlineKeyboardButton("👥 Clients", callback_data="admin_menu_clients"),
+            InlineKeyboardButton("📈 Stats", callback_data="admin_menu_stats")
+        ],
+        [
+            InlineKeyboardButton("⏰ Horaires", callback_data="admin_menu_horaires"),
+            InlineKeyboardButton("❓ Aide", callback_data="admin_menu_help")
+        ],
+        [
+            InlineKeyboardButton("❌ Fermer", callback_data="admin_close")
+        ]
+    ]
+    
+    await update.message.reply_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    return ADMIN_MENU_MAIN
+
+# ==================== CALLBACKS MENU ADMIN ====================
+
+@error_handler
+async def admin_menu_products_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu produits"""
+    query = update.callback_query
+    await query.answer()
+    
+    available = get_available_products()
+    registry = load_product_registry()
+    
+    text = f"📦 *GESTION PRODUITS*\n\n"
+    text += f"• Total registre : {len(registry)}\n"
+    text += f"• Visibles : {len(available)}\n"
+    text += f"• Masqués : {len(registry) - len(available)}\n\n"
+    text += f"*Commandes principales :*\n"
+    text += f"• `/products` - Liste complète\n"
+    text += f"• `/add <code>` - Activer produit\n"
+    text += f"• `/del <code>` - Masquer produit\n"
+    text += f"• `/repair <code>` - Réparer visibilité"
+    
+    keyboard = [
+        [InlineKeyboardButton("➕ Créer produit", callback_data="admin_create_product")],
+        [InlineKeyboardButton("📦 Archiver produit", callback_data="admin_archive_product")],
+        [InlineKeyboardButton("♻️ Restaurer produit", callback_data="admin_restore_product")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_main")]
+    ]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    return ADMIN_MENU_MAIN
+
+@error_handler
+async def admin_menu_prices_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu prix"""
+    query = update.callback_query
+    await query.answer()
+    
+    tiers = load_pricing_tiers()
+    
+    text = f"💰 *GESTION PRIX*\n\n"
+    text += f"• Produits avec paliers : {len(tiers)}\n\n"
+    text += f"*Commandes principales :*\n"
+    text += f"• `/prices` - Voir tous les prix\n"
+    text += f"• `/setprice <code> <pays> <prix>`\n"
+    text += f"• `/pricing` - Interface paliers dégressifs\n"
+    text += f"• `/delpricing <code> <pays> <qty>`\n"
+    text += f"• `/exportpricing` - Export CSV"
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_main")]
+    ]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    return ADMIN_MENU_MAIN
+
+@error_handler
+async def admin_menu_stocks_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu stocks - 🆕 V3.0"""
+    query = update.callback_query
+    await query.answer()
+    
+    stocks = load_stocks()
+    low_stock = len(get_low_stock_products())
+    out_of_stock = len(get_out_of_stock_products())
+    
+    text = f"📊 *GESTION STOCKS* 🆕\n\n"
+    text += f"• Produits suivis : {len(stocks)}\n"
+    text += f"• ⚠️ Stock faible : {low_stock}\n"
+    text += f"• 🔴 Ruptures : {out_of_stock}\n\n"
+    text += f"*Commandes :*\n"
+    text += f"• `/stockmenu` - Interface complète\n"
+    text += f"• `/stock` - Voir stocks\n"
+    text += f"• `/setstock <code> <qty>`\n"
+    text += f"• `/restock <code> <qty>`"
+    
+    keyboard = [
+        [InlineKeyboardButton("📊 Ouvrir interface stocks", callback_data="open_stockmenu")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_main")]
+    ]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    return ADMIN_MENU_MAIN
+
+@error_handler
+async def admin_menu_promos_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu promos - 🆕 V3.0"""
+    query = update.callback_query
+    await query.answer()
+    
+    codes = load_promo_codes()
+    active_codes = 0
+    now = datetime.now()
+    
+    for code, data in codes.items():
+        is_active = True
+        if "valid_until" in data:
+            if now > datetime.fromisoformat(data["valid_until"]):
+                is_active = False
+        if data.get("used_count", 0) >= data.get("max_uses", 999999):
+            is_active = False
+        if is_active:
+            active_codes += 1
+    
+    text = f"🎁 *CODES PROMO* 🆕\n\n"
+    text += f"• Total codes : {len(codes)}\n"
+    text += f"• Actifs : {active_codes}\n"
+    text += f"• Inactifs : {len(codes) - active_codes}\n\n"
+    text += f"*Commandes :*\n"
+    text += f"• `/promomenu` - Interface complète\n"
+    text += f"• `/promo` - Liste codes\n"
+    text += f"• `/addpromo <CODE> <type> <val>`"
+    
+    keyboard = [
+        [InlineKeyboardButton("🎁 Ouvrir interface promos", callback_data="open_promomenu")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_main")]
+    ]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    return ADMIN_MENU_MAIN
+
+@error_handler
+async def admin_menu_clients_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu clients - 🆕 V3.0"""
+    query = update.callback_query
+    await query.answer()
+    
+    users = load_users()
+    history = load_client_history()
+    vip_count = sum(1 for h in history.values() if h.get("vip_status", False))
+    
+    text = f"👥 *GESTION CLIENTS* 🆕\n\n"
+    text += f"• Total clients : {len(users)}\n"
+    text += f"• Avec commandes : {len(history)}\n"
+    text += f"• 👑 VIP : {vip_count}\n\n"
+    text += f"*Commandes :*\n"
+    text += f"• `/clientmenu` - Interface complète\n"
+    text += f"• `/clients` - Stats globales\n"
+    text += f"• `/client <user_id>` - Profil\n"
+    text += f"• `/topclients` - Top 10"
+    
+    keyboard = [
+        [InlineKeyboardButton("👥 Ouvrir interface clients", callback_data="open_clientmenu")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_main")]
+    ]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    return ADMIN_MENU_MAIN
+
+@error_handler
+async def admin_menu_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu statistiques"""
+    query = update.callback_query
+    await query.answer()
+    
+    stats = load_stats()
+    weekly = stats.get("weekly", [])
+    monthly = stats.get("monthly", [])
+    
+    total_week = sum(s["amount"] for s in weekly) if weekly else 0
+    total_month = sum(s["amount"] for s in monthly) if monthly else 0
+    
+    text = f"📊 *STATISTIQUES*\n\n"
+    text += f"Cette semaine :\n"
+    text += f"• CA : {total_week:.2f}€\n"
+    text += f"• Commandes : {len(weekly)}\n\n"
+    text += f"Ce mois :\n"
+    text += f"• CA : {total_month:.2f}€\n"
+    text += f"• Commandes : {len(monthly)}\n\n"
+    text += f"*Commande :* `/stats`"
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_main")]
+    ]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    return ADMIN_MENU_MAIN
+
+@error_handler
+async def admin_menu_horaires_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu horaires"""
+    query = update.callback_query
+    await query.answer()
+    
+    horaires = get_horaires_text()
+    
+    text = f"⏰ *HORAIRES D'OUVERTURE*\n\n"
+    text += f"Actuels : {horaires}\n\n"
+    text += f"*Commande :* `/horaires`\n\n"
+    text += f"_Format : HH:MM-HH:MM_\n"
+    text += f"_Exemple : 09:00-23:00_"
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_main")]
+    ]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    return ADMIN_MENU_MAIN
+
+@error_handler
+async def admin_menu_help_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu aide"""
+    query = update.callback_query
+    await query.answer()
+    
+    text = "❓ *AIDE ADMIN*\n\n"
+    text += "Tapez `/help` pour le guide complet\n\n"
+    text += "*Raccourcis utiles :*\n"
+    text += "• `/debug` - Diagnostic système\n"
+    text += "• `/stats` - Stats complètes\n"
+    text += "• `/maintenance on` - Mode maintenance\n"
+    text += "• `/failover` - État failover"
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_main")]
+    ]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    return ADMIN_MENU_MAIN
+
+@error_handler
+async def admin_back_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Retour au menu principal admin"""
+    query = update.callback_query
+    await query.answer()
+    
+    text = "🔑 *PANNEAU ADMIN V3.0*\n\n"
+    text += "Que voulez-vous gérer ?\n\n"
+    text += "_Toutes les nouvelles fonctionnalités sont disponibles !_"
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("📦 Produits", callback_data="admin_menu_products"),
+            InlineKeyboardButton("💰 Prix", callback_data="admin_menu_prices")
+        ],
+        [
+            InlineKeyboardButton("📊 Stocks", callback_data="admin_menu_stocks"),
+            InlineKeyboardButton("🎁 Promos", callback_data="admin_menu_promos")
+        ],
+        [
+            InlineKeyboardButton("👥 Clients", callback_data="admin_menu_clients"),
+            InlineKeyboardButton("📈 Stats", callback_data="admin_menu_stats")
+        ],
+        [
+            InlineKeyboardButton("⏰ Horaires", callback_data="admin_menu_horaires"),
+            InlineKeyboardButton("❓ Aide", callback_data="admin_menu_help")
+        ],
+        [
+            InlineKeyboardButton("❌ Fermer", callback_data="admin_close")
+        ]
+    ]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    return ADMIN_MENU_MAIN
+
+@error_handler
+async def admin_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Fermer le menu admin"""
+    query = update.callback_query
+    await query.answer()
+    
+    try:
+        await query.message.delete()
+    except:
+        await query.message.edit_text("✅ Menu fermé.")
+    
+    return ConversationHandler.END
+
+# ==================== REDIRECTIONS VERS LES MENUS SPÉCIALISÉS ====================
+
+@error_handler
+async def open_stockmenu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Redirige vers le menu stocks complet"""
+    query = update.callback_query
+    await query.answer("Ouverture du menu stocks...")
+    
+    # Simuler l'appel de /stockmenu
+    await admin_stock_menu_command(update, context)
+    return STOCK_MANAGEMENT
+
+@error_handler
+async def open_promomenu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Redirige vers le menu promos complet"""
+    query = update.callback_query
+    await query.answer("Ouverture du menu promos...")
+    
+    # Simuler l'appel de /promomenu
+    await admin_promo_menu_command(update, context)
+    return ADMIN_PROMO_MENU
+
+@error_handler
+async def open_clientmenu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Redirige vers le menu clients complet"""
+    query = update.callback_query
+    await query.answer("Ouverture du menu clients...")
+    
+    # Simuler l'appel de /clientmenu
+    await admin_client_menu_command(update, context)
+    return ADMIN_CLIENT_MENU
+
+# ==================== COMMANDES ADMIN TEXTE ====================
+
+@error_handler
+async def admin_products_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /products - Liste des produits"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return
+    
+    registry = load_product_registry()
+    available = get_available_products()
+    
+    text = "📦 *LISTE DES PRODUITS*\n\n"
+    
+    # Produits visibles
+    visible = []
+    for code, product in registry.items():
+        if product.get("name") in available:
+            visible.append((code, product))
+    
+    if visible:
+        text += "*✅ VISIBLES :*\n"
+        for code, product in sorted(visible, key=lambda x: x[1].get("name", "")):
+            name = product.get("name", "N/A")
+            stock = get_stock(name)
+            stock_info = f" ({stock}g)" if stock is not None else ""
+            text += f"  • {name} (`{code}`){stock_info}\n"
+        text += "\n"
+    
+    # Produits masqués
+    hidden = []
+    for code, product in registry.items():
+        if product.get("name") not in available:
+            hidden.append((code, product))
+    
+    if hidden:
+        text += "*❌ MASQUÉS :*\n"
+        for code, product in sorted(hidden, key=lambda x: x[1].get("name", ""))[:5]:
+            name = product.get("name", "N/A")
+            text += f"  • {name} (`{code}`)\n"
+        if len(hidden) > 5:
+            text += f"  _... et {len(hidden) - 5} autres_\n"
+    
+    text += f"\n📊 Total : {len(visible)} visibles / {len(registry)} total"
+    
+    await update.message.reply_text(text, parse_mode='Markdown')
+
+@error_handler
+async def admin_prices_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /prices - Liste des prix"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return
+    
+    prices = load_prices()
+    available = get_available_products()
+    
+    text = "💰 *LISTE DES PRIX*\n\n"
+    
+    for product_name in sorted(available)[:15]:
+        price_fr = prices.get("FR", {}).get(product_name, 0)
+        price_ch = prices.get("CH", {}).get(product_name, 0)
+        text += f"{product_name}\n"
+        text += f"  🇫🇷 {price_fr}€/g | 🇨🇭 {price_ch}€/g\n\n"
+    
+    if len(available) > 15:
+        text += f"_... et {len(available) - 15} autres_\n\n"
+    
+    text += f"💡 `/setprice <code> <pays> <prix>`"
+    
+    await update.message.reply_text(text, parse_mode='Markdown')
+
+@error_handler
+async def admin_setprice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /setprice - Modifier un prix"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return
+    
+    if len(context.args) != 3:
+        text = """❌ *MODIFIER UN PRIX*
+
+*Usage :* `/setprice <code> <pays> <prix>`
+
+*Exemple :* `/setprice coco fr 45`
+
+💡 Pays : `fr` ou `ch`"""
+        await update.message.reply_text(text, parse_mode='Markdown')
+        return
+    
+    code = context.args[0].lower()
+    country_code = context.args[1].lower()
+    
+    product_name = PRODUCT_CODES.get(code)
+    if not product_name:
+        await update.message.reply_text(f"❌ Code invalide: `{code}`", parse_mode='Markdown')
+        return
+    
+    if country_code not in ['fr', 'ch']:
+        await update.message.reply_text("❌ Pays invalide. Utilisez `fr` ou `ch`", parse_mode='Markdown')
+        return
+    
+    try:
+        price = float(context.args[2])
+        if price <= 0:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text("❌ Prix invalide (nombre positif requis)")
+        return
+    
+    country = "FR" if country_code == "fr" else "CH"
+    
+    if set_price(product_name, country, price):
+        flag = "🇫🇷" if country == "FR" else "🇨🇭"
+        await update.message.reply_text(
+            f"✅ *PRIX MODIFIÉ*\n\n{product_name} {flag}\n{price}€/g",
+            parse_mode='Markdown'
+        )
+    else:
+        await update.message.reply_text("❌ Erreur lors de la sauvegarde")
+
+@error_handler
+async def admin_add_product_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /add - Activer un produit"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return
+    
+    if not context.args:
+        await update.message.reply_text("❌ Usage : `/add <code>`\n\nExemple : `/add coco`", parse_mode='Markdown')
+        return
+    
+    code = context.args[0].lower()
+    product_name = PRODUCT_CODES.get(code)
+    
+    if not product_name:
+        await update.message.reply_text(f"❌ Code invalide: `{code}`", parse_mode='Markdown')
+        return
+    
+    available = get_available_products()
+    if product_name in available:
+        await update.message.reply_text(f"⚠️ {product_name} est déjà visible", parse_mode='Markdown')
+        return
+    
+    available.add(product_name)
+    if save_available_products(available):
+        await update.message.reply_text(f"✅ *PRODUIT ACTIVÉ*\n\n{product_name}", parse_mode='Markdown')
+    else:
+        await update.message.reply_text("❌ Erreur lors de la sauvegarde")
+
+@error_handler
+async def admin_del_product_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /del - Masquer un produit"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return
+    
+    if not context.args:
+        await update.message.reply_text("❌ Usage : `/del <code>`\n\nExemple : `/del coco`", parse_mode='Markdown')
+        return
+    
+    code = context.args[0].lower()
+    product_name = PRODUCT_CODES.get(code)
+    
+    if not product_name:
+        await update.message.reply_text(f"❌ Code invalide: `{code}`", parse_mode='Markdown')
+        return
+    
+    available = get_available_products()
+    if product_name not in available:
+        await update.message.reply_text(f"⚠️ {product_name} est déjà masqué", parse_mode='Markdown')
+        return
+    
+    available.remove(product_name)
+    if save_available_products(available):
+        await update.message.reply_text(f"✅ *PRODUIT MASQUÉ*\n\n{product_name}", parse_mode='Markdown')
+    else:
+        await update.message.reply_text("❌ Erreur lors de la sauvegarde")
+
+@error_handler
+async def admin_repair_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /repair - Réparer un produit"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return
+    
+    if not context.args:
+        await update.message.reply_text("❌ Usage : `/repair <code>`\n\nExemple : `/repair coco`", parse_mode='Markdown')
+        return
+    
+    code = context.args[0].lower()
+    
+    if repair_product_visibility(code):
+        await update.message.reply_text(f"✅ *PRODUIT RÉPARÉ*\n\nCode : `{code}`", parse_mode='Markdown')
+    else:
+        await update.message.reply_text(f"❌ Échec de la réparation pour `{code}`", parse_mode='Markdown')
+
+@error_handler
+async def users_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /users - Statistiques utilisateurs"""
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin uniquement.")
+        return
+    
+    users = load_users()
+    history = load_client_history()
+    
+    text = f"👥 *STATISTIQUES UTILISATEURS*\n\n"
+    text += f"• Total inscrits : {len(users)}\n"
+    text += f"• Avec commandes : {len(history)}\n\n"
+    text += f"💡 Utilisez `/clients` pour plus de détails"
+    
+    await update.message.reply_text(text, parse_mode='Markdown')
+
+# ==================== GESTION CRÉATION PRODUITS (STUBS) ====================
+
+@error_handler
+async def admin_create_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Débute le processus de création de produit"""
+    query = update.callback_query
+    await query.answer()
+    
+    text = "➕ *CRÉER UN PRODUIT*\n\n"
+    text += "Entrez le nom du produit :\n\n"
+    text += "_Exemple : 🌿 Green Dream_"
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_cancel_product")]]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    return ADMIN_NEW_PRODUCT_NAME
+
+@error_handler
+async def admin_archive_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu archivage produit"""
+    query = update.callback_query
+    await query.answer()
+    
+    text = "📦 *ARCHIVER UN PRODUIT*\n\n"
+    text += "Cette fonctionnalité permet d'archiver\n"
+    text += "un produit sans le supprimer.\n\n"
+    text += "💡 _Fonction en développement_"
+    
+    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_back_main")]]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    return ADMIN_MENU_MAIN
+
+@error_handler
+async def admin_restore_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu restauration produit"""
+    query = update.callback_query
+    await query.answer()
+    
+    text = "♻️ *RESTAURER UN PRODUIT*\n\n"
+    text += "Cette fonctionnalité permet de restaurer\n"
+    text += "un produit archivé.\n\n"
+    text += "💡 _Fonction en développement_"
+    
+    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_back_main")]]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    return ADMIN_MENU_MAIN
+
+@error_handler
+async def admin_cancel_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Annulation création produit"""
+    query = update.callback_query
+    await query.answer()
+    
+    await query.message.edit_text("❌ Annulé.")
+    return ConversationHandler.END
+
+# Stubs pour les fonctions de création (optionnel - peuvent rester vides)
+async def receive_product_name(update, context):
+    await update.message.reply_text("💡 Fonction en développement")
+    return ConversationHandler.END
+
+async def receive_product_code(update, context):
+    await update.message.reply_text("💡 Fonction en développement")
+    return ConversationHandler.END
+
+async def receive_product_category(update, context):
+    query = update.callback_query
+    await query.answer("💡 Fonction en développement")
+    return ConversationHandler.END
+
+async def receive_product_price_fr(update, context):
+    await update.message.reply_text("💡 Fonction en développement")
+    return ConversationHandler.END
+
+async def receive_product_price_ch(update, context):
+    await update.message.reply_text("💡 Fonction en développement")
+    return ConversationHandler.END
+
+async def confirm_create_product(update, context):
+    query = update.callback_query
+    await query.answer("💡 Fonction en développement")
+    return ConversationHandler.END
+
+async def confirm_archive_product(update, context):
+    query = update.callback_query
+    await query.answer("💡 Fonction en développement")
+    return ConversationHandler.END
+
+async def execute_archive(update, context):
+    query = update.callback_query
+    await query.answer("💡 Fonction en développement")
+    return ConversationHandler.END
+
+async def execute_restore(update, context):
+    query = update.callback_query
+    await query.answer("💡 Fonction en développement")
+    return ConversationHandler.END
+
+# FIN DU BLOC 5.5
 # ==================== BLOC 6 : GESTION DES STOCKS ====================
 # Ajoutez ce bloc APRÈS le BLOC 5
 

@@ -1276,6 +1276,30 @@ def update_last_online():
     status = load_maintenance_status()
     status["last_online"] = datetime.now().isoformat()
     save_maintenance_status(status)
+    def check_downtime_and_activate_maintenance():
+    """Vérifie si le bot était down et active maintenance si nécessaire"""
+    status = load_maintenance_status()
+    
+    if status.get("enabled", False):
+        return True  # Déjà en maintenance
+    
+    last_online = status.get("last_online")
+    if not last_online:
+        return False  # Première fois
+    
+    try:
+        last_time = datetime.fromisoformat(last_online)
+        downtime = (datetime.now() - last_time).total_seconds()
+        threshold = status.get("downtime_threshold", 300)  # 5 minutes par défaut
+        
+        if downtime > threshold:
+            logger.warning(f"⚠️ Downtime détecté: {int(downtime)}s (seuil: {threshold}s)")
+            set_maintenance_mode(True, reason=f"Redémarrage après {int(downtime/60)}min d'arrêt")
+            return True
+    except Exception as e:
+        logger.error(f"Erreur check downtime: {e}")
+    
+    return False
 
 # ==================== SYSTÈME HEALTH CHECK (FAILOVER) ====================
 

@@ -3662,44 +3662,44 @@ application.add_handler(CallbackQueryHandler(execute_restore, pattern="^restore_
 application.add_handler(CallbackQueryHandler(admin_close, pattern="^admin_close$"))
 
 application.add_error_handler(error_callback)
-
 if application.job_queue is not None:
     application.job_queue.run_repeating(check_pending_deletions, interval=60, first=10)
     application.job_queue.run_repeating(schedule_reports, interval=60, first=10)
     application.job_queue.run_repeating(heartbeat_maintenance, interval=60, first=5)
-        # ✅ HEALTH CHECK (BOT 2 uniquement)
-        if IS_BACKUP_BOT:
-            application.job_queue.run_repeating(health_check_job, interval=HEALTH_CHECK_INTERVAL, first=30)
-            logger.info("✅ Health check activé (BOT BACKUP)")
-        
-        logger.info("✅ Tasks programmées")
     
-    logger.info("✅ Handlers configurés")
-    logger.info("=" * 60)
-    logger.info("🚀 BOT V2.2 EN LIGNE")
-    logger.info("=" * 60)
+    # ✅ HEALTH CHECK (BOT 2 uniquement)
+    if IS_BACKUP_BOT:
+        application.job_queue.run_repeating(health_check_job, interval=HEALTH_CHECK_INTERVAL, first=30)
+        logger.info("✅ Health check activé (BOT BACKUP)")
     
-    # ✅ VÉRIFICATION DOWNTIME ET MAINTENANCE
-    if check_downtime_and_activate_maintenance():
-        logger.warning("🔧 MODE MAINTENANCE ACTIF - Redémarrage détecté")
-    else:
-        update_last_online()
-        logger.info("✅ Bot opérationnel - Maintenance désactivée")
-    
-    await application.initialize()
-    await application.start()
-    await application.updater.start_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
-    
-    import signal
-    stop_event = asyncio.Event()
-    def stop_handler(signum, frame):
-        stop_event.set()
-    signal.signal(signal.SIGINT, stop_handler)
-    signal.signal(signal.SIGTERM, stop_handler)
-    await stop_event.wait()
-    await application.updater.stop()
-    await application.stop()
-    await application.shutdown()
+    logger.info("✅ Tasks programmées")
+
+logger.info("✅ Handlers configurés")
+logger.info("=" * 60)
+logger.info("🚀 BOT V2.2 EN LIGNE")
+logger.info("=" * 60)
+
+# ✅ VÉRIFICATION DOWNTIME ET MAINTENANCE
+if check_downtime_and_activate_maintenance():
+    logger.warning("🔧 MODE MAINTENANCE ACTIF - Redémarrage détecté")
+else:
+    update_last_online()
+    logger.info("✅ Bot opérationnel - Maintenance désactivée")
+
+await application.initialize()
+await application.start()
+await application.updater.start_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
+
+import signal
+stop_event = asyncio.Event()
+def stop_handler(signum, frame):
+    stop_event.set()
+signal.signal(signal.SIGINT, stop_handler)
+signal.signal(signal.SIGTERM, stop_handler)
+await stop_event.wait()
+await application.updater.stop()
+await application.stop()
+await application.shutdown()
 
 
 def run_health_server():

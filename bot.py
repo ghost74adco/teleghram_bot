@@ -3503,7 +3503,7 @@ def restore_product(product_name):
     return success
 
 # FIN DU BLOC 5
-        # ==================== BLOC 5.5 : COMMANDES ADMIN PRINCIPALES ET GESTION PRODUITS ====================
+      # ==================== BLOC 5.5 : COMMANDES ADMIN PRINCIPALES ET GESTION PRODUITS ====================
 # Ajoutez ce bloc APRÈS le BLOC 5 et AVANT le BLOC 6
 
 # ==================== COMMANDE /admin - MENU PRINCIPAL ====================
@@ -3632,7 +3632,6 @@ async def admin_menu_stocks_callback(update: Update, context: ContextTypes.DEFAU
     text += f"• `/restock <code> <qty>`"
     
     keyboard = [
-        [InlineKeyboardButton("📊 Ouvrir interface stocks", callback_data="open_stockmenu")],
         [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_main")]
     ]
     
@@ -3673,7 +3672,6 @@ async def admin_menu_promos_callback(update: Update, context: ContextTypes.DEFAU
     text += f"• `/addpromo <CODE> <type> <val>`"
     
     keyboard = [
-        [InlineKeyboardButton("🎁 Ouvrir interface promos", callback_data="open_promomenu")],
         [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_main")]
     ]
     
@@ -3705,7 +3703,6 @@ async def admin_menu_clients_callback(update: Update, context: ContextTypes.DEFA
     text += f"• `/topclients` - Top 10"
     
     keyboard = [
-        [InlineKeyboardButton("👥 Ouvrir interface clients", callback_data="open_clientmenu")],
         [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_main")]
     ]
     
@@ -3715,6 +3712,12 @@ async def admin_menu_clients_callback(update: Update, context: ContextTypes.DEFA
         parse_mode='Markdown'
     )
     return ADMIN_MENU_MAIN
+
+@error_handler
+async def admin_menu_users_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu utilisateurs (alias de clients)"""
+    # Redirection vers le menu clients
+    return await admin_menu_clients_callback(update, context)
 
 @error_handler
 async def admin_menu_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3850,38 +3853,6 @@ async def admin_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.edit_text("✅ Menu fermé.")
     
     return ConversationHandler.END
-
-# ==================== REDIRECTIONS VERS LES MENUS SPÉCIALISÉS ====================
-
-@error_handler
-async def open_stockmenu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Redirige vers le menu stocks complet"""
-    query = update.callback_query
-    await query.answer("Ouverture du menu stocks...")
-    
-    # Simuler l'appel de /stockmenu
-    await admin_stock_menu_command(update, context)
-    return STOCK_MANAGEMENT
-
-@error_handler
-async def open_promomenu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Redirige vers le menu promos complet"""
-    query = update.callback_query
-    await query.answer("Ouverture du menu promos...")
-    
-    # Simuler l'appel de /promomenu
-    await admin_promo_menu_command(update, context)
-    return ADMIN_PROMO_MENU
-
-@error_handler
-async def open_clientmenu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Redirige vers le menu clients complet"""
-    query = update.callback_query
-    await query.answer("Ouverture du menu clients...")
-    
-    # Simuler l'appel de /clientmenu
-    await admin_client_menu_command(update, context)
-    return ADMIN_CLIENT_MENU
 
 # ==================== COMMANDES ADMIN TEXTE ====================
 
@@ -4106,17 +4077,18 @@ async def admin_create_product(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.answer()
     
     text = "➕ *CRÉER UN PRODUIT*\n\n"
-    text += "Entrez le nom du produit :\n\n"
-    text += "_Exemple : 🌿 Green Dream_"
+    text += "Cette fonctionnalité permet de créer\n"
+    text += "un nouveau produit dans le système.\n\n"
+    text += "💡 _Fonction en développement_"
     
-    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_cancel_product")]]
+    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_back_main")]]
     
     await query.message.edit_text(
         text,
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
-    return ADMIN_NEW_PRODUCT_NAME
+    return ADMIN_MENU_MAIN
 
 @error_handler
 async def admin_archive_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -4167,46 +4139,32 @@ async def admin_cancel_product(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.message.edit_text("❌ Annulé.")
     return ConversationHandler.END
 
-# Stubs pour les fonctions de création (optionnel - peuvent rester vides)
+# Stubs pour éviter les erreurs (fonctions non utilisées mais référencées)
 async def receive_product_name(update, context):
-    await update.message.reply_text("💡 Fonction en développement")
     return ConversationHandler.END
 
 async def receive_product_code(update, context):
-    await update.message.reply_text("💡 Fonction en développement")
     return ConversationHandler.END
 
 async def receive_product_category(update, context):
-    query = update.callback_query
-    await query.answer("💡 Fonction en développement")
     return ConversationHandler.END
 
 async def receive_product_price_fr(update, context):
-    await update.message.reply_text("💡 Fonction en développement")
     return ConversationHandler.END
 
 async def receive_product_price_ch(update, context):
-    await update.message.reply_text("💡 Fonction en développement")
     return ConversationHandler.END
 
 async def confirm_create_product(update, context):
-    query = update.callback_query
-    await query.answer("💡 Fonction en développement")
     return ConversationHandler.END
 
 async def confirm_archive_product(update, context):
-    query = update.callback_query
-    await query.answer("💡 Fonction en développement")
     return ConversationHandler.END
 
 async def execute_archive(update, context):
-    query = update.callback_query
-    await query.answer("💡 Fonction en développement")
     return ConversationHandler.END
 
 async def execute_restore(update, context):
-    query = update.callback_query
-    await query.answer("💡 Fonction en développement")
     return ConversationHandler.END
 
 # FIN DU BLOC 5.5

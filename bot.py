@@ -3656,7 +3656,8 @@ async def admin_menu_stocks_callback(update: Update, context: ContextTypes.DEFAU
     text += f"• `/stockmenu` - Interface complète\n"
     text += f"• `/stock` - Voir stocks\n"
     text += f"• `/setstock <code> <qty>`\n"
-    text += f"• `/restock <code> <qty>`"
+    text += f"• `/restock <code> <qty>`\n\n"
+    text += f"💡 Utilisez `/stockmenu` pour l'interface graphique"
     
     keyboard = [
         [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_main")]
@@ -3696,7 +3697,8 @@ async def admin_menu_promos_callback(update: Update, context: ContextTypes.DEFAU
     text += f"*Commandes :*\n"
     text += f"• `/promomenu` - Interface complète\n"
     text += f"• `/promo` - Liste codes\n"
-    text += f"• `/addpromo <CODE> <type> <val>`"
+    text += f"• `/addpromo <CODE> <type> <val>`\n\n"
+    text += f"💡 Utilisez `/promomenu` pour l'interface graphique"
     
     keyboard = [
         [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_main")]
@@ -3727,7 +3729,8 @@ async def admin_menu_clients_callback(update: Update, context: ContextTypes.DEFA
     text += f"• `/clientmenu` - Interface complète\n"
     text += f"• `/clients` - Stats globales\n"
     text += f"• `/client <user_id>` - Profil\n"
-    text += f"• `/topclients` - Top 10"
+    text += f"• `/topclients` - Top 10\n\n"
+    text += f"💡 Utilisez `/clientmenu` pour l'interface graphique"
     
     keyboard = [
         [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_main")]

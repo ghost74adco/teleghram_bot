@@ -3654,7 +3654,7 @@ pricing_handler = ConversationHandler(
     per_message=False
 )
 
-application.add_handler(pricing_handler)
+    application.add_handler(pricing_handler)
     application.add_handler(CallbackQueryHandler(admin_validation_livraison, pattern='^admin_validate_'))
     application.add_handler(CallbackQueryHandler(confirm_archive_product, pattern="^archive_"))
     application.add_handler(CallbackQueryHandler(execute_archive, pattern="^confirmarchive_"))

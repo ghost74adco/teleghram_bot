@@ -4924,7 +4924,7 @@ async def pricing_country_selected(update: Update, context: ContextTypes.DEFAULT
     return ADMIN_PRICING_TIERS
 
 @error_handler
-async def add_pricing_tier(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def pricing_tier_add_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Demander la quantité minimale pour le palier"""
     query = update.callback_query
     await query.answer()

@@ -2414,25 +2414,7 @@ async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     logger.info(f"🔍 DEBUG back_to_main_menu - Retourne LANGUE ({LANGUE})")
     return LANGUE  # ✅ Retourner à LANGUE pour le menu principal
-```
 
----
-
-## 📊 FLUX CORRIGÉ
-```
-/start
-  ↓
-LANGUE (sélection langue)
-  ↓ [lang_fr]
-set_langue() → LANGUE (menu principal affiché)
-  ↓ [start_order]
-menu_navigation() → PAYS (choix pays)
-  ↓ [country_FR]
-choix_pays() → PRODUIT
-  ↓
-...
-  ↓ [back_to_main_menu]
-back_to_main_menu() → LANGUE (menu principal)
 
 @error_handler
 async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):

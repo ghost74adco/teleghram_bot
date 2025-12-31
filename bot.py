@@ -7522,6 +7522,7 @@ def main():
     logger.info(f"💾 DATA : {DATA_DIR}")
     logger.info(f"📏 DISTANCE : {DISTANCE_METHOD}")
     logger.info(f"🌐 NETWORK : Enabled")
+    application = ApplicationBuilder().token(TOKEN).build()
     
     # Produits disponibles
     available = get_available_products()

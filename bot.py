@@ -2116,16 +2116,30 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = user.id
     is_admin = user_id == ADMIN_ID
     
+    # ✅ CORRECTION : Gérer CallbackQuery et Message
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        send_method = query.message.reply_text
+        edit_method = query.message.edit_text
+        chat_id = query.message.chat_id
+        is_callback = True
+    else:
+        send_method = update.message.reply_text
+        edit_method = None
+        chat_id = update.message.chat_id
+        is_callback = False
+    
     # Gestion FAILOVER
     if IS_BACKUP_BOT:
         if is_primary_bot_down():
             if not is_admin:
                 failover_msg = f"{EMOJI_THEME['warning']} *BOT DE SECOURS ACTIF*\n\n⚠️ Le bot principal {PRIMARY_BOT_USERNAME} est temporairement indisponible.\n\n✅ Vous utilisez actuellement le bot de secours.\n\n_Vos commandes fonctionnent normalement._\n\n💡 Une fois le bot principal rétabli, vous pourrez y retourner."
-                await update.message.reply_text(failover_msg, parse_mode='Markdown')
+                await send_method(failover_msg, parse_mode='Markdown')
         else:
             if not is_admin:
                 suggestion = f"💡 *INFORMATION*\n\nLe bot principal {PRIMARY_BOT_USERNAME} est disponible.\n\n_Vous pouvez l'utiliser pour une meilleure expérience._\n\n👉 Cliquez ici : {PRIMARY_BOT_USERNAME}\n\n✅ Ou continuez sur ce bot de secours."
-                await update.message.reply_text(suggestion, parse_mode='Markdown')
+                await send_method(suggestion, parse_mode='Markdown')
     else:
         if is_maintenance_mode(user_id):
             await send_maintenance_message(update, context)
@@ -2150,6 +2164,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"👤 [{bot_name}] /start: {user.first_name} (ID: {user.id}){' 🔑 ADMIN' if is_admin else ''}")
     
     context.user_data.clear()
+    
+    # Menu de sélection de langue
     keyboard = [
         [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
         [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
@@ -2157,13 +2173,24 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
         [InlineKeyboardButton("🇮🇹 Italiano", callback_data="lang_it")]
     ]
-    await update.message.reply_text(
-        "🌍 *Langue / Language / Sprache / Idioma / Lingua*",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
+    
+    text = "🌍 *Langue / Language / Sprache / Idioma / Lingua*"
+    
+    # ✅ CORRECTION : Utiliser edit si callback, send sinon
+    if is_callback and edit_method:
+        await edit_method(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    else:
+        await send_method(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    
     return LANGUE
-
 @error_handler
 async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Définit la langue de l'utilisateur"""

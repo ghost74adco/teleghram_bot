@@ -2212,10 +2212,9 @@ async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['langue'] = lang_code
     user_id = update.effective_user.id
     
-    logger.info(f"👤 Langue: {lang_code} (User: {user_id})")
-    logger.info(f"🔍 DEBUG set_langue - user_data: {context.user_data}")
+    logger.info(f"👤 Langue sélectionnée: {lang_code} (User: {user_id})")
     
-    # ✅ CORRECTION : Afficher directement le menu principal
+    # ✅ Afficher le menu principal
     text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
     
     if user_id == ADMIN_ID:
@@ -2385,8 +2384,6 @@ async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    logger.info(f"🔍 DEBUG back_to_main_menu - user_data: {context.user_data}")
-    
     user_id = update.effective_user.id
     text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
     
@@ -2412,8 +2409,9 @@ async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
     
-    logger.info(f"🔍 DEBUG back_to_main_menu - Retourne LANGUE ({LANGUE})")
-    return LANGUE  # ✅ Retourner à LANGUE pour le menu principal
+    # ✅ CRITIQUE : Retourner à PAYS (menu principal)
+    logger.info(f"✅ back_to_main_menu → PAYS")
+    return PAYS
 
 
 @error_handler
@@ -2422,48 +2420,67 @@ async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    logger.info(f"👤 Nav: {query.data}")
-    logger.info(f"🔍 DEBUG menu_navigation - user_data: {context.user_data}")
+    logger.info(f"📍 menu_navigation appelé - callback_data: {query.data}")
     
-    # ✅ CORRECTION : Gérer contact_admin ici
+    # ✅ Gestion contact admin
     if query.data == "contact_admin":
-        await query.message.edit_text(tr(context.user_data, "contact_message"), parse_mode='Markdown')
-        return CONTACT  # ✅ Passer à l'état CONTACT
+        await query.message.edit_text(
+            tr(context.user_data, "contact_message"),
+            parse_mode='Markdown'
+        )
+        logger.info(f"✅ menu_navigation → CONTACT")
+        return CONTACT
     
-    # Vérifier horaires
-    user_id = update.effective_user.id
-    
-    if not is_within_delivery_hours(user_id):
-        if user_id == ADMIN_ID:
-            hours_msg = f"\n\n{EMOJI_THEME['warning']} *MODE ADMIN* - Horaires fermés pour les clients\nHoraires : {get_horaires_text()}"
+    # ✅ Si start_order, on affiche le choix du pays
+    if query.data == "start_order":
+        user_id = update.effective_user.id
+        
+        # Vérifier horaires
+        if not is_within_delivery_hours(user_id):
+            if user_id == ADMIN_ID:
+                hours_msg = f"\n\n{EMOJI_THEME['warning']} *MODE ADMIN* - Horaires fermés\nHoraires : {get_horaires_text()}"
+            else:
+                await query.message.edit_text(
+                    tr(context.user_data, "outside_hours"),
+                    parse_mode='Markdown'
+                )
+                return ConversationHandler.END
         else:
-            await query.message.edit_text(tr(context.user_data, "outside_hours"), parse_mode='Markdown')
-            return ConversationHandler.END
-    else:
-        hours_msg = ""
+            hours_msg = ""
+        
+        # ✅ Afficher choix du pays
+        keyboard = [
+            [InlineKeyboardButton(tr(context.user_data, "france"), callback_data="country_FR")],
+            [InlineKeyboardButton(tr(context.user_data, "switzerland"), callback_data="country_CH")],
+            [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_main_menu")]
+        ]
+        
+        message_text = tr(context.user_data, "choose_country") + hours_msg
+        await query.message.edit_text(
+            message_text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        
+        logger.info(f"✅ menu_navigation → PAYS (choix pays)")
+        return PAYS  # ✅ Rester dans PAYS (on affiche le choix)
     
-    # ✅ Afficher choix du pays
-    keyboard = [
-        [InlineKeyboardButton(tr(context.user_data, "france"), callback_data="country_FR")],
-        [InlineKeyboardButton(tr(context.user_data, "switzerland"), callback_data="country_CH")],
-        [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_main_menu")]
-    ]
-    
-    message_text = tr(context.user_data, "choose_country") + hours_msg
-    await query.message.edit_text(message_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    
-    logger.info(f"🔍 DEBUG menu_navigation - Retourne PAYS ({PAYS})")
-    return PAYS  # ✅ Passer à l'état PAYS
+    # ✅ Cas par défaut (ne devrait pas arriver)
+    logger.warning(f"⚠️ menu_navigation - callback non géré: {query.data}")
+    return PAYS
 
 @error_handler
 async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Choix du pays"""
     query = update.callback_query
     await query.answer()
+    
+    # ✅ Extraire le pays
     context.user_data['pays'] = query.data.replace("country_", "")
     context.user_data['cart'] = []
     context.user_data['promo_code'] = None
-    logger.info(f"👤 Pays: {context.user_data['pays']}")
+    
+    logger.info(f"🌍 Pays sélectionné: {context.user_data['pays']}")
     
     available = get_available_products()
     keyboard = []
@@ -2504,7 +2521,10 @@ async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
-    return PRODUIT
+    
+    # ✅ CRITIQUE : Passer à l'état PRODUIT
+    logger.info(f"✅ choix_pays → PRODUIT")
+    return PRODUIT  # ✅ Passer au choix de produit
 
 # FIN DU BLOC 4 - PARTIE 1
 
@@ -2819,6 +2839,9 @@ async def back_to_country_choice(update: Update, context: ContextTypes.DEFAULT_T
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
+    
+    # ✅ CRITIQUE : Rester dans PAYS (choix pays affiché)
+    logger.info(f"✅ back_to_country_choice → PAYS")
     return PAYS
 
 @error_handler
@@ -7211,25 +7234,25 @@ def create_client_conversation_handler():
     return ConversationHandler(
         entry_points=[
             CommandHandler("start", start_command),
-            CallbackQueryHandler(start_command, pattern="^start_order$"),
             CallbackQueryHandler(retry_start, pattern="^retry_start$")
         ],
         states={
             LANGUE: [
-                CallbackQueryHandler(set_langue, pattern="^lang_"),
-                # ✅ AJOUT : Gérer le menu principal dans l'état LANGUE
-                CallbackQueryHandler(voir_carte, pattern="^voir_carte$"),
-                CallbackQueryHandler(my_account, pattern="^my_account$"),
-                CallbackQueryHandler(menu_navigation, pattern="^contact_admin$"),
-                CallbackQueryHandler(menu_navigation, pattern="^start_order$"),  # ✅ Passer à PAYS
+                # ✅ Gestion sélection langue
+                CallbackQueryHandler(set_langue, pattern="^lang_")
             ],
             PAYS: [
+                # ✅ Gestion menu principal (après sélection langue)
                 CallbackQueryHandler(menu_navigation, pattern="^start_order$"),
                 CallbackQueryHandler(menu_navigation, pattern="^contact_admin$"),
                 CallbackQueryHandler(my_account, pattern="^my_account$"),
                 CallbackQueryHandler(voir_carte, pattern="^voir_carte$"),
                 CallbackQueryHandler(afficher_prix, pattern="^prix_"),
+                
+                # ✅ Choix du pays
                 CallbackQueryHandler(choix_pays, pattern="^country_"),
+                
+                # ✅ Navigation
                 CallbackQueryHandler(back_to_main_menu, pattern="^back_to_main_menu$"),
                 CallbackQueryHandler(back_to_country_choice, pattern="^back_to_country_choice$")
             ],
@@ -7283,13 +7306,13 @@ def create_client_conversation_handler():
             CONTACT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, contact_admin_handler)
             ]
-       },
+        },
         fallbacks=[
             CommandHandler("cancel", cancel),
             CallbackQueryHandler(cancel, pattern="^cancel$")
         ],
         conversation_timeout=1800,
-        per_message=False,
+        per_message=True,  # ✅ IMPORTANT
         name="client_conversation",
         allow_reentry=True
     )

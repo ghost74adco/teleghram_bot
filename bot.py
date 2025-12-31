@@ -7512,7 +7512,7 @@ def main():
     )
     
     # Informations de démarrage
-   logger.info("=" * 60)
+    logger.info("=" * 60)
     logger.info(f"🤖 BOT : {'BACKUP' if IS_BACKUP_BOT else 'PRIMARY'}")
     logger.info(f"🆔 TOKEN : {TOKEN[:10]}...{TOKEN[-10:]}")
     logger.info(f"👤 ADMIN : {ADMIN_ID[:4]}***{ADMIN_ID[-2:]}")  # ✅ MASQUÉ : 8450***84

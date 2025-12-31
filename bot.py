@@ -2191,6 +2191,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     
     return LANGUE
+    
 @error_handler
 async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Définit la langue de l'utilisateur"""

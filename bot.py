@@ -1340,19 +1340,48 @@ def save_health_status(status):
         logger.error(f"Erreur sauvegarde health: {e}")
         return False
 
-# ==================== CALCULS DE DISTANCE ET LIVRAISON ====================
+# ==================== ✅ CALCULS DE DISTANCE ET LIVRAISON - CORRIGÉ ====================
 
 def calculate_delivery_fee(delivery_type, distance=0, subtotal=0):
-    """Calcule les frais de livraison"""
+    """
+    Calcule les frais de livraison
+    
+    RÈGLES EXPRESS :
+    - 10€ par tranche de 10 km
+    - Minimum commande : 30€
+    - Plafond frais : 70€
+    - Arrondi : >= 25km → dizaine supérieure, < 25km → dizaine inférieure
+    """
     if delivery_type == "postal":
         return FRAIS_POSTAL
+    
     elif delivery_type == "express":
-        distance_arrondie = math.ceil(distance)
-        frais_brut = distance_arrondie * 10
-        frais_final = math.ceil(frais_brut / 10) * 10
+        # Vérifier minimum de commande
+        if subtotal < 30:
+            logger.warning(f"⚠️ Commande {subtotal}€ < 30€ minimum pour Express")
+            # On retourne quand même les frais, mais le client devra être averti
+        
+        # Calcul de base : 10€ par 10km
+        frais_brut = (distance / 10) * 10
+        
+        # Arrondi selon distance
+        if distance >= 25:
+            # Arrondir à la dizaine supérieure
+            frais_arrondi = math.ceil(frais_brut / 10) * 10
+        else:
+            # Arrondir à la dizaine inférieure
+            frais_arrondi = math.floor(frais_brut / 10) * 10
+        
+        # Appliquer le plafond
+        frais_final = min(frais_arrondi, 70)
+        
+        logger.info(f"🚚 Express: {distance:.1f}km → {frais_brut:.1f}€ → {frais_arrondi}€ → plafonné {frais_final}€")
+        
         return frais_final
+    
     elif delivery_type == "meetup":
         return FRAIS_MEETUP
+    
     return 0
 
 def calculate_distance_openroute(origin, destination):
@@ -1374,8 +1403,8 @@ def calculate_distance_openroute(origin, destination):
         )
         
         distance_m = route["features"][0]["properties"]["segments"][0]["distance"]
-        distance_km = math.ceil(distance_m / 1000)
-        logger.info(f"📍 Distance: {distance_km} km (OpenRouteService)")
+        distance_km = distance_m / 1000
+        logger.info(f"📍 Distance: {distance_km:.1f} km (OpenRouteService)")
         return distance_km
     except Exception as e:
         logger.error(f"❌ OpenRouteService: {e}")
@@ -1394,8 +1423,7 @@ def calculate_distance_geopy(origin, destination):
         coords_dest = (loc_dest.latitude, loc_dest.longitude)
         
         distance_km = geodesic(coords_origin, coords_dest).kilometers * 1.3
-        distance_km = math.ceil(distance_km)
-        logger.info(f"📍 Distance: {distance_km} km (Geopy approximatif)")
+        logger.info(f"📍 Distance: {distance_km:.1f} km (Geopy approximatif)")
         return distance_km
     except Exception as e:
         logger.error(f"❌ Geopy: {e}")
@@ -1578,7 +1606,7 @@ def get_formatted_price_list(country_code):
     
     text += f"\n{EMOJI_THEME['delivery']} *Livraison* :\n"
     text += f"  • Postale (48-72h) : 10€\n"
-    text += f"  • Express (30min+) : 10€/km\n"
+    text += f"  • Express (30min+) : 10€/10km (min 30€, max 70€)\n"
     text += f"  • Meetup : Gratuit"
     
     return text
@@ -2074,7 +2102,8 @@ async def check_stocks_job(context: ContextTypes.DEFAULT_TYPE):
                 )
 
 # FIN DU BLOC 3
-# ==================== BLOC 4 : HANDLERS CLIENTS ET NAVIGATION ====================
+
+# ==================== BLOC 4 : HANDLERS CLIENTS ET NAVIGATION (AVEC MEETUP COMPLET) ====================
 # Ajoutez ce bloc APRÈS le BLOC 3
 
 # ==================== HANDLERS PRINCIPAUX ====================
@@ -2796,9 +2825,10 @@ async def ask_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text += "Choisissez votre mode de livraison :\n\n"
     text += f"📮 *Postale* : {FRAIS_POSTAL}€ (fixe)\n"
     text += f"   Délai : 2-5 jours\n\n"
-    text += f"{EMOJI_THEME['rocket']} *Express* : {FRAIS_EXPRESS_PAR_KM}€/km\n"
+    text += f"{EMOJI_THEME['rocket']} *Express* : 10€/10km\n"
     text += f"   Délai : 24-48h\n"
-    text += f"   Calcul automatique selon distance\n\n"
+    text += f"   Min commande : 30€\n"
+    text += f"   Max frais : 70€\n\n"
     
     if has_meetup:
         text += f"🤝 *Meetup* : {FRAIS_MEETUP}€\n"
@@ -2864,16 +2894,35 @@ async def livraison_postale(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @error_handler
 async def livraison_express(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Gestion livraison express avec calcul distance"""
+    """✅ Gestion livraison express AVEC VÉRIFICATION MINIMUM 30€"""
     query = update.callback_query
     await query.answer()
+    
+    # ✅ VÉRIFIER LE MINIMUM DE COMMANDE
+    cart = context.user_data.get('cart', [])
+    country = context.user_data.get('pays', 'FR')
+    
+    # Calculer sous-total
+    total_info = calculate_total(cart, country)
+    subtotal = total_info['subtotal']
+    
+    # ✅ VÉRIFICATION : Minimum 30€
+    if subtotal < 30:
+        await query.answer(
+            f"{EMOJI_THEME['error']} Minimum 30€ pour la livraison Express\n\n"
+            f"Votre panier : {subtotal:.2f}€\n"
+            f"Il manque : {30 - subtotal:.2f}€",
+            show_alert=True
+        )
+        # Retour au menu livraison
+        return await ask_livraison(update, context)
     
     # Calculer la distance
     adresse = context.user_data.get('adresse', '')
     
     try:
         distance = calculate_distance_simple(adresse)
-        frais = calculate_delivery_fee("express", distance)
+        frais = calculate_delivery_fee("express", distance, subtotal)
     except Exception as e:
         logger.error(f"Erreur calcul distance: {e}")
         frais = 50  # Frais par défaut
@@ -2883,9 +2932,21 @@ async def livraison_express(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['frais_livraison'] = frais
     context.user_data['distance'] = distance
     
+    # ✅ AFFICHAGE DÉTAILLÉ DES FRAIS
     text = f"{EMOJI_THEME['success']} *LIVRAISON EXPRESS*\n\n"
     text += f"{EMOJI_THEME['rocket']} Distance : {distance:.1f} km\n"
-    text += f"{EMOJI_THEME['money']} Frais : {frais}€ ({FRAIS_EXPRESS_PAR_KM}€/km)\n"
+    
+    # Détail du calcul
+    if distance >= 25:
+        text += f"📊 Calcul : Arrondi dizaine supérieure\n"
+    else:
+        text += f"📊 Calcul : Arrondi dizaine inférieure\n"
+    
+    text += f"{EMOJI_THEME['money']} Frais : {frais}€\n"
+    
+    if frais == 70:
+        text += f"   (Plafond max atteint)\n"
+    
     text += f"⏱️ Délai : 24-48h\n\n"
     text += "Choisissez votre mode de paiement :"
     
@@ -4691,7 +4752,7 @@ async def pricing_delete_do(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # FIN DU BLOC 6 PARTIE 2
 
-# ==================== BLOC 7 : PANEL ADMIN - PARTIE 2 ====================
+# ==================== BLOC 7 : PANEL ADMIN - PARTIE 2 (PRICING, PROMOS, STOCKS) ====================
 # Ajoutez ce bloc APRÈS le BLOC 6
 
 # ==================== GESTION PRIX DÉGRESSIFS ====================
@@ -4733,7 +4794,7 @@ async def admin_pricing_menu(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 @error_handler
 async def pricing_select_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Sélection du produit pour configurer les paliers"""
+    """✅ CORRECTION : Sélection du produit pour configurer les paliers"""
     query = update.callback_query
     await query.answer()
     
@@ -4747,7 +4808,7 @@ async def pricing_select_product(update: Update, context: ContextTypes.DEFAULT_T
             ]]),
             parse_mode='Markdown'
         )
-        return ADMIN_MENU_MAIN
+        return ADMIN_MENU_MAIN  # ✅ CORRECTION : Retour au bon état
     
     text = f"💰 *PRIX DÉGRESSIFS - SÉLECTION PRODUIT*\n\n"
     text += f"Choisissez un produit :"
@@ -4770,7 +4831,7 @@ async def pricing_select_product(update: Update, context: ContextTypes.DEFAULT_T
         parse_mode='Markdown'
     )
     
-    return ADMIN_SELECT_PRODUCT_PRICING
+    return ADMIN_SELECT_PRODUCT_PRICING  # ✅ BON ÉTAT
 
 @error_handler
 async def pricing_product_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -5020,11 +5081,280 @@ async def pricing_view_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     return ADMIN_MENU_MAIN
 
+# ==================== ÉDITION PRIX DÉGRESSIFS ====================
+
+@error_handler
+async def pricing_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu pour éditer les paliers de prix"""
+    query = update.callback_query
+    await query.answer()
+    
+    tiers_data = load_pricing_tiers()
+    
+    if not tiers_data:
+        await query.message.edit_text(
+            f"{EMOJI_THEME['warning']} *AUCUN PALIER À ÉDITER*\n\n"
+            f"Aucun prix dégressif configuré.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Retour", callback_data="admin_pricing")
+            ]]),
+            parse_mode='Markdown'
+        )
+        return ADMIN_MENU_MAIN
+    
+    text = f"✏️ *ÉDITER PRIX DÉGRESSIFS*\n\n"
+    text += f"Sélectionnez un produit :"
+    
+    keyboard = []
+    
+    # Regrouper par produit
+    products_with_tiers = {}
+    for product_key, tiers in tiers_data.items():
+        if not tiers:
+            continue
+        parts = product_key.rsplit("_", 1)
+        product_name = parts[0]
+        country = parts[1]
+        
+        if product_name not in products_with_tiers:
+            products_with_tiers[product_name] = []
+        products_with_tiers[product_name].append(country)
+    
+    for product_name, countries in sorted(products_with_tiers.items()):
+        for country in countries:
+            flag = "🇫🇷" if country == "FR" else "🇨🇭"
+            tier_count = len(tiers_data.get(f"{product_name}_{country}", []))
+            
+            keyboard.append([InlineKeyboardButton(
+                f"{flag} {product_name} ({tier_count} paliers)",
+                callback_data=f"pricing_edit_select_{product_name}_{country}"
+            )])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="admin_pricing")])
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_PRICING_EDIT
+
+@error_handler
+async def pricing_edit_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche les paliers d'un produit pour édition"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Format: pricing_edit_select_ProductName_Country
+    data_parts = query.data.replace("pricing_edit_select_", "").rsplit("_", 1)
+    product_name = data_parts[0]
+    country = data_parts[1]
+    
+    context.user_data['edit_pricing_product'] = product_name
+    context.user_data['edit_pricing_country'] = country
+    
+    tiers = load_pricing_tiers()
+    product_key = f"{product_name}_{country}"
+    existing_tiers = tiers.get(product_key, [])
+    
+    if not existing_tiers:
+        await query.answer(f"{EMOJI_THEME['error']} Aucun palier trouvé", show_alert=True)
+        return ADMIN_PRICING_EDIT
+    
+    flag = "🇫🇷" if country == "FR" else "🇨🇭"
+    
+    text = f"✏️ *ÉDITER PALIERS*\n\n"
+    text += f"{flag} {product_name}\n\n"
+    text += f"📊 *Paliers actuels :*\n\n"
+    
+    sorted_tiers = sorted(existing_tiers, key=lambda x: x['min_qty'])
+    
+    keyboard = []
+    
+    for tier in sorted_tiers:
+        qty = tier['min_qty']
+        price = tier['price']
+        
+        text += f"• {qty}g+ : {price}€/g\n"
+        
+        keyboard.append([InlineKeyboardButton(
+            f"🗑️ Supprimer palier {qty}g",
+            callback_data=f"pricing_delete_tier_{qty}"
+        )])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="pricing_edit")])
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_PRICING_EDIT
+
+@error_handler
+async def pricing_delete_tier_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Suppression d'un palier spécifique"""
+    query = update.callback_query
+    await query.answer()
+    
+    min_qty = int(query.data.replace("pricing_delete_tier_", ""))
+    product_name = context.user_data.get('edit_pricing_product')
+    country = context.user_data.get('edit_pricing_country')
+    
+    # Supprimer le palier
+    success = delete_pricing_tier(product_name, country, min_qty)
+    
+    if success:
+        message = f"{EMOJI_THEME['success']} Palier {min_qty}g supprimé"
+        logger.info(f"🗑️ Palier supprimé: {product_name} ({country}) - {min_qty}g")
+    else:
+        message = f"{EMOJI_THEME['error']} Erreur lors de la suppression"
+    
+    await query.answer(message, show_alert=True)
+    
+    # Rafraîchir la liste
+    return await pricing_edit_select(update, context)
+
+# ==================== SUPPRESSION COMPLÈTE PRICING ====================
+
+@error_handler
+async def pricing_delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu pour supprimer tous les paliers d'un produit"""
+    query = update.callback_query
+    await query.answer()
+    
+    tiers_data = load_pricing_tiers()
+    
+    if not tiers_data:
+        await query.message.edit_text(
+            f"{EMOJI_THEME['warning']} *AUCUN PALIER À SUPPRIMER*\n\n"
+            f"Aucun prix dégressif configuré.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Retour", callback_data="admin_pricing")
+            ]]),
+            parse_mode='Markdown'
+        )
+        return ADMIN_MENU_MAIN
+    
+    text = f"🗑️ *SUPPRIMER PRIX DÉGRESSIFS*\n\n"
+    text += f"⚠️ Supprime TOUS les paliers d'un produit\n\n"
+    text += f"Sélectionnez un produit :"
+    
+    keyboard = []
+    
+    # Regrouper par produit
+    products_with_tiers = {}
+    for product_key, tiers in tiers_data.items():
+        if not tiers:
+            continue
+        parts = product_key.rsplit("_", 1)
+        product_name = parts[0]
+        country = parts[1]
+        
+        if product_name not in products_with_tiers:
+            products_with_tiers[product_name] = []
+        products_with_tiers[product_name].append(country)
+    
+    for product_name, countries in sorted(products_with_tiers.items()):
+        for country in countries:
+            flag = "🇫🇷" if country == "FR" else "🇨🇭"
+            tier_count = len(tiers_data.get(f"{product_name}_{country}", []))
+            
+            keyboard.append([InlineKeyboardButton(
+                f"{flag} {product_name} ({tier_count} paliers)",
+                callback_data=f"pricing_delete_confirm_{product_name}_{country}"
+            )])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="admin_pricing")])
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_PRICING_DELETE
+
+@error_handler
+async def pricing_delete_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Confirmation avant suppression complète"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Format: pricing_delete_confirm_ProductName_Country
+    data_parts = query.data.replace("pricing_delete_confirm_", "").rsplit("_", 1)
+    product_name = data_parts[0]
+    country = data_parts[1]
+    
+    flag = "🇫🇷" if country == "FR" else "🇨🇭"
+    
+    text = f"🗑️ *CONFIRMATION SUPPRESSION*\n\n"
+    text += f"{flag} {product_name}\n\n"
+    text += f"⚠️ *Tous les paliers seront supprimés*\n\n"
+    text += f"Le produit reviendra au prix de base uniquement.\n\n"
+    text += f"Confirmez-vous ?"
+    
+    keyboard = [
+        [InlineKeyboardButton(
+            f"🗑️ Confirmer Suppression",
+            callback_data=f"pricing_delete_do_{product_name}_{country}"
+        )],
+        [InlineKeyboardButton("❌ Annuler", callback_data="pricing_delete")]
+    ]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_PRICING_DELETE
+
+@error_handler
+async def pricing_delete_do(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Effectue la suppression complète des paliers"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Format: pricing_delete_do_ProductName_Country
+    data_parts = query.data.replace("pricing_delete_do_", "").rsplit("_", 1)
+    product_name = data_parts[0]
+    country = data_parts[1]
+    
+    # Charger et supprimer
+    tiers = load_pricing_tiers()
+    product_key = f"{product_name}_{country}"
+    
+    if product_key in tiers:
+        del tiers[product_key]
+        save_pricing_tiers(tiers)
+        
+        text = f"{EMOJI_THEME['success']} *PALIERS SUPPRIMÉS*\n\n"
+        text += f"Tous les paliers de {product_name} ont été supprimés.\n\n"
+        text += f"Le produit utilise maintenant son prix de base."
+        
+        logger.info(f"🗑️ Tous les paliers supprimés: {product_name} ({country})")
+    else:
+        text = f"{EMOJI_THEME['error']} *ERREUR*\n\n"
+        text += f"Impossible de trouver les paliers."
+    
+    keyboard = [[InlineKeyboardButton("🔙 Menu Pricing", callback_data="admin_pricing")]]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_MENU_MAIN
+
 # ==================== GESTION CODES PROMO ====================
 
 @error_handler
 async def admin_promo_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menu de gestion des codes promo"""
+    """✅ CORRECTION : Menu de gestion des codes promo AVEC BOUTON RETOUR"""
     query = update.callback_query
     await query.answer()
     
@@ -5059,7 +5389,7 @@ async def admin_promo_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(f"➕ Créer code promo", callback_data="promo_create")],
         [InlineKeyboardButton(f"🗑️ Supprimer code", callback_data="promo_delete")],
         [InlineKeyboardButton(f"📊 Détails codes", callback_data="promo_details")],
-        [InlineKeyboardButton("🔙 Retour", callback_data="back_to_admin_menu")]
+        [InlineKeyboardButton("🔙 Retour", callback_data="back_to_admin_menu")]  # ✅ AJOUTÉ
     ]
     
     await query.message.edit_text(
@@ -5300,481 +5630,12 @@ async def promo_type_selected(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data['promo_step'] = 'value'
     return ADMIN_PROMO_MENU
 
-# ==================== GESTION STOCKS ====================
+# Continuez avec promo_delete, promo_details, stocks... dans le prochain message
 
-@error_handler
-async def admin_stocks_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menu de gestion des stocks"""
-    query = update.callback_query
-    await query.answer()
-    
-    stocks = load_stocks()
-    registry = load_product_registry()
-    
-    # Statistiques
-    low_stock_count = len(get_low_stock_products())
-    out_of_stock_count = len(get_out_of_stock_products())
-    
-    # 🎨 Affichage avec indicateurs visuels
-    text = f"📦 *GESTION DES STOCKS*\n\n"
-    text += f"📊 *Statistiques :*\n"
-    text += f"• {EMOJI_THEME['warning']} Stock faible : {low_stock_count}\n"
-    text += f"• {EMOJI_THEME['offline']} Rupture : {out_of_stock_count}\n\n"
-    
-    if stocks:
-        text += f"📋 *État des stocks :*\n\n"
-        
-        for product_name, data in sorted(stocks.items()):
-            quantity = data.get('quantity', 0)
-            threshold = data.get('alert_threshold', 20)
-            
-            # Indicateur visuel
-            if quantity == 0:
-                indicator = f"{EMOJI_THEME['offline']}"
-            elif quantity <= threshold:
-                indicator = f"{EMOJI_THEME['warning']}"
-            else:
-                indicator = f"{EMOJI_THEME['online']}"
-            
-            # Barre de progression
-            if quantity > 0:
-                max_display = max(100, threshold * 2)
-                progress = create_progress_bar(quantity, max_display, length=10)
-                text += f"{indicator} {product_name}\n"
-                text += f"   {progress} {quantity}g\n\n"
-            else:
-                text += f"{indicator} {product_name} : *RUPTURE*\n\n"
-    else:
-        text += f"_Aucun stock configuré (stock illimité par défaut)_"
-    
-    keyboard = [
-        [InlineKeyboardButton(f"➕ Configurer stock", callback_data="stock_configure")],
-        [InlineKeyboardButton(f"📥 Ajouter stock", callback_data="stock_add")],
-        [InlineKeyboardButton(f"📤 Retirer stock", callback_data="stock_remove")],
-        [InlineKeyboardButton(f"{EMOJI_THEME['warning']} Alertes stock", callback_data="stock_alerts")],
-        [InlineKeyboardButton("🔙 Retour", callback_data="back_to_admin_menu")]
-    ]
-    
-    await query.message.edit_text(
-        text,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
-    
-    return ADMIN_STOCK_MENU
+# FIN DU BLOC 7 - PARTIE 1
 
-@error_handler
-async def stock_configure(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Configuration initiale du stock pour un produit"""
-    query = update.callback_query
-    await query.answer()
-    
-    registry = load_product_registry()
-    
-    if not registry:
-        await query.message.edit_text(
-            f"{EMOJI_THEME['error']} Aucun produit disponible.",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔙 Retour", callback_data="admin_stocks")
-            ]]),
-            parse_mode='Markdown'
-        )
-        return ADMIN_STOCK_MENU
-    
-    text = f"➕ *CONFIGURER STOCK*\n\n"
-    text += f"Choisissez un produit :"
-    
-    keyboard = []
-    
-    for code, data in sorted(registry.items()):
-        name = data['name']
-        emoji = data.get('emoji', '📦')
-        
-        # Vérifier si déjà configuré
-        stocks = load_stocks()
-        status = " (✓)" if name in stocks else ""
-        
-        keyboard.append([InlineKeyboardButton(
-            f"{emoji} {name}{status}",
-            callback_data=f"stock_config_{code}"
-        )])
-    
-    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="admin_stocks")])
-    
-    await query.message.edit_text(
-        text,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
-    
-    return ADMIN_STOCK_MENU
-
-@error_handler
-async def stock_config_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Configuration du stock pour un produit spécifique"""
-    query = update.callback_query
-    await query.answer()
-    
-    product_code = query.data.replace("stock_config_", "")
-    registry = load_product_registry()
-    
-    if product_code not in registry:
-        await query.answer(f"{EMOJI_THEME['error']} Produit non trouvé", show_alert=True)
-        return ADMIN_STOCK_MENU
-    
-    product_name = registry[product_code]['name']
-    context.user_data['stock_product'] = product_name
-    
-    # Stock actuel
-    current_stock = get_stock(product_name)
-    
-    text = f"➕ *CONFIGURER STOCK*\n\n"
-    text += f"Produit : {product_name}\n"
-    if current_stock is not None:
-        text += f"Stock actuel : {current_stock}g\n\n"
-    else:
-        text += f"Stock actuel : Illimité\n\n"
-    
-    text += f"Entrez la quantité de stock (grammes) :\n"
-    text += f"_Exemple : 500_\n\n"
-    text += f"_Tapez 0 pour désactiver le suivi de stock_"
-    
-    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="stock_configure")]]
-    
-    await query.message.edit_text(
-        text,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
-    
-    context.user_data['stock_action'] = 'configure'
-    return ADMIN_STOCK_MENU
-
-@error_handler
-async def stock_receive_quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Réception de la quantité de stock"""
-    qty_text = sanitize_input(update.message.text, 10)
-    
-    try:
-        quantity = int(qty_text)
-        if quantity < 0:
-            raise ValueError
-    except:
-        await update.message.reply_text(
-            f"{EMOJI_THEME['error']} Quantité invalide.\n\nEntrez un nombre entier positif ou 0.",
-            parse_mode='Markdown'
-        )
-        return ADMIN_STOCK_MENU
-    
-    product_name = context.user_data.get('stock_product')
-    action = context.user_data.get('stock_action', 'configure')
-    
-    if action == 'configure':
-        if quantity == 0:
-            # Désactiver le suivi
-            stocks = load_stocks()
-            if product_name in stocks:
-                del stocks[product_name]
-                save_stocks(stocks)
-            
-            text = f"{EMOJI_THEME['success']} *SUIVI DÉSACTIVÉ*\n\n"
-            text += f"Le suivi de stock pour {product_name} a été désactivé.\n"
-            text += f"Stock : Illimité"
-        else:
-            # Configurer avec seuil d'alerte par défaut (20g)
-            set_stock(product_name, quantity, alert_threshold=20)
-            
-            text = f"{EMOJI_THEME['success']} *STOCK CONFIGURÉ*\n\n"
-            text += f"Produit : {product_name}\n"
-            text += f"Stock : {quantity}g\n"
-            text += f"Seuil d'alerte : 20g"
-        
-        keyboard = [
-            [InlineKeyboardButton(f"📦 Gérer stocks", callback_data="admin_stocks")],
-            [InlineKeyboardButton("🔙 Menu Admin", callback_data="back_to_admin_menu")]
-        ]
-        
-        await update.message.reply_text(
-            text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
-        )
-        
-        # Nettoyer
-        context.user_data.pop('stock_product', None)
-        context.user_data.pop('stock_action', None)
-        
-        logger.info(f"📦 Stock configuré: {product_name} = {quantity}g")
-    
-    return ADMIN_STOCK_MENU
-
-# FIN DU BLOC 7
-
-# ==================== BLOC 7 PARTIE 2 : STOCKS ET PROMOS - FONCTIONS MANQUANTES ====================
-# Ajoutez ce bloc APRÈS stock_receive_quantity dans le BLOC 7
-
-# ==================== AJOUT/RETRAIT STOCK ====================
-
-@error_handler
-async def stock_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menu pour ajouter du stock"""
-    query = update.callback_query
-    await query.answer()
-    
-    stocks = load_stocks()
-    
-    if not stocks:
-        await query.message.edit_text(
-            f"{EMOJI_THEME['warning']} *AUCUN STOCK CONFIGURÉ*\n\n"
-            f"Configurez d'abord des stocks avant d'en ajouter.",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("➕ Configurer stock", callback_data="stock_configure"),
-                InlineKeyboardButton("🔙 Retour", callback_data="admin_stocks")
-            ]]),
-            parse_mode='Markdown'
-        )
-        return ADMIN_STOCK_MENU
-    
-    text = f"📥 *AJOUTER STOCK*\n\n"
-    text += f"Sélectionnez un produit :"
-    
-    keyboard = []
-    
-    for product_name, data in sorted(stocks.items()):
-        quantity = data.get('quantity', 0)
-        
-        keyboard.append([InlineKeyboardButton(
-            f"{product_name} (Actuel: {quantity}g)",
-            callback_data=f"stock_add_select_{product_name}"
-        )])
-    
-    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="admin_stocks")])
-    
-    await query.message.edit_text(
-        text,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
-    
-    return ADMIN_STOCK_MENU
-
-@error_handler
-async def stock_add_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Produit sélectionné pour ajout de stock"""
-    query = update.callback_query
-    await query.answer()
-    
-    product_name = query.data.replace("stock_add_select_", "")
-    context.user_data['stock_product'] = product_name
-    context.user_data['stock_action'] = 'add'
-    
-    current_stock = get_stock(product_name)
-    
-    text = f"📥 *AJOUTER STOCK*\n\n"
-    text += f"Produit : {product_name}\n"
-    text += f"Stock actuel : {current_stock}g\n\n"
-    text += f"Entrez la quantité à ajouter (grammes) :\n"
-    text += f"_Exemple : 100_"
-    
-    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="stock_add")]]
-    
-    await query.message.edit_text(
-        text,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
-    
-    return ADMIN_STOCK_MENU
-
-@error_handler
-async def stock_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menu pour retirer du stock"""
-    query = update.callback_query
-    await query.answer()
-    
-    stocks = load_stocks()
-    
-    if not stocks:
-        await query.message.edit_text(
-            f"{EMOJI_THEME['warning']} *AUCUN STOCK CONFIGURÉ*\n\n"
-            f"Configurez d'abord des stocks.",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔙 Retour", callback_data="admin_stocks")
-            ]]),
-            parse_mode='Markdown'
-        )
-        return ADMIN_STOCK_MENU
-    
-    text = f"📤 *RETIRER STOCK*\n\n"
-    text += f"Sélectionnez un produit :"
-    
-    keyboard = []
-    
-    for product_name, data in sorted(stocks.items()):
-        quantity = data.get('quantity', 0)
-        
-        keyboard.append([InlineKeyboardButton(
-            f"{product_name} (Actuel: {quantity}g)",
-            callback_data=f"stock_remove_select_{product_name}"
-        )])
-    
-    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="admin_stocks")])
-    
-    await query.message.edit_text(
-        text,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
-    
-    return ADMIN_STOCK_MENU
-
-@error_handler
-async def stock_remove_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Produit sélectionné pour retrait de stock"""
-    query = update.callback_query
-    await query.answer()
-    
-    product_name = query.data.replace("stock_remove_select_", "")
-    context.user_data['stock_product'] = product_name
-    context.user_data['stock_action'] = 'remove'
-    
-    current_stock = get_stock(product_name)
-    
-    text = f"📤 *RETIRER STOCK*\n\n"
-    text += f"Produit : {product_name}\n"
-    text += f"Stock actuel : {current_stock}g\n\n"
-    text += f"Entrez la quantité à retirer (grammes) :\n"
-    text += f"_Exemple : 50_\n\n"
-    text += f"⚠️ Maximum : {current_stock}g"
-    
-    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="stock_remove")]]
-    
-    await query.message.edit_text(
-        text,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
-    
-    return ADMIN_STOCK_MENU
-
-@error_handler
-async def stock_process_quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Traite l'ajout ou le retrait de stock (amélioration de stock_receive_quantity)"""
-    qty_text = sanitize_input(update.message.text, 10)
-    
-    try:
-        quantity = int(qty_text)
-        if quantity < 0:
-            raise ValueError
-    except:
-        await update.message.reply_text(
-            f"{EMOJI_THEME['error']} Quantité invalide.\n\nEntrez un nombre entier positif.",
-            parse_mode='Markdown'
-        )
-        return ADMIN_STOCK_MENU
-    
-    product_name = context.user_data.get('stock_product')
-    action = context.user_data.get('stock_action', 'configure')
-    
-    if action == 'add':
-        # Ajouter au stock
-        update_stock(product_name, quantity)
-        new_stock = get_stock(product_name)
-        
-        text = f"{EMOJI_THEME['success']} *STOCK AJOUTÉ*\n\n"
-        text += f"Produit : {product_name}\n"
-        text += f"Quantité ajoutée : +{quantity}g\n"
-        text += f"Nouveau stock : {new_stock}g"
-        
-        logger.info(f"📥 Stock ajouté: {product_name} +{quantity}g (total: {new_stock}g)")
-        
-    elif action == 'remove':
-        # Vérifier si assez de stock
-        current_stock = get_stock(product_name)
-        
-        if quantity > current_stock:
-            await update.message.reply_text(
-                f"{EMOJI_THEME['error']} *STOCK INSUFFISANT*\n\n"
-                f"Stock actuel : {current_stock}g\n"
-                f"Demandé : {quantity}g\n\n"
-                f"Vous ne pouvez pas retirer plus que le stock disponible.",
-                parse_mode='Markdown'
-            )
-            return ADMIN_STOCK_MENU
-        
-        # Retirer du stock
-        update_stock(product_name, -quantity)
-        new_stock = get_stock(product_name)
-        
-        text = f"{EMOJI_THEME['success']} *STOCK RETIRÉ*\n\n"
-        text += f"Produit : {product_name}\n"
-        text += f"Quantité retirée : -{quantity}g\n"
-        text += f"Nouveau stock : {new_stock}g"
-        
-        logger.info(f"📤 Stock retiré: {product_name} -{quantity}g (total: {new_stock}g)")
-        
-    else:
-        # Action 'configure' - géré par stock_receive_quantity original
-        return await stock_receive_quantity(update, context)
-    
-    keyboard = [
-        [InlineKeyboardButton(f"📦 Gérer stocks", callback_data="admin_stocks")],
-        [InlineKeyboardButton("🔙 Menu Admin", callback_data="back_to_admin_menu")]
-    ]
-    
-    await update.message.reply_text(
-        text,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
-    
-    # Nettoyer
-    context.user_data.pop('stock_product', None)
-    context.user_data.pop('stock_action', None)
-    
-    return ADMIN_STOCK_MENU
-
-# ==================== ALERTES STOCK ====================
-
-@error_handler
-async def stock_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Affiche les alertes de stock"""
-    query = update.callback_query
-    await query.answer()
-    
-    low_stock = get_low_stock_products()
-    out_of_stock = get_out_of_stock_products()
-    
-    text = f"{EMOJI_THEME['warning']} *ALERTES STOCK*\n\n"
-    
-    if out_of_stock:
-        text += f"{EMOJI_THEME['offline']} *RUPTURES DE STOCK :*\n"
-        for product in out_of_stock:
-            text += f"• {product}\n"
-        text += "\n"
-    
-    if low_stock:
-        text += f"{EMOJI_THEME['warning']} *STOCK FAIBLE :*\n"
-        for item in low_stock:
-            product = item['product']
-            quantity = item['quantity']
-            threshold = item['threshold']
-            text += f"• {product} : {quantity}g (seuil: {threshold}g)\n"
-        text += "\n"
-    
-    if not out_of_stock and not low_stock:
-        text += f"{EMOJI_THEME['success']} *AUCUNE ALERTE*\n\n"
-        text += f"Tous les stocks sont à niveau."
-    
-    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_stocks")]]
-    
-    await query.message.edit_text(
-        text,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
-    
-    return ADMIN_STOCK_MENU
+# ==================== BLOC 7 PARTIE 2 : STOCKS ET PROMOS - SUITE ====================
+# Ajoutez ce bloc APRÈS le BLOC 7 PARTIE 1
 
 # ==================== SUPPRESSION CODE PROMO ====================
 
@@ -5954,9 +5815,468 @@ async def promo_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     return ADMIN_PROMO_MENU
 
+# ==================== GESTION STOCKS ====================
+
+@error_handler
+async def admin_stocks_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu de gestion des stocks"""
+    query = update.callback_query
+    await query.answer()
+    
+    stocks = load_stocks()
+    registry = load_product_registry()
+    
+    # Statistiques
+    low_stock_count = len(get_low_stock_products())
+    out_of_stock_count = len(get_out_of_stock_products())
+    
+    # 🎨 Affichage avec indicateurs visuels
+    text = f"📦 *GESTION DES STOCKS*\n\n"
+    text += f"📊 *Statistiques :*\n"
+    text += f"• {EMOJI_THEME['warning']} Stock faible : {low_stock_count}\n"
+    text += f"• {EMOJI_THEME['offline']} Rupture : {out_of_stock_count}\n\n"
+    
+    if stocks:
+        text += f"📋 *État des stocks :*\n\n"
+        
+        for product_name, data in sorted(stocks.items()):
+            quantity = data.get('quantity', 0)
+            threshold = data.get('alert_threshold', 20)
+            
+            # Indicateur visuel
+            if quantity == 0:
+                indicator = f"{EMOJI_THEME['offline']}"
+            elif quantity <= threshold:
+                indicator = f"{EMOJI_THEME['warning']}"
+            else:
+                indicator = f"{EMOJI_THEME['online']}"
+            
+            # Barre de progression
+            if quantity > 0:
+                max_display = max(100, threshold * 2)
+                progress = create_progress_bar(quantity, max_display, length=10)
+                text += f"{indicator} {product_name}\n"
+                text += f"   {progress} {quantity}g\n\n"
+            else:
+                text += f"{indicator} {product_name} : *RUPTURE*\n\n"
+    else:
+        text += f"_Aucun stock configuré (stock illimité par défaut)_"
+    
+    keyboard = [
+        [InlineKeyboardButton(f"➕ Configurer stock", callback_data="stock_configure")],
+        [InlineKeyboardButton(f"📥 Ajouter stock", callback_data="stock_add")],
+        [InlineKeyboardButton(f"📤 Retirer stock", callback_data="stock_remove")],
+        [InlineKeyboardButton(f"{EMOJI_THEME['warning']} Alertes stock", callback_data="stock_alerts")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="back_to_admin_menu")]
+    ]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_STOCK_MENU
+
+@error_handler
+async def stock_configure(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Configuration initiale du stock pour un produit"""
+    query = update.callback_query
+    await query.answer()
+    
+    registry = load_product_registry()
+    
+    if not registry:
+        await query.message.edit_text(
+            f"{EMOJI_THEME['error']} Aucun produit disponible.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Retour", callback_data="admin_stocks")
+            ]]),
+            parse_mode='Markdown'
+        )
+        return ADMIN_STOCK_MENU
+    
+    text = f"➕ *CONFIGURER STOCK*\n\n"
+    text += f"Choisissez un produit :"
+    
+    keyboard = []
+    
+    for code, data in sorted(registry.items()):
+        name = data['name']
+        emoji = data.get('emoji', '📦')
+        
+        # Vérifier si déjà configuré
+        stocks = load_stocks()
+        status = " (✓)" if name in stocks else ""
+        
+        keyboard.append([InlineKeyboardButton(
+            f"{emoji} {name}{status}",
+            callback_data=f"stock_config_{code}"
+        )])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="admin_stocks")])
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_STOCK_MENU
+
+@error_handler
+async def stock_config_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Configuration du stock pour un produit spécifique"""
+    query = update.callback_query
+    await query.answer()
+    
+    product_code = query.data.replace("stock_config_", "")
+    registry = load_product_registry()
+    
+    if product_code not in registry:
+        await query.answer(f"{EMOJI_THEME['error']} Produit non trouvé", show_alert=True)
+        return ADMIN_STOCK_MENU
+    
+    product_name = registry[product_code]['name']
+    context.user_data['stock_product'] = product_name
+    
+    # Stock actuel
+    current_stock = get_stock(product_name)
+    
+    text = f"➕ *CONFIGURER STOCK*\n\n"
+    text += f"Produit : {product_name}\n"
+    if current_stock is not None:
+        text += f"Stock actuel : {current_stock}g\n\n"
+    else:
+        text += f"Stock actuel : Illimité\n\n"
+    
+    text += f"Entrez la quantité de stock (grammes) :\n"
+    text += f"_Exemple : 500_\n\n"
+    text += f"_Tapez 0 pour désactiver le suivi de stock_"
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="stock_configure")]]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    context.user_data['stock_action'] = 'configure'
+    return ADMIN_STOCK_MENU
+
+@error_handler
+async def stock_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu pour ajouter du stock"""
+    query = update.callback_query
+    await query.answer()
+    
+    stocks = load_stocks()
+    
+    if not stocks:
+        await query.message.edit_text(
+            f"{EMOJI_THEME['warning']} *AUCUN STOCK CONFIGURÉ*\n\n"
+            f"Configurez d'abord des stocks avant d'en ajouter.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("➕ Configurer stock", callback_data="stock_configure"),
+                InlineKeyboardButton("🔙 Retour", callback_data="admin_stocks")
+            ]]),
+            parse_mode='Markdown'
+        )
+        return ADMIN_STOCK_MENU
+    
+    text = f"📥 *AJOUTER STOCK*\n\n"
+    text += f"Sélectionnez un produit :"
+    
+    keyboard = []
+    
+    for product_name, data in sorted(stocks.items()):
+        quantity = data.get('quantity', 0)
+        
+        keyboard.append([InlineKeyboardButton(
+            f"{product_name} (Actuel: {quantity}g)",
+            callback_data=f"stock_add_select_{product_name}"
+        )])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="admin_stocks")])
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_STOCK_MENU
+
+@error_handler
+async def stock_add_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Produit sélectionné pour ajout de stock"""
+    query = update.callback_query
+    await query.answer()
+    
+    product_name = query.data.replace("stock_add_select_", "")
+    context.user_data['stock_product'] = product_name
+    context.user_data['stock_action'] = 'add'
+    
+    current_stock = get_stock(product_name)
+    
+    text = f"📥 *AJOUTER STOCK*\n\n"
+    text += f"Produit : {product_name}\n"
+    text += f"Stock actuel : {current_stock}g\n\n"
+    text += f"Entrez la quantité à ajouter (grammes) :\n"
+    text += f"_Exemple : 100_"
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="stock_add")]]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_STOCK_MENU
+
+@error_handler
+async def stock_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu pour retirer du stock"""
+    query = update.callback_query
+    await query.answer()
+    
+    stocks = load_stocks()
+    
+    if not stocks:
+        await query.message.edit_text(
+            f"{EMOJI_THEME['warning']} *AUCUN STOCK CONFIGURÉ*\n\n"
+            f"Configurez d'abord des stocks.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Retour", callback_data="admin_stocks")
+            ]]),
+            parse_mode='Markdown'
+        )
+        return ADMIN_STOCK_MENU
+    
+    text = f"📤 *RETIRER STOCK*\n\n"
+    text += f"Sélectionnez un produit :"
+    
+    keyboard = []
+    
+    for product_name, data in sorted(stocks.items()):
+        quantity = data.get('quantity', 0)
+        
+        keyboard.append([InlineKeyboardButton(
+            f"{product_name} (Actuel: {quantity}g)",
+            callback_data=f"stock_remove_select_{product_name}"
+        )])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="admin_stocks")])
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_STOCK_MENU
+
+@error_handler
+async def stock_remove_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Produit sélectionné pour retrait de stock"""
+    query = update.callback_query
+    await query.answer()
+    
+    product_name = query.data.replace("stock_remove_select_", "")
+    context.user_data['stock_product'] = product_name
+    context.user_data['stock_action'] = 'remove'
+    
+    current_stock = get_stock(product_name)
+    
+    text = f"📤 *RETIRER STOCK*\n\n"
+    text += f"Produit : {product_name}\n"
+    text += f"Stock actuel : {current_stock}g\n\n"
+    text += f"Entrez la quantité à retirer (grammes) :\n"
+    text += f"_Exemple : 50_\n\n"
+    text += f"⚠️ Maximum : {current_stock}g"
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="stock_remove")]]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_STOCK_MENU
+
+@error_handler
+async def stock_process_quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Traite l'ajout ou le retrait de stock"""
+    qty_text = sanitize_input(update.message.text, 10)
+    
+    try:
+        quantity = int(qty_text)
+        if quantity < 0:
+            raise ValueError
+    except:
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} Quantité invalide.\n\nEntrez un nombre entier positif ou 0.",
+            parse_mode='Markdown'
+        )
+        return ADMIN_STOCK_MENU
+    
+    product_name = context.user_data.get('stock_product')
+    action = context.user_data.get('stock_action', 'configure')
+    
+    if action == 'configure':
+        if quantity == 0:
+            # Désactiver le suivi
+            stocks = load_stocks()
+            if product_name in stocks:
+                del stocks[product_name]
+                save_stocks(stocks)
+            
+            text = f"{EMOJI_THEME['success']} *SUIVI DÉSACTIVÉ*\n\n"
+            text += f"Le suivi de stock pour {product_name} a été désactivé.\n"
+            text += f"Stock : Illimité"
+        else:
+            # Configurer avec seuil d'alerte par défaut (20g)
+            set_stock(product_name, quantity, alert_threshold=20)
+            
+            text = f"{EMOJI_THEME['success']} *STOCK CONFIGURÉ*\n\n"
+            text += f"Produit : {product_name}\n"
+            text += f"Stock : {quantity}g\n"
+            text += f"Seuil d'alerte : 20g"
+        
+        keyboard = [
+            [InlineKeyboardButton(f"📦 Gérer stocks", callback_data="admin_stocks")],
+            [InlineKeyboardButton("🔙 Menu Admin", callback_data="back_to_admin_menu")]
+        ]
+        
+        await update.message.reply_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        
+        # Nettoyer
+        context.user_data.pop('stock_product', None)
+        context.user_data.pop('stock_action', None)
+        
+        logger.info(f"📦 Stock configuré: {product_name} = {quantity}g")
+        
+    elif action == 'add':
+        # Ajouter au stock
+        update_stock(product_name, quantity)
+        new_stock = get_stock(product_name)
+        
+        text = f"{EMOJI_THEME['success']} *STOCK AJOUTÉ*\n\n"
+        text += f"Produit : {product_name}\n"
+        text += f"Quantité ajoutée : +{quantity}g\n"
+        text += f"Nouveau stock : {new_stock}g"
+        
+        logger.info(f"📥 Stock ajouté: {product_name} +{quantity}g (total: {new_stock}g)")
+        
+        keyboard = [
+            [InlineKeyboardButton(f"📦 Gérer stocks", callback_data="admin_stocks")],
+            [InlineKeyboardButton("🔙 Menu Admin", callback_data="back_to_admin_menu")]
+        ]
+        
+        await update.message.reply_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        
+        # Nettoyer
+        context.user_data.pop('stock_product', None)
+        context.user_data.pop('stock_action', None)
+        
+    elif action == 'remove':
+        # Vérifier si assez de stock
+        current_stock = get_stock(product_name)
+        
+        if quantity > current_stock:
+            await update.message.reply_text(
+                f"{EMOJI_THEME['error']} *STOCK INSUFFISANT*\n\n"
+                f"Stock actuel : {current_stock}g\n"
+                f"Demandé : {quantity}g\n\n"
+                f"Vous ne pouvez pas retirer plus que le stock disponible.",
+                parse_mode='Markdown'
+            )
+            return ADMIN_STOCK_MENU
+        
+        # Retirer du stock
+        update_stock(product_name, -quantity)
+        new_stock = get_stock(product_name)
+        
+        text = f"{EMOJI_THEME['success']} *STOCK RETIRÉ*\n\n"
+        text += f"Produit : {product_name}\n"
+        text += f"Quantité retirée : -{quantity}g\n"
+        text += f"Nouveau stock : {new_stock}g"
+        
+        logger.info(f"📤 Stock retiré: {product_name} -{quantity}g (total: {new_stock}g)")
+        
+        keyboard = [
+            [InlineKeyboardButton(f"📦 Gérer stocks", callback_data="admin_stocks")],
+            [InlineKeyboardButton("🔙 Menu Admin", callback_data="back_to_admin_menu")]
+        ]
+        
+        await update.message.reply_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        
+        # Nettoyer
+        context.user_data.pop('stock_product', None)
+        context.user_data.pop('stock_action', None)
+    
+    return ADMIN_STOCK_MENU
+
+# ==================== ALERTES STOCK ====================
+
+@error_handler
+async def stock_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche les alertes de stock"""
+    query = update.callback_query
+    await query.answer()
+    
+    low_stock = get_low_stock_products()
+    out_of_stock = get_out_of_stock_products()
+    
+    text = f"{EMOJI_THEME['warning']} *ALERTES STOCK*\n\n"
+    
+    if out_of_stock:
+        text += f"{EMOJI_THEME['offline']} *RUPTURES DE STOCK :*\n"
+        for product in out_of_stock:
+            text += f"• {product}\n"
+        text += "\n"
+    
+    if low_stock:
+        text += f"{EMOJI_THEME['warning']} *STOCK FAIBLE :*\n"
+        for item in low_stock:
+            product = item['product']
+            quantity = item['quantity']
+            threshold = item['threshold']
+            text += f"• {product} : {quantity}g (seuil: {threshold}g)\n"
+        text += "\n"
+    
+    if not out_of_stock and not low_stock:
+        text += f"{EMOJI_THEME['success']} *AUCUNE ALERTE*\n\n"
+        text += f"Tous les stocks sont à niveau."
+    
+    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_stocks")]]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_STOCK_MENU
+
 # FIN DU BLOC 7 PARTIE 2
 
-# ==================== BLOC 8 : PANEL ADMIN - PARTIE 3 ====================
+# ==================== BLOC 8 : PANEL ADMIN - PARTIE 3 (CLIENTS, STATS, HORAIRES, MAINTENANCE) ====================
 # Ajoutez ce bloc APRÈS le BLOC 7
 
 # ==================== GESTION CLIENTS ====================
@@ -6422,6 +6742,125 @@ async def stats_countries(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     return ADMIN_MENU_MAIN
 
+# ✅ CORRECTION : GRAPHIQUE SEMAINE
+
+@error_handler
+async def stats_week_graph(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """✅ AJOUT : Graphique de la semaine en ASCII art"""
+    query = update.callback_query
+    await query.answer()
+    
+    stats = load_stats()
+    weekly_sales = stats.get('weekly', [])
+    
+    if not weekly_sales:
+        text = f"📊 *GRAPHIQUE SEMAINE*\n\n"
+        text += f"Aucune donnée disponible cette semaine."
+    else:
+        # Regrouper par jour
+        from collections import defaultdict
+        daily_sales = defaultdict(float)
+        
+        for sale in weekly_sales:
+            date_str = sale['date'][:10]  # YYYY-MM-DD
+            daily_sales[date_str] += sale['amount']
+        
+        # Trier par date
+        sorted_days = sorted(daily_sales.items())
+        
+        # Trouver le max pour normaliser
+        max_amount = max(daily_sales.values()) if daily_sales else 1
+        
+        text = f"📊 *GRAPHIQUE SEMAINE*\n\n"
+        
+        # Créer le graphique en barres ASCII
+        for date, amount in sorted_days[-7:]:  # 7 derniers jours
+            # Date formatée
+            try:
+                day_name = datetime.fromisoformat(date).strftime('%a %d/%m')
+            except:
+                day_name = date
+            
+            # Barre proportionnelle
+            bar_length = int((amount / max_amount) * 20)
+            bar = "█" * bar_length
+            
+            text += f"{day_name}\n"
+            text += f"{bar} {amount:.0f}€\n\n"
+        
+        # Statistiques
+        total = sum(daily_sales.values())
+        avg = total / len(daily_sales) if daily_sales else 0
+        
+        text += f"📈 *Résumé :*\n"
+        text += f"• Total : {total:.2f}€\n"
+        text += f"• Moyenne/jour : {avg:.2f}€\n"
+        text += f"• Meilleur jour : {max(daily_sales.values()):.2f}€"
+    
+    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_stats")]]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return ADMIN_MENU_MAIN
+
+# ✅ CORRECTION : EXPORT CSV
+
+@error_handler
+async def stats_export(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """✅ AJOUT : Exporte les statistiques en CSV"""
+    query = update.callback_query
+    await query.answer()
+    
+    csv_path = DATA_DIR / "orders.csv"
+    
+    if not csv_path.exists():
+        await query.message.edit_text(
+            f"{EMOJI_THEME['warning']} *AUCUNE DONNÉE*\n\n"
+            f"Aucune commande enregistrée dans le fichier CSV.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Retour", callback_data="admin_stats")
+            ]]),
+            parse_mode='Markdown'
+        )
+        return ADMIN_MENU_MAIN
+    
+    try:
+        # Envoyer le fichier CSV
+        with open(csv_path, 'rb') as f:
+            await context.bot.send_document(
+                chat_id=query.message.chat_id,
+                document=f,
+                filename=f"orders_{datetime.now().strftime('%Y%m%d')}.csv",
+                caption=f"{EMOJI_THEME['success']} *EXPORT CSV*\n\nFichier de toutes les commandes",
+                parse_mode='Markdown'
+            )
+        
+        await query.answer(f"{EMOJI_THEME['success']} Fichier envoyé", show_alert=True)
+        
+        # Message de confirmation
+        text = f"{EMOJI_THEME['success']} *EXPORT RÉUSSI*\n\n"
+        text += f"Le fichier CSV a été envoyé ci-dessus."
+        
+        keyboard = [[InlineKeyboardButton("🔙 Menu Stats", callback_data="admin_stats")]]
+        
+        await query.message.edit_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        
+        logger.info(f"📊 Export CSV envoyé à l'admin")
+        
+    except Exception as e:
+        logger.error(f"Erreur export CSV: {e}")
+        await query.answer(f"{EMOJI_THEME['error']} Erreur d'export", show_alert=True)
+    
+    return ADMIN_MENU_MAIN
+
 # ==================== HORAIRES ====================
 
 @error_handler
@@ -6689,7 +7128,7 @@ async def notif_send_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @error_handler
 async def notif_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Envoie une notification de test"""
+    """✅ CORRECTION : Envoie une notification de test AVEC RETOUR"""
     query = update.callback_query
     await query.answer()
     
@@ -6704,14 +7143,19 @@ async def notif_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown'
         )
         await query.answer(f"{EMOJI_THEME['success']} Notification envoyée", show_alert=True)
+        
+        # ✅ CORRECTION : Retourner au menu notifications
+        return await admin_notifications_menu(update, context)
+        
     except Exception as e:
         logger.error(f"Erreur test notification: {e}")
         await query.answer(f"{EMOJI_THEME['error']} Erreur d'envoi", show_alert=True)
-    
-    return await admin_notifications_menu(update, context)
+        
+        # ✅ CORRECTION : Retourner au menu même en cas d'erreur
+        return await admin_notifications_menu(update, context)
 
 # FIN DU BLOC 8
-# ==================== BLOC 9 : CONVERSATION HANDLER ET CONFIGURATION ====================
+# ==================== BLOC 9 : CONVERSATION HANDLER ET CONFIGURATION DU BOT ====================
 # Ajoutez ce bloc APRÈS le BLOC 8
 
 # ==================== CONVERSATION HANDLER CLIENT ====================
@@ -6794,19 +7238,22 @@ def create_client_conversation_handler():
             CallbackQueryHandler(cancel, pattern="^cancel$")
         ],
         conversation_timeout=1800,  # 30 minutes
-        name="client_conversation"
+        per_message=False,
+        name="client_conversation",
+        allow_reentry=True
     )
 
-# ==================== CONVERSATION HANDLER ADMIN ====================
+# ==================== CONVERSATION HANDLER ADMIN - VERSION COMPLÈTE CORRIGÉE ====================
 
 def create_admin_conversation_handler():
-    """Crée le ConversationHandler pour l'admin - VERSION COMPLÈTE"""
+    """✅ Crée le ConversationHandler pour l'admin - TOUTES CORRECTIONS APPLIQUÉES"""
     return ConversationHandler(
         entry_points=[
             CommandHandler("admin", admin_command)
         ],
         states={
             ADMIN_MENU_MAIN: [
+                # Navigation principale
                 CallbackQueryHandler(admin_menu_main_handler, pattern="^admin_"),
                 CallbackQueryHandler(back_to_admin_menu, pattern="^back_to_admin_menu$"),
                 
@@ -6818,7 +7265,8 @@ def create_admin_conversation_handler():
                 CallbackQueryHandler(confirm_archive_product, pattern="^archive_confirm_"),
                 CallbackQueryHandler(do_archive_product, pattern="^archive_do_"),
                 
-                # Pricing
+                # Pricing - ✅ CORRECTION APPLIQUÉE
+                CallbackQueryHandler(pricing_select_product, pattern="^pricing_select_product$"),
                 CallbackQueryHandler(pricing_view_all, pattern="^pricing_view_all$"),
                 CallbackQueryHandler(pricing_edit, pattern="^pricing_edit$"),
                 CallbackQueryHandler(pricing_delete, pattern="^pricing_delete$"),
@@ -6843,9 +7291,11 @@ def create_admin_conversation_handler():
                 CallbackQueryHandler(clients_referrals, pattern="^clients_referrals$"),
                 CallbackQueryHandler(clients_top, pattern="^clients_top$"),
                 
-                # Stats
+                # Stats - ✅ CORRECTIONS APPLIQUÉES
                 CallbackQueryHandler(stats_products, pattern="^stats_products$"),
                 CallbackQueryHandler(stats_countries, pattern="^stats_countries$"),
+                CallbackQueryHandler(stats_week_graph, pattern="^stats_week_graph$"),  # ✅ AJOUTÉ
+                CallbackQueryHandler(stats_export, pattern="^stats_export$"),  # ✅ AJOUTÉ
                 
                 # Horaires
                 CallbackQueryHandler(horaires_toggle, pattern="^horaires_toggle$"),
@@ -6887,9 +7337,9 @@ def create_admin_conversation_handler():
             
             # États pricing
             ADMIN_SELECT_PRODUCT_PRICING: [
-                CallbackQueryHandler(pricing_select_product, pattern="^pricing_select_product$"),
                 CallbackQueryHandler(pricing_product_selected, pattern="^pricing_product_"),
                 CallbackQueryHandler(pricing_country_selected, pattern="^pricing_country_"),
+                CallbackQueryHandler(pricing_select_product, pattern="^pricing_select_product$"),
                 CallbackQueryHandler(admin_pricing_menu, pattern="^admin_pricing$")
             ],
             ADMIN_PRICING_TIERS: [
@@ -6906,7 +7356,7 @@ def create_admin_conversation_handler():
                 CallbackQueryHandler(pricing_country_selected, pattern="^pricing_country_")
             ],
             
-            # 🆕 États pricing edit/delete
+            # États pricing edit/delete
             ADMIN_PRICING_EDIT: [
                 CallbackQueryHandler(pricing_edit, pattern="^pricing_edit$"),
                 CallbackQueryHandler(pricing_edit_select, pattern="^pricing_edit_select_"),
@@ -6920,7 +7370,7 @@ def create_admin_conversation_handler():
                 CallbackQueryHandler(admin_pricing_menu, pattern="^admin_pricing$")
             ],
             
-            # États promo
+            # États promo - ✅ CORRECTION BOUTON RETOUR
             ADMIN_PROMO_MENU: [
                 CallbackQueryHandler(promo_create, pattern="^promo_create$"),
                 CallbackQueryHandler(promo_type_selected, pattern="^promo_type_"),
@@ -6929,6 +7379,7 @@ def create_admin_conversation_handler():
                 CallbackQueryHandler(promo_delete_do, pattern="^promo_delete_do_"),
                 CallbackQueryHandler(promo_details, pattern="^promo_details$"),
                 CallbackQueryHandler(admin_promo_menu, pattern="^admin_promo$"),
+                CallbackQueryHandler(back_to_admin_menu, pattern="^back_to_admin_menu$"),  # ✅ AJOUTÉ
                 MessageHandler(filters.TEXT & ~filters.COMMAND, promo_receive_input)
             ],
             
@@ -6961,11 +7412,12 @@ def create_admin_conversation_handler():
                 CallbackQueryHandler(admin_horaires_menu, pattern="^admin_horaires$")
             ],
             
-            # États notifications
+            # États notifications - ✅ CORRECTION RETOUR
             ADMIN_NOTIF_MENU: [
                 CallbackQueryHandler(notif_send_report, pattern="^notif_send_report$"),
                 CallbackQueryHandler(notif_test, pattern="^notif_test$"),
-                CallbackQueryHandler(admin_notifications_menu, pattern="^admin_notifications$")
+                CallbackQueryHandler(admin_notifications_menu, pattern="^admin_notifications$"),
+                CallbackQueryHandler(back_to_admin_menu, pattern="^back_to_admin_menu$")  # ✅ AJOUTÉ
             ]
         },
         fallbacks=[
@@ -6973,9 +7425,10 @@ def create_admin_conversation_handler():
             CallbackQueryHandler(cancel, pattern="^admin_close$")
         ],
         conversation_timeout=3600,
-        name="admin_conversation"
+        per_message=False,
+        name="admin_conversation",
+        allow_reentry=True  # ✅ PERMET DE RÉOUVRIR /admin
     )
-
 
 # ==================== HANDLERS STANDALONE ====================
 
@@ -7115,4 +7568,5 @@ if __name__ == "__main__":
         sys.exit(1)
 
 # FIN DU BLOC 9
+
 

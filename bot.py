@@ -3247,13 +3247,16 @@ async def saisie_promo_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def saisie_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Saisie de l'adresse"""
     address = sanitize_input(update.message.text, 300)
+    
     if len(address) < 15:
         await update.message.reply_text(tr(context.user_data, "address_too_short"))
         return ADRESSE
     
     context.user_data['adresse'] = address
+    logger.info(f"📍 Adresse saisie : {address}")
+    
     return await ask_livraison(update, context)
-
+    
 @error_handler
 async def back_to_country_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Retour au choix du pays"""

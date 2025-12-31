@@ -3362,39 +3362,73 @@ async def ask_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
         edit_mode = False
     
     country = context.user_data.get('pays')
-    meetup_zones = get_available_meetup_zones(country)
-    has_meetup = len(meetup_zones) > 0
+    cart = context.user_data.get('cart', [])
     
+    # ✅ Calculer le sous-total
+    total_info = calculate_total(cart, country)
+    subtotal = total_info['subtotal']
+    
+    # ✅ Vérifier si Express est disponible (minimum 30€)
+    express_available = subtotal >= 30
+    
+    # Construction du message
     text = f"{EMOJI_THEME['delivery']} *MODE DE LIVRAISON*\n\n"
+    text += f"💰 *Montant du panier :* {subtotal:.2f}€\n\n"
     text += "Choisissez votre mode de livraison :\n\n"
+    
+    # 📮 POSTALE (toujours disponible)
     text += f"📮 *Postale* : {FRAIS_POSTAL}€ (fixe)\n"
-    text += f"   Délai : 2-5 jours\n\n"
-    text += f"{EMOJI_THEME['rocket']} *Express* : 10€/10km\n"
-    text += f"   Délai : 24-48h\n"
-    text += f"   Min commande : 30€\n"
-    text += f"   Max frais : 70€\n\n"
+    text += f"   ⏱️ Délai : 24h-48h\n"
+    text += f"   ✅ Toujours disponible\n\n"
     
-    if has_meetup:
-        text += f"🤝 *Meetup* : {FRAIS_MEETUP}€\n"
-        text += f"   Rencontre en personne\n"
-        text += f"   Zones disponibles : {', '.join(meetup_zones[:3])}"
-        if len(meetup_zones) > 3:
-            text += f" (+{len(meetup_zones) - 3} autres)"
+    # 🚀 EXPRESS (si panier >= 30€)
+    if express_available:
+        text += f"{EMOJI_THEME['rocket']} *Express* : 10€/10km\n"
+        text += f"   ⏱️ Délai : 30min+\n"
+        text += f"   💰 Min commande : 30€\n"
+        text += f"   📊 Max frais : 70€\n"
+        text += f"   ✅ Disponible (panier {subtotal:.2f}€)\n\n"
+    else:
+        text += f"{EMOJI_THEME['rocket']} *Express* : ❌ NON DISPONIBLE\n"
+        text += f"   💰 Min commande : 30€\n"
+        text += f"   ⚠️ Il manque {30 - subtotal:.2f}€\n\n"
     
-    keyboard = [
-        [InlineKeyboardButton("📮 Postale", callback_data="livraison_postale")],
-        [InlineKeyboardButton(f"{EMOJI_THEME['rocket']} Express", callback_data="livraison_express")]
-    ]
+    # 🤝 MEETUP (toujours disponible)
+    text += f"🤝 *Meetup* : {FRAIS_MEETUP}€\n"
+    text += f"   📍 Retrait en personne\n"
+    text += f"   ⏰ Délai : Selon disponibilités\n"
+    text += f"   💡 Vous venez récupérer votre commande\n"
+    text += f"   ✅ Toujours disponible\n"
     
-    if has_meetup:
-        keyboard.append([InlineKeyboardButton("🤝 Meetup", callback_data="livraison_meetup")])
+    # ✅ Construction du clavier
+    keyboard = []
     
+    # Postale (toujours disponible)
+    keyboard.append([InlineKeyboardButton("📮 Postale", callback_data="livraison_postale")])
+    
+    # Express (si panier >= 30€)
+    if express_available:
+        keyboard.append([InlineKeyboardButton(f"{EMOJI_THEME['rocket']} Express", callback_data="livraison_express")])
+    
+    # Meetup (toujours disponible)
+    keyboard.append([InlineKeyboardButton("🤝 Meetup (Retrait)", callback_data="livraison_meetup")])
+    
+    # Bouton retour
     keyboard.append([InlineKeyboardButton("🔙 Retour panier", callback_data="back_to_cart")])
     
+    # Envoi du message
     if edit_mode:
-        await message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        await message.edit_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
     else:
-        await message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        await message.reply_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
     
     return LIVRAISON
 
@@ -3410,7 +3444,7 @@ async def livraison_postale(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     text = f"{EMOJI_THEME['success']} *LIVRAISON POSTALE*\n\n"
     text += f"📮 Frais : {FRAIS_POSTAL}€\n"
-    text += f"⏱️ Délai : 2-5 jours\n\n"
+    text += f"⏱️ Délai : 24h-48h\n\n"
     text += "Choisissez votre mode de paiement :"
     
     keyboard = [
@@ -3470,7 +3504,7 @@ async def livraison_express(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if frais == 70:
         text += f"   (Plafond max atteint)\n"
     
-    text += f"⏱️ Délai : 24-48h\n\n"
+    text += f"⏱️ Délai : 30min+\n\n"
     text += "Choisissez votre mode de paiement :"
     
     keyboard = [

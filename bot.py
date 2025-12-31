@@ -3122,20 +3122,47 @@ async def choix_rock_subcategory(update: Update, context: ContextTypes.DEFAULT_T
 
 @error_handler
 async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Saisie de la quantité"""
-    qty = sanitize_input(update.message.text, 10)
+    """Saisie de la quantité - Support décimales"""
+    qty_input = sanitize_input(update.message.text, 10).replace(',', '.')  # ✅ Remplacer virgule par point
     product_name = context.user_data.get('current_product')
     
-    if not qty.isdigit() or not (0 < int(qty) <= MAX_QUANTITY_PER_PRODUCT):
-        await update.message.reply_text(tr(context.user_data, "invalid_quantity"))
+    # ✅ Validation : doit être un nombre décimal valide
+    try:
+        quantity = float(qty_input)
+    except ValueError:
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} *QUANTITÉ INVALIDE*\n\n"
+            f"Veuillez entrer un nombre valide.\n"
+            f"Exemples : 1, 2.5, 3.75, 0.5",
+            parse_mode='Markdown'
+        )
         return QUANTITE
     
-    quantity = int(qty)
+    # ✅ Vérifier que la quantité est positive et dans les limites
+    if quantity <= 0:
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} *QUANTITÉ INVALIDE*\n\n"
+            f"La quantité doit être supérieure à 0.",
+            parse_mode='Markdown'
+        )
+        return QUANTITE
     
+    if quantity > MAX_QUANTITY_PER_PRODUCT:
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} *QUANTITÉ TROP ÉLEVÉE*\n\n"
+            f"Maximum autorisé : {MAX_QUANTITY_PER_PRODUCT}g",
+            parse_mode='Markdown'
+        )
+        return QUANTITE
+    
+    # ✅ Vérifier le stock
     if not is_in_stock(product_name, quantity):
         stock = get_stock(product_name)
         await update.message.reply_text(
-            f"{EMOJI_THEME['error']} *STOCK INSUFFISANT*\n\nDisponible : {stock}g\nDemandé : {quantity}g",
+            f"{EMOJI_THEME['error']} *STOCK INSUFFISANT*\n\n"
+            f"📦 Disponible : {stock}g\n"
+            f"❌ Demandé : {quantity}g\n\n"
+            f"Veuillez réduire la quantité.",
             parse_mode='Markdown'
         )
         return QUANTITE
@@ -3146,10 +3173,10 @@ async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     context.user_data['cart'].append({
         "produit": product_name,
-        "quantite": quantity
+        "quantite": quantity  # ✅ Stocke en float
     })
     
-    logger.info(f"✅ Produit ajouté au panier : {product_name} x{quantity}")
+    logger.info(f"✅ Produit ajouté au panier : {product_name} x{quantity}g")
     
     # ✅ ALLER DIRECTEMENT AU CHOIX DE LIVRAISON
     country = context.user_data.get('pays')

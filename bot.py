@@ -7512,8 +7512,9 @@ def main():
     )
     
     # Informations de démarrage
-    def main():
+def main():
     """Point d'entrée principal du bot"""
+    
     logger.info("=" * 60)
     logger.info(f"🤖 BOT : {'BACKUP' if IS_BACKUP_BOT else 'PRIMARY'}")
     logger.info(f"🆔 TOKEN : {TOKEN[:10]}...{TOKEN[-10:]}")

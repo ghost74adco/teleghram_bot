@@ -6653,6 +6653,7 @@ async def receive_tier_quantity(update: Update, context: ContextTypes.DEFAULT_TY
     return ADMIN_CONFIRM_PRODUCT
 
 @error_handler
+@error_handler
 async def receive_tier_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Réception du prix pour le palier"""
     try:
@@ -6660,12 +6661,16 @@ async def receive_tier_price(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if price <= 0:
             raise ValueError
     except:
-        await update.message.reply_text("❌ Prix invalide.")
-        return ADMIN_CONFIRM_PRODUCT
+        await update.message.reply_text("❌ Prix invalide. Entrez un nombre positif.\n\n_Exemple : 45_", parse_mode='Markdown')
+        return ADMIN_TIER_PRICE  #
     
     product_name = context.user_data.get('pricing_product')
     country = context.user_data.get('pricing_country')
     min_qty = context.user_data.get('tier_min_qty')
+    
+    if not product_name or not country or not min_qty:
+        await update.message.reply_text("❌ Session expirée. Utilisez /pricing pour recommencer.")
+        return ConversationHandler.END
     
     success = add_pricing_tier(product_name, country, min_qty, price)
     
@@ -6677,7 +6682,7 @@ async def receive_tier_price(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
         keyboard = [
             [InlineKeyboardButton("➕ Ajouter autre palier", callback_data="pricing_add_tier")],
-            [InlineKeyboardButton("✅ Terminer", callback_data="admin_close")]
+            [InlineKeyboardButton("✅ Terminer", callback_data="pricing_back")]
         ]
         
         await update.message.reply_text(
@@ -6685,10 +6690,10 @@ async def receive_tier_price(update: Update, context: ContextTypes.DEFAULT_TYPE)
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode='Markdown'
         )
+        return ADMIN_ADD_TIER  #
     else:
-        await update.message.reply_text("❌ Erreur lors de l'ajout du palier.")
-    
-    return ADMIN_ADD_TIER
+        await update.message.reply_text("❌ Erreur lors de l'ajout du palier. Réessayez.")
+        return ADMIN_TIER_PRICE  #
 
 # ==================== 🆕 MODIFIER UN PALIER ====================
 
@@ -7704,38 +7709,41 @@ async def main_async():
     
     # 🆕 Handler prix dégressifs
     pricing_handler = ConversationHandler(
-        entry_points=[CommandHandler('pricing', admin_pricing_command)],
-        states={
-            ADMIN_SELECT_PRODUCT_PRICING: [
-                CallbackQueryHandler(select_product_for_pricing, pattern="^pricing_")
-            ],
-            ADMIN_PRICING_TIERS: [
-                CallbackQueryHandler(select_country_for_pricing, pattern="^pricing_country_")
-            ],
-            ADMIN_ADD_TIER: [
-                CallbackQueryHandler(add_tier_prompt, pattern="^pricing_add_tier$"),
-                CallbackQueryHandler(edit_tier_callback, pattern="^pricing_edit_tier$"),
-                CallbackQueryHandler(delete_tier_callback, pattern="^pricing_delete_tier$"),
-                CallbackQueryHandler(pricing_copy_callback, pattern="^pricing_copy$"),
-                CallbackQueryHandler(confirm_copy_tiers, pattern="^confirm_copy_tiers$"),
-                CallbackQueryHandler(pricing_back_navigation, pattern="^pricing_back$"),
-            ],
-            ADMIN_TIER_QUANTITY: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_tier_quantity)
-            ],
-            ADMIN_PRICING_EDIT: [
-                CallbackQueryHandler(edit_tier_selected, pattern="^edit_tier_")
-            ],
-            ADMIN_PRICING_DELETE: [
-                CallbackQueryHandler(delete_tier_selected, pattern="^delete_tier_"),
-                CallbackQueryHandler(confirm_delete_tier, pattern="^confirm_delete_"),
-            ],
-        },
-        fallbacks=[CallbackQueryHandler(admin_close, pattern="^admin_close$")],
-        name="pricing_conv",
-        persistent=False,
-        per_message=False
-    )
+    entry_points=[CommandHandler('pricing', admin_pricing_command)],
+    states={
+        ADMIN_SELECT_PRODUCT_PRICING: [
+            CallbackQueryHandler(select_product_for_pricing, pattern="^pricing_")
+        ],
+        ADMIN_PRICING_TIERS: [
+            CallbackQueryHandler(select_country_for_pricing, pattern="^pricing_country_")
+        ],
+        ADMIN_ADD_TIER: [
+            CallbackQueryHandler(add_tier_prompt, pattern="^pricing_add_tier$"),
+            CallbackQueryHandler(edit_tier_callback, pattern="^pricing_edit_tier$"),
+            CallbackQueryHandler(delete_tier_callback, pattern="^pricing_delete_tier$"),
+            CallbackQueryHandler(pricing_copy_callback, pattern="^pricing_copy$"),
+            CallbackQueryHandler(confirm_copy_tiers, pattern="^confirm_copy_tiers$"),
+            CallbackQueryHandler(pricing_back_navigation, pattern="^pricing_back$"),
+        ],
+        ADMIN_TIER_QUANTITY: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, receive_tier_quantity)
+        ],
+        ADMIN_TIER_PRICE: [  # 🆕 ÉTAT DÉDIÉ POUR SAISIE PRIX
+            MessageHandler(filters.TEXT & ~filters.COMMAND, receive_tier_price)
+        ],
+        ADMIN_PRICING_EDIT: [
+            CallbackQueryHandler(edit_tier_selected, pattern="^edit_tier_")
+        ],
+        ADMIN_PRICING_DELETE: [
+            CallbackQueryHandler(delete_tier_selected, pattern="^delete_tier_"),
+            CallbackQueryHandler(confirm_delete_tier, pattern="^confirm_delete_"),
+        ],
+    },
+    fallbacks=[CallbackQueryHandler(admin_close, pattern="^admin_close$")],
+    name="pricing_conv",
+    persistent=False,
+    per_message=False
+)
     
     # Enregistrer les handlers
     application.add_handler(conv_handler)

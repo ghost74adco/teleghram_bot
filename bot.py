@@ -6626,62 +6626,108 @@ async def add_tier_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ADMIN_TIER_QUANTITY
 
 @error_handler
+@error_handler
 async def receive_tier_quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Réception de la quantité pour le palier"""
-    try:
-        min_qty = int(update.message.text.strip())
-        if min_qty <= 0:
-            raise ValueError
-    except:
-        await update.message.reply_text("❌ Quantité invalide. Entrez un nombre entier positif.")
-        return ADMIN_TIER_QUANTITY  # ✅ Rester dans le même état pour réessayer
+    """Réception de la quantité minimale pour le palier"""
     
+    user_input = update.message.text.strip()
+    
+    # Log pour debug
+    logger.info(f"[PRICING] Quantité reçue: {user_input}")
+    
+    try:
+        min_qty = int(user_input)
+        if min_qty <= 0:
+            raise ValueError("Quantité doit être positive")
+    except ValueError as e:
+        logger.warning(f"[PRICING] Quantité invalide: {e}")
+        await update.message.reply_text(
+            "❌ *Quantité invalide*\n\n"
+            "Veuillez entrer un nombre entier positif.\n\n"
+            "_Exemple: 5_",
+            parse_mode='Markdown'
+        )
+        return ADMIN_TIER_QUANTITY  # Rester dans le même état
+    
+    # Sauvegarder la quantité
     context.user_data['tier_min_qty'] = min_qty
     
+    # Récupérer le contexte
     product_name = context.user_data.get('pricing_product')
     country = context.user_data.get('pricing_country')
     
     if not product_name or not country:
+        logger.error("[PRICING] Session expirée - product ou country manquant")
         await update.message.reply_text("❌ Session expirée. Utilisez /pricing pour recommencer.")
         return ConversationHandler.END
     
     flag = "🇫🇷" if country == "FR" else "🇨🇭"
     
-    text = f"💰 *{product_name}* {flag}\n\n➕ Palier à partir de {min_qty}g\n\nEntrez le prix (€/g) :\n\n_Exemple : 45_"
+    text = (
+        f"💰 *{product_name}* {flag}\n\n"
+        f"➕ Palier à partir de *{min_qty}g*\n\n"
+        f"Maintenant, entrez le prix par gramme (€/g) :\n\n"
+        f"_Exemple: 45_"
+    )
+    
+    logger.info(f"[PRICING] Passage à ADMIN_TIER_PRICE (état {ADMIN_TIER_PRICE})")
     
     await update.message.reply_text(text, parse_mode='Markdown')
-    return ADMIN_CONFIRM_PRODUCT
+    
+    return ADMIN_TIER_PRICE  # ⚠️ CRITIQUE : Retourner l'état 111
 
-@error_handler
 @error_handler
 async def receive_tier_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Réception du prix pour le palier"""
-    try:
-        price = float(update.message.text.strip())
-        if price <= 0:
-            raise ValueError
-    except:
-        await update.message.reply_text("❌ Prix invalide. Entrez un nombre positif.\n\n_Exemple : 45_", parse_mode='Markdown')
-        return ADMIN_TIER_PRICE  #
     
+    user_input = update.message.text.strip()
+    
+    # Log pour debug
+    logger.info(f"[PRICING] Prix reçu: {user_input}")
+    logger.info(f"[PRICING] État actuel: ADMIN_TIER_PRICE")
+    logger.info(f"[PRICING] user_data: {context.user_data}")
+    
+    try:
+        price = float(user_input.replace(',', '.'))  # Accepter virgule ou point
+        if price <= 0:
+            raise ValueError("Prix doit être positif")
+    except ValueError as e:
+        logger.warning(f"[PRICING] Prix invalide: {e}")
+        await update.message.reply_text(
+            "❌ *Prix invalide*\n\n"
+            "Veuillez entrer un nombre positif.\n\n"
+            "_Exemple: 45 ou 45.5_",
+            parse_mode='Markdown'
+        )
+        return ADMIN_TIER_PRICE  # Rester dans le même état
+    
+    # Récupérer le contexte
     product_name = context.user_data.get('pricing_product')
     country = context.user_data.get('pricing_country')
     min_qty = context.user_data.get('tier_min_qty')
     
     if not product_name or not country or not min_qty:
+        logger.error(f"[PRICING] Données manquantes - product:{product_name}, country:{country}, qty:{min_qty}")
         await update.message.reply_text("❌ Session expirée. Utilisez /pricing pour recommencer.")
         return ConversationHandler.END
     
+    # Ajouter le palier
+    logger.info(f"[PRICING] Ajout palier: {product_name} {country} {min_qty}g @ {price}€/g")
     success = add_pricing_tier(product_name, country, min_qty, price)
     
     if success:
         flag = "🇫🇷" if country == "FR" else "🇨🇭"
         tiers_display = get_pricing_tiers_display(product_name, country)
         
-        text = f"✅ *PALIER AJOUTÉ*\n\n💰 *{product_name}* {flag}\n\n*Paliers configurés :*\n{tiers_display}"
+        text = (
+            f"✅ *PALIER AJOUTÉ*\n\n"
+            f"💰 *{product_name}* {flag}\n\n"
+            f"*Paliers configurés :*\n{tiers_display}\n\n"
+            f"Que souhaitez-vous faire ?"
+        )
         
         keyboard = [
-            [InlineKeyboardButton("➕ Ajouter autre palier", callback_data="pricing_add_tier")],
+            [InlineKeyboardButton("➕ Ajouter un autre palier", callback_data="pricing_add_tier")],
             [InlineKeyboardButton("✅ Terminer", callback_data="pricing_back")]
         ]
         
@@ -6690,10 +6736,17 @@ async def receive_tier_price(update: Update, context: ContextTypes.DEFAULT_TYPE)
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode='Markdown'
         )
-        return ADMIN_ADD_TIER  #
+        
+        logger.info(f"[PRICING] Palier ajouté avec succès, retour à ADMIN_ADD_TIER")
+        return ADMIN_ADD_TIER
     else:
-        await update.message.reply_text("❌ Erreur lors de l'ajout du palier. Réessayez.")
-        return ADMIN_TIER_PRICE  #
+        logger.error(f"[PRICING] Échec ajout palier")
+        await update.message.reply_text(
+            "❌ *Erreur lors de l'ajout du palier*\n\n"
+            "Veuillez réessayer ou contactez l'administrateur.",
+            parse_mode='Markdown'
+        )
+        return ADMIN_TIER_PRICE  # Réessayer
 
 # ==================== 🆕 MODIFIER UN PALIER ====================
 
@@ -7728,7 +7781,7 @@ async def main_async():
         ADMIN_TIER_QUANTITY: [
             MessageHandler(filters.TEXT & ~filters.COMMAND, receive_tier_quantity)
         ],
-        ADMIN_TIER_PRICE: [  # 🆕 ÉTAT DÉDIÉ POUR SAISIE PRIX
+        ADMIN_TIER_PRICE: [  # ⚠️ CRITIQUE : Gérer l'état 111
             MessageHandler(filters.TEXT & ~filters.COMMAND, receive_tier_price)
         ],
         ADMIN_PRICING_EDIT: [
@@ -7739,7 +7792,10 @@ async def main_async():
             CallbackQueryHandler(confirm_delete_tier, pattern="^confirm_delete_"),
         ],
     },
-    fallbacks=[CallbackQueryHandler(admin_close, pattern="^admin_close$")],
+    fallbacks=[
+        CallbackQueryHandler(admin_close, pattern="^admin_close$"),
+        CommandHandler('cancel', lambda u, c: ConversationHandler.END)
+    ],
     name="pricing_conv",
     persistent=False,
     per_message=False

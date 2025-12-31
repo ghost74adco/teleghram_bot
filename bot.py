@@ -7696,20 +7696,19 @@ def create_client_conversation_handler():
                 CallbackQueryHandler(set_langue, pattern="^lang_")
             ],
             PAYS: [
-    # ✅ Gestion menu principal (après sélection langue)
-    CallbackQueryHandler(menu_navigation, pattern="^start_order$"),
-    CallbackQueryHandler(menu_navigation, pattern="^contact_admin$"),
-    CallbackQueryHandler(my_account, pattern="^my_account$"),
-    CallbackQueryHandler(voir_carte, pattern="^voir_carte$"),
-    CallbackQueryHandler(afficher_prix, pattern="^prix_"),
-    
-    # ✅ Choix du pays
-    CallbackQueryHandler(choix_pays, pattern="^country_"),
-    
-    # ✅ CORRECTION : back_to_main_menu gère le retour
-    CallbackQueryHandler(back_to_main_menu, pattern="^back_to_main_menu$"),
-    CallbackQueryHandler(back_to_country_choice, pattern="^back_to_country_choice$")
-],
+                # ✅ Gestion menu principal (après sélection langue)
+                CallbackQueryHandler(menu_navigation, pattern="^start_order$"),
+                CallbackQueryHandler(menu_navigation, pattern="^contact_admin$"),
+                CallbackQueryHandler(my_account, pattern="^my_account$"),
+                CallbackQueryHandler(voir_carte, pattern="^voir_carte$"),
+                CallbackQueryHandler(afficher_prix, pattern="^prix_"),
+                
+                # ✅ Choix du pays
+                CallbackQueryHandler(choix_pays, pattern="^country_"),
+                
+                # ✅ CORRECTION : back_to_main_menu gère le retour
+                CallbackQueryHandler(back_to_main_menu, pattern="^back_to_main_menu$"),
+                CallbackQueryHandler(back_to_country_choice, pattern="^back_to_country_choice$")
             ],
             PRODUIT: [
                 CallbackQueryHandler(choix_produit, pattern="^product_"),
@@ -7767,7 +7766,7 @@ def create_client_conversation_handler():
             CallbackQueryHandler(cancel, pattern="^cancel$")
         ],
         conversation_timeout=1800,
-        per_message=True,  # ✅ IMPORTANT
+        per_message=True,
         name="client_conversation",
         allow_reentry=True
     )

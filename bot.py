@@ -2215,6 +2215,7 @@ async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"👤 Langue: {lang_code} (User: {user_id})")
     logger.info(f"🔍 DEBUG set_langue - user_data: {context.user_data}")
     
+    # ✅ CORRECTION : Afficher directement le menu principal
     text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
     
     if user_id == ADMIN_ID:
@@ -2411,8 +2412,27 @@ async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
     
-    logger.info(f"🔍 DEBUG back_to_main_menu - Retourne PAYS ({PAYS})")
-    return PAYS
+    logger.info(f"🔍 DEBUG back_to_main_menu - Retourne LANGUE ({LANGUE})")
+    return LANGUE  # ✅ Retourner à LANGUE pour le menu principal
+```
+
+---
+
+## 📊 FLUX CORRIGÉ
+```
+/start
+  ↓
+LANGUE (sélection langue)
+  ↓ [lang_fr]
+set_langue() → LANGUE (menu principal affiché)
+  ↓ [start_order]
+menu_navigation() → PAYS (choix pays)
+  ↓ [country_FR]
+choix_pays() → PRODUIT
+  ↓
+...
+  ↓ [back_to_main_menu]
+back_to_main_menu() → LANGUE (menu principal)
 
 @error_handler
 async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2422,15 +2442,13 @@ async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     logger.info(f"👤 Nav: {query.data}")
     logger.info(f"🔍 DEBUG menu_navigation - user_data: {context.user_data}")
-    logger.info(f"🔍 DEBUG menu_navigation - Langue: {context.user_data.get('langue', 'NON DEFINIE')}")
     
+    # ✅ CORRECTION : Gérer contact_admin ici
     if query.data == "contact_admin":
         await query.message.edit_text(tr(context.user_data, "contact_message"), parse_mode='Markdown')
-        return CONTACT
+        return CONTACT  # ✅ Passer à l'état CONTACT
     
-    if query.data == "my_account":
-        return await my_account(update, context)
-    
+    # Vérifier horaires
     user_id = update.effective_user.id
     
     if not is_within_delivery_hours(user_id):
@@ -2442,6 +2460,7 @@ async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         hours_msg = ""
     
+    # ✅ Afficher choix du pays
     keyboard = [
         [InlineKeyboardButton(tr(context.user_data, "france"), callback_data="country_FR")],
         [InlineKeyboardButton(tr(context.user_data, "switzerland"), callback_data="country_CH")],
@@ -2452,7 +2471,7 @@ async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.message.edit_text(message_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     
     logger.info(f"🔍 DEBUG menu_navigation - Retourne PAYS ({PAYS})")
-    return PAYS
+    return PAYS  # ✅ Passer à l'état PAYS
 
 @error_handler
 async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -7215,7 +7234,12 @@ def create_client_conversation_handler():
         ],
         states={
             LANGUE: [
-                CallbackQueryHandler(set_langue, pattern="^lang_")
+                CallbackQueryHandler(set_langue, pattern="^lang_"),
+                # ✅ AJOUT : Gérer le menu principal dans l'état LANGUE
+                CallbackQueryHandler(voir_carte, pattern="^voir_carte$"),
+                CallbackQueryHandler(my_account, pattern="^my_account$"),
+                CallbackQueryHandler(menu_navigation, pattern="^contact_admin$"),
+                CallbackQueryHandler(menu_navigation, pattern="^start_order$"),  # ✅ Passer à PAYS
             ],
             PAYS: [
                 CallbackQueryHandler(menu_navigation, pattern="^start_order$"),
@@ -7277,7 +7301,7 @@ def create_client_conversation_handler():
             CONTACT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, contact_admin_handler)
             ]
-        },
+       },
         fallbacks=[
             CommandHandler("cancel", cancel),
             CallbackQueryHandler(cancel, pattern="^cancel$")

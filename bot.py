@@ -2109,39 +2109,65 @@ async def check_stocks_job(context: ContextTypes.DEFAULT_TYPE):
 
 # ==================== HANDLERS PRINCIPAUX ====================
 
-@error_handler
+
 @error_handler
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Commande /start - Point d'entrée principal"""
+    
+    # ✅ LOG CRITIQUE AU TOUT DÉBUT
+    logger.info("=" * 60)
+    logger.info("🚨🚨🚨 start_command APPELÉ 🚨🚨🚨")
+    logger.info(f"Update type: {type(update)}")
+    logger.info(f"Update: {update}")
+    
+    if not update.effective_user:
+        logger.error("❌ update.effective_user est None!")
+        return ConversationHandler.END
+    
     user = update.effective_user
     user_id = user.id
     is_admin = user_id == ADMIN_ID
     
-    logger.info(f"🔍 DEBUG start_command APPELÉ - user_id={user_id} - user_data: {context.user_data}")
+    logger.info(f"👤 USER_ID: {user_id}")
+    logger.info(f"🔑 IS_ADMIN: {is_admin}")
+    logger.info(f"🆔 ADMIN_ID: {ADMIN_ID}")
+    logger.info(f"📦 user_data AVANT: {context.user_data}")
+    logger.info("=" * 60)
     
-    # ✅ CORRECTION : Gérer CallbackQuery et Message
+    # ✅ Gérer CallbackQuery et Message
     if update.callback_query:
+        logger.info("✅ Mode: CallbackQuery")
         query = update.callback_query
         await query.answer()
         send_method = query.message.reply_text
         edit_method = query.message.edit_text
         chat_id = query.message.chat_id
         is_callback = True
-    else:
+    elif update.message:
+        logger.info("✅ Mode: Message")
         send_method = update.message.reply_text
         edit_method = None
         chat_id = update.message.chat_id
         is_callback = False
-    
-    # ✅ CORRECTION : Vérifier maintenance AVANT failover
-    # L'admin n'est JAMAIS bloqué par la maintenance
-    if not is_admin and is_maintenance_mode(user_id):
-        logger.info(f"⚠️ Client {user_id} bloqué par maintenance")
-        await send_maintenance_message(update, context)
+    else:
+        logger.error("❌ Ni callback_query ni message!")
         return ConversationHandler.END
     
-    # Gestion FAILOVER (uniquement pour les clients, pas l'admin)
+    # ✅ Vérifier maintenance
+    if not is_admin:
+        maintenance_active = is_maintenance_mode(user_id)
+        logger.info(f"🔧 Maintenance active: {maintenance_active}")
+        
+        if maintenance_active:
+            logger.warning(f"⚠️ Client {user_id} bloqué par maintenance")
+            await send_maintenance_message(update, context)
+            return ConversationHandler.END
+    else:
+        logger.info("🔑 Admin détecté - Skip maintenance check")
+    
+    # Gestion FAILOVER
     if IS_BACKUP_BOT and not is_admin:
+        logger.info("🔄 Vérification FAILOVER...")
         if is_primary_bot_down():
             failover_msg = f"{EMOJI_THEME['warning']} *BOT DE SECOURS ACTIF*\n\n⚠️ Le bot principal {PRIMARY_BOT_USERNAME} est temporairement indisponible.\n\n✅ Vous utilisez actuellement le bot de secours.\n\n_Vos commandes fonctionnent normalement._\n\n💡 Une fois le bot principal rétabli, vous pourrez y retourner."
             await send_method(failover_msg, parse_mode='Markdown')
@@ -2151,6 +2177,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Gestion utilisateur
     is_new = is_new_user(user_id)
+    logger.info(f"👤 Nouvel utilisateur: {is_new}")
+    
     if is_new:
         user_data_dict = {
             "username": user.username,
@@ -2159,17 +2187,17 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
         add_user(user_id, user_data_dict)
         asyncio.create_task(notify_admin_new_user(context, user_id, user_data_dict))
-        logger.info(f"🆕 Nouvel utilisateur: {user_id} (@{user.username})")
+        logger.info(f"🆕 Nouvel utilisateur enregistré: {user_id} (@{user.username})")
     else:
         update_user_visit(user_id)
-        logger.info(f"🔄 Utilisateur connu: {user_id}")
+        logger.info(f"🔄 Utilisateur connu mis à jour: {user_id}")
     
     bot_name = "BACKUP" if IS_BACKUP_BOT else "PRIMARY"
     logger.info(f"👤 [{bot_name}] /start: {user.first_name} (ID: {user.id}){' 🔑 ADMIN' if is_admin else ''}")
     
-    # ✅ Réinitialiser user_data
+    # Réinitialiser user_data
     context.user_data.clear()
-    logger.info(f"🔍 DEBUG start_command - user_data après clear: {context.user_data}")
+    logger.info(f"📦 user_data APRÈS clear: {context.user_data}")
     
     # Menu de sélection de langue
     keyboard = [
@@ -2182,61 +2210,40 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     text = "🌍 *Langue / Language / Sprache / Idioma / Lingua*"
     
-    # ✅ CORRECTION : Utiliser edit si callback, send sinon
-    if is_callback and edit_method:
-        try:
-            await edit_method(
-                text,
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode='Markdown'
-            )
-        except Exception:
+    logger.info("📤 Envoi du menu de langue...")
+    
+    # Envoyer le message
+    try:
+        if is_callback and edit_method:
+            try:
+                await edit_method(
+                    text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+                logger.info("✅ Message édité avec succès")
+            except Exception as e:
+                logger.warning(f"⚠️ Édition échouée, envoi nouveau message: {e}")
+                await send_method(
+                    text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+                logger.info("✅ Nouveau message envoyé")
+        else:
             await send_method(
                 text,
                 reply_markup=InlineKeyboardMarkup(keyboard),
                 parse_mode='Markdown'
             )
-    else:
-        await send_method(
-            text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
-        )
+            logger.info("✅ Message envoyé avec succès")
+    except Exception as e:
+        logger.error(f"❌ ERREUR lors de l'envoi du message: {e}", exc_info=True)
+        return ConversationHandler.END
     
-    logger.info(f"🔍 DEBUG start_command - Retourne LANGUE ({LANGUE})")
+    logger.info(f"🔍 Retourne LANGUE (valeur: {LANGUE})")
+    logger.info("=" * 60)
     return LANGUE
-@error_handler
-async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Définit la langue de l'utilisateur"""
-    query = update.callback_query
-    await query.answer()
-    lang_code = query.data.replace("lang_", "")
-    context.user_data['langue'] = lang_code
-    user_id = update.effective_user.id
-    
-    logger.info(f"👤 Langue sélectionnée: {lang_code} (User: {user_id})")
-    
-    # ✅ Afficher le menu principal
-    text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
-    
-    if user_id == ADMIN_ID:
-        text += f"\n\n🔑 *MODE ADMINISTRATEUR*\n{EMOJI_THEME['success']} Accès illimité 24h/24"
-    
-    keyboard = [
-        [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
-        [InlineKeyboardButton(tr(context.user_data, "pirate_card"), callback_data="voir_carte")],
-        [InlineKeyboardButton(tr(context.user_data, "my_account"), callback_data="my_account")],
-        [InlineKeyboardButton(tr(context.user_data, "contact_admin"), callback_data="contact_admin")]
-    ]
-    
-    await query.message.edit_text(
-        text,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
-    
-    logger.info(f"🔍 DEBUG set_langue - Retourne PAYS ({PAYS})")
-    return PAYS
 
 @error_handler
 async def my_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -7685,8 +7692,12 @@ async def notif_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ==================== CONVERSATION HANDLER CLIENT ====================
 
+# ==================== BLOC 9 : CONVERSATION HANDLERS ====================
+
 def create_client_conversation_handler():
     """Crée le ConversationHandler pour les clients"""
+    logger.info("🔧 Création du ConversationHandler CLIENT")
+    
     return ConversationHandler(
         entry_points=[
             CommandHandler("start", start_command),
@@ -7768,10 +7779,136 @@ def create_client_conversation_handler():
             CallbackQueryHandler(cancel, pattern="^cancel$")
         ],
         conversation_timeout=1800,
-        per_message=True,
+        per_message=False,  # ✅ CHANGÉ : False pour supporter MessageHandler
         name="client_conversation",
         allow_reentry=True
     )
+
+def create_admin_conversation_handler():
+    """Crée le ConversationHandler pour l'admin"""
+    logger.info("🔧 Création du ConversationHandler ADMIN")
+    
+    return ConversationHandler(
+        entry_points=[
+            CommandHandler("admin", admin_start),
+            CallbackQueryHandler(admin_start, pattern="^admin_menu$")
+        ],
+        states={
+            ADMIN_MENU: [
+                CallbackQueryHandler(admin_stock_menu, pattern="^admin_stock$"),
+                CallbackQueryHandler(admin_products_menu, pattern="^admin_products$"),
+                CallbackQueryHandler(admin_orders_menu, pattern="^admin_orders$"),
+                CallbackQueryHandler(admin_stats_menu, pattern="^admin_stats$"),
+                CallbackQueryHandler(admin_promo_menu, pattern="^admin_promo$"),
+                CallbackQueryHandler(admin_settings_menu, pattern="^admin_settings$"),
+                CallbackQueryHandler(admin_clients_menu, pattern="^admin_clients$"),
+                CallbackQueryHandler(broadcast_message_start, pattern="^admin_broadcast$")
+            ],
+            ADMIN_STOCK: [
+                CallbackQueryHandler(admin_view_all_stock, pattern="^view_all_stock$"),
+                CallbackQueryHandler(admin_update_stock_select, pattern="^update_stock$"),
+                CallbackQueryHandler(admin_add_stock_select, pattern="^add_stock$"),
+                CallbackQueryHandler(admin_remove_stock_select, pattern="^remove_stock$"),
+                CallbackQueryHandler(admin_start, pattern="^back_to_admin$")
+            ],
+            ADMIN_STOCK_PRODUCT_SELECT: [
+                CallbackQueryHandler(admin_stock_product_selected, pattern="^stock_product_"),
+                CallbackQueryHandler(admin_stock_menu, pattern="^back_to_stock_menu$")
+            ],
+            ADMIN_STOCK_INPUT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, admin_stock_input_handler),
+                CallbackQueryHandler(admin_stock_menu, pattern="^back_to_stock_menu$")
+            ],
+            ADMIN_PRODUCTS: [
+                CallbackQueryHandler(admin_toggle_product, pattern="^toggle_product_"),
+                CallbackQueryHandler(admin_start, pattern="^back_to_admin$")
+            ],
+            ADMIN_ORDERS: [
+                CallbackQueryHandler(admin_view_pending_orders, pattern="^view_pending$"),
+                CallbackQueryHandler(admin_view_completed_orders, pattern="^view_completed$"),
+                CallbackQueryHandler(admin_view_cancelled_orders, pattern="^view_cancelled$"),
+                CallbackQueryHandler(admin_search_order, pattern="^search_order$"),
+                CallbackQueryHandler(admin_start, pattern="^back_to_admin$")
+            ],
+            ADMIN_ORDER_SEARCH: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, admin_order_search_handler),
+                CallbackQueryHandler(admin_orders_menu, pattern="^back_to_orders$")
+            ],
+            ADMIN_STATS: [
+                CallbackQueryHandler(admin_view_daily_stats, pattern="^stats_daily$"),
+                CallbackQueryHandler(admin_view_weekly_stats, pattern="^stats_weekly$"),
+                CallbackQueryHandler(admin_view_monthly_stats, pattern="^stats_monthly$"),
+                CallbackQueryHandler(admin_view_all_time_stats, pattern="^stats_all$"),
+                CallbackQueryHandler(admin_view_top_clients, pattern="^stats_top_clients$"),
+                CallbackQueryHandler(admin_view_top_products, pattern="^stats_top_products$"),
+                CallbackQueryHandler(admin_start, pattern="^back_to_admin$")
+            ],
+            ADMIN_PROMO: [
+                CallbackQueryHandler(admin_list_promo_codes, pattern="^list_promos$"),
+                CallbackQueryHandler(admin_create_promo_start, pattern="^create_promo$"),
+                CallbackQueryHandler(admin_delete_promo_start, pattern="^delete_promo$"),
+                CallbackQueryHandler(admin_start, pattern="^back_to_admin$")
+            ],
+            ADMIN_PROMO_CREATE_CODE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, admin_promo_create_code_handler),
+                CallbackQueryHandler(admin_promo_menu, pattern="^back_to_promo$")
+            ],
+            ADMIN_PROMO_CREATE_DISCOUNT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, admin_promo_create_discount_handler),
+                CallbackQueryHandler(admin_promo_menu, pattern="^back_to_promo$")
+            ],
+            ADMIN_PROMO_CREATE_USAGE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, admin_promo_create_usage_handler),
+                CallbackQueryHandler(admin_promo_menu, pattern="^back_to_promo$")
+            ],
+            ADMIN_PROMO_DELETE: [
+                CallbackQueryHandler(admin_promo_delete_confirm, pattern="^delete_promo_code_"),
+                CallbackQueryHandler(admin_promo_menu, pattern="^back_to_promo$")
+            ],
+            ADMIN_SETTINGS: [
+                CallbackQueryHandler(admin_toggle_maintenance, pattern="^toggle_maintenance$"),
+                CallbackQueryHandler(admin_update_hours, pattern="^update_hours$"),
+                CallbackQueryHandler(admin_view_logs, pattern="^view_logs$"),
+                CallbackQueryHandler(admin_backup_data, pattern="^backup_data$"),
+                CallbackQueryHandler(admin_clear_cache, pattern="^clear_cache$"),
+                CallbackQueryHandler(admin_start, pattern="^back_to_admin$")
+            ],
+            ADMIN_HOURS_DAY: [
+                CallbackQueryHandler(admin_hours_day_selected, pattern="^hours_day_"),
+                CallbackQueryHandler(admin_settings_menu, pattern="^back_to_settings$")
+            ],
+            ADMIN_HOURS_INPUT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, admin_hours_input_handler),
+                CallbackQueryHandler(admin_settings_menu, pattern="^back_to_settings$")
+            ],
+            ADMIN_CLIENTS: [
+                CallbackQueryHandler(admin_view_all_clients, pattern="^view_all_clients$"),
+                CallbackQueryHandler(admin_search_client, pattern="^search_client$"),
+                CallbackQueryHandler(admin_view_vip_clients, pattern="^view_vip_clients$"),
+                CallbackQueryHandler(admin_client_stats, pattern="^client_stats_"),
+                CallbackQueryHandler(admin_start, pattern="^back_to_admin$")
+            ],
+            ADMIN_CLIENT_SEARCH: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, admin_client_search_handler),
+                CallbackQueryHandler(admin_clients_menu, pattern="^back_to_clients$")
+            ],
+            BROADCAST_MESSAGE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_message_handler),
+                CallbackQueryHandler(admin_start, pattern="^back_to_admin$")
+            ]
+        },
+        fallbacks=[
+            CommandHandler("cancel", cancel),
+            CallbackQueryHandler(cancel, pattern="^cancel$"),
+            CallbackQueryHandler(admin_start, pattern="^back_to_admin$")
+        ],
+        conversation_timeout=1800,
+        per_message=False,
+        name="admin_conversation",
+        allow_reentry=True
+    )
+
+# FIN DU BLOC 9
 
 # ==================== CONVERSATION HANDLER ADMIN ====================
 

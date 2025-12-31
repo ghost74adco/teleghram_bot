@@ -1538,6 +1538,17 @@ def format_cart(cart, user_data):
         text += f"• {item['produit']} x {item['quantite']}\n"
     return text
 
+def format_cart_summary(cart):
+    """Résumé rapide du panier (une ligne)"""
+    if not cart:
+        return "Vide"
+    
+    items = []
+    for item in cart:
+        items.append(f"{item['produit']} x{item['quantite']}g")
+    
+    return ", ".join(items)
+
 # 🎨 AMÉLIORATION 5 : Interface Carte Produit Style E-commerce
 def format_product_card(product_name, country, stock=None):
     """
@@ -3129,22 +3140,71 @@ async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return QUANTITE
     
+    # ✅ Ajouter au panier
+    if 'cart' not in context.user_data:
+        context.user_data['cart'] = []
+    
     context.user_data['cart'].append({
         "produit": product_name,
         "quantite": quantity
     })
     
+    logger.info(f"✅ Produit ajouté au panier : {product_name} x{quantity}")
+    
+    # ✅ ALLER DIRECTEMENT AU CHOIX DE LIVRAISON
+    country = context.user_data.get('pays')
+    cart = context.user_data.get('cart', [])
+    
+    # Calculer le sous-total
+    total_info = calculate_total(cart, country)
+    subtotal = total_info['subtotal']
+    
+    # Vérifier si Express est disponible
+    express_available = subtotal >= 30
+    
+    # Message de choix de livraison
+    text = f"{EMOJI_THEME['delivery']} *MODE DE LIVRAISON*\n\n"
+    text += f"🛒 *Panier :* {format_cart_summary(cart)}\n"
+    text += f"💰 *Sous-total :* {subtotal:.2f}€\n\n"
+    text += "Choisissez votre mode de livraison :\n\n"
+    
+    # 📮 POSTALE
+    text += f"📮 *Postale* : {FRAIS_POSTAL}€\n"
+    text += f"   ⏱️ Délai : 24h-48h\n"
+    text += f"   ✅ Toujours disponible\n\n"
+    
+    # 🚀 EXPRESS
+    if express_available:
+        text += f"{EMOJI_THEME['rocket']} *Express* : 10€/10km\n"
+        text += f"   ⏱️ Délai : 30min+\n"
+        text += f"   ✅ Disponible\n\n"
+    else:
+        text += f"{EMOJI_THEME['rocket']} *Express* : ❌ NON DISPONIBLE\n"
+        text += f"   💰 Min : 30€ (manque {30 - subtotal:.2f}€)\n\n"
+    
+    # 🤝 MEETUP
+    text += f"🤝 *Meetup* : {FRAIS_MEETUP}€\n"
+    text += f"   📍 Retrait en personne\n"
+    text += f"   ✅ Toujours disponible\n"
+    
+    # Clavier
     keyboard = [
-        [InlineKeyboardButton(tr(context.user_data, "add_more"), callback_data="add_more")],
-        [InlineKeyboardButton(tr(context.user_data, "proceed"), callback_data="proceed_checkout")]
+        [InlineKeyboardButton("📮 Postale", callback_data="livraison_postale")],
     ]
     
+    if express_available:
+        keyboard.append([InlineKeyboardButton(f"{EMOJI_THEME['rocket']} Express", callback_data="livraison_express")])
+    
+    keyboard.append([InlineKeyboardButton("🤝 Meetup (Retrait)", callback_data="livraison_meetup")])
+    keyboard.append([InlineKeyboardButton("🔙 Annuler", callback_data="back_to_main_menu")])
+    
     await update.message.reply_text(
-        format_cart(context.user_data['cart'], context.user_data),
+        text,
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
-    return CART_MENU
+    
+    return LIVRAISON
 
 @error_handler
 async def cart_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3245,7 +3305,7 @@ async def saisie_promo_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @error_handler
 async def saisie_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Saisie de l'adresse"""
+    """Saisie de l'adresse - Calcule les frais et va au paiement"""
     address = sanitize_input(update.message.text, 300)
     
     if len(address) < 15:
@@ -3255,28 +3315,53 @@ async def saisie_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['adresse'] = address
     logger.info(f"📍 Adresse saisie : {address}")
     
-    return await ask_livraison(update, context)
+    mode_livraison = context.user_data.get('mode_livraison')
     
-@error_handler
-async def back_to_country_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Retour au choix du pays"""
-    query = update.callback_query
-    await query.answer()
+    # ✅ Si POSTALE → Frais fixes, direct au paiement
+    if mode_livraison == 'postale':
+        text = f"{EMOJI_THEME['success']} *ADRESSE CONFIRMÉE*\n\n"
+        text += f"📍 {address}\n"
+        text += f"📮 Livraison postale : {FRAIS_POSTAL}€\n"
+        text += f"⏱️ Délai : 24h-48h\n\n"
+        text += "💳 *Choisissez votre mode de paiement :*"
+    
+    # ✅ Si EXPRESS → Calculer distance et frais
+    elif mode_livraison == 'express':
+        try:
+            distance = calculate_distance_simple(address)
+            frais = calculate_delivery_fee("express", distance, 0)
+        except Exception as e:
+            logger.error(f"Erreur calcul distance: {e}")
+            distance = 5
+            frais = 50
+        
+        context.user_data['frais_livraison'] = frais
+        context.user_data['distance'] = distance
+        
+        text = f"{EMOJI_THEME['success']} *ADRESSE CONFIRMÉE*\n\n"
+        text += f"📍 {address}\n"
+        text += f"{EMOJI_THEME['rocket']} Distance : {distance:.1f} km\n"
+        text += f"💰 Frais livraison : {frais}€\n"
+        text += f"⏱️ Délai : 30min+\n\n"
+        text += "💳 *Choisissez votre mode de paiement :*"
+    
+    else:
+        # Cas imprévu
+        text = "💳 *Choisissez votre mode de paiement :*"
     
     keyboard = [
-        [InlineKeyboardButton(tr(context.user_data, "france"), callback_data="country_FR")],
-        [InlineKeyboardButton(tr(context.user_data, "switzerland"), callback_data="country_CH")],
-        [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_main_menu")]
+        [InlineKeyboardButton("💵 Cash", callback_data="paiement_cash")],
+        [InlineKeyboardButton("₿ Crypto", callback_data="paiement_crypto")],
+        [InlineKeyboardButton("🔙 Modifier adresse", callback_data="back_to_address")]
     ]
     
-    await query.message.edit_text(
-        tr(context.user_data, "choose_country"),
+    await update.message.reply_text(
+        text,
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='Markdown'
     )
     
-    logger.info(f"✅ back_to_country_choice → PAYS")
-    return PAYS
+    return PAIEMENT
 
 @error_handler
 async def back_to_products(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3437,7 +3522,7 @@ async def ask_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @error_handler
 async def livraison_postale(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Gestion livraison postale"""
+    """Gestion livraison postale - DEMANDE L'ADRESSE"""
     query = update.callback_query
     await query.answer()
     
@@ -3448,20 +3533,15 @@ async def livraison_postale(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = f"{EMOJI_THEME['success']} *LIVRAISON POSTALE*\n\n"
     text += f"📮 Frais : {FRAIS_POSTAL}€\n"
     text += f"⏱️ Délai : 24h-48h\n\n"
-    text += "Choisissez votre mode de paiement :"
+    text += "📍 *Veuillez entrer votre adresse de livraison :*"
     
-    keyboard = [
-        [InlineKeyboardButton("💵 Cash", callback_data="paiement_cash")],
-        [InlineKeyboardButton("₿ Crypto", callback_data="paiement_crypto")],
-        [InlineKeyboardButton("🔙 Modifier livraison", callback_data="back_to_livraison")]
-    ]
+    await query.message.edit_text(text, parse_mode='Markdown')
     
-    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-    return PAIEMENT
+    return ADRESSE
 
 @error_handler
 async def livraison_express(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Gestion livraison express"""
+    """Gestion livraison express - DEMANDE L'ADRESSE"""
     query = update.callback_query
     await query.answer()
     
@@ -3473,71 +3553,48 @@ async def livraison_express(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if subtotal < 30:
         await query.answer(
-            f"{EMOJI_THEME['error']} Minimum 30€ pour la livraison Express\n\n"
-            f"Votre panier : {subtotal:.2f}€\n"
-            f"Il manque : {30 - subtotal:.2f}€",
+            f"{EMOJI_THEME['error']} Minimum 30€ pour Express",
             show_alert=True
         )
-        return await ask_livraison(update, context)
-    
-    adresse = context.user_data.get('adresse', '')
-    
-    try:
-        distance = calculate_distance_simple(adresse)
-        frais = calculate_delivery_fee("express", distance, subtotal)
-    except Exception as e:
-        logger.error(f"Erreur calcul distance: {e}")
-        frais = 50
-        distance = 5
+        return LIVRAISON
     
     context.user_data['mode_livraison'] = 'express'
-    context.user_data['frais_livraison'] = frais
-    context.user_data['distance'] = distance
     
     text = f"{EMOJI_THEME['success']} *LIVRAISON EXPRESS*\n\n"
-    text += f"{EMOJI_THEME['rocket']} Distance : {distance:.1f} km\n"
+    text += f"{EMOJI_THEME['rocket']} Délai : 30min+\n"
+    text += f"💰 Frais : 10€/10km (max 70€)\n\n"
+    text += "📍 *Veuillez entrer votre adresse de livraison :*"
     
-    if distance >= 25:
-        text += f"📊 Calcul : Arrondi dizaine supérieure\n"
-    else:
-        text += f"📊 Calcul : Arrondi dizaine inférieure\n"
+    await query.message.edit_text(text, parse_mode='Markdown')
     
-    text += f"{EMOJI_THEME['money']} Frais : {frais}€\n"
+    return ADRESSE
+
+@error_handler
+async def livraison_meetup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gestion livraison Meetup - PAS D'ADRESSE"""
+    query = update.callback_query
+    await query.answer()
     
-    if frais == 70:
-        text += f"   (Plafond max atteint)\n"
+    context.user_data['mode_livraison'] = 'meetup'
+    context.user_data['frais_livraison'] = FRAIS_MEETUP
+    context.user_data['adresse'] = "Meetup - Retrait en personne"
+    context.user_data['distance'] = 0
     
-    text += f"⏱️ Délai : 30min+\n\n"
-    text += "Choisissez votre mode de paiement :"
+    text = f"{EMOJI_THEME['success']} *MEETUP CONFIRMÉ*\n\n"
+    text += f"🤝 Mode : Retrait en personne\n"
+    text += f"{EMOJI_THEME['money']} Frais : {FRAIS_MEETUP}€\n\n"
+    text += f"📍 _L'adresse de retrait vous sera communiquée par message privé._\n\n"
+    text += "💳 *Choisissez votre mode de paiement :*"
     
     keyboard = [
         [InlineKeyboardButton("💵 Cash", callback_data="paiement_cash")],
         [InlineKeyboardButton("₿ Crypto", callback_data="paiement_crypto")],
-        [InlineKeyboardButton("🔙 Modifier livraison", callback_data="back_to_livraison")]
+        [InlineKeyboardButton("🔙 Modifier livraison", callback_data="back_to_livraison_from_meetup")]
     ]
     
     await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    
     return PAIEMENT
-
-@error_handler
-async def livraison_meetup(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Gestion de la livraison Meetup"""
-    query = update.callback_query
-    await query.answer()
-    
-    country = context.user_data.get('pays')
-    zones = get_available_meetup_zones(country)
-    
-    if not zones:
-        await query.message.edit_text(
-            f"{EMOJI_THEME['error']} Aucune zone de meetup disponible dans votre pays.\n\n"
-            "Veuillez choisir un autre mode de livraison.",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔙 Retour", callback_data="back_to_livraison")
-            ]]),
-            parse_mode='Markdown'
-        )
-        return LIVRAISON
     
     text = "🤝 *MEETUP - RENCONTRE EN PERSONNE*\n\n"
     text += "Choisissez votre zone de rencontre :\n\n"
@@ -3600,6 +3657,66 @@ async def meetup_zone_selected(update: Update, context: ContextTypes.DEFAULT_TYP
 async def back_to_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Retour au choix de livraison"""
     return await ask_livraison(update, context)
+
+@error_handler
+async def back_to_livraison_from_meetup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Retour au choix de livraison depuis le paiement"""
+    query = update.callback_query
+    await query.answer()
+    
+    country = context.user_data.get('pays')
+    cart = context.user_data.get('cart', [])
+    
+    # Calculer le sous-total
+    total_info = calculate_total(cart, country)
+    subtotal = total_info['subtotal']
+    
+    # Vérifier si Express est disponible
+    express_available = subtotal >= 30
+    
+    # Message de choix de livraison
+    text = f"{EMOJI_THEME['delivery']} *MODE DE LIVRAISON*\n\n"
+    text += f"🛒 *Panier :* {format_cart_summary(cart)}\n"
+    text += f"💰 *Sous-total :* {subtotal:.2f}€\n\n"
+    text += "Choisissez votre mode de livraison :\n\n"
+    
+    # 📮 POSTALE
+    text += f"📮 *Postale* : {FRAIS_POSTAL}€\n"
+    text += f"   ⏱️ Délai : 24h-48h\n"
+    text += f"   ✅ Toujours disponible\n\n"
+    
+    # 🚀 EXPRESS
+    if express_available:
+        text += f"{EMOJI_THEME['rocket']} *Express* : 10€/10km\n"
+        text += f"   ⏱️ Délai : 30min+\n"
+        text += f"   ✅ Disponible\n\n"
+    else:
+        text += f"{EMOJI_THEME['rocket']} *Express* : ❌ NON DISPONIBLE\n"
+        text += f"   💰 Min : 30€ (manque {30 - subtotal:.2f}€)\n\n"
+    
+    # 🤝 MEETUP
+    text += f"🤝 *Meetup* : {FRAIS_MEETUP}€\n"
+    text += f"   📍 Retrait en personne\n"
+    text += f"   ✅ Toujours disponible\n"
+    
+    # Clavier
+    keyboard = [
+        [InlineKeyboardButton("📮 Postale", callback_data="livraison_postale")],
+    ]
+    
+    if express_available:
+        keyboard.append([InlineKeyboardButton(f"{EMOJI_THEME['rocket']} Express", callback_data="livraison_express")])
+    
+    keyboard.append([InlineKeyboardButton("🤝 Meetup (Retrait)", callback_data="livraison_meetup")])
+    keyboard.append([InlineKeyboardButton("🔙 Annuler", callback_data="back_to_main_menu")])
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    return LIVRAISON
 
 @error_handler
 async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -7800,8 +7917,10 @@ def create_client_conversation_handler():
                 CallbackQueryHandler(back_to_cart, pattern="^back_to_cart$")
             ],
             PAIEMENT: [
-                CallbackQueryHandler(choix_paiement, pattern="^paiement_"),
-                CallbackQueryHandler(back_to_livraison, pattern="^back_to_livraison$")
+    CallbackQueryHandler(choix_paiement, pattern="^paiement_"),
+    CallbackQueryHandler(back_to_livraison_from_meetup, pattern="^back_to_livraison_from_meetup$"),
+    CallbackQueryHandler(back_to_livraison, pattern="^back_to_livraison$")
+],
             ],
             CONFIRMATION: [
                 CallbackQueryHandler(confirmation_commande, pattern="^confirm_order$"),

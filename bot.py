@@ -2110,13 +2110,14 @@ async def check_stocks_job(context: ContextTypes.DEFAULT_TYPE):
 # ==================== HANDLERS PRINCIPAUX ====================
 
 @error_handler
+@error_handler
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Commande /start - Point d'entrée principal"""
     user = update.effective_user
     user_id = user.id
     is_admin = user_id == ADMIN_ID
     
-    logger.info(f"🔍 DEBUG start_command APPELÉ - user_data: {context.user_data}")
+    logger.info(f"🔍 DEBUG start_command APPELÉ - user_id={user_id} - user_data: {context.user_data}")
     
     # ✅ CORRECTION : Gérer CallbackQuery et Message
     if update.callback_query:
@@ -2132,20 +2133,21 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = update.message.chat_id
         is_callback = False
     
-    # Gestion FAILOVER
-    if IS_BACKUP_BOT:
+    # ✅ CORRECTION : Vérifier maintenance AVANT failover
+    # L'admin n'est JAMAIS bloqué par la maintenance
+    if not is_admin and is_maintenance_mode(user_id):
+        logger.info(f"⚠️ Client {user_id} bloqué par maintenance")
+        await send_maintenance_message(update, context)
+        return ConversationHandler.END
+    
+    # Gestion FAILOVER (uniquement pour les clients, pas l'admin)
+    if IS_BACKUP_BOT and not is_admin:
         if is_primary_bot_down():
-            if not is_admin:
-                failover_msg = f"{EMOJI_THEME['warning']} *BOT DE SECOURS ACTIF*\n\n⚠️ Le bot principal {PRIMARY_BOT_USERNAME} est temporairement indisponible.\n\n✅ Vous utilisez actuellement le bot de secours.\n\n_Vos commandes fonctionnent normalement._\n\n💡 Une fois le bot principal rétabli, vous pourrez y retourner."
-                await send_method(failover_msg, parse_mode='Markdown')
+            failover_msg = f"{EMOJI_THEME['warning']} *BOT DE SECOURS ACTIF*\n\n⚠️ Le bot principal {PRIMARY_BOT_USERNAME} est temporairement indisponible.\n\n✅ Vous utilisez actuellement le bot de secours.\n\n_Vos commandes fonctionnent normalement._\n\n💡 Une fois le bot principal rétabli, vous pourrez y retourner."
+            await send_method(failover_msg, parse_mode='Markdown')
         else:
-            if not is_admin:
-                suggestion = f"💡 *INFORMATION*\n\nLe bot principal {PRIMARY_BOT_USERNAME} est disponible.\n\n_Vous pouvez l'utiliser pour une meilleure expérience._\n\n👉 Cliquez ici : {PRIMARY_BOT_USERNAME}\n\n✅ Ou continuez sur ce bot de secours."
-                await send_method(suggestion, parse_mode='Markdown')
-    else:
-        if is_maintenance_mode(user_id):
-            await send_maintenance_message(update, context)
-            return ConversationHandler.END
+            suggestion = f"💡 *INFORMATION*\n\nLe bot principal {PRIMARY_BOT_USERNAME} est disponible.\n\n_Vous pouvez l'utiliser pour une meilleure expérience._\n\n👉 Cliquez ici : {PRIMARY_BOT_USERNAME}\n\n✅ Ou continuez sur ce bot de secours."
+            await send_method(suggestion, parse_mode='Markdown')
     
     # Gestion utilisateur
     is_new = is_new_user(user_id)
@@ -2165,6 +2167,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bot_name = "BACKUP" if IS_BACKUP_BOT else "PRIMARY"
     logger.info(f"👤 [{bot_name}] /start: {user.first_name} (ID: {user.id}){' 🔑 ADMIN' if is_admin else ''}")
     
+    # ✅ Réinitialiser user_data
     context.user_data.clear()
     logger.info(f"🔍 DEBUG start_command - user_data après clear: {context.user_data}")
     
@@ -2202,7 +2205,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     logger.info(f"🔍 DEBUG start_command - Retourne LANGUE ({LANGUE})")
     return LANGUE
-
 @error_handler
 async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Définit la langue de l'utilisateur"""

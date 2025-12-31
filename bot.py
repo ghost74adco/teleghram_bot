@@ -2380,9 +2380,14 @@ async def afficher_prix(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @error_handler
 async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Retour au menu principal"""
+    """✅ CORRECTION : Retour au menu principal SANS boucle"""
     query = update.callback_query
     await query.answer()
+    
+    # ✅ Réinitialiser le panier
+    context.user_data['cart'] = []
+    context.user_data.pop('promo_code', None)
+    context.user_data.pop('promo_discount', None)
     
     user_id = update.effective_user.id
     text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
@@ -2409,9 +2414,8 @@ async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
     
-    # ✅ CRITIQUE : Retourner à PAYS (menu principal)
     logger.info(f"✅ back_to_main_menu → PAYS")
-    return PAYS
+    return PAYS  #
 
 
 @error_handler
@@ -2526,10 +2530,429 @@ async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"✅ choix_pays → PRODUIT")
     return PRODUIT  # ✅ Passer au choix de produit
 
-# FIN DU BLOC 4 - PARTIE 1
+# ==================== BLOC 4 : HANDLERS CLIENTS ET NAVIGATION (CORRIGÉ) ====================
+# Ajoutez ce bloc APRÈS le BLOC 3
 
-# ==================== BLOC 4 PARTIE 2 : PRODUITS, QUANTITÉS ET PANIER ====================
-# Suite du BLOC 4
+# ==================== HANDLERS PRINCIPAUX ====================
+
+@error_handler
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /start - Point d'entrée principal"""
+    user = update.effective_user
+    user_id = user.id
+    is_admin = user_id == ADMIN_ID
+    
+    logger.info(f"🔍 DEBUG start_command APPELÉ - user_data: {context.user_data}")
+    
+    # ✅ CORRECTION : Gérer CallbackQuery et Message
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        send_method = query.message.reply_text
+        edit_method = query.message.edit_text
+        chat_id = query.message.chat_id
+        is_callback = True
+    else:
+        send_method = update.message.reply_text
+        edit_method = None
+        chat_id = update.message.chat_id
+        is_callback = False
+    
+    # Gestion FAILOVER
+    if IS_BACKUP_BOT:
+        if is_primary_bot_down():
+            if not is_admin:
+                failover_msg = f"{EMOJI_THEME['warning']} *BOT DE SECOURS ACTIF*\n\n⚠️ Le bot principal {PRIMARY_BOT_USERNAME} est temporairement indisponible.\n\n✅ Vous utilisez actuellement le bot de secours.\n\n_Vos commandes fonctionnent normalement._\n\n💡 Une fois le bot principal rétabli, vous pourrez y retourner."
+                await send_method(failover_msg, parse_mode='Markdown')
+        else:
+            if not is_admin:
+                suggestion = f"💡 *INFORMATION*\n\nLe bot principal {PRIMARY_BOT_USERNAME} est disponible.\n\n_Vous pouvez l'utiliser pour une meilleure expérience._\n\n👉 Cliquez ici : {PRIMARY_BOT_USERNAME}\n\n✅ Ou continuez sur ce bot de secours."
+                await send_method(suggestion, parse_mode='Markdown')
+    else:
+        if is_maintenance_mode(user_id):
+            await send_maintenance_message(update, context)
+            return ConversationHandler.END
+    
+    # Gestion utilisateur
+    is_new = is_new_user(user_id)
+    if is_new:
+        user_data_dict = {
+            "username": user.username,
+            "first_name": user.first_name,
+            "last_name": user.last_name
+        }
+        add_user(user_id, user_data_dict)
+        asyncio.create_task(notify_admin_new_user(context, user_id, user_data_dict))
+        logger.info(f"🆕 Nouvel utilisateur: {user_id} (@{user.username})")
+    else:
+        update_user_visit(user_id)
+        logger.info(f"🔄 Utilisateur connu: {user_id}")
+    
+    bot_name = "BACKUP" if IS_BACKUP_BOT else "PRIMARY"
+    logger.info(f"👤 [{bot_name}] /start: {user.first_name} (ID: {user.id}){' 🔑 ADMIN' if is_admin else ''}")
+    
+    context.user_data.clear()
+    logger.info(f"🔍 DEBUG start_command - user_data après clear: {context.user_data}")
+    
+    # Menu de sélection de langue
+    keyboard = [
+        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
+        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
+        [InlineKeyboardButton("🇩🇪 Deutsch", callback_data="lang_de")],
+        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
+        [InlineKeyboardButton("🇮🇹 Italiano", callback_data="lang_it")]
+    ]
+    
+    text = "🌍 *Langue / Language / Sprache / Idioma / Lingua*"
+    
+    # ✅ CORRECTION : Utiliser edit si callback, send sinon
+    if is_callback and edit_method:
+        try:
+            await edit_method(
+                text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+        except Exception:
+            await send_method(
+                text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+    else:
+        await send_method(
+            text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    
+    logger.info(f"🔍 DEBUG start_command - Retourne LANGUE ({LANGUE})")
+    return LANGUE
+
+@error_handler
+async def set_langue(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Définit la langue de l'utilisateur"""
+    query = update.callback_query
+    await query.answer()
+    lang_code = query.data.replace("lang_", "")
+    context.user_data['langue'] = lang_code
+    user_id = update.effective_user.id
+    
+    logger.info(f"👤 Langue sélectionnée: {lang_code} (User: {user_id})")
+    
+    # ✅ Afficher le menu principal
+    text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
+    
+    if user_id == ADMIN_ID:
+        text += f"\n\n🔑 *MODE ADMINISTRATEUR*\n{EMOJI_THEME['success']} Accès illimité 24h/24"
+    
+    keyboard = [
+        [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
+        [InlineKeyboardButton(tr(context.user_data, "pirate_card"), callback_data="voir_carte")],
+        [InlineKeyboardButton(tr(context.user_data, "my_account"), callback_data="my_account")],
+        [InlineKeyboardButton(tr(context.user_data, "contact_admin"), callback_data="contact_admin")]
+    ]
+    
+    await query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    logger.info(f"🔍 DEBUG set_langue - Retourne PAYS ({PAYS})")
+    return PAYS
+
+@error_handler
+async def back_to_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """✅ CORRECTION : Retour au menu principal SANS boucle"""
+    query = update.callback_query
+    await query.answer()
+    
+    # ✅ Réinitialiser le panier
+    context.user_data['cart'] = []
+    context.user_data.pop('promo_code', None)
+    context.user_data.pop('promo_discount', None)
+    
+    user_id = update.effective_user.id
+    text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
+    
+    if user_id == ADMIN_ID:
+        text += f"\n\n🔑 *MODE ADMINISTRATEUR*\n{EMOJI_THEME['success']} Accès illimité 24h/24"
+    
+    keyboard = [
+        [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
+        [InlineKeyboardButton(tr(context.user_data, "pirate_card"), callback_data="voir_carte")],
+        [InlineKeyboardButton(tr(context.user_data, "my_account"), callback_data="my_account")],
+        [InlineKeyboardButton(tr(context.user_data, "contact_admin"), callback_data="contact_admin")]
+    ]
+    
+    try:
+        await query.message.delete()
+    except:
+        pass
+    
+    await context.bot.send_message(
+        chat_id=query.message.chat_id,
+        text=text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    logger.info(f"✅ back_to_main_menu → PAYS")
+    return PAYS  # ✅ RETOURNE PAYS, PAS LANGUE
+
+@error_handler
+async def my_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche le compte utilisateur"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = update.effective_user.id
+    stats = get_client_stats(user_id)
+    referral_stats = get_referral_stats(user_id)
+    
+    text = f"{EMOJI_THEME['vip']} *MON COMPTE*\n\n"
+    
+    if stats:
+        if stats['vip_status']:
+            badge = f"{EMOJI_THEME['diamond']} VIP DIAMOND"
+            text += f"┏━━━━━━━━━━━━━━━━━━━━━┓\n"
+            text += f"┃  {badge}  ┃\n"
+            text += f"┗━━━━━━━━━━━━━━━━━━━━━┛\n\n"
+        else:
+            badge = "👤 MEMBRE STANDARD"
+            text += f"{badge}\n\n"
+        
+        text += f"{EMOJI_THEME['money']} *Total dépensé :* {stats['total_spent']:.2f}€\n"
+        text += f"{EMOJI_THEME['product']} *Commandes :* {stats['orders_count']}\n\n"
+        
+        if not stats['vip_status']:
+            remaining = VIP_THRESHOLD - stats['total_spent']
+            progress_bar = create_progress_bar(stats['total_spent'], VIP_THRESHOLD, length=15)
+            text += f"{EMOJI_THEME['target']} *PROGRESSION VIP*\n"
+            text += f"{progress_bar}\n"
+            text += f"_Encore {remaining:.2f}€ pour devenir VIP_\n\n"
+        else:
+            text += f"{EMOJI_THEME['vip']} *AVANTAGES VIP*\n"
+            text += f"• {EMOJI_THEME['success']} Réduction de {VIP_DISCOUNT}% permanente\n"
+            text += f"• {EMOJI_THEME['star']} Accès prioritaire\n"
+            text += f"• {EMOJI_THEME['gift']} Offres exclusives\n\n"
+        
+        if stats.get('top_products'):
+            text += f"{EMOJI_THEME['star']} *Produits préférés :*\n"
+            for i, (product, count) in enumerate(stats['top_products'], 1):
+                if i == 1:
+                    text += f"{EMOJI_THEME['trophy']} "
+                elif i == 2:
+                    text += f"{EMOJI_THEME['medal']} "
+                else:
+                    text += f"{EMOJI_THEME['star']} "
+                text += f"{product} ({count}x)\n"
+            text += "\n"
+    else:
+        text += f"_Aucune commande pour le moment_\n\n"
+        text += f"{EMOJI_THEME['gift']} _Passez votre première commande pour débloquer des avantages !_\n\n"
+    
+    if referral_stats:
+        text += f"{EMOJI_THEME['target']} *PARRAINAGE*\n"
+        text += f"Code : `{referral_stats['referral_code']}`\n"
+        text += f"{EMOJI_THEME['gift']} Filleuls : {len(referral_stats.get('referred_users', []))}\n"
+        text += f"{EMOJI_THEME['money']} Gains : {referral_stats.get('earnings', 0):.2f}€\n\n"
+        
+        if referral_stats.get('referred_by'):
+            text += f"👥 Parrainé par : `{referral_stats['referred_by']}`\n"
+    
+    keyboard = [[InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_main_menu")]]
+    
+    await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+    return PAYS
+
+@error_handler
+async def voir_carte(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche le menu de la carte des prix"""
+    query = update.callback_query
+    await query.answer()
+    
+    keyboard = [
+        [InlineKeyboardButton(tr(context.user_data, "prices_france"), callback_data="prix_france")],
+        [InlineKeyboardButton(tr(context.user_data, "prices_switzerland"), callback_data="prix_suisse")],
+        [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_main_menu")]
+    ]
+    
+    try:
+        await query.message.delete()
+    except:
+        pass
+    
+    await context.bot.send_message(
+        chat_id=query.message.chat_id,
+        text=tr(context.user_data, "choose_country_prices"),
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    return PAYS
+
+@error_handler
+async def afficher_prix(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche les prix pour un pays"""
+    query = update.callback_query
+    await query.answer()
+    
+    if query.data == "prix_france":
+        text = tr(context.user_data, "price_list_fr") + get_formatted_price_list("fr")
+        image_path = IMAGE_PRIX_FRANCE
+    else:
+        text = tr(context.user_data, "price_list_ch") + get_formatted_price_list("ch")
+        image_path = IMAGE_PRIX_SUISSE
+    
+    keyboard = [
+        [InlineKeyboardButton(tr(context.user_data, "back_to_card"), callback_data="voir_carte")],
+        [InlineKeyboardButton(tr(context.user_data, "main_menu_btn"), callback_data="back_to_main_menu")]
+    ]
+    
+    try:
+        await query.message.delete()
+    except:
+        pass
+    
+    if image_path.exists():
+        try:
+            with open(image_path, 'rb') as photo:
+                await context.bot.send_photo(
+                    chat_id=query.message.chat_id,
+                    photo=photo,
+                    caption=text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+        except Exception as e:
+            logger.error(f"Erreur envoi image: {e}")
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text=text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+    else:
+        logger.warning(f"⚠️ Image non trouvée : {image_path}")
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text=text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    return PAYS
+
+@error_handler
+async def menu_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Navigation dans le menu de commande"""
+    query = update.callback_query
+    await query.answer()
+    
+    logger.info(f"📍 menu_navigation appelé - callback_data: {query.data}")
+    
+    # ✅ Gestion contact admin
+    if query.data == "contact_admin":
+        await query.message.edit_text(
+            tr(context.user_data, "contact_message"),
+            parse_mode='Markdown'
+        )
+        logger.info(f"✅ menu_navigation → CONTACT")
+        return CONTACT
+    
+    # ✅ Si start_order, on affiche le choix du pays
+    if query.data == "start_order":
+        user_id = update.effective_user.id
+        
+        # Vérifier horaires
+        if not is_within_delivery_hours(user_id):
+            if user_id == ADMIN_ID:
+                hours_msg = f"\n\n{EMOJI_THEME['warning']} *MODE ADMIN* - Horaires fermés\nHoraires : {get_horaires_text()}"
+            else:
+                await query.message.edit_text(
+                    tr(context.user_data, "outside_hours"),
+                    parse_mode='Markdown'
+                )
+                return ConversationHandler.END
+        else:
+            hours_msg = ""
+        
+        # ✅ Afficher choix du pays
+        keyboard = [
+            [InlineKeyboardButton(tr(context.user_data, "france"), callback_data="country_FR")],
+            [InlineKeyboardButton(tr(context.user_data, "switzerland"), callback_data="country_CH")],
+            [InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_main_menu")]
+        ]
+        
+        message_text = tr(context.user_data, "choose_country") + hours_msg
+        await query.message.edit_text(
+            message_text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        
+        logger.info(f"✅ menu_navigation → PAYS (choix pays)")
+        return PAYS
+    
+    # ✅ Cas par défaut (ne devrait pas arriver)
+    logger.warning(f"⚠️ menu_navigation - callback non géré: {query.data}")
+    return PAYS
+
+@error_handler
+async def choix_pays(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Choix du pays"""
+    query = update.callback_query
+    await query.answer()
+    
+    # ✅ Extraire le pays
+    context.user_data['pays'] = query.data.replace("country_", "")
+    context.user_data['cart'] = []
+    context.user_data['promo_code'] = None
+    
+    logger.info(f"🌍 Pays sélectionné: {context.user_data['pays']}")
+    
+    available = get_available_products()
+    keyboard = []
+    has_pills = False
+    has_crystals = False
+    
+    for product_name in sorted(available):
+        if not is_in_stock(product_name, 1):
+            continue
+        
+        code = None
+        for c, name in PRODUCT_CODES.items():
+            if name == product_name:
+                code = c
+                break
+        
+        if not code:
+            continue
+        
+        if product_name in PILL_SUBCATEGORIES.values():
+            has_pills = True
+        elif product_name in ROCK_SUBCATEGORIES.values():
+            has_crystals = True
+        else:
+            keyboard.append([InlineKeyboardButton(product_name, callback_data=f"product_{code}")])
+    
+    if has_pills:
+        keyboard.insert(0, [InlineKeyboardButton("💊 Pills", callback_data="product_pill")])
+    
+    if has_crystals:
+        keyboard.append([InlineKeyboardButton("🪨 Crystal", callback_data="product_rock")])
+    
+    keyboard.append([InlineKeyboardButton(tr(context.user_data, "back"), callback_data="back_to_country_choice")])
+    keyboard.append([InlineKeyboardButton(tr(context.user_data, "main_menu_btn"), callback_data="back_to_main_menu")])
+    
+    await query.message.edit_text(
+        tr(context.user_data, "choose_product"),
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+    
+    logger.info(f"✅ choix_pays → PRODUIT")
+    return PRODUIT
 
 @error_handler
 async def choix_produit(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2840,7 +3263,6 @@ async def back_to_country_choice(update: Update, context: ContextTypes.DEFAULT_T
         parse_mode='Markdown'
     )
     
-    # ✅ CRITIQUE : Rester dans PAYS (choix pays affiché)
     logger.info(f"✅ back_to_country_choice → PAYS")
     return PAYS
 
@@ -2917,11 +3339,6 @@ async def back_to_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     return CART_MENU
-
-# FIN DE LA PARTIE 2
-
-# ==================== BLOC 4 PARTIE 3 : LIVRAISON, PAIEMENT ET CONFIRMATION ====================
-# Fin du BLOC 4
 
 @error_handler
 async def ask_livraison(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3183,7 +3600,44 @@ async def choix_paiement(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.message.edit_text(summary, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return CONFIRMATION
 
-# FIN DU BLOC 4 COMPLET
+@error_handler
+async def contact_admin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gestion du contact avec l'admin"""
+    user = update.effective_user
+    message_text = sanitize_input(update.message.text, 1000)
+    
+    # Préparer le message pour l'admin
+    admin_notification = f"{EMOJI_THEME['info']} *NOUVEAU MESSAGE CLIENT*\n\n"
+    admin_notification += f"👤 *De :* {user.first_name}"
+    if user.username:
+        admin_notification += f" (@{user.username})"
+    admin_notification += f"\n🆔 *ID :* `{user.id}`\n\n"
+    admin_notification += f"💬 *Message :*\n{message_text}"
+    
+    try:
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=admin_notification,
+            parse_mode='Markdown'
+        )
+        
+        # Confirmation au client
+        await update.message.reply_text(
+            tr(context.user_data, "contact_sent"),
+            parse_mode='Markdown'
+        )
+        
+        logger.info(f"📧 Message envoyé à l'admin de {user.id}")
+    except Exception as e:
+        logger.error(f"Erreur envoi message admin: {e}")
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} Erreur lors de l'envoi du message. Veuillez réessayer.",
+            parse_mode='Markdown'
+        )
+    
+    return ConversationHandler.END
+
+# FIN DU BLOC 4 CORRIGÉ
 
 # ==================== BLOC 5 : CONFIRMATION, CONTACT ET HANDLERS FINAUX ====================
 # Ajoutez ce bloc APRÈS le BLOC 4
@@ -7242,19 +7696,20 @@ def create_client_conversation_handler():
                 CallbackQueryHandler(set_langue, pattern="^lang_")
             ],
             PAYS: [
-                # ✅ Gestion menu principal (après sélection langue)
-                CallbackQueryHandler(menu_navigation, pattern="^start_order$"),
-                CallbackQueryHandler(menu_navigation, pattern="^contact_admin$"),
-                CallbackQueryHandler(my_account, pattern="^my_account$"),
-                CallbackQueryHandler(voir_carte, pattern="^voir_carte$"),
-                CallbackQueryHandler(afficher_prix, pattern="^prix_"),
-                
-                # ✅ Choix du pays
-                CallbackQueryHandler(choix_pays, pattern="^country_"),
-                
-                # ✅ Navigation
-                CallbackQueryHandler(back_to_main_menu, pattern="^back_to_main_menu$"),
-                CallbackQueryHandler(back_to_country_choice, pattern="^back_to_country_choice$")
+    # ✅ Gestion menu principal (après sélection langue)
+    CallbackQueryHandler(menu_navigation, pattern="^start_order$"),
+    CallbackQueryHandler(menu_navigation, pattern="^contact_admin$"),
+    CallbackQueryHandler(my_account, pattern="^my_account$"),
+    CallbackQueryHandler(voir_carte, pattern="^voir_carte$"),
+    CallbackQueryHandler(afficher_prix, pattern="^prix_"),
+    
+    # ✅ Choix du pays
+    CallbackQueryHandler(choix_pays, pattern="^country_"),
+    
+    # ✅ CORRECTION : back_to_main_menu gère le retour
+    CallbackQueryHandler(back_to_main_menu, pattern="^back_to_main_menu$"),
+    CallbackQueryHandler(back_to_country_choice, pattern="^back_to_country_choice$")
+],
             ],
             PRODUIT: [
                 CallbackQueryHandler(choix_produit, pattern="^product_"),

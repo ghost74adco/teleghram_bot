@@ -7917,10 +7917,9 @@ def create_client_conversation_handler():
                 CallbackQueryHandler(back_to_cart, pattern="^back_to_cart$")
             ],
             PAIEMENT: [
-    CallbackQueryHandler(choix_paiement, pattern="^paiement_"),
-    CallbackQueryHandler(back_to_livraison_from_meetup, pattern="^back_to_livraison_from_meetup$"),
-    CallbackQueryHandler(back_to_livraison, pattern="^back_to_livraison$")
-],
+                CallbackQueryHandler(choix_paiement, pattern="^paiement_"),
+                CallbackQueryHandler(back_to_livraison_from_meetup, pattern="^back_to_livraison_from_meetup$"),
+                CallbackQueryHandler(back_to_livraison, pattern="^back_to_livraison$")
             ],
             CONFIRMATION: [
                 CallbackQueryHandler(confirmation_commande, pattern="^confirm_order$"),

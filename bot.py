@@ -7238,41 +7238,34 @@ def create_client_conversation_handler():
             CommandHandler("cancel", cancel),
             CallbackQueryHandler(cancel, pattern="^cancel$")
         ],
-        conversation_timeout=1800,  # 30 minutes
+        conversation_timeout=1800,
         per_message=False,
         name="client_conversation",
         allow_reentry=True
     )
 
-# ==================== CONVERSATION HANDLER ADMIN - VERSION COMPLÈTE CORRIGÉE ====================
+# ==================== CONVERSATION HANDLER ADMIN ====================
 
 def create_admin_conversation_handler():
-    """✅ Crée le ConversationHandler pour l'admin - TOUTES CORRECTIONS APPLIQUÉES"""
+    """Crée le ConversationHandler pour l'admin"""
     return ConversationHandler(
         entry_points=[
             CommandHandler("admin", admin_command)
         ],
         states={
             ADMIN_MENU_MAIN: [
-                # Navigation principale
                 CallbackQueryHandler(admin_menu_main_handler, pattern="^admin_"),
                 CallbackQueryHandler(back_to_admin_menu, pattern="^back_to_admin_menu$"),
-                
-                # Gestion produits
                 CallbackQueryHandler(admin_add_product, pattern="^admin_add_product$"),
                 CallbackQueryHandler(admin_toggle_product, pattern="^admin_toggle_product$"),
                 CallbackQueryHandler(process_toggle_product, pattern="^toggle_"),
                 CallbackQueryHandler(admin_archive_product, pattern="^admin_archive_product$"),
                 CallbackQueryHandler(confirm_archive_product, pattern="^archive_confirm_"),
                 CallbackQueryHandler(do_archive_product, pattern="^archive_do_"),
-                
-                # Pricing - ✅ CORRECTION APPLIQUÉE
                 CallbackQueryHandler(pricing_select_product, pattern="^pricing_select_product$"),
                 CallbackQueryHandler(pricing_view_all, pattern="^pricing_view_all$"),
                 CallbackQueryHandler(pricing_edit, pattern="^pricing_edit$"),
                 CallbackQueryHandler(pricing_delete, pattern="^pricing_delete$"),
-                
-                # Stocks
                 CallbackQueryHandler(stock_configure, pattern="^stock_configure$"),
                 CallbackQueryHandler(stock_config_product, pattern="^stock_config_"),
                 CallbackQueryHandler(stock_add, pattern="^stock_add$"),
@@ -7280,37 +7273,23 @@ def create_admin_conversation_handler():
                 CallbackQueryHandler(stock_remove, pattern="^stock_remove$"),
                 CallbackQueryHandler(stock_remove_select, pattern="^stock_remove_select_"),
                 CallbackQueryHandler(stock_alerts, pattern="^stock_alerts$"),
-                
-                # Promo
                 CallbackQueryHandler(promo_delete, pattern="^promo_delete$"),
                 CallbackQueryHandler(promo_details, pattern="^promo_details$"),
-                
-                # Clients
                 CallbackQueryHandler(clients_list, pattern="^clients_list$"),
                 CallbackQueryHandler(clients_page_change, pattern="^clients_page_"),
                 CallbackQueryHandler(clients_vip, pattern="^clients_vip$"),
                 CallbackQueryHandler(clients_referrals, pattern="^clients_referrals$"),
                 CallbackQueryHandler(clients_top, pattern="^clients_top$"),
-                
-                # Stats - ✅ CORRECTIONS APPLIQUÉES
                 CallbackQueryHandler(stats_products, pattern="^stats_products$"),
                 CallbackQueryHandler(stats_countries, pattern="^stats_countries$"),
-                CallbackQueryHandler(stats_week_graph, pattern="^stats_week_graph$"),  # ✅ AJOUTÉ
-                CallbackQueryHandler(stats_export, pattern="^stats_export$"),  # ✅ AJOUTÉ
-                
-                # Horaires
+                CallbackQueryHandler(stats_week_graph, pattern="^stats_week_graph$"),
+                CallbackQueryHandler(stats_export, pattern="^stats_export$"),
                 CallbackQueryHandler(horaires_toggle, pattern="^horaires_toggle$"),
                 CallbackQueryHandler(horaires_modify, pattern="^horaires_modify$"),
-                
-                # Maintenance
                 CallbackQueryHandler(maintenance_toggle, pattern="^maintenance_toggle$"),
-                
-                # Notifications
                 CallbackQueryHandler(notif_send_report, pattern="^notif_send_report$"),
                 CallbackQueryHandler(notif_test, pattern="^notif_test$")
             ],
-            
-            # États ajout produit
             ADMIN_NEW_PRODUCT_NAME: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, receive_product_name),
                 CallbackQueryHandler(admin_products_menu, pattern="^admin_products$")
@@ -7335,8 +7314,6 @@ def create_admin_conversation_handler():
                 CallbackQueryHandler(confirm_add_product, pattern="^confirm_add_product$"),
                 CallbackQueryHandler(admin_products_menu, pattern="^admin_products$")
             ],
-            
-            # États pricing
             ADMIN_SELECT_PRODUCT_PRICING: [
                 CallbackQueryHandler(pricing_product_selected, pattern="^pricing_product_"),
                 CallbackQueryHandler(pricing_country_selected, pattern="^pricing_country_"),
@@ -7356,8 +7333,6 @@ def create_admin_conversation_handler():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, receive_tier_price),
                 CallbackQueryHandler(pricing_country_selected, pattern="^pricing_country_")
             ],
-            
-            # États pricing edit/delete
             ADMIN_PRICING_EDIT: [
                 CallbackQueryHandler(pricing_edit, pattern="^pricing_edit$"),
                 CallbackQueryHandler(pricing_edit_select, pattern="^pricing_edit_select_"),
@@ -7370,8 +7345,6 @@ def create_admin_conversation_handler():
                 CallbackQueryHandler(pricing_delete_do, pattern="^pricing_delete_do_"),
                 CallbackQueryHandler(admin_pricing_menu, pattern="^admin_pricing$")
             ],
-            
-            # États promo - ✅ CORRECTION BOUTON RETOUR
             ADMIN_PROMO_MENU: [
                 CallbackQueryHandler(promo_create, pattern="^promo_create$"),
                 CallbackQueryHandler(promo_type_selected, pattern="^promo_type_"),
@@ -7380,11 +7353,9 @@ def create_admin_conversation_handler():
                 CallbackQueryHandler(promo_delete_do, pattern="^promo_delete_do_"),
                 CallbackQueryHandler(promo_details, pattern="^promo_details$"),
                 CallbackQueryHandler(admin_promo_menu, pattern="^admin_promo$"),
-                CallbackQueryHandler(back_to_admin_menu, pattern="^back_to_admin_menu$"),  # ✅ AJOUTÉ
+                CallbackQueryHandler(back_to_admin_menu, pattern="^back_to_admin_menu$"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, promo_receive_input)
             ],
-            
-            # États stocks
             ADMIN_STOCK_MENU: [
                 CallbackQueryHandler(stock_configure, pattern="^stock_configure$"),
                 CallbackQueryHandler(stock_config_product, pattern="^stock_config_"),
@@ -7396,8 +7367,6 @@ def create_admin_conversation_handler():
                 CallbackQueryHandler(admin_stocks_menu, pattern="^admin_stocks$"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, stock_process_quantity)
             ],
-            
-            # États clients
             ADMIN_CLIENT_MENU: [
                 CallbackQueryHandler(clients_list, pattern="^clients_list$"),
                 CallbackQueryHandler(clients_page_change, pattern="^clients_page_"),
@@ -7406,19 +7375,15 @@ def create_admin_conversation_handler():
                 CallbackQueryHandler(clients_top, pattern="^clients_top$"),
                 CallbackQueryHandler(admin_clients_menu, pattern="^admin_clients$")
             ],
-            
-            # États horaires
             ADMIN_HORAIRES_INPUT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, receive_horaires),
                 CallbackQueryHandler(admin_horaires_menu, pattern="^admin_horaires$")
             ],
-            
-            # États notifications - ✅ CORRECTION RETOUR
             ADMIN_NOTIF_MENU: [
                 CallbackQueryHandler(notif_send_report, pattern="^notif_send_report$"),
                 CallbackQueryHandler(notif_test, pattern="^notif_test$"),
                 CallbackQueryHandler(admin_notifications_menu, pattern="^admin_notifications$"),
-                CallbackQueryHandler(back_to_admin_menu, pattern="^back_to_admin_menu$")  # ✅ AJOUTÉ
+                CallbackQueryHandler(back_to_admin_menu, pattern="^back_to_admin_menu$")
             ]
         },
         fallbacks=[
@@ -7428,48 +7393,38 @@ def create_admin_conversation_handler():
         conversation_timeout=3600,
         per_message=False,
         name="admin_conversation",
-        allow_reentry=True  # ✅ PERMET DE RÉOUVRIR /admin
+        allow_reentry=True
     )
 
 # ==================== HANDLERS STANDALONE ====================
 
 async def handle_admin_validate_order_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler pour la validation de commande par l'admin (hors conversation)"""
+    """Handler pour la validation de commande par l'admin"""
     return await admin_validate_order(update, context)
 
 # ==================== JOBS PLANIFIÉS ====================
 
 async def scheduled_jobs(context: ContextTypes.DEFAULT_TYPE):
     """Tâches planifiées toutes les minutes"""
-    # Heartbeat maintenance
     await heartbeat_maintenance(context)
-    
-    # Vérifier messages à supprimer
     await check_pending_deletions(context)
-    
-    # Rapports automatiques
     await schedule_reports(context)
-    
-    # Vérifier stocks
     await check_stocks_job(context)
-    
-    # Health check (si bot backup)
     if IS_BACKUP_BOT:
         await check_primary_bot_health(context)
 
 # ==================== INITIALISATION DU BOT ====================
 
 def main():
-    """Point d'entrée principal du bot"""
+    """✅ Point d'entrée principal du bot - VERSION CORRIGÉE"""
     
-    # 🎨 Banner de démarrage
+    # Banner de démarrage
     logger.info("=" * 60)
     logger.info("🚀 BOT TELEGRAM V3.0 - DÉMARRAGE")
     logger.info("=" * 60)
     
     # Vérifier persistance
     boot_count = verify_data_persistence()
-    
     if boot_count == 1:
         logger.info("🆕 PREMIER DÉMARRAGE")
     else:
@@ -7492,7 +7447,7 @@ def main():
     application.add_handler(create_client_conversation_handler())
     application.add_handler(create_admin_conversation_handler())
     
-    # Ajouter le handler pour validation commande admin (standalone)
+    # Handler validation commande admin (standalone)
     application.add_handler(CallbackQueryHandler(
         handle_admin_validate_order_callback,
         pattern="^admin_validate_"
@@ -7504,28 +7459,17 @@ def main():
     # Jobs planifiés
     logger.info("⏰ Configuration des jobs planifiés...")
     job_queue = application.job_queue
+    job_queue.run_repeating(scheduled_jobs, interval=60, first=10)
     
-    # Job toutes les minutes
-    job_queue.run_repeating(
-        scheduled_jobs,
-        interval=60,
-        first=10  # Premier run après 10 secondes
-    )
-    
-    # Informations de démarrage
-def main():
-    """Point d'entrée principal du bot"""
-    
+    # Statistiques de démarrage
     logger.info("=" * 60)
     logger.info(f"🤖 BOT : {'BACKUP' if IS_BACKUP_BOT else 'PRIMARY'}")
     logger.info(f"🆔 TOKEN : {TOKEN[:10]}...{TOKEN[-10:]}")
-    logger.info(f"👤 ADMIN : ***PROTECTED***")
+    logger.info(f"👤 ADMIN : {ADMIN_ID}")
     logger.info(f"💾 DATA : {DATA_DIR}")
     logger.info(f"📏 DISTANCE : {DISTANCE_METHOD}")
-    logger.info(f"🌐 NETWORK : Enabled")
-    application = ApplicationBuilder().token(TOKEN).build()
     
-    # Produits disponibles
+    # Produits
     available = get_available_products()
     logger.info(f"📦 PRODUITS : {len(available)} disponibles")
     
@@ -7572,6 +7516,6 @@ if __name__ == "__main__":
         logger.error(f"❌ ERREUR AU DÉMARRAGE : {e}", exc_info=True)
         sys.exit(1)
 
-# FIN DU BLOC 9
+# FIN DU BLOC 9 - VERSION CORRIGÉE
 
 

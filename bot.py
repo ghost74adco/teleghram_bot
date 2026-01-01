@@ -2113,6 +2113,104 @@ async def check_stocks_job(context: ContextTypes.DEFAULT_TYPE):
                     item['quantity']
                 )
 
+# ==================== SYSTÈME DE SUPPRESSION AUTOMATIQUE DES MESSAGES ====================
+
+# Dictionnaire pour tracker les messages à supprimer
+MESSAGE_TRACKER = {}
+
+async def schedule_message_deletion(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, delay_minutes: int):
+    """Planifie la suppression d'un message après X minutes"""
+    try:
+        await asyncio.sleep(delay_minutes * 60)
+        await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+        logger.info(f"🗑️ Message {message_id} supprimé après {delay_minutes}min")
+    except Exception as e:
+        logger.debug(f"Impossible de supprimer message {message_id}: {e}")
+
+async def send_and_schedule_deletion(context: ContextTypes.DEFAULT_TYPE, chat_id: int, text: str, 
+                                     reply_markup=None, parse_mode='Markdown', 
+                                     user_id=None, photo=None, caption=None):
+    """Envoie un message et planifie sa suppression automatique"""
+    
+    # Déterminer le délai selon le type d'utilisateur
+    is_admin = user_id == ADMIN_ID if user_id else False
+    delay = 30 if is_admin else 10  # 30min pour admin, 10min pour client
+    
+    try:
+        # Envoyer le message
+        if photo:
+            sent_message = await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=photo,
+                caption=caption or text,
+                reply_markup=reply_markup,
+                parse_mode=parse_mode
+            )
+        else:
+            sent_message = await context.bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                reply_markup=reply_markup,
+                parse_mode=parse_mode
+            )
+        
+        # Planifier la suppression
+        asyncio.create_task(
+            schedule_message_deletion(context, chat_id, sent_message.message_id, delay)
+        )
+        
+        return sent_message
+        
+    except Exception as e:
+        logger.error(f"Erreur envoi message: {e}")
+        return None
+
+async def edit_and_schedule_deletion(query, text: str, reply_markup=None, 
+                                     parse_mode='Markdown', user_id=None, context=None):
+    """Édite un message et planifie sa suppression"""
+    
+    is_admin = user_id == ADMIN_ID if user_id else False
+    delay = 30 if is_admin else 10
+    
+    try:
+        # Supprimer l'ancien message si possible
+        try:
+            await query.message.delete()
+        except:
+            pass
+        
+        # Envoyer nouveau message
+        sent_message = await query.message.chat.send_message(
+            text=text,
+            reply_markup=reply_markup,
+            parse_mode=parse_mode
+        )
+        
+        # Planifier suppression
+        if context:
+            asyncio.create_task(
+                schedule_message_deletion(context, query.message.chat_id, 
+                                        sent_message.message_id, delay)
+            )
+        
+        return sent_message
+        
+    except Exception as e:
+        logger.error(f"Erreur édition message: {e}")
+        return None
+
+async def delete_user_message(update: Update, delay_minutes: int = 10):
+    """Supprime le message de l'utilisateur après un délai"""
+    if update.message:
+        try:
+            await asyncio.sleep(delay_minutes * 60)
+            await update.message.delete()
+            logger.info(f"🗑️ Message utilisateur supprimé après {delay_minutes}min")
+        except Exception as e:
+            logger.debug(f"Impossible de supprimer message utilisateur: {e}")
+
+# ==================== FIN DU BLOC 3 ====================
+    
 # FIN DU BLOC 3
 
 # ==================== BLOC 4 : HANDLERS CLIENTS ET NAVIGATION (AVEC MEETUP COMPLET) ====================
@@ -3123,47 +3221,67 @@ async def choix_rock_subcategory(update: Update, context: ContextTypes.DEFAULT_T
 @error_handler
 async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Saisie de la quantité - Support décimales"""
-    qty_input = sanitize_input(update.message.text, 10).replace(',', '.')  # ✅ Remplacer virgule par point
+    
+    user_id = update.effective_user.id
+    
+    # ✅ Planifier suppression du message utilisateur (10min)
+    asyncio.create_task(delete_user_message(update, delay_minutes=10))
+    
+    qty_input = sanitize_input(update.message.text, 10).replace(',', '.')
     product_name = context.user_data.get('current_product')
     
     # ✅ Validation : doit être un nombre décimal valide
     try:
         quantity = float(qty_input)
     except ValueError:
-        await update.message.reply_text(
+        msg = await update.message.reply_text(
             f"{EMOJI_THEME['error']} *QUANTITÉ INVALIDE*\n\n"
             f"Veuillez entrer un nombre valide.\n"
             f"Exemples : 1, 2.5, 3.75, 0.5",
             parse_mode='Markdown'
         )
+        # ✅ Supprimer le message d'erreur après 10min
+        asyncio.create_task(
+            schedule_message_deletion(context, msg.chat_id, msg.message_id, 10)
+        )
         return QUANTITE
     
-    # ✅ Vérifier que la quantité est positive et dans les limites
+    # ✅ Vérifier que la quantité est positive
     if quantity <= 0:
-        await update.message.reply_text(
+        msg = await update.message.reply_text(
             f"{EMOJI_THEME['error']} *QUANTITÉ INVALIDE*\n\n"
             f"La quantité doit être supérieure à 0.",
             parse_mode='Markdown'
         )
+        asyncio.create_task(
+            schedule_message_deletion(context, msg.chat_id, msg.message_id, 10)
+        )
         return QUANTITE
     
+    # ✅ Vérifier limite max
     if quantity > MAX_QUANTITY_PER_PRODUCT:
-        await update.message.reply_text(
+        msg = await update.message.reply_text(
             f"{EMOJI_THEME['error']} *QUANTITÉ TROP ÉLEVÉE*\n\n"
             f"Maximum autorisé : {MAX_QUANTITY_PER_PRODUCT}g",
             parse_mode='Markdown'
+        )
+        asyncio.create_task(
+            schedule_message_deletion(context, msg.chat_id, msg.message_id, 10)
         )
         return QUANTITE
     
     # ✅ Vérifier le stock
     if not is_in_stock(product_name, quantity):
         stock = get_stock(product_name)
-        await update.message.reply_text(
+        msg = await update.message.reply_text(
             f"{EMOJI_THEME['error']} *STOCK INSUFFISANT*\n\n"
             f"📦 Disponible : {stock}g\n"
             f"❌ Demandé : {quantity}g\n\n"
             f"Veuillez réduire la quantité.",
             parse_mode='Markdown'
+        )
+        asyncio.create_task(
+            schedule_message_deletion(context, msg.chat_id, msg.message_id, 10)
         )
         return QUANTITE
     
@@ -3173,7 +3291,7 @@ async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     context.user_data['cart'].append({
         "produit": product_name,
-        "quantite": quantity  # ✅ Stocke en float
+        "quantite": quantity
     })
     
     logger.info(f"✅ Produit ajouté au panier : {product_name} x{quantity}g")
@@ -3225,10 +3343,13 @@ async def saisie_quantite(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard.append([InlineKeyboardButton("🤝 Meetup (Retrait)", callback_data="livraison_meetup")])
     keyboard.append([InlineKeyboardButton("🔙 Annuler", callback_data="back_to_main_menu")])
     
-    await update.message.reply_text(
-        text,
+    # ✅ Envoyer avec suppression automatique
+    await send_and_schedule_deletion(
+        context=context,
+        chat_id=update.message.chat_id,
+        text=text,
         reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        user_id=user_id
     )
     
     return LIVRAISON
@@ -3840,19 +3961,53 @@ async def confirmation_commande(update: Update, context: ContextTypes.DEFAULT_TY
     query = update.callback_query
     await query.answer()
     
-    if query.data == "cancel":
-        keyboard = [[InlineKeyboardButton(tr(context.user_data, "new_order"), callback_data="start_order")]]
-        await query.message.edit_text(
-            tr(context.user_data, "order_cancelled"),
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
-        )
-        context.user_data.clear()
-        return ConversationHandler.END
-    
-    # Génération de la commande
     user = update.effective_user
     user_id = user.id
+    is_admin = user_id == ADMIN_ID
+    
+    if query.data == "cancel":
+        # ✅ ANNULATION - Retour au menu principal
+        logger.info(f"❌ Commande annulée par {user_id}")
+        
+        # Réinitialiser le panier
+        context.user_data['cart'] = []
+        context.user_data.pop('promo_code', None)
+        context.user_data.pop('promo_discount', None)
+        context.user_data.pop('adresse', None)
+        context.user_data.pop('mode_livraison', None)
+        context.user_data.pop('paiement', None)
+        
+        text = f"{EMOJI_THEME['info']} *COMMANDE ANNULÉE*\n\n"
+        text += "Votre commande a été annulée.\n\n"
+        text += tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
+        
+        if is_admin:
+            text += f"\n\n🔑 *MODE ADMINISTRATEUR*\n{EMOJI_THEME['success']} Accès illimité 24h/24"
+        
+        keyboard = [
+            [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
+            [InlineKeyboardButton(tr(context.user_data, "pirate_card"), callback_data="voir_carte")],
+            [InlineKeyboardButton(tr(context.user_data, "my_account"), callback_data="my_account")],
+            [InlineKeyboardButton(tr(context.user_data, "contact_admin"), callback_data="contact_admin")]
+        ]
+        
+        # ✅ Supprimer ancien message et envoyer nouveau avec auto-suppression
+        try:
+            await query.message.delete()
+        except:
+            pass
+        
+        await send_and_schedule_deletion(
+            context=context,
+            chat_id=query.message.chat_id,
+            text=text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            user_id=user_id
+        )
+        
+        return PAYS  # ✅ RETOUR AU MENU (pas ConversationHandler.END)
+    
+    # ✅ CONFIRMATION - Traiter la commande
     cart = context.user_data.get('cart', [])
     country = context.user_data.get('pays', 'FR')
     delivery_type = context.user_data.get('mode_livraison')
@@ -3873,7 +4028,7 @@ async def confirmation_commande(update: Update, context: ContextTypes.DEFAULT_TY
     for item in cart:
         product_name = item['produit']
         quantity = item['quantite']
-        update_stock(product_name, -quantity)  # Retirer du stock
+        update_stock(product_name, -quantity)
         
         # Vérifier si stock faible
         remaining_stock = get_stock(product_name)
@@ -3882,7 +4037,7 @@ async def confirmation_commande(update: Update, context: ContextTypes.DEFAULT_TY
             threshold = stocks_data.get(product_name, {}).get('alert_threshold', 20)
             
             if remaining_stock <= 0:
-                # Rupture de stock - Masquer le produit
+                # Rupture de stock
                 available = get_available_products()
                 if product_name in available:
                     available.remove(product_name)
@@ -3958,19 +4113,17 @@ async def confirmation_commande(update: Update, context: ContextTypes.DEFAULT_TY
             stats['total_spent']
         ))
     
-    # 🆕 Bonus parrainage si applicable
+    # 🆕 Bonus parrainage
     referral_stats = get_referral_stats(user_id)
     if referral_stats and referral_stats.get('referred_by'):
         referrer_id = referral_stats['referred_by']
         
-        # Calculer bonus
         if REFERRAL_BONUS_TYPE == "percentage":
             bonus = total_info['total'] * (REFERRAL_BONUS_VALUE / 100)
         else:
             bonus = REFERRAL_BONUS_VALUE
         
         add_referral_earnings(referrer_id, bonus)
-        
         logger.info(f"💰 Bonus parrainage: {bonus}€ pour user {referrer_id}")
     
     # 🆕 Alerte haute valeur
@@ -4008,7 +4161,7 @@ async def confirmation_commande(update: Update, context: ContextTypes.DEFAULT_TY
     
     # Info selon type de livraison
     if delivery_type == 'meetup':
-        meetup_zone = context.user_data.get('meetup_zone', 'Zone inconnue')
+        meetup_zone = context.user_data.get('meetup_zone', 'Retrait en personne')
         confirmation_text += f"🤝 *MEETUP - {meetup_zone}*\n\n"
         confirmation_text += f"📍 Les coordonnées exactes du point de rencontre vous seront envoyées dans les prochaines heures.\n\n"
         confirmation_text += f"⏰ Délai estimé : Sous 24h\n\n"
@@ -4020,9 +4173,9 @@ async def confirmation_commande(update: Update, context: ContextTypes.DEFAULT_TY
             confirmation_text += f"📍 Distance : {distance:.1f} km\n"
         confirmation_text += f"⏰ Délai estimé : "
         if delivery_type == 'postale':
-            confirmation_text += "2-5 jours"
+            confirmation_text += "24h-48h"
         else:
-            confirmation_text += "24-48h"
+            confirmation_text += "30min+"
     
     confirmation_text += f"\n\n{EMOJI_THEME['celebration']} _Merci pour votre commande !_"
     
@@ -4031,18 +4184,55 @@ async def confirmation_commande(update: Update, context: ContextTypes.DEFAULT_TY
         confirmation_text += f"\n\n{EMOJI_THEME['vip']} *STATUT VIP ACTIF*\n"
         confirmation_text += f"Vous avez bénéficié de -{VIP_DISCOUNT}% sur cette commande"
     
-    keyboard = [[InlineKeyboardButton(tr(context.user_data, "new_order"), callback_data="start_order")]]
+    # ✅ Supprimer ancien message
+    try:
+        await query.message.delete()
+    except:
+        pass
     
-    await query.message.edit_text(
-        confirmation_text,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+    # ✅ Envoyer message de confirmation avec auto-suppression
+    await send_and_schedule_deletion(
+        context=context,
+        chat_id=query.message.chat_id,
+        text=confirmation_text,
+        user_id=user_id
     )
     
     logger.info(f"✅ Commande confirmée: {order_id} (User: {user_id}, Total: {total_info['total']}€)")
     
-    context.user_data.clear()
-    return ConversationHandler.END
+    # ✅ Attendre 5 secondes puis afficher menu principal
+    await asyncio.sleep(5)
+    
+    # Réinitialiser le panier
+    context.user_data['cart'] = []
+    context.user_data.pop('promo_code', None)
+    context.user_data.pop('promo_discount', None)
+    context.user_data.pop('adresse', None)
+    context.user_data.pop('mode_livraison', None)
+    context.user_data.pop('paiement', None)
+    
+    # Afficher menu principal
+    text = tr(context.user_data, "welcome") + tr(context.user_data, "main_menu")
+    
+    if is_admin:
+        text += f"\n\n🔑 *MODE ADMINISTRATEUR*\n{EMOJI_THEME['success']} Accès illimité 24h/24"
+    
+    keyboard = [
+        [InlineKeyboardButton(tr(context.user_data, "start_order"), callback_data="start_order")],
+        [InlineKeyboardButton(tr(context.user_data, "pirate_card"), callback_data="voir_carte")],
+        [InlineKeyboardButton(tr(context.user_data, "my_account"), callback_data="my_account")],
+        [InlineKeyboardButton(tr(context.user_data, "contact_admin"), callback_data="contact_admin")]
+    ]
+    
+    await send_and_schedule_deletion(
+        context=context,
+        chat_id=query.message.chat_id,
+        text=text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        user_id=user_id
+    )
+    
+    return PAYS  # ✅ RETOUR AU MENU PRINCIPAL
 
 # ==================== CONTACT ADMIN ====================
 

@@ -1,483 +1,679 @@
-# ==================== BLOC 1 : IMPORTS, CONFIGURATION ET TRADUCTIONS ====================
-# Bot Telegram V3.0 - Version Complète avec Gestion Multi-Admins
-# Copier ce bloc AU DÉBUT de bot.py
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+BOT TELEGRAM V3.0 - SYSTÈME MULTI-ADMINS
+Gestion complète e-commerce avec interface admin Telegram
+"""
 
 import os
-import re
 import sys
 import json
 import csv
-import math
 import asyncio
 import logging
 import hashlib
-import secrets
+import math
 from pathlib import Path
-from datetime import datetime, timedelta, time
-from collections import defaultdict
+from datetime import datetime, time
+from typing import Dict, List, Set, Optional
 from functools import wraps
-from typing import Optional, Dict, List, Tuple
+
+# Telegram imports
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    Application,
-    ApplicationBuilder,
-    CommandHandler,
-    CallbackQueryHandler,
-    MessageHandler,
-    ConversationHandler,
-    ContextTypes,
-    filters
+    Application, CommandHandler, CallbackQueryHandler, 
+    MessageHandler, filters, ContextTypes, ConversationHandler
 )
 
-# Configuration du logging
+# Distance calculation
+from geopy.geocoders import Nominatim
+from geopy.distance import geodesic
+
+# ==================== CONFIGURATION LOGGING ====================
+
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+    level=logging.INFO,
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('bot.log', encoding='utf-8')
+    ]
 )
 logger = logging.getLogger(__name__)
 
+# Réduire les logs des bibliothèques externes
+logging.getLogger('httpx').setLevel(logging.WARNING)
+logging.getLogger('telegram').setLevel(logging.WARNING)
+
 # ==================== CHARGEMENT VARIABLES D'ENVIRONNEMENT ====================
-from dotenv import load_dotenv
 
-env_file = Path(__file__).parent / "infos.env"
-if env_file.exists():
-    load_dotenv(env_file)
-    logger.info("✅ Variables: infos.env")
-else:
-    logger.warning("⚠️ Fichier infos.env non trouvé")
-
-# Variables d'environnement obligatoires
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-
-# ==================== CHEMINS DES FICHIERS - DISQUE PERSISTANT ====================
-
-if Path("/data").exists():
-    DATA_DIR = Path("/data")
-    logger.info("✅ Utilisation du disque persistant : /data")
-else:
-    DATA_DIR = Path(__file__).parent / "data"
-    logger.info("⚠️ Utilisation du dossier local : ./data")
-
-DATA_DIR.mkdir(exist_ok=True)
-
-# ==================== CONFIGURATION MULTI-ADMINS ====================
-
-# Fichier de stockage des admins
-ADMINS_FILE = DATA_DIR / "admins.json"
-
-def load_admins() -> Dict:
-    """Charge la liste des administrateurs depuis admins.json"""
-    if ADMINS_FILE.exists():
-        try:
-            with open(ADMINS_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                logger.info(f"✅ Admins chargés: {len(data)} administrateur(s)")
-                return data
-        except Exception as e:
-            logger.error(f"❌ Erreur chargement admins.json: {e}")
-            return {}
-    else:
-        logger.warning("⚠️ Fichier admins.json non trouvé, création...")
-        return {}
-
-def save_admins(admins: Dict):
-    """Sauvegarde la liste des administrateurs dans admins.json"""
+def load_env_file(filepath: str = "infos.env") -> dict:
+    """Charge les variables depuis le fichier .env"""
+    env_vars = {}
+    env_path = Path(filepath)
+    
+    if not env_path.exists():
+        logger.error(f"❌ Fichier {filepath} introuvable")
+        return env_vars
+    
     try:
-        with open(ADMINS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(admins, f, indent=2, ensure_ascii=False)
-        logger.info(f"💾 Admins sauvegardés: {len(admins)} administrateur(s)")
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    key = key.strip()
+                    value = value.strip().strip('"').strip("'")
+                    env_vars[key] = value
+                    os.environ[key] = value
+        
+        logger.info(f"✅ Variables: {filepath}")
+        return env_vars
+    
     except Exception as e:
-        logger.error(f"❌ Erreur sauvegarde admins.json: {e}")
+        logger.error(f"❌ Erreur lecture {filepath}: {e}")
+        return env_vars
 
-def init_admins():
-    """
-    Initialise le système d'admins
-    - Charge admins.json s'il existe
-    - Sinon, crée le premier super-admin depuis infos.env
-    """
-    admins = load_admins()
-    
-    # Si admins.json est vide, créer l'admin principal depuis infos.env
-    if not admins:
-        admin_principal_id = os.getenv("ADMIN_TELEGRAM_ID")
-        
-        if not admin_principal_id:
-            logger.error("❌ ADMIN_TELEGRAM_ID manquant dans infos.env!")
-            return admins
-        
-        try:
-            admin_principal_id = int(admin_principal_id)
-        except ValueError:
-            logger.error(f"❌ ADMIN_TELEGRAM_ID invalide: {admin_principal_id}")
-            return admins
-        
-        # Créer le premier super-admin
-        admins[str(admin_principal_id)] = {
-            'level': 'super_admin',
-            'name': 'Propriétaire',
-            'added_by': 'system',
-            'added_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'permissions': ['all']
-        }
-        
-        save_admins(admins)
-        logger.info(f"✅ Super-admin créé: {admin_principal_id}")
-    
-    return admins
+# Charger les variables
+ENV_VARS = load_env_file("infos.env")
 
-# Initialiser les admins au démarrage
-ADMINS = init_admins()
+# ==================== VARIABLES D'ENVIRONNEMENT ESSENTIELLES ====================
 
-def get_admin_ids() -> List[int]:
-    """Retourne la liste des IDs administrateurs"""
-    return [int(admin_id) for admin_id in ADMINS.keys()]
-
-def is_admin(user_id: int) -> bool:
-    """Vérifie si l'utilisateur est administrateur"""
-    return str(user_id) in ADMINS
-
-def is_super_admin(user_id: int) -> bool:
-    """Vérifie si l'utilisateur est super-admin"""
-    if str(user_id) not in ADMINS:
-        return False
-    return ADMINS[str(user_id)].get('level') == 'super_admin'
-
-def get_admin_info(user_id: int) -> Dict:
-    """Récupère les informations complètes d'un admin"""
-    return ADMINS.get(str(user_id), {})
-
-def get_admin_level(user_id: int) -> str:
-    """Récupère le niveau d'un admin"""
-    admin_info = get_admin_info(user_id)
-    return admin_info.get('level', 'user')
-
-# Vérification finale
-if not TOKEN or not ADMINS:
-    logger.error("❌ Variables manquantes! TOKEN ou ADMIN_TELEGRAM_ID requis.")
+# TOKEN BOT (CRITIQUE)
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+if not BOT_TOKEN:
+    logger.critical("❌ BOT_TOKEN manquant dans infos.env !")
+    logger.critical("Ajoutez: BOT_TOKEN=votre_token_telegram")
     sys.exit(1)
 
-logger.info(f"✅ Bot configuré avec {len(ADMINS)} administrateur(s)")
+# Admin principal (pour initialisation)
+ADMIN_TELEGRAM_ID = os.getenv("ADMIN_TELEGRAM_ID")
+if not ADMIN_TELEGRAM_ID:
+    logger.critical("❌ ADMIN_TELEGRAM_ID manquant dans infos.env !")
+    logger.critical("Ajoutez: ADMIN_TELEGRAM_ID=votre_id_telegram")
+    sys.exit(1)
 
-# Conserver ADMIN_ID pour compatibilité avec le code existant
-ADMIN_ID = int(os.getenv("ADMIN_TELEGRAM_ID", "0"))
+try:
+    ADMIN_ID = int(ADMIN_TELEGRAM_ID)
+except ValueError:
+    logger.critical("❌ ADMIN_TELEGRAM_ID doit être un nombre !")
+    logger.critical(f"Valeur actuelle: {ADMIN_TELEGRAM_ID}")
+    sys.exit(1)
 
-# ==================== RESTE DU BLOC 1 (FICHIERS, CONFIG, ETC.) ====================
+# Adresse admin pour calcul distance
+ADMIN_ADDRESS = os.getenv("ADMIN_ADDRESS", "Paris, France")
 
-# Configuration BOT PRINCIPAL vs BACKUP
-IS_BACKUP_BOT = os.getenv("IS_BACKUP_BOT", "false").lower() == "true"
-PRIMARY_BOT_USERNAME = os.getenv("PRIMARY_BOT_USERNAME", "@votre_bot_principal_bot")
-BACKUP_BOT_USERNAME = os.getenv("BACKUP_BOT_USERNAME", "@votre_bot_backup_bot")
-PRIMARY_BOT_TOKEN = os.getenv("PRIMARY_BOT_TOKEN", "")
+# OpenRouteService (optionnel)
+OPENROUTE_API_KEY = os.getenv("OPENROUTE_API_KEY")
 
-# Health check
-HEALTH_CHECK_INTERVAL = 60
-PRIMARY_BOT_DOWN_THRESHOLD = 3
+logger.info(f"✅ BOT_TOKEN chargé: {BOT_TOKEN[:10]}...")
+logger.info(f"✅ ADMIN_ID: {ADMIN_ID}")
+logger.info(f"✅ ADMIN_ADDRESS: {ADMIN_ADDRESS}")
 
-# Configuration distance
-DISTANCE_METHOD = os.getenv("DISTANCE_METHOD", "geopy")
+# ==================== CONFIGURATION DISQUE PERSISTANT ====================
 
-# Import selon méthode choisie
-if DISTANCE_METHOD == "openroute":
-    try:
-        import openrouteservice
-        ORS_API_KEY = os.getenv("OPENROUTESERVICE_API_KEY", "")
-        if ORS_API_KEY:
-            distance_client = openrouteservice.Client(key=ORS_API_KEY)
-            logger.info("✅ OpenRouteService configuré")
-        else:
-            logger.warning("⚠️ ORS_API_KEY manquant")
-            DISTANCE_METHOD = "geopy"
-    except ImportError:
-        logger.warning("⚠️ pip install openrouteservice")
-        DISTANCE_METHOD = "geopy"
+# Détection automatique de l'environnement
+if os.path.exists("/data"):
+    # Render.com
+    DATA_DIR = Path("/data")
+    logger.info("✅ Utilisation du disque persistant : /data")
+elif os.path.exists("/persistent"):
+    # Railway
+    DATA_DIR = Path("/persistent")
+    logger.info("✅ Utilisation du disque persistant : /persistent")
+else:
+    # Développement local
+    DATA_DIR = Path(__file__).parent / "data"
+    DATA_DIR.mkdir(exist_ok=True)
+    logger.info(f"✅ Mode local : {DATA_DIR}")
 
-if DISTANCE_METHOD == "geopy":
-    try:
-        from geopy.geocoders import Nominatim
-        from geopy.distance import geodesic
-        distance_client = Nominatim(user_agent="telegram_bot")
-        logger.info("✅ Geopy - Distance approximative")
-    except ImportError:
-        logger.error("❌ pip install geopy")
-        sys.exit(1)
+# Créer les sous-dossiers
+MEDIA_DIR = DATA_DIR / "media"
+MEDIA_DIR.mkdir(exist_ok=True)
 
-# Fichiers JSON existants
+# ==================== FICHIERS DE DONNÉES ====================
+
+# Fichiers JSON
+ADMINS_FILE = DATA_DIR / "admins.json"
 PRODUCT_REGISTRY_FILE = DATA_DIR / "product_registry.json"
-AVAILABLE_PRODUCTS_FILE = DATA_DIR / "available_products.json"
-PRICING_TIERS_FILE = DATA_DIR / "pricing_tiers.json"
 PRICES_FILE = DATA_DIR / "prices.json"
-ARCHIVED_PRODUCTS_FILE = DATA_DIR / "archived_products.json"
+AVAILABLE_PRODUCTS_FILE = DATA_DIR / "available_products.json"
 USERS_FILE = DATA_DIR / "users.json"
-HORAIRES_FILE = DATA_DIR / "horaires.json"
-STATS_FILE = DATA_DIR / "stats.json"
-PENDING_MESSAGES_FILE = DATA_DIR / "pending_messages.json"
-
-# 🆕 Nouveaux fichiers
 STOCKS_FILE = DATA_DIR / "stocks.json"
 PROMO_CODES_FILE = DATA_DIR / "promo_codes.json"
 CLIENT_HISTORY_FILE = DATA_DIR / "client_history.json"
 REFERRALS_FILE = DATA_DIR / "referrals.json"
-NOTIFICATIONS_FILE = DATA_DIR / "notifications.json"
+HORAIRES_FILE = DATA_DIR / "horaires.json"
+STATS_FILE = DATA_DIR / "stats.json"
+PRICING_TIERS_FILE = DATA_DIR / "pricing_tiers.json"
 
-# Dossier média
-MEDIA_DIR = Path(__file__).parent / "media"
+# ==================== CONSTANTES MÉTIER ====================
 
-# Images prix
-IMAGE_PRIX_FRANCE = MEDIA_DIR / "prix_france.jpg"
-IMAGE_PRIX_SUISSE = MEDIA_DIR / "prix_suisse.jpg"
+# Frais de livraison
+FRAIS_POSTAL = 10
+FRAIS_MEETUP = 0
 
-# ==================== ÉTATS DE CONVERSATION - VALEURS EXPLICITES ====================
+# VIP
+VIP_THRESHOLD = 500  # Montant pour devenir VIP
+VIP_DISCOUNT = 5     # % de réduction VIP
 
-# États conversation client (0-12)
-LANGUE = 0
-PAYS = 1
-PRODUIT = 2
-PILL_SUBCATEGORY = 3
-ROCK_SUBCATEGORY = 4
-QUANTITE = 5
-CART_MENU = 6
-PROMO_CODE_INPUT = 7
-ADRESSE = 8
-LIVRAISON = 9
-PAIEMENT = 10
-CONFIRMATION = 11
-CONTACT = 12
+# Parrainage
+REFERRAL_REWARD = 5  # Euros offerts au parrain
 
-# États conversation admin (100-130)
-ADMIN_MENU_MAIN = 100
-ADMIN_NEW_PRODUCT_NAME = 101
-ADMIN_NEW_PRODUCT_CODE = 102
-ADMIN_NEW_PRODUCT_CATEGORY = 103
-ADMIN_NEW_PRODUCT_PRICE_FR = 104
-ADMIN_NEW_PRODUCT_PRICE_CH = 105
-ADMIN_CONFIRM_PRODUCT = 106
-ADMIN_SELECT_PRODUCT_PRICING = 107
-ADMIN_PRICING_TIERS = 108
-ADMIN_ADD_TIER = 109
-ADMIN_TIER_QUANTITY = 110
-ADMIN_TIER_PRICE = 111
-ADMIN_PRICING_EDIT = 112
-ADMIN_PRICING_DELETE = 113
-ADMIN_PROMO_MENU = 114
-ADMIN_CLIENT_MENU = 115
-ADMIN_HORAIRES_INPUT = 116
-STOCK_MANAGEMENT = 117
-ADMIN_STOCK_MENU = 118
-ADMIN_NOTIF_MENU = 119
+# ==================== ÉTATS DE CONVERSATION ====================
 
-# 🆕 États gestion admins (120-129)
+# États pour le ConversationHandler de gestion des admins
 ADMIN_MANAGE_MENU = 120
 ADMIN_ADD_ID = 121
 ADMIN_ADD_LEVEL = 122
 ADMIN_REMOVE_CONFIRM = 123
 ADMIN_VIEW_LIST = 124
 
-# ==================== CONFIGURATION ====================
+# ==================== MÉTHODE DE CALCUL DISTANCE ====================
 
-MAX_QUANTITY_PER_PRODUCT = 1000
-FRAIS_POSTAL = 10
-FRAIS_EXPRESS_PAR_KM = 10
-FRAIS_MEETUP = 0
-ADMIN_ADDRESS = "858 Rte du Chef Lieu, 74250 Fillinges"
+DISTANCE_METHOD = "geopy"  # Par défaut
 
-# 🆕 Configuration système de parrainage
-REFERRAL_BONUS_TYPE = "percentage"
-REFERRAL_BONUS_VALUE = 5
-REFERRAL_CODE_LENGTH = 6
+if OPENROUTE_API_KEY:
+    try:
+        import openrouteservice
+        distance_client = openrouteservice.Client(key=OPENROUTE_API_KEY)
+        DISTANCE_METHOD = "openroute"
+        logger.info("✅ OpenRouteService configuré")
+    except ImportError:
+        logger.warning("⚠️ openrouteservice non installé, fallback sur geopy")
+        distance_client = Nominatim(user_agent="telegram_bot_v3")
+        DISTANCE_METHOD = "geopy"
+except Exception as e:
+    logger.warning(f"⚠️ Erreur OpenRouteService: {e}, fallback sur geopy")
+    distance_client = Nominatim(user_agent="telegram_bot_v3")
+    DISTANCE_METHOD = "geopy"
+else:
+    if not OPENROUTE_API_KEY:
+        distance_client = Nominatim(user_agent="telegram_bot_v3")
+        logger.info("✅ Geopy - Distance approximative")
 
-# 🆕 Configuration VIP
-VIP_THRESHOLD = 1000
-VIP_DISCOUNT = 10
+# ==================== GESTION DES ADMINS ====================
 
-# 🎨 Système Emojis Thématique
+def load_admins() -> Dict:
+    """Charge la liste des administrateurs depuis admins.json"""
+    if ADMINS_FILE.exists():
+        try:
+            with open(ADMINS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"❌ Erreur lecture admins.json: {e}")
+            return {}
+    else:
+        logger.warning("⚠️ Fichier admins.json non trouvé, création...")
+        return {}
+
+def save_admins(admins: Dict) -> bool:
+    """Sauvegarde les administrateurs dans admins.json"""
+    try:
+        with open(ADMINS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(admins, f, indent=2, ensure_ascii=False)
+        logger.info(f"💾 Admins sauvegardés: {len(admins)} administrateur(s)")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Erreur sauvegarde admins: {e}")
+        return False
+
+def init_admins() -> Dict:
+    """Initialise le système d'admins (crée le super-admin si nécessaire)"""
+    admins = load_admins()
+    
+    # Si aucun admin, créer le super-admin depuis ADMIN_TELEGRAM_ID
+    if not admins:
+        logger.info("🔧 Initialisation du premier super-admin...")
+        admins[str(ADMIN_ID)] = {
+            'level': 'super_admin',
+            'name': 'Propriétaire',
+            'added_by': 'system',
+            'added_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'permissions': ['all']
+        }
+        save_admins(admins)
+        logger.info(f"✅ Super-admin créé: {ADMIN_ID}")
+    
+    return admins
+
+def is_admin(user_id: int) -> bool:
+    """Vérifie si un utilisateur est admin"""
+    admins = load_admins()
+    return str(user_id) in admins
+
+def is_super_admin(user_id: int) -> bool:
+    """Vérifie si un utilisateur est super-admin"""
+    admins = load_admins()
+    user_data = admins.get(str(user_id))
+    if not user_data:
+        return False
+    return user_data.get('level') == 'super_admin'
+
+def get_admin_info(user_id: int) -> Optional[Dict]:
+    """Récupère les informations complètes d'un admin"""
+    admins = load_admins()
+    return admins.get(str(user_id))
+
+def get_admin_level(user_id: int) -> Optional[str]:
+    """Récupère le niveau d'un admin"""
+    info = get_admin_info(user_id)
+    return info.get('level') if info else None
+
+def get_admin_ids() -> List[int]:
+    """Retourne la liste des IDs de tous les admins"""
+    admins = load_admins()
+    return [int(uid) for uid in admins.keys()]
+
+# Initialiser les admins au démarrage
+ADMINS = init_admins()
+
+logger.info(f"✅ Bot configuré avec {len(ADMINS)} administrateur(s)")
+
+# ==================== EMOJI THEME ====================
+
 EMOJI_THEME = {
-    "success": "✅",
-    "error": "❌",
-    "warning": "⚠️",
-    "info": "ℹ️",
-    "loading": "⏳",
-    "money": "💰",
-    "product": "📦",
-    "vip": "👑",
-    "diamond": "💎",
-    "star": "⭐",
-    "gift": "🎁",
-    "delivery": "🚚",
-    "cart": "🛒",
-    "stats": "📊",
-    "trend_up": "📈",
-    "trend_down": "📉",
-    "fire": "🔥",
-    "rocket": "🚀",
-    "online": "🟢",
-    "offline": "🔴",
-    "busy": "🟡",
-    "trophy": "🏆",
-    "medal": "🥇",
-    "target": "🎯",
-    "celebration": "🎉"
+    'success': '✅',
+    'error': '❌',
+    'warning': '⚠️',
+    'info': 'ℹ️',
+    'money': '💰',
+    'cart': '🛒',
+    'delivery': '🚚',
+    'product': '📦',
+    'admin': '👨‍💼',
+    'user': '👤',
+    'stats': '📊',
+    'gift': '🎁',
+    'vip': '⭐',
+    'celebration': '🎉',
+    'wave': '👋',
+    'history': '📜',
+    'support': '💬',
+    'security': '🔒',
+    'online': '🟢',
+    'offline': '🔴'
 }
 
-# Prix par défaut (BACKUP)
-PRIX_FR = {
-    "❄️ Coco": 80,
-    "💊 Squid Game": 10,
-    "💊 Punisher": 10,
-    "🫒 Hash": 8,
-    "🍀 Weed": 7,
-    "🪨 MDMA": 50,
-    "🪨 4MMC": 50
-}
+# ==================== DICTIONNAIRES PRODUITS (seront remplis par init_product_codes) ====================
 
-PRIX_CH = {
-    "❄️ Coco": 100,
-    "💊 Squid Game": 15,
-    "💊 Punisher": 15,
-    "🫒 Hash": 8,
-    "🍀 Weed": 10,
-    "🪨 MDMA": 60,
-    "🪨 4MMC": 60
-}
-
-# Dictionnaires globaux
 PRODUCT_CODES = {}
 PILL_SUBCATEGORIES = {}
 ROCK_SUBCATEGORIES = {}
 IMAGES_PRODUITS = {}
 VIDEOS_PRODUITS = {}
 
-# ==================== TRADUCTIONS COMPLÈTES ====================
+# ==================== PRIX DE BASE (fallback) ====================
+
+PRIX_FR = {
+    "❄️ Coco": 60,
+    "💊 Squid Game": 15,
+    "💊 Punisher": 15,
+    "🫒 Hash": 10,
+    "🍀 Weed": 10,
+    "🪨 MDMA": 40,
+    "🪨 4MMC": 20,
+    "🍄 Ketamine": 40
+}
+
+PRIX_CH = {
+    "❄️ Coco": 80,
+    "💊 Squid Game": 20,
+    "💊 Punisher": 20,
+    "🫒 Hash": 15,
+    "🍀 Weed": 15,
+    "🪨 MDMA": 50,
+    "🪨 4MMC": 25,
+    "🍄 Ketamine": 50
+}
+
+# ==================== TRADUCTIONS (optionnel) ====================
 
 TRANSLATIONS = {
-    "fr": {
-        "welcome": f"{EMOJI_THEME['celebration']} *Bienvenue !*\n\n",
-        "main_menu": "Que souhaitez-vous faire ?",
-        "start_order": f"{EMOJI_THEME['cart']} Commander",
-        "pirate_card": "🏴‍☠️ Carte du Pirate",
-        "contact_admin": "📞 Contact",
-        "my_account": f"{EMOJI_THEME['vip']} Mon Compte",
-        "choose_country": f"🌍 *Choix du pays*\n\nSélectionnez votre pays :",
-        "france": "🇫🇷 France",
-        "switzerland": "🇨🇭 Suisse",
-        "choose_product": f"{EMOJI_THEME['product']} *Produit*\n\nQue souhaitez-vous commander ?",
-        "choose_pill_type": "💊 *Type de pilule*\n\nChoisissez :",
-        "choose_rock_type": "🪨 *Type de crystal*\n\nChoisissez :",
-        "enter_quantity": f"📊 *Quantité*\n\nCombien en voulez-vous ?\n_(Maximum : {{max}} unités)_",
-        "invalid_quantity": f"{EMOJI_THEME['error']} Quantité invalide.\n\n📊 Entre 1 et {{max}} unités.",
-        "cart_title": f"{EMOJI_THEME['cart']} *Panier :*",
-        "add_more": f"➕ Ajouter un produit",
-        "proceed": f"{EMOJI_THEME['success']} Valider le panier",
-        "apply_promo": f"{EMOJI_THEME['gift']} Code promo",
-        "promo_applied": f"{EMOJI_THEME['success']} Code promo appliqué : -{{discount}}",
-        "promo_invalid": f"{EMOJI_THEME['error']} Code promo invalide ou expiré",
-        "promo_min_order": f"{EMOJI_THEME['error']} Commande minimum : {{min}}€",
-        "enter_promo": f"{EMOJI_THEME['gift']} *Code Promo*\n\nEntrez votre code :",
-        "enter_address": "📍 *Adresse de livraison*\n\nEntrez votre adresse complète :\n_(Rue, Code postal, Ville)_",
-        "address_too_short": f"{EMOJI_THEME['error']} Adresse trop courte.\n\nVeuillez entrer une adresse complète.",
-        "choose_delivery": f"{EMOJI_THEME['delivery']} *Mode de livraison*\n\nChoisissez :",
-        "postal": "📬 Postale (48-72h) - 10€",
-        "express": "⚡ Express (30min+) - 10€/km",
-        "meetup": f"🤝 Meetup - {FRAIS_MEETUP}€",
-        "distance_calculated": f"📍 *Distance calculée*\n\n🚗 {{distance}} km\n{EMOJI_THEME['money']} Frais : {{fee}}€",
-        "choose_payment": f"💳 *Mode de paiement*\n\nChoisissez :",
-        "cash": "💵 Espèces",
-        "crypto": "₿ Crypto",
-        "order_summary": f"📋 *Récapitulatif commande*",
-        "subtotal": f"💵 Sous-total :",
-        "delivery_fee": f"{EMOJI_THEME['delivery']} Frais de livraison :",
-        "promo_discount": f"{EMOJI_THEME['gift']} Réduction promo :",
-        "vip_discount": f"{EMOJI_THEME['vip']} Réduction VIP :",
-        "referral_bonus": f"{EMOJI_THEME['target']} Bonus parrainage :",
-        "total": f"{EMOJI_THEME['money']} *TOTAL :*",
-        "confirm": f"{EMOJI_THEME['success']} Confirmer",
-        "cancel": f"{EMOJI_THEME['error']} Annuler",
-        "order_confirmed": f"{EMOJI_THEME['success']} *Commande confirmée !*\n\nMerci ! Vous recevrez une confirmation.",
-        "order_cancelled": f"{EMOJI_THEME['error']} *Commande annulée*",
-        "new_order": "🔄 Nouvelle commande",
-        "choose_country_prices": f"🏴‍☠️ *Carte du Pirate*\n\nConsultez nos prix :",
-        "prices_france": "🇫🇷 Prix France",
-        "prices_switzerland": "🇨🇭 Prix Suisse",
-        "price_list_fr": "🇫🇷 *PRIX FRANCE*\n\n",
-        "price_list_ch": "🇨🇭 *PRIX SUISSE*\n\n",
-        "back_to_card": "🔙 Retour à la carte",
-        "back": "🔙 Retour",
-        "main_menu_btn": "🏠 Menu principal",
-        "contact_message": "📞 *Contacter l'administrateur*\n\nÉcrivez votre message :",
-        "contact_sent": f"{EMOJI_THEME['success']} Message envoyé !\n\nL'admin vous répondra rapidement.",
-        "my_account_title": f"{EMOJI_THEME['vip']} *MON COMPTE*",
-        "total_spent": f"{EMOJI_THEME['money']} Total dépensé :",
-        "orders_count": f"{EMOJI_THEME['product']} Commandes :",
-        "vip_status": f"{EMOJI_THEME['vip']} Statut VIP",
-        "regular_status": "👤 Statut Standard",
-        "referral_code": f"{EMOJI_THEME['target']} Code parrainage :",
-        "referred_by": "👥 Parrainé par :",
-        "referrals_count": f"{EMOJI_THEME['gift']} Parrainages :",
-        "referral_earnings": f"💵 Gains parrainage :",
-        "favorite_products": f"{EMOJI_THEME['star']} Produits préférés :",
-        "view_history": f"{EMOJI_THEME['stats']} Voir historique",
-        "out_of_stock": f"{EMOJI_THEME['error']} *Produit en rupture de stock*\n\n{{product}}\n\nRevenez bientôt !",
-        "low_stock": f"{EMOJI_THEME['warning']} Stock limité : {{stock}}g restants",
-        "outside_hours": f"⏰ *Fermé*\n\nNous sommes ouverts de {{hours}}.\n\nRevenez pendant nos horaires !",
-        "maintenance_mode": f"🔧 *MODE MAINTENANCE*\n\nLe bot est actuellement en maintenance.\n\n⏰ Retour prévu : Bientôt\n\n💬 Contactez @{{admin}} pour plus d'infos.",
+    'fr': {
+        'welcome': 'Bienvenue',
+        'cart_title': '🛒 Votre panier :',
+        'menu': 'Menu principal',
+        'select_country': 'Sélectionnez votre pays',
+        'product_added': 'Produit ajouté au panier',
+        'order_confirmed': 'Commande confirmée',
+        'thank_you': 'Merci pour votre commande'
+    },
+    'en': {
+        'welcome': 'Welcome',
+        'cart_title': '🛒 Your cart:',
+        'menu': 'Main menu',
+        'select_country': 'Select your country',
+        'product_added': 'Product added to cart',
+        'order_confirmed': 'Order confirmed',
+        'thank_you': 'Thank you for your order'
     }
 }
 
-# ==================== ERROR HANDLER DECORATOR ====================
+def tr(user_data: dict, key: str, default_lang: str = 'fr') -> str:
+    """Traduction simple"""
+    lang = user_data.get('language_code', default_lang)
+    return TRANSLATIONS.get(lang, TRANSLATIONS['fr']).get(key, key)
+
+# ==================== GÉNÉRATEURS ====================
+
+def generate_referral_code() -> str:
+    """Génère un code de parrainage unique"""
+    import random
+    import string
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+
+def generate_order_id() -> str:
+    """Génère un ID de commande unique"""
+    timestamp = int(datetime.now().timestamp())
+    return f"CMD{timestamp}"
+
+# ==================== DÉCORATEUR ERROR HANDLER ====================
 
 def error_handler(func):
-    """Décorateur pour gérer les erreurs de manière centralisée"""
+    """Décorateur pour gérer les erreurs de manière uniforme"""
     @wraps(func)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             return await func(update, context)
         except Exception as e:
-            logger.error(f"Erreur dans {func.__name__}: {e}", exc_info=True)
-            error_message = f"{EMOJI_THEME['error']} Une erreur s'est produite. Veuillez réessayer."
+            logger.error(f"❌ Erreur dans {func.__name__}: {e}", exc_info=True)
+            
+            error_message = (
+                f"{EMOJI_THEME['error']} *Erreur technique*\n\n"
+                "Une erreur s'est produite. Veuillez réessayer.\n"
+                "Si le problème persiste, contactez l'administrateur."
+            )
+            
             try:
-                if update.message:
-                    await update.message.reply_text(error_message)
-                elif update.callback_query:
-                    await update.callback_query.answer(error_message, show_alert=True)
-            except:
-                pass
-            return ConversationHandler.END
+                if update.callback_query:
+                    await update.callback_query.answer("Erreur technique", show_alert=True)
+                    await update.callback_query.message.reply_text(
+                        error_message,
+                        parse_mode='Markdown'
+                    )
+                elif update.message:
+                    await update.message.reply_text(
+                        error_message,
+                        parse_mode='Markdown'
+                    )
+            except Exception as notify_error:
+                logger.error(f"Impossible de notifier l'erreur: {notify_error}")
+    
     return wrapper
 
-# ==================== FONCTIONS UTILITAIRES ====================
+# ==================== FORMATAGE DATES ====================
 
-def tr(user_data, key):
-    """Traduction avec remplacement de variables"""
-    lang = user_data.get('langue', 'fr')
-    t = TRANSLATIONS.get(lang, TRANSLATIONS['fr']).get(key, key)
-    t = t.replace("{max}", str(MAX_QUANTITY_PER_PRODUCT))
-    return t
+def format_datetime(dt: datetime) -> str:
+    """Formate une datetime en français"""
+    return dt.strftime('%d/%m/%Y %H:%M:%S')
 
-def sanitize_input(text, max_length=300):
-    """Nettoie les entrées utilisateur"""
-    if not text:
-        return ""
-    return re.sub(r'[<>{}[\]\\`|]', '', text.strip()[:max_length])
+def format_date(dt: datetime) -> str:
+    """Formate une date en français"""
+    return dt.strftime('%d/%m/%Y')
 
-def generate_referral_code():
-    """Génère un code de parrainage unique"""
-    return ''.join(secrets.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789') for _ in range(REFERRAL_CODE_LENGTH))
+def format_time(dt: datetime) -> str:
+    """Formate une heure"""
+    return dt.strftime('%H:%M')
 
-def generate_order_id(user_id):
-    """Génère un ID de commande unique"""
-    timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-    return f"ORD-{timestamp}-{user_id}"
+# ==================== FORMATAGE PRIX ====================
 
-def create_progress_bar(current, total, length=10, filled_char="█", empty_char="░"):
-    """Crée une barre de progression visuelle"""
+def format_price(price: float) -> str:
+    """Formate un prix avec 2 décimales"""
+    return f"{price:.2f}€"
+
+def format_weight(weight: float) -> str:
+    """Formate un poids"""
+    if weight >= 1000:
+        return f"{weight/1000:.1f}kg"
+    return f"{weight:.0f}g"
+
+# ==================== VALIDATION ====================
+
+def is_valid_email(email: str) -> bool:
+    """Vérifie si un email est valide"""
+    import re
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return re.match(pattern, email) is not None
+
+def is_valid_phone(phone: str) -> bool:
+    """Vérifie si un numéro de téléphone est valide"""
+    import re
+    # Format international simple
+    pattern = r'^\+?[1-9]\d{1,14}$'
+    phone_clean = phone.replace(' ', '').replace('-', '').replace('.', '')
+    return re.match(pattern, phone_clean) is not None
+
+def sanitize_filename(filename: str) -> str:
+    """Nettoie un nom de fichier"""
+    import re
+    # Remplacer les caractères interdits
+    filename = re.sub(r'[<>:"/\\|?*]', '_', filename)
+    # Limiter la longueur
+    if len(filename) > 200:
+        name, ext = os.path.splitext(filename)
+        filename = name[:200-len(ext)] + ext
+    return filename
+
+# ==================== HELPERS POUR CALCULS ====================
+
+def round_to_nearest(value: float, nearest: float) -> float:
+    """Arrondit à la valeur la plus proche"""
+    return round(value / nearest) * nearest
+
+def percentage(part: float, total: float) -> float:
+    """Calcule un pourcentage"""
     if total == 0:
-        percentage = 0
-    else:
-        percentage = int((current / total) * 100)
+        return 0
+    return (part / total) * 100
+
+def calculate_vat(amount: float, vat_rate: float = 20) -> float:
+    """Calcule la TVA"""
+    return amount * (vat_rate / 100)
+
+# ==================== SÉCURITÉ ====================
+
+def hash_string(text: str) -> str:
+    """Hash une chaîne de caractères"""
+    return hashlib.sha256(text.encode()).hexdigest()
+
+def generate_token(length: int = 32) -> str:
+    """Génère un token aléatoire"""
+    import secrets
+    return secrets.token_urlsafe(length)
+
+# ==================== FICHIERS & DOSSIERS ====================
+
+def ensure_dir(directory: Path) -> Path:
+    """S'assure qu'un dossier existe"""
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+def file_exists(filepath: Path) -> bool:
+    """Vérifie si un fichier existe"""
+    return filepath.exists() and filepath.is_file()
+
+def get_file_size(filepath: Path) -> int:
+    """Retourne la taille d'un fichier en octets"""
+    if not filepath.exists():
+        return 0
+    return filepath.stat().st_size
+
+def format_file_size(size_bytes: int) -> str:
+    """Formate une taille de fichier"""
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size_bytes < 1024:
+            return f"{size_bytes:.1f} {unit}"
+        size_bytes /= 1024
+    return f"{size_bytes:.1f} TB"
+
+# ==================== STATISTIQUES HELPERS ====================
+
+def calculate_average(values: List[float]) -> float:
+    """Calcule la moyenne"""
+    if not values:
+        return 0
+    return sum(values) / len(values)
+
+def calculate_median(values: List[float]) -> float:
+    """Calcule la médiane"""
+    if not values:
+        return 0
+    sorted_values = sorted(values)
+    n = len(sorted_values)
+    if n % 2 == 0:
+        return (sorted_values[n//2-1] + sorted_values[n//2]) / 2
+    return sorted_values[n//2]
+
+def calculate_growth(old_value: float, new_value: float) -> float:
+    """Calcule le taux de croissance en %"""
+    if old_value == 0:
+        return 100 if new_value > 0 else 0
+    return ((new_value - old_value) / old_value) * 100
+
+# ==================== NOTIFICATIONS HELPERS ====================
+
+async def send_notification_to_admins(context: ContextTypes.DEFAULT_TYPE, message: str):
+    """Envoie une notification à tous les admins"""
+    for admin_id in get_admin_ids():
+        try:
+            await context.bot.send_message(
+                chat_id=admin_id,
+                text=message,
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            logger.error(f"Erreur envoi notif à {admin_id}: {e}")
+
+async def send_notification_to_user(context: ContextTypes.DEFAULT_TYPE, user_id: int, message: str):
+    """Envoie une notification à un utilisateur"""
+    try:
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=message,
+            parse_mode='Markdown'
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Erreur envoi notif à {user_id}: {e}")
+        return False
+
+# ==================== BACKUP & RESTORE ====================
+
+def create_backup(backup_dir: Path = None) -> Optional[Path]:
+    """Crée une sauvegarde de toutes les données"""
+    if backup_dir is None:
+        backup_dir = DATA_DIR / "backups"
     
-    filled = int((current / total) * length) if total > 0 else 0
-    bar = filled_char * filled + empty_char * (length - filled)
+    ensure_dir(backup_dir)
     
-    return f"{bar} {percentage}%"
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    backup_file = backup_dir / f"backup_{timestamp}.json"
+    
+    try:
+        backup_data = {
+            'timestamp': timestamp,
+            'admins': load_admins(),
+            'users': load_users(),
+            'products': load_product_registry(),
+            'prices': load_prices(),
+            'stocks': load_stocks(),
+            'promo_codes': load_promo_codes(),
+            'client_history': load_client_history(),
+            'referrals': load_referrals(),
+            'stats': load_stats()
+        }
+        
+        with open(backup_file, 'w', encoding='utf-8') as f:
+            json.dump(backup_data, f, indent=2, ensure_ascii=False)
+        
+        logger.info(f"✅ Backup créé: {backup_file}")
+        return backup_file
+    
+    except Exception as e:
+        logger.error(f"❌ Erreur création backup: {e}")
+        return None
+
+# ==================== CONSTANTES SUPPLÉMENTAIRES ====================
+
+# Limites
+MAX_CART_ITEMS = 50
+MAX_QUANTITY_PER_ITEM = 1000
+MIN_ORDER_AMOUNT = 10
+
+# Timeouts
+ORDER_TIMEOUT_MINUTES = 30
+SESSION_TIMEOUT_HOURS = 24
+
+# Messages système
+SYSTEM_MESSAGES = {
+    'maintenance': "🔧 Le bot est en maintenance. Veuillez réessayer plus tard.",
+    'closed': "⏰ Nous sommes actuellement fermés. Horaires: {horaires}",
+    'out_of_stock': "😔 Ce produit est en rupture de stock.",
+    'cart_empty': "🛒 Votre panier est vide.",
+    'order_success': "✅ Commande confirmée ! Nous vous contacterons bientôt.",
+    'payment_pending': "⏳ En attente de paiement...",
+    'unauthorized': "🔒 Vous n'êtes pas autorisé à effectuer cette action."
+}
+
+# ==================== CONFIGURATION AVANCÉE ====================
+
+# Rate limiting (simple)
+RATE_LIMIT = {
+    'max_requests_per_minute': 30,
+    'max_orders_per_hour': 5,
+    'ban_duration_minutes': 30
+}
+
+# Cache
+CACHE_DURATION_SECONDS = 300  # 5 minutes
+
+# Logs détaillés
+DETAILED_LOGGING = os.getenv("DETAILED_LOGGING", "False").lower() == "true"
+
+if DETAILED_LOGGING:
+    logger.setLevel(logging.DEBUG)
+    logger.info("🔍 Mode logging détaillé activé")
+
+# ==================== VÉRIFICATIONS DE SANTÉ ====================
+
+def check_system_health() -> Dict[str, bool]:
+    """Vérifie l'état du système"""
+    health = {
+        'data_dir': DATA_DIR.exists(),
+        'admins_file': ADMINS_FILE.exists(),
+        'products_file': PRODUCT_REGISTRY_FILE.exists(),
+        'at_least_one_admin': len(ADMINS) > 0,
+        'bot_token': bool(BOT_TOKEN),
+    }
+    
+    health['overall'] = all(health.values())
+    
+    if not health['overall']:
+        logger.warning("⚠️ Problèmes de santé système détectés:")
+        for key, value in health.items():
+            if not value and key != 'overall':
+                logger.warning(f"  ❌ {key}")
+    
+    return health
+
+# Vérifier la santé au démarrage
+SYSTEM_HEALTH = check_system_health()
+
+if not SYSTEM_HEALTH['overall']:
+    logger.error("❌ Le système n'est pas en bonne santé !")
+    # Ne pas exit, mais logger l'erreur
+
+# ==================== INFORMATIONS DE VERSION ====================
+
+BOT_VERSION = "3.0.0"
+BOT_NAME = "E-Commerce Bot Multi-Admins"
+BOT_AUTHOR = "Assistant IA"
+BOT_UPDATED = "2025-01-02"
+
+logger.info(f"🤖 {BOT_NAME} v{BOT_VERSION}")
+logger.info(f"📅 Dernière mise à jour: {BOT_UPDATED}")
 
 # FIN DU BLOC 1
 

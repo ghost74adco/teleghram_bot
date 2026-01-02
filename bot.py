@@ -173,6 +173,7 @@ ADMIN_VIEW_LIST = 124
 # ==================== MÉTHODE DE CALCUL DISTANCE ====================
 
 DISTANCE_METHOD = "geopy"  # Par défaut
+distance_client = None
 
 if OPENROUTE_API_KEY:
     try:
@@ -184,14 +185,18 @@ if OPENROUTE_API_KEY:
         logger.warning("⚠️ openrouteservice non installé, fallback sur geopy")
         distance_client = Nominatim(user_agent="telegram_bot_v3")
         DISTANCE_METHOD = "geopy"
-except Exception as e:
-    logger.warning(f"⚠️ Erreur OpenRouteService: {e}, fallback sur geopy")
-    distance_client = Nominatim(user_agent="telegram_bot_v3")
-    DISTANCE_METHOD = "geopy"
-else:
-    if not OPENROUTE_API_KEY:
+    except Exception as e:
+        logger.warning(f"⚠️ Erreur OpenRouteService: {e}, fallback sur geopy")
         distance_client = Nominatim(user_agent="telegram_bot_v3")
-        logger.info("✅ Geopy - Distance approximative")
+        DISTANCE_METHOD = "geopy"
+else:
+    distance_client = Nominatim(user_agent="telegram_bot_v3")
+    logger.info("✅ Geopy - Distance approximative")
+
+# Vérification de sécurité
+if distance_client is None:
+    distance_client = Nominatim(user_agent="telegram_bot_v3")
+    logger.warning("⚠️ Fallback final sur Geopy")
 
 # ==================== GESTION DES ADMINS ====================
 
@@ -328,7 +333,7 @@ PRIX_CH = {
     "🍄 Ketamine": 50
 }
 
-# ==================== TRADUCTIONS (optionnel) ====================
+# ==================== TRADUCTIONS ====================
 
 TRANSLATIONS = {
     'fr': {
@@ -575,14 +580,7 @@ def create_backup(backup_dir: Path = None) -> Optional[Path]:
         backup_data = {
             'timestamp': timestamp,
             'admins': load_admins(),
-            'users': load_users(),
-            'products': load_product_registry(),
-            'prices': load_prices(),
-            'stocks': load_stocks(),
-            'promo_codes': load_promo_codes(),
-            'client_history': load_client_history(),
-            'referrals': load_referrals(),
-            'stats': load_stats()
+            'bot_version': '3.0.0'
         }
         
         with open(backup_file, 'w', encoding='utf-8') as f:
@@ -643,7 +641,6 @@ def check_system_health() -> Dict[str, bool]:
     health = {
         'data_dir': DATA_DIR.exists(),
         'admins_file': ADMINS_FILE.exists(),
-        'products_file': PRODUCT_REGISTRY_FILE.exists(),
         'at_least_one_admin': len(ADMINS) > 0,
         'bot_token': bool(BOT_TOKEN),
     }
@@ -662,8 +659,7 @@ def check_system_health() -> Dict[str, bool]:
 SYSTEM_HEALTH = check_system_health()
 
 if not SYSTEM_HEALTH['overall']:
-    logger.error("❌ Le système n'est pas en bonne santé !")
-    # Ne pas exit, mais logger l'erreur
+    logger.warning("⚠️ Le système n'est pas complètement en bonne santé")
 
 # ==================== INFORMATIONS DE VERSION ====================
 

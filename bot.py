@@ -1,7 +1,6 @@
 # ==================== BLOC 1 : IMPORTS, CONFIGURATION ET TRADUCTIONS ====================
 # Bot Telegram V3.0 - Version Complète avec Améliorations Visuelles
 # Copier ce bloc AU DÉBUT de bot.py
-
 import os
 import re
 import sys
@@ -17,7 +16,6 @@ from datetime import datetime, timedelta, time
 from collections import defaultdict
 from functools import wraps
 from typing import Optional, Dict, List, Tuple
-
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -32,13 +30,12 @@ from telegram.ext import (
 
 # Configuration du logging
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format='%(asctime)s - %(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
 # ==================== CHARGEMENT VARIABLES D'ENVIRONNEMENT ====================
-
 from dotenv import load_dotenv
 
 env_file = Path(__file__).parent / "infos.env"
@@ -50,12 +47,57 @@ else:
 
 # Variables d'environnement obligatoires
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-ADMIN_ID = int(os.getenv("ADMIN_TELEGRAM_ID", "0"))
 
-if not TOKEN or ADMIN_ID == 0:
-    logger.error("❌ Variables manquantes!")
+# ==================== CONFIGURATION MULTI-ADMINS ====================
+# Liste des administrateurs (plusieurs admins possibles)
+ADMIN_USER_IDS = []
+
+# Charger l'admin principal depuis infos.env
+admin_principal = os.getenv("ADMIN_TELEGRAM_ID")
+if admin_principal:
+    try:
+        ADMIN_USER_IDS.append(int(admin_principal))
+        logger.info(f"✅ Admin principal: {admin_principal}")
+    except ValueError:
+        logger.error(f"❌ ADMIN_TELEGRAM_ID invalide: {admin_principal}")
+
+# Charger les admins secondaires depuis infos.env (optionnel)
+admin_secondaire = os.getenv("ADMIN_TELEGRAM_ID_2")
+if admin_secondaire:
+    try:
+        ADMIN_USER_IDS.append(int(admin_secondaire))
+        logger.info(f"✅ Admin secondaire: {admin_secondaire}")
+    except ValueError:
+        logger.error(f"❌ ADMIN_TELEGRAM_ID_2 invalide: {admin_secondaire}")
+
+# Charger un 3ème admin (optionnel)
+admin_tertiaire = os.getenv("ADMIN_TELEGRAM_ID_3")
+if admin_tertiaire:
+    try:
+        ADMIN_USER_IDS.append(int(admin_tertiaire))
+        logger.info(f"✅ Admin tertiaire: {admin_tertiaire}")
+    except ValueError:
+        logger.error(f"❌ ADMIN_TELEGRAM_ID_3 invalide: {admin_tertiaire}")
+
+# Vérification finale
+if not TOKEN or not ADMIN_USER_IDS:
+    logger.error("❌ Variables manquantes! TOKEN ou ADMIN_TELEGRAM_ID requis.")
     sys.exit(1)
 
+logger.info(f"✅ Bot configuré avec {len(ADMIN_USER_IDS)} administrateur(s)")
+
+# Fonction pour vérifier si un utilisateur est admin
+def is_admin(user_id: int) -> bool:
+    """Vérifie si l'utilisateur est administrateur"""
+    return user_id in ADMIN_USER_IDS
+
+# Fonction pour obtenir la liste des admins (pour notifications)
+def get_admin_ids() -> List[int]:
+    """Retourne la liste des IDs administrateurs"""
+    return ADMIN_USER_IDS.copy()
+
+# ==================== RESTE DU BLOC 1 (INCHANGÉ) ====================
+# ... ton code existant continue ici ...
 # Configuration BOT PRINCIPAL vs BACKUP
 IS_BACKUP_BOT = os.getenv("IS_BACKUP_BOT", "false").lower() == "true"
 PRIMARY_BOT_USERNAME = os.getenv("PRIMARY_BOT_USERNAME", "@votre_bot_principal_bot")
@@ -174,14 +216,9 @@ ADMIN_NOTIF_MENU = 119
 MAX_QUANTITY_PER_PRODUCT = 1000
 FRAIS_POSTAL = 10
 FRAIS_EXPRESS_PAR_KM = 10
-FRAIS_MEETUP = 0  # 🆕 Meetup gratuit ou fixe
+FRAIS_MEETUP = 0
 ADMIN_ADDRESS = "858 Rte du Chef Lieu, 74250 Fillinges"
 
-# 🆕 Zones de meetup disponibles
-MEETUP_ZONES = {
-    "FR": ["Paris", "Lyon", "Marseille", "Bordeaux", "Toulouse", "Nice"],
-    "CH": ["Genève", "Lausanne", "Zurich", "Berne", "Bâle"]
-}
 
 # 🆕 Configuration système de parrainage
 REFERRAL_BONUS_TYPE = "percentage"  # ou "fixed"
@@ -232,13 +269,13 @@ EMOJI_THEME = {
 
 # Prix par défaut (BACKUP)
 PRIX_FR = {
-    "❄️ Coco": 50,
-    "💊 Squid Game": 15,
-    "💊 Punisher": 15,
+    "❄️ Coco": 80,
+    "💊 Squid Game": 10,
+    "💊 Punisher": 10,
     "🫒 Hash": 8,
-    "🍀 Weed": 50,
+    "🍀 Weed": 7,
     "🪨 MDMA": 50,
-    "🪨 4MMC": 40
+    "🪨 4MMC": 50
 }
 
 PRIX_CH = {
@@ -246,8 +283,8 @@ PRIX_CH = {
     "💊 Squid Game": 15,
     "💊 Punisher": 15,
     "🫒 Hash": 8,
-    "🍀 Weed": 50,
-    "🪨 MDMA": 100,
+    "🍀 Weed": 10,
+    "🪨 MDMA": 60,
     "🪨 4MMC": 60
 }
 
@@ -2218,6 +2255,29 @@ async def delete_user_message(update: Update, delay_minutes: int = 10):
 
 # ==================== HANDLERS PRINCIPAUX ====================
 
+async def get_my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande pour obtenir son ID Telegram"""
+    user_id = update.effective_user.id
+    username = update.effective_user.username or "Aucun"
+    first_name = update.effective_user.first_name
+    
+    message = f"""
+🆔 **INFORMATIONS TELEGRAM**
+
+👤 Nom : {first_name}
+🔢 **ID** : `{user_id}`
+📝 Username : @{username}
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+ℹ️ Communiquez cet ID à l'administrateur
+principal pour obtenir des droits d'accès.
+"""
+    
+    await update.message.reply_text(message, parse_mode='Markdown')
+    
+    # Log pour l'admin
+    logger.info(f"👤 {first_name} (ID: {user_id}) a demandé son ID")
 
 @error_handler
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -8480,6 +8540,14 @@ def main():
     logger.info("🔧 Création de l'application...")
     application = Application.builder().token(TOKEN).build()
     
+    # ==================== AJOUTER ICI - COMMANDES SIMPLES ====================
+    logger.info("🔑 Configuration des commandes simples...")
+    
+    # Commande /myid (pour obtenir son ID Telegram)
+    application.add_handler(CommandHandler("myid", get_my_id))
+    
+    # ==================== FIN AJOUT ====================
+    
     # Ajouter les ConversationHandlers
     logger.info("📋 Configuration des handlers...")
     application.add_handler(create_client_conversation_handler())
@@ -8503,7 +8571,7 @@ def main():
     logger.info("=" * 60)
     logger.info(f"🤖 BOT : {'BACKUP' if IS_BACKUP_BOT else 'PRIMARY'}")
     logger.info(f"🆔 TOKEN : {TOKEN[:10]}...{TOKEN[-10:]}")
-    logger.info(f"👤 ADMIN : {ADMIN_ID}")
+    logger.info(f"👤 ADMIN : {ADMIN_USER_IDS}")  # ← MODIFIÉ AUSSI ICI
     logger.info(f"💾 DATA : {DATA_DIR}")
     logger.info(f"📏 DISTANCE : {DISTANCE_METHOD}")
     
@@ -8545,15 +8613,13 @@ def main():
     finally:
         logger.info("🛑 BOT ARRÊTÉ")
 
-# ==================== POINT D'ENTRÉE ====================
 
+# ==================== POINT D'ENTRÉE ====================
 if __name__ == "__main__":
     try:
         main()
     except Exception as e:
         logger.error(f"❌ ERREUR AU DÉMARRAGE : {e}", exc_info=True)
         sys.exit(1)
-
 # FIN DU BLOC 9 - VERSION CORRIGÉE
-
 

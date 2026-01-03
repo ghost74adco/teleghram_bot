@@ -5259,6 +5259,7 @@ async def main():
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("admin", admin_command))
     application.add_handler(CommandHandler("myid", get_my_id))
+    application.add_handler(CommandHandler("cancel", cancel_command))
     
     # ==================== CALLBACKS GÉNÉRAUX ====================
     
@@ -5308,16 +5309,24 @@ async def main():
     application.add_handler(CallbackQueryHandler(admin_view_stocks, pattern="^admin_view_stocks$"))
     application.add_handler(CallbackQueryHandler(admin_add_stock, pattern="^admin_add_stock$"))
     application.add_handler(CallbackQueryHandler(admin_stock_alerts, pattern="^admin_stock_alerts$"))
+    application.add_handler(CallbackQueryHandler(admin_stock_select_product, pattern="^admin_stock_select_"))
     
     # ==================== ADMIN - PRIX ====================
     
     application.add_handler(CallbackQueryHandler(admin_prices, pattern="^admin_prices$"))
     application.add_handler(CallbackQueryHandler(admin_prices_country, pattern="^admin_prices_(fr|ch)$"))
+    application.add_handler(CallbackQueryHandler(admin_edit_price_start, pattern="^admin_edit_prices_"))
+    application.add_handler(CallbackQueryHandler(admin_price_edit_product, pattern="^admin_price_edit_"))
     
     # ==================== ADMIN - PROMOS ====================
     
     application.add_handler(CallbackQueryHandler(admin_promos, pattern="^admin_promos$"))
     application.add_handler(CallbackQueryHandler(admin_list_promos, pattern="^admin_list_promos$"))
+    application.add_handler(CallbackQueryHandler(admin_create_promo_start, pattern="^admin_create_promo$"))
+    application.add_handler(CallbackQueryHandler(admin_delete_promo_start, pattern="^admin_delete_promo$"))
+    application.add_handler(CallbackQueryHandler(admin_delete_promo_confirm, pattern="^admin_delete_promo_confirm_"))
+    application.add_handler(CallbackQueryHandler(admin_delete_promo_execute, pattern="^admin_delete_promo_yes_"))
+    application.add_handler(CallbackQueryHandler(promo_type_selected, pattern="^promo_type_"))
     
     # ==================== ADMIN - COMMANDES ====================
     
@@ -5333,8 +5342,9 @@ async def main():
     # ==================== ADMIN - STATISTIQUES ====================
     
     application.add_handler(CallbackQueryHandler(admin_stats, pattern="^admin_stats$"))
+    application.add_handler(CallbackQueryHandler(admin_detailed_stats, pattern="^admin_detailed_stats$"))
     
-    # ==================== 🆕 CONVERSATION HANDLER - GESTION ADMINS ====================
+    # ==================== CONVERSATION HANDLER - GESTION ADMINS ====================
     
     admin_manage_handler = ConversationHandler(
         entry_points=[
@@ -5377,27 +5387,10 @@ async def main():
     
     # ==================== MESSAGE HANDLERS ====================
     
-    # Handler pour quantité personnalisée
     application.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
-            receive_custom_quantity
-        )
-    )
-    
-    # Handler pour adresse (doit être avant le handler quantité)
-    application.add_handler(
-        MessageHandler(
-            filters.TEXT & ~filters.COMMAND,
-            receive_address
-        )
-    )
-    
-    # Handler pour code promo
-    application.add_handler(
-        MessageHandler(
-            filters.TEXT & ~filters.COMMAND,
-            receive_promo_code
+            handle_text_message
         )
     )
     
@@ -5405,13 +5398,8 @@ async def main():
     
     job_queue = application.job_queue
     
-    # Heartbeat toutes les 60 secondes
     job_queue.run_repeating(heartbeat_maintenance, interval=60, first=10)
-    
-    # Vérification stocks toutes les heures
     job_queue.run_repeating(check_stocks_job, interval=3600, first=60)
-    
-    # Rapports automatiques toutes les 24h
     job_queue.run_repeating(schedule_reports, interval=86400, first=3600)
     
     # ==================== DÉMARRAGE ====================
@@ -5434,52 +5422,52 @@ async def main():
     logger.info("🚀 Bot démarré avec succès !")
     logger.info("=" * 50)
     
-    # Lancer le bot
-    await application.run_polling(allowed_updates=Update.ALL_TYPES)
-
-# ==================== FIN DU BLOC 9 - VERSION SANS NEST_ASYNCIO ====================
-
-# ==================== DÉMARRAGE - VERSION RENDER-COMPATIBLE ====================
-
-if __name__ == '__main__':
+    # ==================== MÉTHODE MANUELLE - ÉVITE LE CONFLIT EVENT LOOP ====================
+    
+    # Initialiser l'application
+    await application.initialize()
+    await application.start()
+    
+    # Démarrer le polling
+    await application.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+    
+    # Créer un événement pour garder le bot actif
+    stop_event = asyncio.Event()
+    
+    # Gestionnaire de signaux pour arrêt propre
     import signal
     
-    def signal_handler(sig, frame):
-        """Gestion propre de l'arrêt"""
-        logger.info("🛑 Signal d'arrêt reçu")
-        sys.exit(0)
+    def handle_stop_signal(signum, frame):
+        logger.info(f"🛑 Signal {signum} reçu, arrêt en cours...")
+        stop_event.set()
     
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
+    # Enregistrer les signaux
+    signal.signal(signal.SIGINT, handle_stop_signal)
+    signal.signal(signal.SIGTERM, handle_stop_signal)
     
-    # Méthode compatible Render.com
-    logger.info("🚀 Lancement du bot en mode Render...")
+    logger.info("✅ Bot en cours d'exécution. Appuyez sur Ctrl+C pour arrêter.")
+    
+    # Attendre le signal d'arrêt
+    await stop_event.wait()
+    
+    # Arrêt propre
+    logger.info("🔄 Arrêt du bot...")
+    await application.updater.stop()
+    await application.stop()
+    await application.shutdown()
+    logger.info("✅ Bot arrêté proprement")
+
+# ==================== DÉMARRAGE ====================
+
+if __name__ == '__main__':
+    logger.info("🚀 Lancement du bot...")
     
     try:
-        # Créer un nouvel event loop isolé
-        new_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(new_loop)
-        
-        try:
-            # Exécuter le bot
-            new_loop.run_until_complete(main())
-        except KeyboardInterrupt:
-            logger.info("🛑 Arrêt demandé par l'utilisateur")
-        except Exception as e:
-            logger.error(f"❌ Erreur fatale: {e}", exc_info=True)
-        finally:
-            # Nettoyage
-            try:
-                pending = asyncio.all_tasks(new_loop)
-                for task in pending:
-                    task.cancel()
-                new_loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-                new_loop.close()
-            except Exception as e:
-                logger.error(f"Erreur lors du nettoyage: {e}")
-    
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("🛑 Arrêt par utilisateur")
     except Exception as e:
-        logger.critical(f"❌ Impossible de démarrer le bot: {e}", exc_info=True)
+        logger.critical(f"❌ Erreur fatale: {e}", exc_info=True)
         sys.exit(1)
 
 # ==================== FIN DU BOT ====================

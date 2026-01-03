@@ -173,14 +173,6 @@ if OPENROUTE_API_KEY:
         logger.info("✅ OpenRouteService configuré")
     except ImportError:
         logger.warning("⚠️ openrouteservice non installé, fallback sur geopy")
-    except Exception as e:
-        logger.warning(f"⚠️ Erreur OpenRouteService: {e}, fallback sur geopy")
-else:
-    logger.info("✅ Geopy - Distance approximative")
-        DISTANCE_METHOD = "openroute"
-        logger.info("✅ OpenRouteService configuré")
-    except ImportError:
-        logger.warning("⚠️ openrouteservice non installé, fallback sur geopy")
         distance_client = Nominatim(user_agent="telegram_bot_v3")
         DISTANCE_METHOD = "geopy"
     except Exception as e:
@@ -190,6 +182,10 @@ else:
 else:
     distance_client = Nominatim(user_agent="telegram_bot_v3")
     logger.info("✅ Geopy - Distance approximative")
+
+if distance_client is None:
+    distance_client = Nominatim(user_agent="telegram_bot_v3")
+    logger.warning("⚠️ Fallback final sur Geopy")
 
 # ==================== GESTION DES ADMINS ====================
 

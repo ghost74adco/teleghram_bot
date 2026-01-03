@@ -5458,9 +5458,7 @@ async def main():
             try:
                 await application.updater.start_polling(
                     allowed_updates=Update.ALL_TYPES,
-                    drop_pending_updates=True,
-                    timeout=30,
-                    pool_timeout=30
+                    drop_pending_updates=True
                 )
                 logger.info("✅ POLLING DÉMARRÉ AVEC SUCCÈS !")
                 polling_started = True

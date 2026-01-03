@@ -5439,37 +5439,47 @@ async def main():
 
 # ==================== FIN DU BLOC 9 - VERSION SANS NEST_ASYNCIO ====================
 
-if __name__ == '__main__':
-    import sys
-    import platform
-    
-    # Détection de l'environnement
-    is_render = os.path.exists("/opt/render")
-    is_railway = os.path.exists("/app")
-    
-    if is_render or is_railway:
-        # Sur Render/Railway, utiliser la méthode directe
-        logger.info("🌐 Environnement cloud détecté")
-        
-        # Créer une nouvelle boucle d'événements propre
-        try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(main())
-        except KeyboardInterrupt:
-            logger.info("🛑 Arrêt du bot...")
-        finally:
-            try:
-                loop.close()
-            except:
-                pass
-    else:
-        # En local, utiliser asyncio.run()
-        try:
-            asyncio.run(main())
-        except KeyboardInterrupt:
-            logger.info("🛑 Arrêt du bot...")
+# ==================== DÉMARRAGE - VERSION RENDER-COMPATIBLE ====================
 
-# ==================== FIN DU BOT ====================
+if __name__ == '__main__':
+    import signal
+    
+    def signal_handler(sig, frame):
+        """Gestion propre de l'arrêt"""
+        logger.info("🛑 Signal d'arrêt reçu")
+        sys.exit(0)
+    
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    # Méthode compatible Render.com
+    logger.info("🚀 Lancement du bot en mode Render...")
+    
+    try:
+        # Créer un nouvel event loop isolé
+        new_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(new_loop)
+        
+        try:
+            # Exécuter le bot
+            new_loop.run_until_complete(main())
+        except KeyboardInterrupt:
+            logger.info("🛑 Arrêt demandé par l'utilisateur")
+        except Exception as e:
+            logger.error(f"❌ Erreur fatale: {e}", exc_info=True)
+        finally:
+            # Nettoyage
+            try:
+                pending = asyncio.all_tasks(new_loop)
+                for task in pending:
+                    task.cancel()
+                new_loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                new_loop.close()
+            except Exception as e:
+                logger.error(f"Erreur lors du nettoyage: {e}")
+    
+    except Exception as e:
+        logger.critical(f"❌ Impossible de démarrer le bot: {e}", exc_info=True)
+        sys.exit(1)
 
 # ==================== FIN DU BOT ====================

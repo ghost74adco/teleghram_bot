@@ -5235,8 +5235,12 @@ async def admin_detailed_stats(update: Update, context: ContextTypes.DEFAULT_TYP
 # ==================== BLOC 9 : FONCTION MAIN & DÉMARRAGE DU BOT ====================
 # Ajoutez ce bloc EN DERNIER (après tous les autres blocs)
 
+# ==================== BLOC 9 : FONCTION MAIN & DÉMARRAGE DU BOT ====================
+
 async def main():
     """Fonction principale du bot"""
+    
+    logger.info("🎯 ENTRÉE DANS main()")
     
     # Vérifier la persistance
     boot_count = verify_data_persistence()
@@ -5419,53 +5423,87 @@ async def main():
     logger.info(f"   • Modérateurs: {stats['moderators']}")
     
     logger.info("=" * 50)
-    logger.info("🚀 Bot démarré avec succès !")
+    logger.info("🚀 Initialisation de l'application...")
     logger.info("=" * 50)
     
-    # ==================== MÉTHODE MANUELLE - ÉVITE LE CONFLIT EVENT LOOP ====================
+    # ==================== DÉMARRAGE MANUEL ====================
     
-    # Initialiser l'application
-    await application.initialize()
-    await application.start()
-    
-    # 🆕 FORCER LA SUPPRESSION DES WEBHOOKS ET UPDATES EN ATTENTE
     try:
+        # Initialiser l'application
+        logger.info("📡 Initialisation de l'application...")
+        await application.initialize()
+        
+        logger.info("▶️ Démarrage de l'application...")
+        await application.start()
+        
+        # Supprimer les webhooks
+        logger.info("🧹 Suppression des webhooks...")
         await application.bot.delete_webhook(drop_pending_updates=True)
-        logger.info("✅ Webhooks supprimés et updates en attente effacées")
+        
+        # Attendre pour éviter les conflits
+        logger.info("⏳ Attente de 2 secondes...")
+        await asyncio.sleep(2)
+        
+        # Démarrer le polling
+        logger.info("🔄 Démarrage du polling...")
+        await application.updater.start_polling(
+            allowed_updates=Update.ALL_TYPES,
+            drop_pending_updates=True
+        )
+        
+        logger.info("=" * 50)
+        logger.info("✅ BOT OPÉRATIONNEL !")
+        logger.info("=" * 50)
+        
+        # Créer un événement d'arrêt
+        stop_event = asyncio.Event()
+        
+        # Gestionnaire de signaux
+        import signal
+        
+        def handle_stop_signal(signum, frame):
+            logger.info(f"🛑 Signal {signum} reçu")
+            stop_event.set()
+        
+        signal.signal(signal.SIGINT, handle_stop_signal)
+        signal.signal(signal.SIGTERM, handle_stop_signal)
+        
+        logger.info("⌛ En attente d'événements... (Ctrl+C pour arrêter)")
+        
+        # Attendre le signal d'arrêt
+        await stop_event.wait()
+        
+        # Arrêt propre
+        logger.info("🔄 Arrêt en cours...")
+        await application.updater.stop()
+        await application.stop()
+        await application.shutdown()
+        logger.info("✅ Bot arrêté proprement")
+    
     except Exception as e:
-        logger.warning(f"⚠️ Erreur suppression webhook: {e}")
+        logger.critical(f"❌ ERREUR FATALE dans main(): {e}", exc_info=True)
+        raise
+
+# ==================== POINT D'ENTRÉE ====================
+
+if __name__ == '__main__':
+    logger.info("=" * 50)
+    logger.info("🚀 LANCEMENT DU BOT")
+    logger.info("=" * 50)
+    logger.info(f"🐍 Python {sys.version}")
+    logger.info(f"📍 Fichier: {__file__}")
+    logger.info("=" * 50)
     
-    # Attendre 2 secondes pour laisser l'ancienne instance se terminer
-    await asyncio.sleep(2)
-    
-    # Démarrer le polling
-    await application.updater.start_polling(
-        allowed_updates=Update.ALL_TYPES,
-        drop_pending_updates=True
-    )
-    
-    # Créer un événement pour garder le bot actif
-    stop_event = asyncio.Event()
-    
-    # Gestionnaire de signaux pour arrêt propre
-    import signal
-    
-    def handle_stop_signal(signum, frame):
-        logger.info(f"🛑 Signal {signum} reçu, arrêt en cours...")
-        stop_event.set()
-    
-    # Enregistrer les signaux
-    signal.signal(signal.SIGINT, handle_stop_signal)
-    signal.signal(signal.SIGTERM, handle_stop_signal)
-    
-    logger.info("✅ Bot en cours d'exécution. Appuyez sur Ctrl+C pour arrêter.")
-    
-    # Attendre le signal d'arrêt
-    await stop_event.wait()
-    
-    # Arrêt propre
-    logger.info("🔄 Arrêt du bot...")
-    await application.updater.stop()
-    await application.stop()
-    await application.shutdown()
-    logger.info("✅ Bot arrêté proprement")
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("⌨️ Arrêt par Ctrl+C")
+    except Exception as e:
+        logger.critical(f"💥 ERREUR CRITIQUE: {e}", exc_info=True)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+    finally:
+        logger.info("👋 Fin du programme")
+
+# FIN DU FICHIER

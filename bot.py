@@ -5428,8 +5428,21 @@ async def main():
     await application.initialize()
     await application.start()
     
+    # 🆕 FORCER LA SUPPRESSION DES WEBHOOKS ET UPDATES EN ATTENTE
+    try:
+        await application.bot.delete_webhook(drop_pending_updates=True)
+        logger.info("✅ Webhooks supprimés et updates en attente effacées")
+    except Exception as e:
+        logger.warning(f"⚠️ Erreur suppression webhook: {e}")
+    
+    # Attendre 2 secondes pour laisser l'ancienne instance se terminer
+    await asyncio.sleep(2)
+    
     # Démarrer le polling
-    await application.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+    await application.updater.start_polling(
+        allowed_updates=Update.ALL_TYPES,
+        drop_pending_updates=True
+    )
     
     # Créer un événement pour garder le bot actif
     stop_event = asyncio.Event()
@@ -5456,18 +5469,3 @@ async def main():
     await application.stop()
     await application.shutdown()
     logger.info("✅ Bot arrêté proprement")
-
-# ==================== DÉMARRAGE ====================
-
-if __name__ == '__main__':
-    logger.info("🚀 Lancement du bot...")
-    
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        logger.info("🛑 Arrêt par utilisateur")
-    except Exception as e:
-        logger.critical(f"❌ Erreur fatale: {e}", exc_info=True)
-        sys.exit(1)
-
-# ==================== FIN DU BOT ====================

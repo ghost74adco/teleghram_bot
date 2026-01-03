@@ -5437,7 +5437,39 @@ async def main():
     # Lancer le bot
     await application.run_polling(allowed_updates=Update.ALL_TYPES)
 
+# ==================== FIN DU BLOC 9 - VERSION SANS NEST_ASYNCIO ====================
+
 if __name__ == '__main__':
-    asyncio.run(main())
+    import sys
+    import platform
+    
+    # Détection de l'environnement
+    is_render = os.path.exists("/opt/render")
+    is_railway = os.path.exists("/app")
+    
+    if is_render or is_railway:
+        # Sur Render/Railway, utiliser la méthode directe
+        logger.info("🌐 Environnement cloud détecté")
+        
+        # Créer une nouvelle boucle d'événements propre
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(main())
+        except KeyboardInterrupt:
+            logger.info("🛑 Arrêt du bot...")
+        finally:
+            try:
+                loop.close()
+            except:
+                pass
+    else:
+        # En local, utiliser asyncio.run()
+        try:
+            asyncio.run(main())
+        except KeyboardInterrupt:
+            logger.info("🛑 Arrêt du bot...")
+
+# ==================== FIN DU BOT ====================
 
 # ==================== FIN DU BOT ====================

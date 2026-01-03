@@ -5235,8 +5235,6 @@ async def admin_detailed_stats(update: Update, context: ContextTypes.DEFAULT_TYP
 # ==================== BLOC 9 : FONCTION MAIN & DÉMARRAGE DU BOT ====================
 # Ajoutez ce bloc EN DERNIER (après tous les autres blocs)
 
-# ==================== BLOC 9 : FONCTION MAIN & DÉMARRAGE DU BOT ====================
-
 async def main():
     """Fonction principale du bot"""
     
@@ -5426,7 +5424,7 @@ async def main():
     logger.info("🚀 Initialisation de l'application...")
     logger.info("=" * 50)
     
-    # ==================== DÉMARRAGE MANUEL ====================
+    # ==================== DÉMARRAGE MANUEL AVEC KILL SWITCH ====================
     
     try:
         # Initialiser l'application
@@ -5438,18 +5436,75 @@ async def main():
         
         # Supprimer les webhooks
         logger.info("🧹 Suppression des webhooks...")
-        await application.bot.delete_webhook(drop_pending_updates=True)
+        try:
+            await application.bot.delete_webhook(drop_pending_updates=True)
+            logger.info("✅ Webhooks supprimés")
+        except Exception as e:
+            logger.warning(f"⚠️ Erreur suppression webhook: {e}")
         
-        # Attendre pour éviter les conflits
-        logger.info("⏳ Attente de 2 secondes...")
-        await asyncio.sleep(2)
+        # 🔪 KILL SWITCH - ATTENTE LONGUE POUR TUER LES INSTANCES ZOMBIES
+        logger.info("🔪 KILL SWITCH ACTIVÉ")
+        logger.info("⏳ Attente de 30 secondes pour que les anciennes instances meurent...")
+        logger.info("   (Démarrage #{} - Si ce numéro est élevé, des instances ne s'arrêtent pas correctement)".format(boot_count))
+        await asyncio.sleep(30)
         
-        # Démarrer le polling
-        logger.info("🔄 Démarrage du polling...")
-        await application.updater.start_polling(
-            allowed_updates=Update.ALL_TYPES,
-            drop_pending_updates=True
-        )
+        # RETRY AUTOMATIQUE AVEC DÉLAI CROISSANT
+        logger.info("🔄 Démarrage du polling avec système de retry automatique...")
+        
+        polling_started = False
+        max_retries = 20
+        
+        for attempt in range(max_retries):
+            try:
+                await application.updater.start_polling(
+                    allowed_updates=Update.ALL_TYPES,
+                    drop_pending_updates=True,
+                    timeout=30,
+                    pool_timeout=30
+                )
+                logger.info("✅ POLLING DÉMARRÉ AVEC SUCCÈS !")
+                polling_started = True
+                break
+                
+            except Exception as e:
+                if "Conflict" in str(e):
+                    # Calcul du délai croissant : 20s, 30s, 40s, 50s...
+                    wait_time = 20 + (attempt * 10)
+                    
+                    logger.warning("=" * 50)
+                    logger.warning(f"⚠️ CONFLIT DÉTECTÉ (Tentative {attempt + 1}/{max_retries})")
+                    logger.warning(f"   Une autre instance du bot tourne encore avec le même token.")
+                    logger.warning(f"   Nouvelle tentative dans {wait_time} secondes...")
+                    logger.warning("=" * 50)
+                    
+                    # Dernière tentative
+                    if attempt == max_retries - 1:
+                        logger.critical("=" * 50)
+                        logger.critical("❌ ÉCHEC APRÈS 20 TENTATIVES ET ~5 MINUTES D'ATTENTE")
+                        logger.critical("=" * 50)
+                        logger.critical("")
+                        logger.critical("🔴 PROBLÈME: Une instance zombie utilise toujours votre token.")
+                        logger.critical("")
+                        logger.critical("✅ SOLUTION RECOMMANDÉE:")
+                        logger.critical("   1. Ouvrez Telegram et parlez à @BotFather")
+                        logger.critical("   2. Tapez /revoke et sélectionnez votre bot")
+                        logger.critical("      OU tapez /newbot pour créer un nouveau bot")
+                        logger.critical("   3. Copiez le nouveau BOT_TOKEN")
+                        logger.critical("   4. Sur Render: Environment → BOT_TOKEN → collez le nouveau")
+                        logger.critical("   5. Redéployez le service")
+                        logger.critical("")
+                        logger.critical("💡 Cela tuera TOUTES les instances zombies instantanément.")
+                        logger.critical("=" * 50)
+                        raise
+                    
+                    await asyncio.sleep(wait_time)
+                else:
+                    # Erreur non-conflit
+                    logger.error(f"❌ Erreur inattendue (non-conflit): {e}")
+                    raise
+        
+        if not polling_started:
+            raise RuntimeError("Impossible de démarrer le polling après toutes les tentatives")
         
         logger.info("=" * 50)
         logger.info("✅ BOT OPÉRATIONNEL !")
@@ -5458,13 +5513,14 @@ async def main():
         # Créer un événement d'arrêt
         stop_event = asyncio.Event()
         
-        # Gestionnaire de signaux
+        # Gestionnaire de signaux pour arrêt propre
         import signal
         
         def handle_stop_signal(signum, frame):
-            logger.info(f"🛑 Signal {signum} reçu")
+            logger.info(f"🛑 Signal {signum} reçu, arrêt en cours...")
             stop_event.set()
         
+        # Enregistrer les signaux
         signal.signal(signal.SIGINT, handle_stop_signal)
         signal.signal(signal.SIGTERM, handle_stop_signal)
         
@@ -5474,7 +5530,7 @@ async def main():
         await stop_event.wait()
         
         # Arrêt propre
-        logger.info("🔄 Arrêt en cours...")
+        logger.info("🔄 Arrêt du bot...")
         await application.updater.stop()
         await application.stop()
         await application.shutdown()

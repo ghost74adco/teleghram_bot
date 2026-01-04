@@ -2771,7 +2771,7 @@ Votre panier a été vidé avec succès.
 
 @error_handler
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Affiche le panel administrateur - VERSION CORRIGÉE SANS BUG"""
+    """Affiche le panel administrateur - VERSION CORRIGÉE"""
     # Gérer à la fois Command et CallbackQuery
     if update.callback_query:
         query = update.callback_query
@@ -2791,13 +2791,11 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Stats rapides
     users_count = len(load_users())
-    stocks = load_stocks()
     low_stock = len(get_low_stock_products())
     out_stock = len(get_out_of_stock_products())
     
-    # MESSAGE SANS FORMATAGE MARKDOWN (BUG FIXÉ)
-    message = f"""
-🎛️ PANEL ADMINISTRATEUR
+    # MESSAGE EN TEXTE BRUT (PAS DE FORMATAGE)
+    message = f"""🎛️ PANEL ADMINISTRATEUR
 
 👤 {name} ({level.upper()})
 
@@ -2844,20 +2842,21 @@ Choisissez une section :
     
     keyboard.append([InlineKeyboardButton("🔙 Fermer", callback_data="admin_close")])
     
-    # ENVOI SANS PARSE_MODE (BUG FIXÉ)
+    # ENVOI SANS PARSE_MODE !!! C'EST LA CLÉ !!!
     if is_callback:
         await query.edit_message_text(
             message,
             reply_markup=InlineKeyboardMarkup(keyboard)
+            # PAS DE parse_mode DU TOUT !
         )
     else:
         await update.message.reply_text(
             message,
             reply_markup=InlineKeyboardMarkup(keyboard)
+            # PAS DE parse_mode DU TOUT !
         )
     
     logger.info(f"🔐 Panel admin affiché: {user_id} ({level})")
-
 # ==================== GESTION PRODUITS ====================
 
 @error_handler

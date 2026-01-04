@@ -5235,6 +5235,8 @@ async def admin_detailed_stats(update: Update, context: ContextTypes.DEFAULT_TYP
 # ==================== BLOC 9 : FONCTION MAIN & DÉMARRAGE DU BOT ====================
 # Ajoutez ce bloc EN DERNIER (après tous les autres blocs)
 
+# ==================== BLOC 9 : FONCTION MAIN & DÉMARRAGE DU BOT ====================
+
 async def main():
     """Fonction principale du bot"""
     
@@ -5251,6 +5253,11 @@ async def main():
     was_down = check_downtime_and_activate_maintenance()
     if was_down:
         logger.warning("⚠️ Maintenance auto-activée après downtime")
+    
+    # 🆕 FORCER LA DÉSACTIVATION DE LA MAINTENANCE
+    logger.info("🔧 Désactivation forcée de la maintenance au démarrage...")
+    set_maintenance_mode(False, reason="Désactivé automatiquement au démarrage")
+    logger.info("✅ Mode maintenance désactivé - Bot accessible à tous")
     
     # Créer l'application
     application = Application.builder().token(BOT_TOKEN).build()
@@ -5498,7 +5505,7 @@ async def main():
                     await asyncio.sleep(wait_time)
                 else:
                     # Erreur non-conflit
-                    logger.error(f"❌ Erreur inattendue (non-conflit): {e}")
+                    logger.error(f"❌ Erreur inattendue: {e}")
                     raise
         
         if not polling_started:

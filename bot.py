@@ -1941,34 +1941,39 @@ def create_backup(backup_dir: Path = None) -> Optional[Path]:
 
 @error_handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler pour la commande /start"""
     user = update.effective_user
     user_id = user.id
-    
-    # Vérifier mode maintenance
+
+    # Maintenance
     if is_maintenance_mode(user_id):
         await update.message.reply_text(
             f"{EMOJI_THEME['warning']} BOT EN MAINTENANCE\n\n"
             "Le service est temporairement indisponible.\n"
-            "Veuillez réessayer dans quelques instants."
+            "Veuillez réessayer dans quelques instants.",
+            parse_mode=None
         )
         return
-    
-    # Récupérer les données utilisateur
+
     user_data = {
         "username": user.username or "N/A",
         "first_name": user.first_name or "Utilisateur",
         "last_name": user.last_name or "",
         "language_code": user.language_code or "fr"
     }
-    
-    # Détection nouveau user
+
+    keyboard = [
+        [
+            InlineKeyboardButton("🇫🇷 France", callback_data="country_fr"),
+            InlineKeyboardButton("🇨🇭 Suisse", callback_data="country_ch")
+        ],
+        [InlineKeyboardButton(f"{EMOJI_THEME['info']} Aide", callback_data="help")]
+    ]
+
     if is_new_user(user_id):
         add_user(user_id, user_data)
         logger.info(f"🆕 Nouvel utilisateur: {user_id} - {user_data['first_name']}")
         await notify_admin_new_user(context, user_id, user_data)
-        
-        # Message de bienvenue pour nouveau user
+
         welcome_message = f"""
 {EMOJI_THEME['celebration']} BIENVENUE {user_data['first_name']} !
 
@@ -1993,27 +1998,21 @@ Notre équipe est disponible {get_horaires_text()}
 
 ━━━━━━━━━━━━━━━━━━━━━━
 """
-        keyboard = [
-            [InlineKeyboardButton("🇫🇷 France", callback_data="country_fr"),
-             InlineKeyboardButton("🇨🇭 Suisse", callback_data="country_ch")],
-            [InlineKeyboardButton(f"{EMOJI_THEME['info']} Aide", callback_data="help")]
-        ]
-        
+
         await update.message.reply_text(
             welcome_message,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode=None
         )
-    
+
     else:
-        # Utilisateur existant
         update_user_visit(user_id)
         stats = get_client_stats(user_id)
-        
+
+        vip_message = ""
         if stats and stats.get("vip_status"):
             vip_message = f"{EMOJI_THEME['vip']} Statut VIP actif - {VIP_DISCOUNT}% de réduction automatique\n"
-        else:
-            vip_message = ""
-        
+
         returning_message = f"""
 {EMOJI_THEME['wave']} Bon retour {user_data['first_name']} !
 
@@ -2022,6 +2021,13 @@ Choisissez votre pays pour commencer :
 
 🕐 Horaires : {get_horaires_text()}
 """
+
+        await update.message.reply_text(
+            returning_message,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode=None
+        )
+
         
         keyboard = [
             [InlineKeyboardButton("🇫🇷 France", callback_data="country_fr"),

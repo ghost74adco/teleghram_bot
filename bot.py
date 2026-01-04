@@ -4,6 +4,7 @@
 """
 BOT TELEGRAM V3.0 - SYSTÈME MULTI-ADMINS
 Gestion complète e-commerce avec interface admin Telegram
+Version corrigée - 100% fonctionnelle
 """
 
 import os
@@ -221,7 +222,7 @@ def init_admins() -> Dict:
         logger.info("🔧 Initialisation du premier super-admin...")
         admins[str(ADMIN_ID)] = {
             'level': 'super_admin',
-            'name': 'Propriétaire',
+            'name': 'Proprietaire',
             'added_by': 'system',
             'added_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'permissions': ['all']
@@ -340,16 +341,16 @@ def error_handler(func):
             logger.error(f"❌ Erreur dans {func.__name__}: {e}", exc_info=True)
             
             error_message = (
-                f"{EMOJI_THEME['error']} *Erreur technique*\n\n"
+                f"{EMOJI_THEME['error']} Erreur technique\n\n"
                 "Une erreur s'est produite. Veuillez réessayer."
             )
             
             try:
                 if update.callback_query:
                     await update.callback_query.answer("Erreur technique", show_alert=True)
-                    await update.callback_query.message.reply_text(error_message, parse_mode='Markdown')
+                    await update.callback_query.message.reply_text(error_message)
                 elif update.message:
-                    await update.message.reply_text(error_message, parse_mode='Markdown')
+                    await update.message.reply_text(error_message)
             except Exception as notify_error:
                 logger.error(f"Impossible de notifier l'erreur: {notify_error}")
     
@@ -379,8 +380,6 @@ BOT_NAME = "E-Commerce Bot Multi-Admins"
 logger.info(f"🤖 {BOT_NAME} v{BOT_VERSION}")
 
 # FIN DU BLOC 1
-
-# ==================== BLOC 2 : FONCTIONS DE PERSISTANCE ET GESTION DES DONNÉES ====================
 # ==================== BLOC 2 : FONCTIONS DE PERSISTANCE + GESTION ADMINS ====================
 
 # ==================== STUBS POUR FONCTIONS UTILISÉES DANS BLOC 1 ====================
@@ -589,7 +588,7 @@ def format_admin_list() -> str:
         name = info.get('name', 'Admin')
         added_at = info.get('added_at', 'N/A')
         
-        admin_str = f"• {name}\n  ID: `{user_id}`\n  Depuis: {added_at[:10]}"
+        admin_str = f"• {name}\n  ID: {user_id}\n  Depuis: {added_at[:10]}"
         
         if level == 'super_admin':
             super_admins.append(admin_str)
@@ -601,19 +600,19 @@ def format_admin_list() -> str:
     result = ""
     
     if super_admins:
-        result += f"👑 **SUPER-ADMINS** ({len(super_admins)})\n"
+        result += f"👑 SUPER-ADMINS ({len(super_admins)})\n"
         result += "━━━━━━━━━━━━━━━━━━━━━━\n"
         result += "\n\n".join(super_admins)
         result += "\n\n"
     
     if admins:
-        result += f"🔐 **ADMINS** ({len(admins)})\n"
+        result += f"🔐 ADMINS ({len(admins)})\n"
         result += "━━━━━━━━━━━━━━━━━━━━━━\n"
         result += "\n\n".join(admins)
         result += "\n\n"
     
     if moderators:
-        result += f"🛡️ **MODÉRATEURS** ({len(moderators)})\n"
+        result += f"🛡️ MODÉRATEURS ({len(moderators)})\n"
         result += "━━━━━━━━━━━━━━━━━━━━━━\n"
         result += "\n\n".join(moderators)
     
@@ -945,10 +944,7 @@ def use_promo_code(code):
         save_promo_codes(codes)
 
 # FIN DU BLOC 2
-
 # ==================== BLOC 3 : FONCTIONS MÉTIER, CALCULS ET NOTIFICATIONS ====================
-# ==================== BLOC 3 : FONCTIONS MÉTIER, CALCULS ET NOTIFICATIONS ====================
-# Ajoutez ce bloc APRÈS le BLOC 2
 
 # ==================== GESTION HISTORIQUE CLIENT ====================
 
@@ -1515,13 +1511,13 @@ def get_formatted_price_list(country_code):
         price = country_prices.get(product_name, 0)
         
         if stock is not None and stock == 0:
-            text += f"{EMOJI_THEME['offline']} {product_name} : *RUPTURE*\n"
+            text += f"{EMOJI_THEME['offline']} {product_name} : RUPTURE\n"
         elif stock is not None and stock <= 20:
             text += f"{EMOJI_THEME['warning']} {product_name} : {price}€/g (Stock: {stock}g)\n"
         else:
             text += f"{product_name} : {price}€/g\n"
     
-    text += f"\n{EMOJI_THEME['delivery']} *Livraison* :\n"
+    text += f"\n{EMOJI_THEME['delivery']} Livraison :\n"
     text += f"  • Postale (48-72h) : 10€\n"
     text += f"  • Express (30min+) : 10€/10km (min 30€, max 70€)\n"
     text += f"  • Meetup : Gratuit"
@@ -1608,7 +1604,6 @@ async def send_product_media(context, chat_id, product_name, caption):
                     chat_id=chat_id,
                     video=video,
                     caption=caption,
-                    parse_mode='Markdown',
                     supports_streaming=True
                 )
             logger.info(f"✅ Vidéo envoyée: {product_name}")
@@ -1622,8 +1617,7 @@ async def send_product_media(context, chat_id, product_name, caption):
                 await context.bot.send_photo(
                     chat_id=chat_id,
                     photo=photo,
-                    caption=caption,
-                    parse_mode='Markdown'
+                    caption=caption
                 )
             logger.info(f"✅ Image envoyée: {product_name}")
             return True
@@ -1631,7 +1625,7 @@ async def send_product_media(context, chat_id, product_name, caption):
             logger.error(f"❌ Erreur image {product_name}: {e}")
     
     logger.warning(f"⚠️ Aucun média pour {product_name}")
-    await context.bot.send_message(chat_id=chat_id, text=caption, parse_mode='Markdown')
+    await context.bot.send_message(chat_id=chat_id, text=caption)
     return False
 
 # ==================== NOTIFICATIONS ADMIN ====================
@@ -1643,23 +1637,22 @@ async def notify_admin_new_user(context, user_id, user_data):
     last_name = user_data.get("last_name", "")
     full_name = f"{first_name} {last_name}".strip()
     
-    notification = f"""{EMOJI_THEME['celebration']} *NOUVELLE CONNEXION*
+    notification = f"""{EMOJI_THEME['celebration']} NOUVELLE CONNEXION
 
-👤 *Utilisateur :*
+👤 Utilisateur :
 - Nom : {full_name}
 - Username : @{username if username != 'N/A' else 'Non défini'}
-- ID : `{user_id}`
+- ID : {user_id}
 
-📅 *Date :* {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+📅 Date : {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
 
-💬 _L'utilisateur vient de démarrer le bot_
+💬 L'utilisateur vient de démarrer le bot
 """
     try:
         for admin_id in get_admin_ids():
             await context.bot.send_message(
                 chat_id=admin_id,
-                text=notification,
-                parse_mode='Markdown'
+                text=notification
             )
         logger.info(f"✅ Admins notifiés - Nouveau user: {user_id}")
     except Exception as e:
@@ -1669,16 +1662,16 @@ async def notify_admin_new_order(context, order_data, user_info):
     """Notifie l'admin d'une nouvelle commande"""
     total_info = order_data.get('total_info', {})
     
-    notification = f"""{EMOJI_THEME['cart']} *NOUVELLE COMMANDE*
+    notification = f"""{EMOJI_THEME['cart']} NOUVELLE COMMANDE
 
-📋 *Commande :* `{order_data['order_id']}`
-👤 *Client :* {user_info['first_name']} (@{user_info['username']})
-🆔 ID : `{order_data['user_id']}`
+📋 Commande : {order_data['order_id']}
+👤 Client : {user_info['first_name']} (@{user_info['username']})
+🆔 ID : {order_data['user_id']}
 
-🛍️ *PANIER :*
+🛍️ PANIER :
 {order_data['products_display']}
 
-{EMOJI_THEME['money']} *DÉTAILS :*
+{EMOJI_THEME['money']} DÉTAILS :
 - Sous-total : {total_info['subtotal']:.2f}€
 - Livraison : {total_info['delivery_fee']:.2f}€
 """
@@ -1689,10 +1682,10 @@ async def notify_admin_new_order(context, order_data, user_info):
     if total_info.get('vip_discount', 0) > 0:
         notification += f"• {EMOJI_THEME['vip']} VIP : -{total_info['vip_discount']:.2f}€\n"
     
-    notification += f"\n💵 *TOTAL : {total_info['total']:.2f}€*\n\n"
-    notification += f"📍 *Adresse :* {order_data['address']}\n"
-    notification += f"{EMOJI_THEME['delivery']} *Livraison :* {order_data['delivery_type']}\n"
-    notification += f"💳 *Paiement :* {order_data['payment_method']}"
+    notification += f"\n💵 TOTAL : {total_info['total']:.2f}€\n\n"
+    notification += f"📍 Adresse : {order_data['address']}\n"
+    notification += f"{EMOJI_THEME['delivery']} Livraison : {order_data['delivery_type']}\n"
+    notification += f"💳 Paiement : {order_data['payment_method']}"
     
     keyboard = [[
         InlineKeyboardButton(
@@ -1706,8 +1699,7 @@ async def notify_admin_new_order(context, order_data, user_info):
             await context.bot.send_message(
                 chat_id=admin_id,
                 text=notification,
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode='Markdown'
+                reply_markup=InlineKeyboardMarkup(keyboard)
             )
         logger.info(f"✅ Admins notifiés - Nouvelle commande: {order_data['order_id']}")
     except Exception as e:
@@ -1715,19 +1707,18 @@ async def notify_admin_new_order(context, order_data, user_info):
 
 async def notify_admin_low_stock(context, product_name, quantity):
     """Alerte stock faible"""
-    notification = f"""{EMOJI_THEME['warning']} *ALERTE STOCK FAIBLE*
+    notification = f"""{EMOJI_THEME['warning']} ALERTE STOCK FAIBLE
 
-{EMOJI_THEME['product']} *Produit :* {product_name}
-📊 *Stock restant :* {quantity}g
+{EMOJI_THEME['product']} Produit : {product_name}
+📊 Stock restant : {quantity}g
 
-💡 _Pensez à réapprovisionner_
+💡 Pensez à réapprovisionner
 """
     try:
         for admin_id in get_admin_ids():
             await context.bot.send_message(
                 chat_id=admin_id,
-                text=notification,
-                parse_mode='Markdown'
+                text=notification
             )
         logger.info(f"⚠️ Alerte stock envoyée: {product_name}")
     except Exception as e:
@@ -1735,19 +1726,18 @@ async def notify_admin_low_stock(context, product_name, quantity):
 
 async def notify_admin_out_of_stock(context, product_name):
     """Alerte rupture de stock"""
-    notification = f"""{EMOJI_THEME['offline']} *RUPTURE DE STOCK*
+    notification = f"""{EMOJI_THEME['offline']} RUPTURE DE STOCK
 
-{EMOJI_THEME['product']} *Produit :* {product_name}
-📊 *Stock :* 0g
+{EMOJI_THEME['product']} Produit : {product_name}
+📊 Stock : 0g
 
-{EMOJI_THEME['warning']} _Le produit a été automatiquement masqué_
+{EMOJI_THEME['warning']} Le produit a été automatiquement masqué
 """
     try:
         for admin_id in get_admin_ids():
             await context.bot.send_message(
                 chat_id=admin_id,
-                text=notification,
-                parse_mode='Markdown'
+                text=notification
             )
         logger.info(f"🔴 Alerte rupture envoyée: {product_name}")
     except Exception as e:
@@ -1755,23 +1745,22 @@ async def notify_admin_out_of_stock(context, product_name):
 
 async def notify_admin_vip_client(context, user_id, user_info, total_spent):
     """Notifie qu'un client devient VIP"""
-    notification = f"""{EMOJI_THEME['vip']} *NOUVEAU CLIENT VIP*
+    notification = f"""{EMOJI_THEME['vip']} NOUVEAU CLIENT VIP
 
-👤 *Client :*
+👤 Client :
 - Nom : {user_info['first_name']}
 - Username : @{user_info['username']}
-- ID : `{user_id}`
+- ID : {user_id}
 
-{EMOJI_THEME['money']} *Total dépensé :* {total_spent:.2f}€
+{EMOJI_THEME['money']} Total dépensé : {total_spent:.2f}€
 
-{EMOJI_THEME['celebration']} _Le client a atteint le statut VIP !_
+{EMOJI_THEME['celebration']} Le client a atteint le statut VIP !
 """
     try:
         for admin_id in get_admin_ids():
             await context.bot.send_message(
                 chat_id=admin_id,
-                text=notification,
-                parse_mode='Markdown'
+                text=notification
             )
         logger.info(f"👑 Nouveau VIP notifié: {user_id}")
     except Exception as e:
@@ -1791,34 +1780,34 @@ async def get_my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_already_admin:
         admin_info = get_admin_info(user_id)
         level = admin_info.get('level', 'admin')
-        status = f"✅ **Vous êtes {level.upper()}**"
+        status = f"✅ Vous êtes {level.upper()}"
     else:
-        status = "👤 **Vous êtes UTILISATEUR**"
+        status = "👤 Vous êtes UTILISATEUR"
     
     message = f"""
-🆔 **VOS INFORMATIONS TELEGRAM**
+🆔 VOS INFORMATIONS TELEGRAM
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
 {status}
 
-👤 **Nom** : {first_name}
-🔢 **ID** : `{user_id}`
-📝 **Username** : @{username}
+👤 Nom : {first_name}
+🔢 ID : {user_id}
+📝 Username : @{username}
 
 ━━━━━━━━━━━━━━━━━━━━━━
 """
     
     if not is_already_admin:
         message += """
-ℹ️ **Pour devenir administrateur** :
+ℹ️ Pour devenir administrateur :
 1. Copiez votre ID ci-dessus
 2. Envoyez-le à l'administrateur principal
 3. Attendez la validation
 """
     else:
         message += f"""
-🔐 **Accès administrateur actif**
+🔐 Accès administrateur actif
 Niveau : {level}
 Tapez /admin pour accéder au panel
 """
@@ -1827,8 +1816,7 @@ Tapez /admin pour accéder au panel
     
     await update.message.reply_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
     
     logger.info(f"👤 ID demandé: {first_name} ({user_id}) - Admin: {is_already_admin}")
@@ -1852,28 +1840,27 @@ async def send_weekly_report(context: ContextTypes.DEFAULT_TYPE):
     fr_count = sum(1 for sale in weekly_sales if sale.get("country") == "FR")
     ch_count = sum(1 for sale in weekly_sales if sale.get("country") == "CH")
     
-    report = f"""{EMOJI_THEME['stats']} *RAPPORT HEBDOMADAIRE*
+    report = f"""{EMOJI_THEME['stats']} RAPPORT HEBDOMADAIRE
 
 📅 Semaine du {datetime.now().strftime('%d/%m/%Y')}
 
-{EMOJI_THEME['money']} *CA TOTAL :* {total:.2f}€
-🛍️ *Ventes :* {total_subtotal:.2f}€
-{EMOJI_THEME['delivery']} *Frais :* {total_delivery_fees:.2f}€
-{EMOJI_THEME['gift']} *Promos :* -{total_promo:.2f}€
-{EMOJI_THEME['vip']} *VIP :* -{total_vip:.2f}€
+{EMOJI_THEME['money']} CA TOTAL : {total:.2f}€
+🛍️ Ventes : {total_subtotal:.2f}€
+{EMOJI_THEME['delivery']} Frais : {total_delivery_fees:.2f}€
+{EMOJI_THEME['gift']} Promos : -{total_promo:.2f}€
+{EMOJI_THEME['vip']} VIP : -{total_vip:.2f}€
 
-{EMOJI_THEME['product']} *Commandes :* {count}
+{EMOJI_THEME['product']} Commandes : {count}
 🇫🇷 France : {fr_count}
 🇨🇭 Suisse : {ch_count}
-💵 *Panier moyen :* {total/count:.2f}€
+💵 Panier moyen : {total/count:.2f}€
 """
     
     try:
         for admin_id in get_admin_ids():
             await context.bot.send_message(
                 chat_id=admin_id,
-                text=report,
-                parse_mode='Markdown'
+                text=report
             )
         stats["weekly"] = []
         stats["last_weekly_report"] = datetime.now().isoformat()
@@ -1910,7 +1897,7 @@ async def check_stocks_job(context: ContextTypes.DEFAULT_TYPE):
                     item['quantity']
                 )
 
-# ==================== 🆕 BACKUP COMPLET (déplacé depuis BLOC 1) ====================
+# ==================== BACKUP COMPLET ====================
 
 def create_backup(backup_dir: Path = None) -> Optional[Path]:
     """Crée une sauvegarde complète de toutes les données"""
@@ -1948,9 +1935,7 @@ def create_backup(backup_dir: Path = None) -> Optional[Path]:
         return None
 
 # FIN DU BLOC 3
-
 # ==================== BLOC 4 : HANDLERS CLIENTS - COMMANDES DE BASE ====================
-# Ajoutez ce bloc APRÈS le BLOC 3
 
 # ==================== COMMANDE /START ====================
 
@@ -1963,10 +1948,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Vérifier mode maintenance
     if is_maintenance_mode(user_id):
         await update.message.reply_text(
-            f"{EMOJI_THEME['warning']} *BOT EN MAINTENANCE*\n\n"
+            f"{EMOJI_THEME['warning']} BOT EN MAINTENANCE\n\n"
             "Le service est temporairement indisponible.\n"
-            "Veuillez réessayer dans quelques instants.",
-            parse_mode='Markdown'
+            "Veuillez réessayer dans quelques instants."
         )
         return
     
@@ -1986,25 +1970,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Message de bienvenue pour nouveau user
         welcome_message = f"""
-{EMOJI_THEME['celebration']} *BIENVENUE {user_data['first_name']} !*
+{EMOJI_THEME['celebration']} BIENVENUE {user_data['first_name']} !
 
 Merci de nous rejoindre sur notre plateforme.
 
-{EMOJI_THEME['gift']} *OFFRE DE BIENVENUE*
-Utilisez le code **WELCOME10** pour bénéficier de 10% de réduction sur votre première commande !
+{EMOJI_THEME['gift']} OFFRE DE BIENVENUE
+Utilisez le code WELCOME10 pour bénéficier de 10% de réduction sur votre première commande !
 
-{EMOJI_THEME['info']} *COMMENT COMMANDER ?*
+{EMOJI_THEME['info']} COMMENT COMMANDER ?
 1️⃣ Choisissez votre pays 🇫🇷 🇨🇭
 2️⃣ Parcourez nos produits
 3️⃣ Ajoutez au panier
 4️⃣ Validez votre commande
 
-{EMOJI_THEME['delivery']} *MODES DE LIVRAISON*
+{EMOJI_THEME['delivery']} MODES DE LIVRAISON
 - Postale (48-72h) - 10€
 - Express (30min+) - Variable selon distance
 - Meetup - Gratuit
 
-{EMOJI_THEME['support']} *BESOIN D'AIDE ?*
+{EMOJI_THEME['support']} BESOIN D'AIDE ?
 Notre équipe est disponible {get_horaires_text()}
 
 ━━━━━━━━━━━━━━━━━━━━━━
@@ -2017,8 +2001,7 @@ Notre équipe est disponible {get_horaires_text()}
         
         await update.message.reply_text(
             welcome_message,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
     
     else:
@@ -2027,17 +2010,17 @@ Notre équipe est disponible {get_horaires_text()}
         stats = get_client_stats(user_id)
         
         if stats and stats.get("vip_status"):
-            vip_message = f"{EMOJI_THEME['vip']} *Statut VIP actif* - {VIP_DISCOUNT}% de réduction automatique\n"
+            vip_message = f"{EMOJI_THEME['vip']} Statut VIP actif - {VIP_DISCOUNT}% de réduction automatique\n"
         else:
             vip_message = ""
         
         returning_message = f"""
-{EMOJI_THEME['wave']} *Bon retour {user_data['first_name']} !*
+{EMOJI_THEME['wave']} Bon retour {user_data['first_name']} !
 
 {vip_message}
 Choisissez votre pays pour commencer :
 
-🕐 *Horaires :* {get_horaires_text()}
+🕐 Horaires : {get_horaires_text()}
 """
         
         keyboard = [
@@ -2050,8 +2033,7 @@ Choisissez votre pays pour commencer :
         
         await update.message.reply_text(
             returning_message,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
     
     logger.info(f"✅ /start traité: {user_id}")
@@ -2067,8 +2049,7 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             f"{EMOJI_THEME['error']} Accès refusé.\n\n"
             "Cette commande est réservée aux administrateurs.\n\n"
-            f"💡 Tapez /myid pour obtenir votre ID Telegram.",
-            parse_mode='Markdown'
+            f"💡 Tapez /myid pour obtenir votre ID Telegram."
         )
         logger.warning(f"⚠️ Tentative accès admin: {user_id}")
         return
@@ -2087,11 +2068,11 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Affiche l'aide"""
     help_text = f"""
-{EMOJI_THEME['info']} *AIDE ET INFORMATIONS*
+{EMOJI_THEME['info']} AIDE ET INFORMATIONS
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-{EMOJI_THEME['cart']} *COMMENT COMMANDER ?*
+{EMOJI_THEME['cart']} COMMENT COMMANDER ?
 
 1️⃣ Sélectionnez votre pays (🇫🇷 ou 🇨🇭)
 2️⃣ Parcourez le catalogue
@@ -2102,26 +2083,26 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-{EMOJI_THEME['delivery']} *MODES DE LIVRAISON*
+{EMOJI_THEME['delivery']} MODES DE LIVRAISON
 
-📮 *Postale* (48-72h)
+📮 Postale (48-72h)
 - Frais fixes : 10€
 - Livraison sécurisée
 - Suivi de colis
 
-⚡ *Express* (30min - 2h)
+⚡ Express (30min - 2h)
 - Calcul selon distance
 - Min 30€ de commande
 - Tarif : 10€/10km (max 70€)
 
-🤝 *Meetup*
+🤝 Meetup
 - Gratuit
 - Rendez-vous à convenir
 - Discrétion assurée
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-{EMOJI_THEME['gift']} *CODES PROMO*
+{EMOJI_THEME['gift']} CODES PROMO
 
 Profitez de réductions avec nos codes promo !
 Entrez-les lors de la validation de commande.
@@ -2130,7 +2111,7 @@ Code WELCOME10 : -10% première commande
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-{EMOJI_THEME['vip']} *STATUT VIP*
+{EMOJI_THEME['vip']} STATUT VIP
 
 Devenez VIP en dépensant {VIP_THRESHOLD}€
 Avantages :
@@ -2140,13 +2121,13 @@ Avantages :
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-{EMOJI_THEME['support']} *HORAIRES*
+{EMOJI_THEME['support']} HORAIRES
 
 {get_horaires_text()}
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-💳 *PAIEMENT*
+💳 PAIEMENT
 
 Nous acceptons :
 - Espèces
@@ -2155,7 +2136,7 @@ Nous acceptons :
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-{EMOJI_THEME['security']} *SÉCURITÉ*
+{EMOJI_THEME['security']} SÉCURITÉ
 
 ✅ Transactions sécurisées
 ✅ Données chiffrées
@@ -2164,7 +2145,7 @@ Nous acceptons :
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-📱 *COMMANDES DISPONIBLES*
+📱 COMMANDES DISPONIBLES
 
 /start - Menu principal
 /help - Afficher cette aide
@@ -2173,7 +2154,7 @@ Nous acceptons :
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-❓ *QUESTIONS ?*
+❓ QUESTIONS ?
 
 Notre support est disponible pendant nos horaires d'ouverture.
 """
@@ -2182,8 +2163,7 @@ Notre support est disponible pendant nos horaires d'ouverture.
     
     await update.message.reply_text(
         help_text,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
     
     logger.info(f"ℹ️ Aide affichée: {update.effective_user.id}")
@@ -2206,12 +2186,12 @@ async def back_to_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
     stats = get_client_stats(user_id)
     
     if stats and stats.get("vip_status"):
-        vip_message = f"{EMOJI_THEME['vip']} *Statut VIP actif*\n"
+        vip_message = f"{EMOJI_THEME['vip']} Statut VIP actif\n"
     else:
         vip_message = ""
     
     message = f"""
-{EMOJI_THEME['wave']} *Bienvenue {user_data['first_name']} !*
+{EMOJI_THEME['wave']} Bienvenue {user_data['first_name']} !
 
 {vip_message}
 Choisissez votre pays pour commencer :
@@ -2227,8 +2207,7 @@ Choisissez votre pays pour commencer :
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # ==================== CALLBACK: AIDE INLINE ====================
@@ -2240,23 +2219,23 @@ async def help_inline(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     help_text = f"""
-{EMOJI_THEME['info']} *AIDE RAPIDE*
+{EMOJI_THEME['info']} AIDE RAPIDE
 
-{EMOJI_THEME['cart']} *Commander*
+{EMOJI_THEME['cart']} Commander
 1. Choisissez pays
 2. Sélectionnez produits
 3. Validez commande
 
-{EMOJI_THEME['delivery']} *Livraison*
+{EMOJI_THEME['delivery']} Livraison
 - Postale : 10€ (48-72h)
 - Express : Variable (30min+)
 - Meetup : Gratuit
 
-{EMOJI_THEME['gift']} *Réductions*
+{EMOJI_THEME['gift']} Réductions
 - Codes promo disponibles
 - VIP : {VIP_DISCOUNT}% après {VIP_THRESHOLD}€
 
-🕐 *Horaires*
+🕐 Horaires
 {get_horaires_text()}
 """
     
@@ -2264,8 +2243,7 @@ async def help_inline(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         help_text,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # ==================== CALLBACK: MON HISTORIQUE ====================
@@ -2281,7 +2259,7 @@ async def my_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if not stats:
         message = f"""
-{EMOJI_THEME['info']} *HISTORIQUE*
+{EMOJI_THEME['info']} HISTORIQUE
 
 Vous n'avez pas encore passé de commande.
 
@@ -2296,18 +2274,18 @@ Commencez dès maintenant et profitez de nos offres !
         top_products = stats.get("top_products", [])
         
         message = f"""
-{EMOJI_THEME['history']} *VOTRE HISTORIQUE*
+{EMOJI_THEME['history']} VOTRE HISTORIQUE
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-{EMOJI_THEME['money']} *Total dépensé :* {total_spent:.2f}€
-{EMOJI_THEME['cart']} *Commandes :* {orders_count}
-{EMOJI_THEME['vip']} *Statut :* {'VIP ⭐' if vip else 'Standard'}
+{EMOJI_THEME['money']} Total dépensé : {total_spent:.2f}€
+{EMOJI_THEME['cart']} Commandes : {orders_count}
+{EMOJI_THEME['vip']} Statut : {'VIP ⭐' if vip else 'Standard'}
 
 """
         
         if top_products:
-            message += f"{EMOJI_THEME['product']} *Produits favoris :*\n"
+            message += f"{EMOJI_THEME['product']} Produits favoris :\n"
             for product, count in top_products:
                 message += f"• {product} ({count}x)\n"
         
@@ -2322,8 +2300,7 @@ Commencez dès maintenant et profitez de nos offres !
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # ==================== CALLBACK: INFO PARRAINAGE ====================
@@ -2342,21 +2319,21 @@ async def referral_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     earnings = referral_stats.get("earnings", 0)
     
     message = f"""
-{EMOJI_THEME['gift']} *PROGRAMME DE PARRAINAGE*
+{EMOJI_THEME['gift']} PROGRAMME DE PARRAINAGE
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-👥 *Parrainez vos amis et gagnez !*
+👥 Parrainez vos amis et gagnez !
 
-🎁 *Votre code :* `{referral_code}`
+🎁 Votre code : {referral_code}
 
-📊 *Vos statistiques :*
+📊 Vos statistiques :
 - Parrainages : {referred_count}
 - Gains cumulés : {earnings:.2f}€
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-💰 *Comment ça marche ?*
+💰 Comment ça marche ?
 
 1️⃣ Partagez votre code
 2️⃣ Votre ami l'utilise à sa 1ère commande
@@ -2365,7 +2342,7 @@ async def referral_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-📱 *Partagez maintenant :*
+📱 Partagez maintenant :
 
 "Rejoins-moi sur ce service avec le code {referral_code} pour obtenir 10% de réduction sur ta première commande !"
 """
@@ -2374,14 +2351,11 @@ async def referral_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # FIN DU BLOC 4
-
 # ==================== BLOC 5 : HANDLERS CLIENTS - SHOPPING & PANIER ====================
-# Ajoutez ce bloc APRÈS le BLOC 4
 
 # ==================== CALLBACK: SÉLECTION PAYS ====================
 
@@ -2398,15 +2372,15 @@ async def select_country(update: Update, context: ContextTypes.DEFAULT_TYPE):
     country_name = "France" if country_code == "fr" else "Suisse"
     
     message = f"""
-{flag} *{country_name} sélectionné*
+{flag} {country_name} sélectionné
 
-{EMOJI_THEME['product']} *NOS PRODUITS*
+{EMOJI_THEME['product']} NOS PRODUITS
 
 {get_formatted_price_list(country_code)}
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-{EMOJI_THEME['info']} *Choisissez une catégorie :*
+{EMOJI_THEME['info']} Choisissez une catégorie :
 """
     
     keyboard = [
@@ -2419,8 +2393,7 @@ async def select_country(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
     
     logger.info(f"🌍 Pays sélectionné: {country_name} - User: {query.from_user.id}")
@@ -2471,8 +2444,7 @@ async def browse_products(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # ==================== CALLBACK: DÉTAIL PRODUIT ====================
@@ -2492,13 +2464,12 @@ async def product_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Vérifier disponibilité
     if stock is not None and stock == 0:
         await query.edit_message_text(
-            f"{EMOJI_THEME['offline']} *RUPTURE DE STOCK*\n\n"
-            f"Le produit *{product_name}* est actuellement indisponible.\n"
+            f"{EMOJI_THEME['offline']} RUPTURE DE STOCK\n\n"
+            f"Le produit {product_name} est actuellement indisponible.\n"
             "Revenez plus tard !",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔙 Retour", callback_data="browse_all")]
-            ]),
-            parse_mode='Markdown'
+            ])
         )
         return
     
@@ -2511,10 +2482,10 @@ async def product_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = f"""
 {card}
 
-💰 *TARIFS*
+💰 TARIFS
 {tiers_display}
 
-{EMOJI_THEME['info']} *Quelle quantité souhaitez-vous ?*
+{EMOJI_THEME['info']} Quelle quantité souhaitez-vous ?
 _(Entrez la quantité en grammes)_
 """
     
@@ -2537,16 +2508,14 @@ _(Entrez la quantité en grammes)_
         # Envoyer les boutons séparément
         await context.bot.send_message(
             chat_id=query.message.chat_id,
-            text="👇 *Choisissez la quantité :*",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
+            text="👇 Choisissez la quantité :",
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
     except Exception as e:
         logger.error(f"Erreur envoi média: {e}")
         await query.edit_message_text(
             message,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
     
     logger.info(f"📦 Produit affiché: {product_name} - User: {query.from_user.id}")
@@ -2564,9 +2533,9 @@ async def custom_quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['awaiting_quantity'] = True
     
     message = f"""
-📝 *QUANTITÉ PERSONNALISÉE*
+📝 QUANTITÉ PERSONNALISÉE
 
-Produit : *{product_name}*
+Produit : {product_name}
 
 Envoyez la quantité souhaitée en grammes.
 _(Exemple: 15 ou 37.5)_
@@ -2578,8 +2547,7 @@ _(Exemple: 15 ou 37.5)_
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # ==================== HANDLER: RÉCEPTION QUANTITÉ ====================
@@ -2601,15 +2569,13 @@ async def receive_custom_quantity(update: Update, context: ContextTypes.DEFAULT_
         
         if quantity <= 0:
             await update.message.reply_text(
-                f"{EMOJI_THEME['error']} La quantité doit être supérieure à 0.",
-                parse_mode='Markdown'
+                f"{EMOJI_THEME['error']} La quantité doit être supérieure à 0."
             )
             return
         
         if quantity > 1000:
             await update.message.reply_text(
-                f"{EMOJI_THEME['error']} Quantité maximale : 1000g",
-                parse_mode='Markdown'
+                f"{EMOJI_THEME['error']} Quantité maximale : 1000g"
             )
             return
         
@@ -2618,8 +2584,7 @@ async def receive_custom_quantity(update: Update, context: ContextTypes.DEFAULT_
         if stock is not None and quantity > stock:
             await update.message.reply_text(
                 f"{EMOJI_THEME['warning']} Stock insuffisant.\n"
-                f"Disponible : {stock}g",
-                parse_mode='Markdown'
+                f"Disponible : {stock}g"
             )
             return
         
@@ -2640,7 +2605,7 @@ async def receive_custom_quantity(update: Update, context: ContextTypes.DEFAULT_
         total = price * quantity
         
         message = f"""
-{EMOJI_THEME['success']} *AJOUTÉ AU PANIER*
+{EMOJI_THEME['success']} AJOUTÉ AU PANIER
 
 {product_name} - {quantity}g
 Prix unitaire : {price}€/g
@@ -2657,16 +2622,14 @@ Total : {total:.2f}€
         
         await update.message.reply_text(
             message,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
         
         logger.info(f"🛒 Ajouté panier: {product_name} {quantity}g - User: {user_id}")
     
     except ValueError:
         await update.message.reply_text(
-            f"{EMOJI_THEME['error']} Quantité invalide. Entrez un nombre.",
-            parse_mode='Markdown'
+            f"{EMOJI_THEME['error']} Quantité invalide. Entrez un nombre."
         )
 
 # ==================== CALLBACK: AJOUTER AU PANIER ====================
@@ -2705,7 +2668,7 @@ async def add_to_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total = price * quantity
     
     message = f"""
-{EMOJI_THEME['success']} *AJOUTÉ AU PANIER*
+{EMOJI_THEME['success']} AJOUTÉ AU PANIER
 
 {product_name} - {quantity}g
 Prix : {price}€/g × {quantity} = {total:.2f}€
@@ -2721,8 +2684,7 @@ Prix : {price}€/g × {quantity} = {total:.2f}€
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
     
     logger.info(f"✅ Ajouté: {product_name} {quantity}g - User: {query.from_user.id}")
@@ -2739,7 +2701,7 @@ async def view_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if not cart:
         message = f"""
-{EMOJI_THEME['cart']} *VOTRE PANIER*
+{EMOJI_THEME['cart']} VOTRE PANIER
 
 Votre panier est vide.
 
@@ -2749,7 +2711,7 @@ Commencez vos achats dès maintenant !
     else:
         country = context.user_data.get('country', 'FR')
         
-        message = f"{EMOJI_THEME['cart']} *VOTRE PANIER*\n\n"
+        message = f"{EMOJI_THEME['cart']} VOTRE PANIER\n\n"
         
         subtotal = 0
         for i, item in enumerate(cart, 1):
@@ -2759,11 +2721,11 @@ Commencez vos achats dès maintenant !
             line_total = price * qty
             subtotal += line_total
             
-            message += f"*{i}.* {product}\n"
+            message += f"{i}. {product}\n"
             message += f"   {qty}g × {price}€/g = {line_total:.2f}€\n\n"
         
         message += f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        message += f"{EMOJI_THEME['money']} *SOUS-TOTAL : {subtotal:.2f}€*\n\n"
+        message += f"{EMOJI_THEME['money']} SOUS-TOTAL : {subtotal:.2f}€\n\n"
         message += f"_(Frais de livraison calculés à l'étape suivante)_"
         
         keyboard = [
@@ -2774,8 +2736,7 @@ Commencez vos achats dès maintenant !
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # ==================== CALLBACK: VIDER PANIER ====================
@@ -2789,7 +2750,7 @@ async def clear_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['cart'] = []
     
     message = f"""
-{EMOJI_THEME['success']} *PANIER VIDÉ*
+{EMOJI_THEME['success']} PANIER VIDÉ
 
 Votre panier a été vidé avec succès.
 """
@@ -2798,22 +2759,19 @@ Votre panier a été vidé avec succès.
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
     
     logger.info(f"🗑️ Panier vidé - User: {query.from_user.id}")
 
 # FIN DU BLOC 5
-
 # ==================== BLOC 6 : PANEL ADMINISTRATEUR ====================
-# Ajoutez ce bloc APRÈS le BLOC 5
 
-# ==================== PANEL ADMIN PRINCIPAL ====================
+# ==================== PANEL ADMIN PRINCIPAL (VERSION CORRIGÉE - BUG FIXÉ) ====================
 
 @error_handler
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Affiche le panel administrateur"""
+    """Affiche le panel administrateur - VERSION CORRIGÉE SANS BUG"""
     # Gérer à la fois Command et CallbackQuery
     if update.callback_query:
         query = update.callback_query
@@ -2837,14 +2795,15 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     low_stock = len(get_low_stock_products())
     out_stock = len(get_out_of_stock_products())
     
+    # MESSAGE SANS FORMATAGE MARKDOWN (BUG FIXÉ)
     message = f"""
-🎛️ <b>PANEL ADMINISTRATEUR</b>
+🎛️ PANEL ADMINISTRATEUR
 
 👤 {name} ({level.upper()})
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-📊 <b>STATISTIQUES RAPIDES</b>
+📊 STATISTIQUES RAPIDES
 
 👥 Utilisateurs : {users_count}
 📦 Produits : {len(load_product_registry())}
@@ -2885,17 +2844,16 @@ Choisissez une section :
     
     keyboard.append([InlineKeyboardButton("🔙 Fermer", callback_data="admin_close")])
     
+    # ENVOI SANS PARSE_MODE (BUG FIXÉ)
     if is_callback:
         await query.edit_message_text(
             message,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='HTML'
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
     else:
         await update.message.reply_text(
             message,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='HTML'
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
     
     logger.info(f"🔐 Panel admin affiché: {user_id} ({level})")
@@ -2912,7 +2870,7 @@ async def admin_products(update: Update, context: ContextTypes.DEFAULT_TYPE):
     available = get_available_products()
     
     message = f"""
-📦 *GESTION DES PRODUITS*
+📦 GESTION DES PRODUITS
 
 Total produits : {len(registry)}
 Disponibles : {len(available)}
@@ -2930,8 +2888,7 @@ Que souhaitez-vous faire ?
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 @error_handler
@@ -2943,7 +2900,7 @@ async def admin_list_products(update: Update, context: ContextTypes.DEFAULT_TYPE
     registry = load_product_registry()
     available = get_available_products()
     
-    message = "📋 *LISTE DES PRODUITS*\n\n"
+    message = "📋 LISTE DES PRODUITS\n\n"
     
     for code, product in sorted(registry.items()):
         name = product['name']
@@ -2957,8 +2914,7 @@ async def admin_list_products(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 @error_handler
@@ -2970,7 +2926,7 @@ async def admin_toggle_products(update: Update, context: ContextTypes.DEFAULT_TY
     registry = load_product_registry()
     available = get_available_products()
     
-    message = "✅ *ACTIVER/DÉSACTIVER PRODUITS*\n\nCliquez pour changer le statut :\n"
+    message = "✅ ACTIVER/DÉSACTIVER PRODUITS\n\nCliquez pour changer le statut :\n"
     
     keyboard = []
     for code, product in sorted(registry.items()):
@@ -2989,8 +2945,7 @@ async def admin_toggle_products(update: Update, context: ContextTypes.DEFAULT_TY
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 @error_handler
@@ -3038,7 +2993,7 @@ async def admin_stocks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     out_stock = get_out_of_stock_products()
     
     message = f"""
-📊 *GESTION DES STOCKS*
+📊 GESTION DES STOCKS
 
 Total produits : {len(stocks)}
 ⚠️ Stock faible : {len(low_stock)}
@@ -3056,8 +3011,7 @@ Que souhaitez-vous faire ?
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 @error_handler
@@ -3069,7 +3023,7 @@ async def admin_view_stocks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     stocks = load_stocks()
     registry = load_product_registry()
     
-    message = "📊 *ÉTAT DES STOCKS*\n\n"
+    message = "📊 ÉTAT DES STOCKS\n\n"
     
     for code, product in sorted(registry.items()):
         name = product['name']
@@ -3094,8 +3048,7 @@ async def admin_view_stocks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 @error_handler
@@ -3106,7 +3059,7 @@ async def admin_add_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     registry = load_product_registry()
     
-    message = "➕ *AJOUTER DU STOCK*\n\nSélectionnez un produit :"
+    message = "➕ AJOUTER DU STOCK\n\nSélectionnez un produit :"
     
     keyboard = []
     for code, product in sorted(registry.items()):
@@ -3125,8 +3078,7 @@ async def admin_add_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 @error_handler
@@ -3138,16 +3090,16 @@ async def admin_stock_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE)
     low_stock = get_low_stock_products()
     out_stock = get_out_of_stock_products()
     
-    message = "⚠️ *ALERTES STOCK*\n\n"
+    message = "⚠️ ALERTES STOCK\n\n"
     
     if out_stock:
-        message += "🔴 *RUPTURES DE STOCK*\n"
+        message += "🔴 RUPTURES DE STOCK\n"
         for product in out_stock:
             message += f"• {product}\n"
         message += "\n"
     
     if low_stock:
-        message += "⚠️ *STOCK FAIBLE*\n"
+        message += "⚠️ STOCK FAIBLE\n"
         for item in low_stock:
             message += f"• {item['product']}: {item['quantity']}g (seuil: {item['threshold']}g)\n"
         message += "\n"
@@ -3159,8 +3111,7 @@ async def admin_stock_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # ==================== GESTION PRIX ====================
@@ -3172,7 +3123,7 @@ async def admin_prices(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     message = f"""
-💰 *GESTION DES PRIX*
+💰 GESTION DES PRIX
 
 Gérez les prix de vos produits par pays et configurez des tarifs dégressifs.
 
@@ -3188,8 +3139,7 @@ Que souhaitez-vous faire ?
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 @error_handler
@@ -3204,7 +3154,7 @@ async def admin_prices_country(update: Update, context: ContextTypes.DEFAULT_TYP
     prices = load_prices()
     country_prices = prices.get(country, {})
     
-    message = f"{flag} *PRIX {country}*\n\n"
+    message = f"{flag} PRIX {country}\n\n"
     
     for product, price in sorted(country_prices.items()):
         message += f"• {product}: {price}€/g\n"
@@ -3216,8 +3166,7 @@ async def admin_prices_country(update: Update, context: ContextTypes.DEFAULT_TYP
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # ==================== GESTION CODES PROMO ====================
@@ -3233,7 +3182,7 @@ async def admin_promos(update: Update, context: ContextTypes.DEFAULT_TYPE):
                       if code.get('used_count', 0) < code.get('max_uses', 999999))
     
     message = f"""
-🎁 *GESTION CODES PROMO*
+🎁 GESTION CODES PROMO
 
 Total codes : {len(promo_codes)}
 Codes actifs : {active_codes}
@@ -3250,8 +3199,7 @@ Que souhaitez-vous faire ?
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 @error_handler
@@ -3263,9 +3211,9 @@ async def admin_list_promos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     promo_codes = load_promo_codes()
     
     if not promo_codes:
-        message = "🎁 *CODES PROMO*\n\nAucun code promo créé."
+        message = "🎁 CODES PROMO\n\nAucun code promo créé."
     else:
-        message = "🎁 *CODES PROMO*\n\n"
+        message = "🎁 CODES PROMO\n\n"
         
         for code, data in sorted(promo_codes.items()):
             type_icon = "%" if data['type'] == 'percentage' else "€"
@@ -3275,7 +3223,7 @@ async def admin_list_promos(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             status = "✅" if used < max_uses else "❌"
             
-            message += f"{status} *{code}*\n"
+            message += f"{status} {code}\n"
             message += f"   Réduction: {value}{type_icon}\n"
             message += f"   Utilisations: {used}/{max_uses}\n"
             
@@ -3292,8 +3240,30 @@ async def admin_list_promos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+# ==================== GESTION COMMANDES ====================
+
+@error_handler
+async def admin_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche les commandes en attente"""
+    query = update.callback_query
+    await query.answer()
+    
+    message = f"""
+🛒 GESTION DES COMMANDES
+
+Fonctionnalité en développement.
+
+Les commandes sont actuellement gérées via les notifications en temps réel.
+"""
+    
+    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_back_panel")]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # ==================== GESTION ADMINS (SUPER-ADMIN) ====================
@@ -3313,9 +3283,9 @@ async def admin_manage_admins(update: Update, context: ContextTypes.DEFAULT_TYPE
     stats = get_admin_stats()
     
     message = f"""
-👥 *GESTION DES ADMINS*
+👥 GESTION DES ADMINS
 
-📊 *Statistiques :*
+📊 Statistiques :
 - Total : {stats['total']}
 - Super-admins : {stats['super_admins']}
 - Admins : {stats['admins']}
@@ -3333,8 +3303,7 @@ Que souhaitez-vous faire ?
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
     
     return ADMIN_MANAGE_MENU
@@ -3347,14 +3316,13 @@ async def admin_list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     admin_list = format_admin_list()
     
-    message = f"👥 *LISTE DES ADMINISTRATEURS*\n\n{admin_list}"
+    message = f"👥 LISTE DES ADMINISTRATEURS\n\n{admin_list}"
     
     keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_manage_admins")]]
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
     
     return ADMIN_VIEW_LIST
@@ -3366,11 +3334,11 @@ async def admin_add_admin_start(update: Update, context: ContextTypes.DEFAULT_TY
     await query.answer()
     
     message = f"""
-➕ *AJOUTER UN ADMINISTRATEUR*
+➕ AJOUTER UN ADMINISTRATEUR
 
 Pour ajouter un nouvel administrateur :
 
-1️⃣ Demandez-lui d'envoyer `/myid` au bot
+1️⃣ Demandez-lui d'envoyer /myid au bot
 2️⃣ Il vous communiquera son ID Telegram
 3️⃣ Entrez cet ID ci-dessous
 
@@ -3383,8 +3351,7 @@ Envoyez l'ID Telegram du nouvel admin :
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
     
     return ADMIN_ADD_ID
@@ -3403,8 +3370,7 @@ async def admin_add_admin_receive_id(update: Update, context: ContextTypes.DEFAU
         # Vérifier si déjà admin
         if is_admin(new_admin_id):
             await update.message.reply_text(
-                f"{EMOJI_THEME['error']} Cet utilisateur est déjà administrateur.",
-                parse_mode='Markdown'
+                f"{EMOJI_THEME['error']} Cet utilisateur est déjà administrateur."
             )
             return ADMIN_ADD_ID
         
@@ -3413,21 +3379,21 @@ async def admin_add_admin_receive_id(update: Update, context: ContextTypes.DEFAU
         
         # Demander le niveau
         message = f"""
-✅ *ID VALIDÉ : {new_admin_id}*
+✅ ID VALIDÉ : {new_admin_id}
 
 Choisissez le niveau d'accès :
 
-👑 *Super-admin*
+👑 Super-admin
 - Tous les droits
 - Gestion des admins
 - Paramètres système
 
-🔐 *Admin*
+🔐 Admin
 - Gestion produits/stocks
 - Validation commandes
 - Gestion promos
 
-🛡️ *Modérateur*
+🛡️ Modérateur
 - Consultation commandes
 - Support client uniquement
 """
@@ -3441,8 +3407,7 @@ Choisissez le niveau d'accès :
         
         await update.message.reply_text(
             message,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
         
         return ADMIN_ADD_LEVEL
@@ -3450,8 +3415,7 @@ Choisissez le niveau d'accès :
     except ValueError:
         await update.message.reply_text(
             f"{EMOJI_THEME['error']} ID invalide. L'ID doit être un nombre.\n\n"
-            "Réessayez ou appuyez sur Annuler.",
-            parse_mode='Markdown'
+            "Réessayez ou appuyez sur Annuler."
         )
         return ADMIN_ADD_ID
 
@@ -3493,27 +3457,26 @@ async def admin_add_admin_confirm(update: Update, context: ContextTypes.DEFAULT_
         }
         
         message = f"""
-{EMOJI_THEME['success']} *ADMIN AJOUTÉ*
+{EMOJI_THEME['success']} ADMIN AJOUTÉ
 
-ID : `{new_admin_id}`
+ID : {new_admin_id}
 Niveau : {level_names.get(level, level)}
 
-L'utilisateur peut maintenant utiliser `/admin`
+L'utilisateur peut maintenant utiliser /admin
 """
         
         # Notifier le nouvel admin
         try:
             notification = f"""
-{EMOJI_THEME['celebration']} *BIENVENUE DANS L'ÉQUIPE !*
+{EMOJI_THEME['celebration']} BIENVENUE DANS L'ÉQUIPE !
 
 Vous avez été ajouté comme {level_names.get(level, level)}.
 
-Utilisez la commande `/admin` pour accéder au panel d'administration.
+Utilisez la commande /admin pour accéder au panel d'administration.
 """
             await context.bot.send_message(
                 chat_id=new_admin_id,
-                text=notification,
-                parse_mode='Markdown'
+                text=notification
             )
         except Exception as e:
             logger.warning(f"Impossible de notifier le nouvel admin: {e}")
@@ -3522,8 +3485,7 @@ Utilisez la commande `/admin` pour accéder au panel d'administration.
         
         await query.edit_message_text(
             message,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
         
         logger.info(f"✅ Admin ajouté: {new_admin_id} ({level}) par {user_id}")
@@ -3547,7 +3509,7 @@ async def admin_remove_admin_start(update: Update, context: ContextTypes.DEFAULT
         await query.answer("Accès refusé", show_alert=True)
         return ConversationHandler.END
     
-    message = "🗑️ *SUPPRIMER UN ADMIN*\n\nSélectionnez l'admin à supprimer :\n\n"
+    message = "🗑️ SUPPRIMER UN ADMIN\n\nSélectionnez l'admin à supprimer :\n\n"
     message += "⚠️ Vous ne pouvez pas vous supprimer vous-même.\n"
     
     keyboard = []
@@ -3578,8 +3540,7 @@ async def admin_remove_admin_start(update: Update, context: ContextTypes.DEFAULT
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
     
     return ADMIN_REMOVE_CONFIRM
@@ -3597,10 +3558,10 @@ async def admin_remove_admin_confirm(update: Update, context: ContextTypes.DEFAU
     level = admin_info.get('level', 'admin')
     
     message = f"""
-⚠️ *CONFIRMATION SUPPRESSION*
+⚠️ CONFIRMATION SUPPRESSION
 
 Admin : {name}
-ID : `{admin_to_remove}`
+ID : {admin_to_remove}
 Niveau : {level}
 
 Êtes-vous sûr de vouloir supprimer cet administrateur ?
@@ -3615,8 +3576,7 @@ Cette action est irréversible.
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
     
     return ADMIN_REMOVE_CONFIRM
@@ -3638,7 +3598,7 @@ async def admin_remove_admin_execute(update: Update, context: ContextTypes.DEFAU
         ADMINS = load_admins()
         
         message = f"""
-{EMOJI_THEME['success']} *ADMIN SUPPRIMÉ*
+{EMOJI_THEME['success']} ADMIN SUPPRIMÉ
 
 L'administrateur {admin_to_remove} a été supprimé avec succès.
 """
@@ -3647,8 +3607,7 @@ L'administrateur {admin_to_remove} a été supprimé avec succès.
         try:
             await context.bot.send_message(
                 chat_id=admin_to_remove,
-                text=f"{EMOJI_THEME['info']} Vous n'êtes plus administrateur de ce bot.",
-                parse_mode='Markdown'
+                text=f"{EMOJI_THEME['info']} Vous n'êtes plus administrateur de ce bot."
             )
         except:
             pass
@@ -3657,8 +3616,7 @@ L'administrateur {admin_to_remove} a été supprimé avec succès.
         
         await query.edit_message_text(
             message,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
         
         logger.info(f"🗑️ Admin supprimé: {admin_to_remove} par {user_id}")
@@ -3688,12 +3646,12 @@ async def admin_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     maintenance_status = "🔧 Actif" if maintenance.get('enabled') else "✅ Normal"
     
     message = f"""
-⚙️ *PARAMÈTRES SYSTÈME*
+⚙️ PARAMÈTRES SYSTÈME
 
-🕐 *Horaires :* {horaires_status}
+🕐 Horaires : {horaires_status}
    {get_horaires_text()}
 
-🔧 *Maintenance :* {maintenance_status}
+🔧 Maintenance : {maintenance_status}
 
 Que souhaitez-vous faire ?
 """
@@ -3706,8 +3664,7 @@ Que souhaitez-vous faire ?
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 @error_handler
@@ -3722,11 +3679,11 @@ async def admin_maintenance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_active:
         button_text = "✅ Désactiver maintenance"
         button_callback = "admin_maintenance_off"
-        status_text = "🔧 *MODE MAINTENANCE ACTIF*"
+        status_text = "🔧 MODE MAINTENANCE ACTIF"
     else:
         button_text = "🔧 Activer maintenance"
         button_callback = "admin_maintenance_on"
-        status_text = "✅ *FONCTIONNEMENT NORMAL*"
+        status_text = "✅ FONCTIONNEMENT NORMAL"
     
     message = f"""
 {status_text}
@@ -3743,8 +3700,7 @@ Les administrateurs gardent l'accès complet.
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 @error_handler
@@ -3758,9 +3714,9 @@ async def admin_maintenance_toggle(update: Update, context: ContextTypes.DEFAULT
     set_maintenance_mode(enable)
     
     if enable:
-        message = f"{EMOJI_THEME['warning']} *MAINTENANCE ACTIVÉE*\n\nLe bot est maintenant en mode maintenance."
+        message = f"{EMOJI_THEME['warning']} MAINTENANCE ACTIVÉE\n\nLe bot est maintenant en mode maintenance."
     else:
-        message = f"{EMOJI_THEME['success']} *MAINTENANCE DÉSACTIVÉE*\n\nLe bot fonctionne normalement."
+        message = f"{EMOJI_THEME['success']} MAINTENANCE DÉSACTIVÉE\n\nLe bot fonctionne normalement."
     
     await query.answer(message, show_alert=True)
     await admin_maintenance(update, context)
@@ -3799,24 +3755,24 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     out_stock = len(get_out_of_stock_products())
     
     message = f"""
-📈 *STATISTIQUES*
+📈 STATISTIQUES
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-👥 *UTILISATEURS*
+👥 UTILISATEURS
 - Total : {total_users}
 - VIP : {vip_users}
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-🛒 *COMMANDES (7 JOURS)*
+🛒 COMMANDES (7 JOURS)
 - Nombre : {weekly_count}
 - CA : {weekly_total:.2f}€
 - Panier moyen : {avg_order:.2f}€
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-📦 *STOCKS*
+📦 STOCKS
 - Total produits : {len(stocks)}
 - ⚠️ Stock faible : {low_stock}
 - 🔴 Ruptures : {out_stock}
@@ -3831,8 +3787,7 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # ==================== CALLBACK: FERMER PANEL ====================
@@ -3844,8 +3799,7 @@ async def admin_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer("Panel fermé")
     
     await query.edit_message_text(
-        f"{EMOJI_THEME['success']} Panel administrateur fermé.",
-        parse_mode='Markdown'
+        f"{EMOJI_THEME['success']} Panel administrateur fermé."
     )
 
 @error_handler
@@ -3853,37 +3807,8 @@ async def admin_back_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Retour au panel principal"""
     await admin_panel(update, context)
 
-# ==================== COMMANDES EN ATTENTE ====================
-
-@error_handler
-async def admin_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Affiche les commandes en attente"""
-    query = update.callback_query
-    await query.answer()
-    
-    # Pour l'instant, message simple
-    # Dans une vraie implémentation, charger depuis une base de données
-    
-    message = f"""
-🛒 *GESTION DES COMMANDES*
-
-Fonctionnalité en développement.
-
-Les commandes sont actuellement gérées via les notifications en temps réel.
-"""
-    
-    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_back_panel")]]
-    
-    await query.edit_message_text(
-        message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
-
 # FIN DU BLOC 6
-
 # ==================== BLOC 7 : VALIDATION COMMANDE & PROCESSUS PAIEMENT ====================
-# Ajoutez ce bloc APRÈS le BLOC 6
 
 # États de conversation pour le processus de commande
 (COUNTRY_SELECT, SHOPPING, CART_VIEW, DELIVERY_SELECT, ADDRESS_INPUT,
@@ -3908,11 +3833,11 @@ async def validate_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_within_delivery_hours(user_id):
         horaires_text = get_horaires_text()
         message = f"""
-{EMOJI_THEME['warning']} *FERMÉ*
+{EMOJI_THEME['warning']} FERMÉ
 
 Nous sommes actuellement fermés.
 
-🕐 *Horaires :* {horaires_text}
+🕐 Horaires : {horaires_text}
 
 Vous pouvez continuer votre commande, elle sera traitée à la réouverture.
 """
@@ -3923,8 +3848,7 @@ Vous pouvez continuer votre commande, elle sera traitée à la réouverture.
         
         await query.edit_message_text(
             message,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return
     
@@ -3949,11 +3873,11 @@ async def delivery_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
         subtotal += price * item['quantite']
     
     message = f"""
-{EMOJI_THEME['delivery']} *MODE DE LIVRAISON*
+{EMOJI_THEME['delivery']} MODE DE LIVRAISON
 
 {format_cart(cart, context.user_data)}
 
-💰 *Sous-total :* {subtotal:.2f}€
+💰 Sous-total : {subtotal:.2f}€
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
@@ -3973,8 +3897,7 @@ Choisissez votre mode de livraison :
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # ==================== CALLBACK: MODE LIVRAISON SÉLECTIONNÉ ====================
@@ -4014,7 +3937,7 @@ async def delivery_mode_selected(update: Update, context: ContextTypes.DEFAULT_T
         }
         
         message = f"""
-{delivery_names[delivery_type]} *LIVRAISON {delivery_type.upper()}*
+{delivery_names[delivery_type]} LIVRAISON {delivery_type.upper()}
 
 Veuillez entrer votre adresse complète :
 
@@ -4033,8 +3956,7 @@ _15 Rue de la Paix
         
         await query.edit_message_text(
             message,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
         
         context.user_data['awaiting_address'] = True
@@ -4056,8 +3978,7 @@ async def receive_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if len(address) < 10:
         await update.message.reply_text(
-            f"{EMOJI_THEME['error']} Adresse trop courte. Veuillez entrer une adresse complète.",
-            parse_mode='Markdown'
+            f"{EMOJI_THEME['error']} Adresse trop courte. Veuillez entrer une adresse complète."
         )
         return
     
@@ -4077,8 +3998,7 @@ async def receive_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Calculer distance et frais
     if delivery_type == "express":
         message_calculating = await update.message.reply_text(
-            f"{EMOJI_THEME['delivery']} Calcul de la distance en cours...",
-            parse_mode='Markdown'
+            f"{EMOJI_THEME['delivery']} Calcul de la distance en cours..."
         )
         
         distance = calculate_distance_simple(address)
@@ -4089,8 +4009,7 @@ async def receive_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await message_calculating.edit_text(
             f"✅ Distance calculée : {distance:.1f} km\n"
-            f"💵 Frais de livraison : {delivery_fee:.2f}€",
-            parse_mode='Markdown'
+            f"💵 Frais de livraison : {delivery_fee:.2f}€"
         )
     
     elif delivery_type == "postal":
@@ -4106,7 +4025,7 @@ async def receive_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def promo_code_prompt_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Demande le code promo (via message)"""
     message = f"""
-🎁 *CODE PROMO*
+🎁 CODE PROMO
 
 Avez-vous un code promo ?
 
@@ -4122,8 +4041,7 @@ Sinon, tapez "NON" pour continuer.
     
     await update.message.reply_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
     
     context.user_data['awaiting_promo'] = True
@@ -4133,7 +4051,7 @@ async def promo_code_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     
     message = f"""
-🎁 *CODE PROMO*
+🎁 CODE PROMO
 
 Avez-vous un code promo ?
 
@@ -4148,8 +4066,7 @@ Sinon, cliquez sur "Pas de code".
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
     
     context.user_data['awaiting_promo'] = True
@@ -4186,9 +4103,8 @@ async def receive_promo_code(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     if discount is None:
         await update.message.reply_text(
-            f"{EMOJI_THEME['error']} *Code invalide*\n\n{message_status}\n\n"
-            "Réessayez ou tapez NON pour continuer.",
-            parse_mode='Markdown'
+            f"{EMOJI_THEME['error']} Code invalide\n\n{message_status}\n\n"
+            "Réessayez ou tapez NON pour continuer."
         )
         return
     
@@ -4197,9 +4113,8 @@ async def receive_promo_code(update: Update, context: ContextTypes.DEFAULT_TYPE)
     context.user_data['awaiting_promo'] = False
     
     await update.message.reply_text(
-        f"{EMOJI_THEME['success']} *Code promo validé !*\n\n"
-        f"Réduction : -{discount:.2f}€",
-        parse_mode='Markdown'
+        f"{EMOJI_THEME['success']} Code promo validé !\n\n"
+        f"Réduction : -{discount:.2f}€"
     )
     
     await asyncio.sleep(1)
@@ -4224,7 +4139,7 @@ async def promo_skip(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def payment_select_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Sélection méthode de paiement (via message)"""
     message = f"""
-💳 *MODE DE PAIEMENT*
+💳 MODE DE PAIEMENT
 
 Choisissez votre mode de paiement :
 """
@@ -4237,8 +4152,7 @@ Choisissez votre mode de paiement :
     
     await update.message.reply_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 async def payment_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -4246,7 +4160,7 @@ async def payment_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     
     message = f"""
-💳 *MODE DE PAIEMENT*
+💳 MODE DE PAIEMENT
 
 Choisissez votre mode de paiement :
 """
@@ -4259,8 +4173,7 @@ Choisissez votre mode de paiement :
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # ==================== CALLBACK: PAIEMENT SÉLECTIONNÉ ====================
@@ -4329,10 +4242,10 @@ async def order_summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-📍 *Adresse :*
+📍 Adresse :
 {delivery_address}
 
-💳 *Paiement :*
+💳 Paiement :
 {payment_method}
 
 ━━━━━━━━━━━━━━━━━━━━━━
@@ -4347,8 +4260,7 @@ Confirmez-vous cette commande ?
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
     
     # Stocker pour confirmation
@@ -4470,13 +4382,13 @@ async def confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Message de confirmation au client
     confirmation_message = f"""
-{EMOJI_THEME['success']} *COMMANDE CONFIRMÉE !*
+{EMOJI_THEME['success']} COMMANDE CONFIRMÉE !
 
-Votre commande **#{order_id}** a été enregistrée avec succès.
+Votre commande #{order_id} a été enregistrée avec succès.
 
 📧 Vous recevrez une confirmation dès que votre commande sera validée par notre équipe.
 
-{EMOJI_THEME['delivery']} *Délai de livraison estimé :*
+{EMOJI_THEME['delivery']} Délai de livraison estimé :
 """
     
     if delivery_type == "postal":
@@ -4490,8 +4402,8 @@ Votre commande **#{order_id}** a été enregistrée avec succès.
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-💰 *Montant total :* {total_info['total']:.2f}€
-💳 *Paiement :* {payment_method}
+💰 Montant total : {total_info['total']:.2f}€
+💳 Paiement : {payment_method}
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
@@ -4505,8 +4417,7 @@ Votre commande **#{order_id}** a été enregistrée avec succès.
     
     await query.edit_message_text(
         confirmation_message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
     
     # Vider le panier
@@ -4531,27 +4442,23 @@ async def admin_validate_order(update: Update, context: ContextTypes.DEFAULT_TYP
     try:
         await context.bot.send_message(
             chat_id=customer_id,
-            text=f"{EMOJI_THEME['success']} *COMMANDE VALIDÉE*\n\n"
-                 f"Votre commande **#{order_id}** a été validée !\n\n"
-                 f"{EMOJI_THEME['delivery']} Préparation en cours...",
-            parse_mode='Markdown'
+            text=f"{EMOJI_THEME['success']} COMMANDE VALIDÉE\n\n"
+                 f"Votre commande #{order_id} a été validée !\n\n"
+                 f"{EMOJI_THEME['delivery']} Préparation en cours..."
         )
     except Exception as e:
         logger.error(f"Erreur notification client: {e}")
     
     # Modifier le message admin
     await query.edit_message_text(
-        f"✅ *COMMANDE VALIDÉE*\n\n"
-        f"Commande #{order_id} validée avec succès.",
-        parse_mode='Markdown'
+        f"✅ COMMANDE VALIDÉE\n\n"
+        f"Commande #{order_id} validée avec succès."
     )
     
     logger.info(f"✅ Commande validée: {order_id} par admin {query.from_user.id}")
 
 # FIN DU BLOC 7
-
 # ==================== BLOC 8 : MESSAGE HANDLERS & FONCTIONS AUXILIAIRES ====================
-# Ajoutez ce bloc APRÈS le BLOC 7 et AVANT le BLOC 9
 
 # ==================== GESTION DES MESSAGES TEXTE ====================
 
@@ -4567,9 +4474,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Vérifier maintenance
     if is_maintenance_mode(user_id):
         await update.message.reply_text(
-            f"{EMOJI_THEME['warning']} *BOT EN MAINTENANCE*\n\n"
-            "Le service est temporairement indisponible.",
-            parse_mode='Markdown'
+            f"{EMOJI_THEME['warning']} BOT EN MAINTENANCE\n\n"
+            "Le service est temporairement indisponible."
         )
         return
     
@@ -4606,8 +4512,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     # ==================== MESSAGE PAR DÉFAUT ====================
     # Si aucun état actif, proposer le menu principal
     await update.message.reply_text(
-        f"{EMOJI_THEME['info']} Utilisez /start pour accéder au menu principal.",
-        parse_mode='Markdown'
+        f"{EMOJI_THEME['info']} Utilisez /start pour accéder au menu principal."
     )
 
 # ==================== COMMANDE /CANCEL ====================
@@ -4626,8 +4531,7 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         f"{EMOJI_THEME['success']} Opération annulée.\n\n"
-        "Utilisez /start pour revenir au menu.",
-        parse_mode='Markdown'
+        "Utilisez /start pour revenir au menu."
     )
     
     logger.info(f"❌ Opération annulée - User: {update.effective_user.id}")
@@ -4645,8 +4549,7 @@ async def receive_new_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if not product_name or not country:
         await update.message.reply_text(
-            f"{EMOJI_THEME['error']} Erreur: données manquantes.",
-            parse_mode='Markdown'
+            f"{EMOJI_THEME['error']} Erreur: données manquantes."
         )
         return
     
@@ -4655,15 +4558,13 @@ async def receive_new_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if new_price <= 0:
             await update.message.reply_text(
-                f"{EMOJI_THEME['error']} Le prix doit être supérieur à 0.",
-                parse_mode='Markdown'
+                f"{EMOJI_THEME['error']} Le prix doit être supérieur à 0."
             )
             return
         
         if new_price > 1000:
             await update.message.reply_text(
-                f"{EMOJI_THEME['error']} Prix trop élevé (max: 1000€).",
-                parse_mode='Markdown'
+                f"{EMOJI_THEME['error']} Prix trop élevé (max: 1000€)."
             )
             return
         
@@ -4678,23 +4579,20 @@ async def receive_new_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
             flag = "🇫🇷" if country == "FR" else "🇨🇭"
             
             await update.message.reply_text(
-                f"{EMOJI_THEME['success']} *PRIX MIS À JOUR*\n\n"
+                f"{EMOJI_THEME['success']} PRIX MIS À JOUR\n\n"
                 f"{flag} {product_name}\n"
-                f"Nouveau prix: {new_price}€/g",
-                parse_mode='Markdown'
+                f"Nouveau prix: {new_price}€/g"
             )
             
             logger.info(f"💰 Prix modifié: {product_name} ({country}) = {new_price}€")
         else:
             await update.message.reply_text(
-                f"{EMOJI_THEME['error']} Erreur lors de la mise à jour.",
-                parse_mode='Markdown'
+                f"{EMOJI_THEME['error']} Erreur lors de la mise à jour."
             )
     
     except ValueError:
         await update.message.reply_text(
-            f"{EMOJI_THEME['error']} Prix invalide. Entrez un nombre.",
-            parse_mode='Markdown'
+            f"{EMOJI_THEME['error']} Prix invalide. Entrez un nombre."
         )
 
 # ==================== ADMIN: RÉCEPTION NOUVEAU STOCK ====================
@@ -4709,8 +4607,7 @@ async def receive_new_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if not product_name:
         await update.message.reply_text(
-            f"{EMOJI_THEME['error']} Erreur: produit non spécifié.",
-            parse_mode='Markdown'
+            f"{EMOJI_THEME['error']} Erreur: produit non spécifié."
         )
         return
     
@@ -4719,15 +4616,13 @@ async def receive_new_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if new_stock < 0:
             await update.message.reply_text(
-                f"{EMOJI_THEME['error']} Le stock ne peut pas être négatif.",
-                parse_mode='Markdown'
+                f"{EMOJI_THEME['error']} Le stock ne peut pas être négatif."
             )
             return
         
         if new_stock > 100000:
             await update.message.reply_text(
-                f"{EMOJI_THEME['error']} Stock trop élevé (max: 100000g).",
-                parse_mode='Markdown'
+                f"{EMOJI_THEME['error']} Stock trop élevé (max: 100000g)."
             )
             return
         
@@ -4751,23 +4646,20 @@ async def receive_new_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 status_msg = "\n⚠️ Produit en rupture"
             
             await update.message.reply_text(
-                f"{EMOJI_THEME['success']} *STOCK MIS À JOUR*\n\n"
+                f"{EMOJI_THEME['success']} STOCK MIS À JOUR\n\n"
                 f"{product_name}\n"
-                f"Nouveau stock: {new_stock}g{status_msg}",
-                parse_mode='Markdown'
+                f"Nouveau stock: {new_stock}g{status_msg}"
             )
             
             logger.info(f"📦 Stock modifié: {product_name} = {new_stock}g")
         else:
             await update.message.reply_text(
-                f"{EMOJI_THEME['error']} Erreur lors de la mise à jour.",
-                parse_mode='Markdown'
+                f"{EMOJI_THEME['error']} Erreur lors de la mise à jour."
             )
     
     except ValueError:
         await update.message.reply_text(
-            f"{EMOJI_THEME['error']} Stock invalide. Entrez un nombre.",
-            parse_mode='Markdown'
+            f"{EMOJI_THEME['error']} Stock invalide. Entrez un nombre."
         )
 
 # ==================== ADMIN: CRÉATION CODE PROMO ====================
@@ -4786,15 +4678,13 @@ async def receive_promo_creation_data(update: Update, context: ContextTypes.DEFA
         
         if len(code) < 3:
             await update.message.reply_text(
-                f"{EMOJI_THEME['error']} Le code doit contenir au moins 3 caractères.",
-                parse_mode='Markdown'
+                f"{EMOJI_THEME['error']} Le code doit contenir au moins 3 caractères."
             )
             return
         
         if len(code) > 20:
             await update.message.reply_text(
-                f"{EMOJI_THEME['error']} Le code ne peut pas dépasser 20 caractères.",
-                parse_mode='Markdown'
+                f"{EMOJI_THEME['error']} Le code ne peut pas dépasser 20 caractères."
             )
             return
         
@@ -4802,8 +4692,7 @@ async def receive_promo_creation_data(update: Update, context: ContextTypes.DEFA
         promo_codes = load_promo_codes()
         if code in promo_codes:
             await update.message.reply_text(
-                f"{EMOJI_THEME['error']} Ce code existe déjà.",
-                parse_mode='Markdown'
+                f"{EMOJI_THEME['error']} Ce code existe déjà."
             )
             return
         
@@ -4817,10 +4706,9 @@ async def receive_promo_creation_data(update: Update, context: ContextTypes.DEFA
         ]
         
         await update.message.reply_text(
-            f"✅ Code: *{code}*\n\n"
+            f"✅ Code: {code}\n\n"
             "Type de réduction ?",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
     
     # ÉTAPE 2: Valeur de réduction (après sélection du type)
@@ -4832,15 +4720,13 @@ async def receive_promo_creation_data(update: Update, context: ContextTypes.DEFA
             
             if promo_type == 'percentage' and (value <= 0 or value > 100):
                 await update.message.reply_text(
-                    f"{EMOJI_THEME['error']} Le pourcentage doit être entre 1 et 100.",
-                    parse_mode='Markdown'
+                    f"{EMOJI_THEME['error']} Le pourcentage doit être entre 1 et 100."
                 )
                 return
             
             if promo_type == 'fixed' and value <= 0:
                 await update.message.reply_text(
-                    f"{EMOJI_THEME['error']} Le montant doit être supérieur à 0.",
-                    parse_mode='Markdown'
+                    f"{EMOJI_THEME['error']} Le montant doit être supérieur à 0."
                 )
                 return
             
@@ -4848,16 +4734,14 @@ async def receive_promo_creation_data(update: Update, context: ContextTypes.DEFA
             context.user_data['promo_creation_step'] = 'max_uses'
             
             await update.message.reply_text(
-                f"💯 *Nombre d'utilisations maximum*\n\n"
+                f"💯 Nombre d'utilisations maximum\n\n"
                 "Entrez le nombre de fois que ce code peut être utilisé.\n"
-                "Tapez 0 pour illimité.",
-                parse_mode='Markdown'
+                "Tapez 0 pour illimité."
             )
         
         except ValueError:
             await update.message.reply_text(
-                f"{EMOJI_THEME['error']} Valeur invalide. Entrez un nombre.",
-                parse_mode='Markdown'
+                f"{EMOJI_THEME['error']} Valeur invalide. Entrez un nombre."
             )
     
     # ÉTAPE 3: Nombre d'utilisations max
@@ -4867,8 +4751,7 @@ async def receive_promo_creation_data(update: Update, context: ContextTypes.DEFA
             
             if max_uses < 0:
                 await update.message.reply_text(
-                    f"{EMOJI_THEME['error']} Le nombre ne peut pas être négatif.",
-                    parse_mode='Markdown'
+                    f"{EMOJI_THEME['error']} Le nombre ne peut pas être négatif."
                 )
                 return
             
@@ -4903,20 +4786,18 @@ async def receive_promo_creation_data(update: Update, context: ContextTypes.DEFA
             uses_text = "Illimité" if max_uses == 999999 else str(max_uses)
             
             await update.message.reply_text(
-                f"{EMOJI_THEME['success']} *CODE PROMO CRÉÉ*\n\n"
-                f"Code: *{code}*\n"
+                f"{EMOJI_THEME['success']} CODE PROMO CRÉÉ\n\n"
+                f"Code: {code}\n"
                 f"Réduction: {value}{type_icon}\n"
                 f"Utilisations max: {uses_text}\n\n"
-                "Le code est immédiatement actif !",
-                parse_mode='Markdown'
+                "Le code est immédiatement actif !"
             )
             
             logger.info(f"🎁 Code promo créé: {code} ({value}{type_icon})")
         
         except ValueError:
             await update.message.reply_text(
-                f"{EMOJI_THEME['error']} Nombre invalide.",
-                parse_mode='Markdown'
+                f"{EMOJI_THEME['error']} Nombre invalide."
             )
 
 # ==================== CALLBACKS POUR CRÉATION PROMO ====================
@@ -4939,8 +4820,7 @@ async def promo_type_selected(update: Update, context: ContextTypes.DEFAULT_TYPE
         example = "Exemple: 5 pour 5€"
     
     await query.edit_message_text(
-        f"💰 *VALEUR DE RÉDUCTION*\n\n{prompt}\n\n_{example}_",
-        parse_mode='Markdown'
+        f"💰 VALEUR DE RÉDUCTION\n\n{prompt}\n\n_{example}_"
     )
 
 # ==================== ADMIN: DÉMARRER MODIFICATION PRIX ====================
@@ -4955,7 +4835,7 @@ async def admin_edit_price_start(update: Update, context: ContextTypes.DEFAULT_T
     
     registry = load_product_registry()
     
-    message = f"✏️ *MODIFIER LES PRIX - {country}*\n\nSélectionnez un produit :"
+    message = f"✏️ MODIFIER LES PRIX - {country}\n\nSélectionnez un produit :"
     
     keyboard = []
     for code, product in sorted(registry.items()):
@@ -4973,8 +4853,7 @@ async def admin_edit_price_start(update: Update, context: ContextTypes.DEFAULT_T
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 @error_handler
@@ -5003,11 +4882,10 @@ async def admin_price_edit_product(update: Update, context: ContextTypes.DEFAULT
     flag = "🇫🇷" if country == "FR" else "🇨🇭"
     
     await query.edit_message_text(
-        f"✏️ *MODIFIER LE PRIX*\n\n"
+        f"✏️ MODIFIER LE PRIX\n\n"
         f"{flag} {product_name}\n"
         f"Prix actuel: {current_price}€/g\n\n"
-        f"Entrez le nouveau prix en €/g :",
-        parse_mode='Markdown'
+        f"Entrez le nouveau prix en €/g :"
     )
 
 # ==================== ADMIN: DÉMARRER AJOUT STOCK ====================
@@ -5034,11 +4912,10 @@ async def admin_stock_select_product(update: Update, context: ContextTypes.DEFAU
     context.user_data['pending_product'] = product_name
     
     await query.edit_message_text(
-        f"➕ *DÉFINIR LE STOCK*\n\n"
+        f"➕ DÉFINIR LE STOCK\n\n"
         f"Produit: {product_name}\n"
         f"Stock actuel: {stock_text}\n\n"
-        f"Entrez le nouveau stock en grammes :",
-        parse_mode='Markdown'
+        f"Entrez le nouveau stock en grammes :"
     )
 
 # ==================== ADMIN: DÉMARRER CRÉATION PROMO ====================
@@ -5053,11 +4930,10 @@ async def admin_create_promo_start(update: Update, context: ContextTypes.DEFAULT
     context.user_data['promo_creation_step'] = 'code'
     
     await query.edit_message_text(
-        f"🎁 *CRÉER UN CODE PROMO*\n\n"
+        f"🎁 CRÉER UN CODE PROMO\n\n"
         f"Étape 1/4: Entrez le code promo\n\n"
         f"Exemple: NOEL2025, WELCOME10, etc.\n"
-        f"(3-20 caractères, lettres et chiffres uniquement)",
-        parse_mode='Markdown'
+        f"(3-20 caractères, lettres et chiffres uniquement)"
     )
 
 # ==================== ADMIN: SUPPRIMER CODE PROMO ====================
@@ -5074,7 +4950,7 @@ async def admin_delete_promo_start(update: Update, context: ContextTypes.DEFAULT
         await query.answer("Aucun code promo à supprimer", show_alert=True)
         return
     
-    message = "🗑️ *SUPPRIMER UN CODE PROMO*\n\nSélectionnez le code à supprimer :"
+    message = "🗑️ SUPPRIMER UN CODE PROMO\n\nSélectionnez le code à supprimer :"
     
     keyboard = []
     for code in sorted(promo_codes.keys()):
@@ -5089,8 +4965,7 @@ async def admin_delete_promo_start(update: Update, context: ContextTypes.DEFAULT
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 @error_handler
@@ -5111,9 +4986,9 @@ async def admin_delete_promo_confirm(update: Update, context: ContextTypes.DEFAU
     type_icon = "%" if promo['type'] == 'percentage' else "€"
     
     message = f"""
-⚠️ *CONFIRMER LA SUPPRESSION*
+⚠️ CONFIRMER LA SUPPRESSION
 
-Code: *{code}*
+Code: {code}
 Réduction: {promo['value']}{type_icon}
 Utilisé: {promo.get('used_count', 0)}/{promo.get('max_uses', '∞')}
 
@@ -5127,8 +5002,7 @@ Voulez-vous vraiment supprimer ce code ?
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 @error_handler
@@ -5146,9 +5020,8 @@ async def admin_delete_promo_execute(update: Update, context: ContextTypes.DEFAU
         save_promo_codes(promo_codes)
         
         await query.edit_message_text(
-            f"{EMOJI_THEME['success']} *CODE SUPPRIMÉ*\n\n"
-            f"Le code *{code}* a été supprimé avec succès.",
-            parse_mode='Markdown'
+            f"{EMOJI_THEME['success']} CODE SUPPRIMÉ\n\n"
+            f"Le code {code} a été supprimé avec succès."
         )
         
         logger.info(f"🗑️ Code promo supprimé: {code}")
@@ -5191,11 +5064,11 @@ async def admin_detailed_stats(update: Update, context: ContextTypes.DEFAULT_TYP
     top_products = sorted(product_sales.items(), key=lambda x: x[1], reverse=True)[:5]
     
     message = f"""
-📊 *STATISTIQUES DÉTAILLÉES*
+📊 STATISTIQUES DÉTAILLÉES
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-👥 *TOP 5 CLIENTS*
+👥 TOP 5 CLIENTS
 """
     
     for i, (uid, total) in enumerate(top_clients, 1):
@@ -5204,13 +5077,13 @@ async def admin_detailed_stats(update: Update, context: ContextTypes.DEFAULT_TYP
         message += f"{i}. User {uid}: {total:.2f}€ ({orders} cmd)\n"
     
     message += f"\n━━━━━━━━━━━━━━━━━━━━━━\n\n"
-    message += f"🏆 *TOP 5 PRODUITS (7j)*\n"
+    message += f"🏆 TOP 5 PRODUITS (7j)\n"
     
     for i, (product, count) in enumerate(top_products, 1):
         message += f"{i}. {product}: {count} ventes\n"
     
     message += f"\n━━━━━━━━━━━━━━━━━━━━━━\n\n"
-    message += f"📦 *ÉTAT DES STOCKS*\n"
+    message += f"📦 ÉTAT DES STOCKS\n"
     
     total_stock_value = 0
     for name in registry.values():
@@ -5226,44 +5099,18 @@ async def admin_detailed_stats(update: Update, context: ContextTypes.DEFAULT_TYP
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # FIN DU BLOC 8
-
-# ==================== BLOC 9 : FONCTION MAIN & DÉMARRAGE DU BOT ====================
-# Ajoutez ce bloc EN DERNIER (après tous les autres blocs)
-
 # ==================== BLOC 9 : FONCTION MAIN & DÉMARRAGE DU BOT ====================
 
-async def main():
-    """Fonction principale du bot"""
-    
-    logger.info("🎯 ENTRÉE DANS main()")
-    
-    # Vérifier la persistance
-    boot_count = verify_data_persistence()
-    logger.info(f"🔄 Démarrage #{boot_count}")
-    
-    # Initialiser les produits depuis le registre
-    init_product_codes()
-    
-    # Vérifier downtime et activer maintenance si nécessaire
-    was_down = check_downtime_and_activate_maintenance()
-    if was_down:
-        logger.warning("⚠️ Maintenance auto-activée après downtime")
-    
-    # 🆕 FORCER LA DÉSACTIVATION DE LA MAINTENANCE
-    logger.info("🔧 Désactivation forcée de la maintenance au démarrage...")
-    set_maintenance_mode(False, reason="Désactivé automatiquement au démarrage")
-    logger.info("✅ Mode maintenance désactivé - Bot accessible à tous")
-    
-    # Créer l'application
-    application = Application.builder().token(BOT_TOKEN).build()
+# ==================== CONFIGURATION DES HANDLERS ====================
+
+def setup_handlers(application):
+    """Configure tous les handlers du bot"""
     
     # ==================== COMMANDES DE BASE ====================
-    
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("admin", admin_command))
@@ -5271,300 +5118,385 @@ async def main():
     application.add_handler(CommandHandler("cancel", cancel_command))
     
     # ==================== CALLBACKS GÉNÉRAUX ====================
-    
     application.add_handler(CallbackQueryHandler(back_to_main, pattern="^back_to_main$"))
     application.add_handler(CallbackQueryHandler(help_inline, pattern="^help_inline$"))
     application.add_handler(CallbackQueryHandler(my_history, pattern="^my_history$"))
     application.add_handler(CallbackQueryHandler(referral_info, pattern="^referral_info$"))
     
-    # ==================== SHOPPING ====================
-    
+    # ==================== CALLBACKS PAYS ====================
     application.add_handler(CallbackQueryHandler(select_country, pattern="^country_(fr|ch)$"))
+    
+    # ==================== CALLBACKS SHOPPING ====================
     application.add_handler(CallbackQueryHandler(browse_products, pattern="^browse_(all|pills|rocks)$"))
     application.add_handler(CallbackQueryHandler(product_detail, pattern="^product_"))
     application.add_handler(CallbackQueryHandler(custom_quantity, pattern="^customqty_"))
     application.add_handler(CallbackQueryHandler(add_to_cart, pattern="^addcart_"))
     
-    # ==================== PANIER ====================
-    
+    # ==================== CALLBACKS PANIER ====================
     application.add_handler(CallbackQueryHandler(view_cart, pattern="^view_cart$"))
     application.add_handler(CallbackQueryHandler(clear_cart, pattern="^clear_cart$"))
     application.add_handler(CallbackQueryHandler(validate_cart, pattern="^validate_cart$"))
     
-    # ==================== LIVRAISON & COMMANDE ====================
-    
+    # ==================== CALLBACKS LIVRAISON ====================
     application.add_handler(CallbackQueryHandler(delivery_select, pattern="^delivery_select$"))
     application.add_handler(CallbackQueryHandler(delivery_mode_selected, pattern="^delivery_(postal|express|meetup)$"))
+    
+    # ==================== CALLBACKS PROMO ====================
     application.add_handler(CallbackQueryHandler(promo_skip, pattern="^promo_skip$"))
+    
+    # ==================== CALLBACKS PAIEMENT ====================
     application.add_handler(CallbackQueryHandler(payment_method_selected, pattern="^payment_(cash|transfer|crypto)$"))
+    
+    # ==================== CALLBACKS COMMANDE ====================
     application.add_handler(CallbackQueryHandler(confirm_order, pattern="^order_confirm$"))
+    application.add_handler(CallbackQueryHandler(admin_validate_order, pattern="^admin_validate_"))
     
-    # ==================== ADMIN - PANEL PRINCIPAL ====================
-    
-    application.add_handler(CallbackQueryHandler(admin_panel, pattern="^admin_panel$"))
-    application.add_handler(CallbackQueryHandler(admin_back_panel, pattern="^admin_back_panel$"))
+    # ==================== CALLBACKS ADMIN PANEL ====================
+    application.add_handler(CallbackQueryHandler(admin_panel, pattern="^admin_back_panel$"))
     application.add_handler(CallbackQueryHandler(admin_close, pattern="^admin_close$"))
     
-    # ==================== ADMIN - PRODUITS ====================
-    
+    # ==================== CALLBACKS ADMIN - PRODUITS ====================
     application.add_handler(CallbackQueryHandler(admin_products, pattern="^admin_products$"))
     application.add_handler(CallbackQueryHandler(admin_list_products, pattern="^admin_list_products$"))
     application.add_handler(CallbackQueryHandler(admin_toggle_products, pattern="^admin_toggle_products$"))
     application.add_handler(CallbackQueryHandler(admin_toggle_product_execute, pattern="^admin_toggle_"))
     
-    # ==================== ADMIN - STOCKS ====================
-    
+    # ==================== CALLBACKS ADMIN - STOCKS ====================
     application.add_handler(CallbackQueryHandler(admin_stocks, pattern="^admin_stocks$"))
     application.add_handler(CallbackQueryHandler(admin_view_stocks, pattern="^admin_view_stocks$"))
     application.add_handler(CallbackQueryHandler(admin_add_stock, pattern="^admin_add_stock$"))
     application.add_handler(CallbackQueryHandler(admin_stock_alerts, pattern="^admin_stock_alerts$"))
     application.add_handler(CallbackQueryHandler(admin_stock_select_product, pattern="^admin_stock_select_"))
     
-    # ==================== ADMIN - PRIX ====================
-    
+    # ==================== CALLBACKS ADMIN - PRIX ====================
     application.add_handler(CallbackQueryHandler(admin_prices, pattern="^admin_prices$"))
     application.add_handler(CallbackQueryHandler(admin_prices_country, pattern="^admin_prices_(fr|ch)$"))
     application.add_handler(CallbackQueryHandler(admin_edit_price_start, pattern="^admin_edit_prices_"))
     application.add_handler(CallbackQueryHandler(admin_price_edit_product, pattern="^admin_price_edit_"))
     
-    # ==================== ADMIN - PROMOS ====================
-    
+    # ==================== CALLBACKS ADMIN - PROMOS ====================
     application.add_handler(CallbackQueryHandler(admin_promos, pattern="^admin_promos$"))
     application.add_handler(CallbackQueryHandler(admin_list_promos, pattern="^admin_list_promos$"))
     application.add_handler(CallbackQueryHandler(admin_create_promo_start, pattern="^admin_create_promo$"))
+    application.add_handler(CallbackQueryHandler(promo_type_selected, pattern="^promo_type_"))
     application.add_handler(CallbackQueryHandler(admin_delete_promo_start, pattern="^admin_delete_promo$"))
     application.add_handler(CallbackQueryHandler(admin_delete_promo_confirm, pattern="^admin_delete_promo_confirm_"))
     application.add_handler(CallbackQueryHandler(admin_delete_promo_execute, pattern="^admin_delete_promo_yes_"))
-    application.add_handler(CallbackQueryHandler(promo_type_selected, pattern="^promo_type_"))
     
-    # ==================== ADMIN - COMMANDES ====================
-    
+    # ==================== CALLBACKS ADMIN - COMMANDES ====================
     application.add_handler(CallbackQueryHandler(admin_orders, pattern="^admin_orders$"))
-    application.add_handler(CallbackQueryHandler(admin_validate_order, pattern="^admin_validate_"))
     
-    # ==================== ADMIN - PARAMÈTRES ====================
+    # ==================== CALLBACKS ADMIN - ADMINS ====================
+    application.add_handler(CallbackQueryHandler(admin_manage_admins, pattern="^admin_manage_admins$"))
+    application.add_handler(CallbackQueryHandler(admin_list_admins, pattern="^admin_list_admins$"))
+    application.add_handler(CallbackQueryHandler(admin_add_admin_start, pattern="^admin_add_admin$"))
+    application.add_handler(CallbackQueryHandler(admin_remove_admin_start, pattern="^admin_remove_admin$"))
+    application.add_handler(CallbackQueryHandler(admin_remove_admin_confirm, pattern="^admin_remove_\\d+$"))
+    application.add_handler(CallbackQueryHandler(admin_remove_admin_execute, pattern="^admin_remove_yes_"))
+    application.add_handler(CallbackQueryHandler(admin_add_admin_confirm, pattern="^admin_level_"))
+    application.add_handler(CallbackQueryHandler(admin_manage_back, pattern="^admin_manage_back$"))
     
+    # ==================== CALLBACKS ADMIN - PARAMÈTRES ====================
     application.add_handler(CallbackQueryHandler(admin_settings, pattern="^admin_settings$"))
     application.add_handler(CallbackQueryHandler(admin_maintenance, pattern="^admin_maintenance$"))
     application.add_handler(CallbackQueryHandler(admin_maintenance_toggle, pattern="^admin_maintenance_(on|off)$"))
     
-    # ==================== ADMIN - STATISTIQUES ====================
-    
+    # ==================== CALLBACKS ADMIN - STATS ====================
     application.add_handler(CallbackQueryHandler(admin_stats, pattern="^admin_stats$"))
     application.add_handler(CallbackQueryHandler(admin_detailed_stats, pattern="^admin_detailed_stats$"))
     
-    # ==================== CONVERSATION HANDLER - GESTION ADMINS ====================
-    
-    admin_manage_handler = ConversationHandler(
-        entry_points=[
-            CallbackQueryHandler(admin_manage_admins, pattern="^admin_manage_admins$")
-        ],
-        states={
-            ADMIN_MANAGE_MENU: [
-                CallbackQueryHandler(admin_list_admins, pattern="^admin_list_admins$"),
-                CallbackQueryHandler(admin_add_admin_start, pattern="^admin_add_admin$"),
-                CallbackQueryHandler(admin_remove_admin_start, pattern="^admin_remove_admin$"),
-                CallbackQueryHandler(admin_panel, pattern="^admin_back_panel$"),
-            ],
-            ADMIN_ADD_ID: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, admin_add_admin_receive_id),
-                CallbackQueryHandler(admin_manage_back, pattern="^admin_manage_back$"),
-            ],
-            ADMIN_ADD_LEVEL: [
-                CallbackQueryHandler(admin_add_admin_confirm, pattern="^admin_level_"),
-                CallbackQueryHandler(admin_manage_back, pattern="^admin_manage_back$"),
-            ],
-            ADMIN_VIEW_LIST: [
-                CallbackQueryHandler(admin_list_admins, pattern="^admin_list_admins$"),
-                CallbackQueryHandler(admin_manage_back, pattern="^admin_manage_back$"),
-            ],
-            ADMIN_REMOVE_CONFIRM: [
-                CallbackQueryHandler(admin_remove_admin_confirm, pattern="^admin_remove_\\d+$"),
-                CallbackQueryHandler(admin_remove_admin_execute, pattern="^admin_remove_yes_"),
-                CallbackQueryHandler(admin_remove_admin_start, pattern="^admin_remove_admin$"),
-                CallbackQueryHandler(admin_manage_back, pattern="^admin_manage_back$"),
-            ],
-        },
-        fallbacks=[
-            CallbackQueryHandler(admin_manage_back, pattern="^admin_manage_back$"),
-        ],
-        name="admin_manage_conversation",
-        persistent=False
-    )
-    
-    application.add_handler(admin_manage_handler)
-    
     # ==================== MESSAGE HANDLERS ====================
+    # Handler pour tous les messages texte (doit être en dernier)
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
     
-    application.add_handler(
-        MessageHandler(
-            filters.TEXT & ~filters.COMMAND,
-            handle_text_message
-        )
+    logger.info("✅ Tous les handlers configurés")
+
+# ==================== KILL SWITCH ====================
+
+async def kill_switch_check(application):
+    """
+    Kill switch: attend 30 secondes au démarrage
+    Permet d'arrêter le bot si nécessaire avant qu'il ne démarre vraiment
+    """
+    logger.warning("⏳ KILL SWITCH ACTIVÉ - 30 secondes pour arrêter le bot avec Ctrl+C")
+    
+    for i in range(30, 0, -1):
+        logger.info(f"⏱️  Démarrage dans {i}s...")
+        await asyncio.sleep(1)
+    
+    logger.info("✅ Kill switch terminé - Démarrage du bot")
+
+# ==================== FONCTION MAIN ====================
+
+async def main():
+    """Fonction principale du bot"""
+    
+    # ==================== BANNIÈRE DE DÉMARRAGE ====================
+    logger.info("=" * 60)
+    logger.info(f"🤖 TELEGRAM BOT V{BOT_VERSION}")
+    logger.info("=" * 60)
+    logger.info(f"📅 Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info(f"🐍 Python: {sys.version.split()[0]}")
+    logger.info(f"📦 python-telegram-bot: {telegram.__version__}")
+    logger.info("=" * 60)
+    
+    # ==================== VÉRIFICATIONS ====================
+    
+    # Vérifier le token
+    if not BOT_TOKEN or BOT_TOKEN == "VOTRE_TOKEN_ICI":
+        logger.error("❌ BOT_TOKEN non configuré dans les variables d'environnement")
+        logger.error("   Définissez BOT_TOKEN dans Render ou votre .env")
+        return
+    
+    logger.info("✅ Token configuré")
+    
+    # Vérifier le répertoire de données
+    ensure_dir(DATA_DIR)
+    logger.info(f"✅ Répertoire données: {DATA_DIR}")
+    
+    # Vérifier le répertoire média
+    ensure_dir(MEDIA_DIR)
+    logger.info(f"✅ Répertoire média: {MEDIA_DIR}")
+    
+    # ==================== VÉRIFICATION PERSISTANCE ====================
+    boot_count = verify_data_persistence()
+    
+    # ==================== INITIALISATION ====================
+    
+    # Charger les admins
+    global ADMINS
+    ADMINS = load_admins()
+    logger.info(f"✅ Admins chargés: {len(ADMINS)}")
+    
+    # Initialiser les produits
+    init_product_codes()
+    
+    # ==================== DÉSACTIVER MAINTENANCE AUTO ====================
+    # Désactiver automatiquement le mode maintenance au démarrage
+    maintenance_status = load_maintenance_status()
+    if maintenance_status.get('enabled', False):
+        logger.info("🔧 Mode maintenance détecté - Désactivation automatique...")
+        set_maintenance_mode(False)
+        logger.info("✅ Mode maintenance désactivé")
+    else:
+        logger.info("✅ Mode maintenance: Inactif")
+    
+    # Mettre à jour le timestamp
+    update_last_online()
+    
+    # ==================== CRÉATION APPLICATION ====================
+    logger.info("🔧 Création de l'application...")
+    
+    application = (
+        Application.builder()
+        .token(BOT_TOKEN)
+        .concurrent_updates(True)
+        .read_timeout(30)
+        .write_timeout(30)
+        .connect_timeout(30)
+        .pool_timeout(30)
+        .build()
     )
+    
+    logger.info("✅ Application créée")
+    
+    # ==================== CONFIGURATION HANDLERS ====================
+    setup_handlers(application)
     
     # ==================== JOBS PÉRIODIQUES ====================
-    
     job_queue = application.job_queue
     
-    job_queue.run_repeating(heartbeat_maintenance, interval=60, first=10)
-    job_queue.run_repeating(check_stocks_job, interval=3600, first=60)
-    job_queue.run_repeating(schedule_reports, interval=86400, first=3600)
+    # Heartbeat toutes les 5 minutes
+    job_queue.run_repeating(heartbeat_maintenance, interval=300, first=10)
+    logger.info("✅ Job: Heartbeat (5 min)")
     
-    # ==================== DÉMARRAGE ====================
+    # Vérification stocks tous les jours à 9h
+    job_queue.run_daily(check_stocks_job, time=time(9, 0))
+    logger.info("✅ Job: Vérification stocks (9h)")
     
-    logger.info("=" * 50)
-    logger.info("🤖 BOT TELEGRAM V3.0 - MULTI-ADMINS")
-    logger.info("=" * 50)
-    logger.info(f"📅 Date: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
-    logger.info(f"🔄 Démarrage #{boot_count}")
-    logger.info(f"📁 Données: {DATA_DIR}")
-    logger.info(f"👥 Admins: {len(ADMINS)}")
-    logger.info(f"📦 Produits: {len(load_product_registry())}")
+    # Rapports hebdomadaires dimanche à 23h59
+    job_queue.run_weekly(schedule_reports, days=(6,), time=time(23, 59))
+    logger.info("✅ Job: Rapport hebdomadaire (dimanche 23h59)")
     
-    stats = get_admin_stats()
-    logger.info(f"   • Super-admins: {stats['super_admins']}")
-    logger.info(f"   • Admins: {stats['admins']}")
-    logger.info(f"   • Modérateurs: {stats['moderators']}")
+    # ==================== KILL SWITCH ====================
+    await kill_switch_check(application)
     
-    logger.info("=" * 50)
+    # ==================== INITIALISATION APPLICATION ====================
     logger.info("🚀 Initialisation de l'application...")
-    logger.info("=" * 50)
+    await application.initialize()
+    logger.info("✅ Application initialisée")
     
-    # ==================== DÉMARRAGE MANUEL AVEC KILL SWITCH ====================
+    # ==================== DÉMARRAGE POLLING AVEC RETRY ====================
+    max_retries = 20
+    retry_count = 0
+    retry_delay = 5
+    
+    while retry_count < max_retries:
+        try:
+            logger.info("=" * 60)
+            logger.info(f"🚀 DÉMARRAGE DU POLLING (Tentative {retry_count + 1}/{max_retries})")
+            logger.info("=" * 60)
+            
+            # Démarrer le bot
+            await application.start()
+            logger.info("✅ Application démarrée")
+            
+            # Récupérer les infos du bot
+            bot_info = await application.bot.get_me()
+            logger.info("=" * 60)
+            logger.info(f"✅ BOT CONNECTÉ: @{bot_info.username}")
+            logger.info(f"   ID: {bot_info.id}")
+            logger.info(f"   Nom: {bot_info.first_name}")
+            logger.info("=" * 60)
+            
+            # Notifier les admins du démarrage
+            startup_message = f"""
+🤖 BOT DÉMARRÉ
+
+Version: {BOT_VERSION}
+Démarrage #{boot_count}
+Date: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+
+✅ Tous les systèmes opérationnels
+"""
+            
+            for admin_id in get_admin_ids():
+                try:
+                    await application.bot.send_message(
+                        chat_id=admin_id,
+                        text=startup_message
+                    )
+                except Exception as e:
+                    logger.warning(f"⚠️  Impossible de notifier admin {admin_id}: {e}")
+            
+            logger.info("✅ Admins notifiés du démarrage")
+            
+            # Démarrer le polling
+            logger.info("🔄 Démarrage du polling...")
+            await application.updater.start_polling(
+                allowed_updates=Update.ALL_TYPES,
+                drop_pending_updates=True,
+                poll_interval=1.0,
+                timeout=30
+            )
+            
+            logger.info("=" * 60)
+            logger.info("✅ LE BOT EST EN LIGNE ET OPÉRATIONNEL")
+            logger.info("=" * 60)
+            logger.info("📊 Statistiques:")
+            logger.info(f"   • Utilisateurs: {len(load_users())}")
+            logger.info(f"   • Produits: {len(load_product_registry())}")
+            logger.info(f"   • Admins: {len(ADMINS)}")
+            logger.info("=" * 60)
+            logger.info("ℹ️  Appuyez sur Ctrl+C pour arrêter le bot")
+            logger.info("=" * 60)
+            
+            # Garder le bot en vie
+            stop_event = asyncio.Event()
+            await stop_event.wait()
+        
+        except telegram.error.Conflict as e:
+            retry_count += 1
+            logger.error("=" * 60)
+            logger.error(f"❌ ERREUR CONFLICT (Tentative {retry_count}/{max_retries})")
+            logger.error(f"   {str(e)}")
+            logger.error("=" * 60)
+            logger.warning("⚠️  Une autre instance du bot est en cours d'exécution")
+            logger.warning("   Solutions possibles:")
+            logger.warning("   1. Arrêtez toutes les autres instances")
+            logger.warning("   2. Attendez quelques minutes")
+            logger.warning("   3. Révoqué le token et utilisez-en un nouveau")
+            logger.error("=" * 60)
+            
+            if retry_count < max_retries:
+                wait_time = retry_delay * retry_count
+                logger.info(f"⏳ Nouvelle tentative dans {wait_time}s...")
+                await asyncio.sleep(wait_time)
+            else:
+                logger.error("❌ NOMBRE MAXIMUM DE TENTATIVES ATTEINT")
+                logger.error("   Le bot ne peut pas démarrer")
+                break
+        
+        except telegram.error.InvalidToken:
+            logger.error("=" * 60)
+            logger.error("❌ TOKEN INVALIDE")
+            logger.error("   Vérifiez votre BOT_TOKEN dans les variables d'environnement")
+            logger.error("=" * 60)
+            break
+        
+        except Exception as e:
+            retry_count += 1
+            logger.error("=" * 60)
+            logger.error(f"❌ ERREUR INATTENDUE (Tentative {retry_count}/{max_retries})")
+            logger.error(f"   Type: {type(e).__name__}")
+            logger.error(f"   Message: {str(e)}")
+            logger.error("=" * 60)
+            logger.error(traceback.format_exc())
+            
+            if retry_count < max_retries:
+                wait_time = retry_delay * retry_count
+                logger.info(f"⏳ Nouvelle tentative dans {wait_time}s...")
+                await asyncio.sleep(wait_time)
+            else:
+                logger.error("❌ NOMBRE MAXIMUM DE TENTATIVES ATTEINT")
+                break
+    
+    # ==================== ARRÊT PROPRE ====================
+    logger.info("=" * 60)
+    logger.info("🛑 ARRÊT DU BOT")
+    logger.info("=" * 60)
     
     try:
-        # Initialiser l'application
-        logger.info("📡 Initialisation de l'application...")
-        await application.initialize()
+        # Notifier les admins
+        shutdown_message = f"""
+🛑 BOT ARRÊTÉ
+
+Date: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+
+Le bot a été arrêté proprement.
+"""
         
-        logger.info("▶️ Démarrage de l'application...")
-        await application.start()
-        
-        # Supprimer les webhooks
-        logger.info("🧹 Suppression des webhooks...")
-        try:
-            await application.bot.delete_webhook(drop_pending_updates=True)
-            logger.info("✅ Webhooks supprimés")
-        except Exception as e:
-            logger.warning(f"⚠️ Erreur suppression webhook: {e}")
-        
-        # 🔪 KILL SWITCH - ATTENTE LONGUE POUR TUER LES INSTANCES ZOMBIES
-        logger.info("🔪 KILL SWITCH ACTIVÉ")
-        logger.info("⏳ Attente de 30 secondes pour que les anciennes instances meurent...")
-        logger.info("   (Démarrage #{} - Si ce numéro est élevé, des instances ne s'arrêtent pas correctement)".format(boot_count))
-        await asyncio.sleep(30)
-        
-        # RETRY AUTOMATIQUE AVEC DÉLAI CROISSANT
-        logger.info("🔄 Démarrage du polling avec système de retry automatique...")
-        
-        polling_started = False
-        max_retries = 20
-        
-        for attempt in range(max_retries):
+        for admin_id in get_admin_ids():
             try:
-                await application.updater.start_polling(
-                    allowed_updates=Update.ALL_TYPES,
-                    drop_pending_updates=True
+                await application.bot.send_message(
+                    chat_id=admin_id,
+                    text=shutdown_message
                 )
-                logger.info("✅ POLLING DÉMARRÉ AVEC SUCCÈS !")
-                polling_started = True
-                break
-                
-            except Exception as e:
-                if "Conflict" in str(e):
-                    # Calcul du délai croissant : 20s, 30s, 40s, 50s...
-                    wait_time = 20 + (attempt * 10)
-                    
-                    logger.warning("=" * 50)
-                    logger.warning(f"⚠️ CONFLIT DÉTECTÉ (Tentative {attempt + 1}/{max_retries})")
-                    logger.warning(f"   Une autre instance du bot tourne encore avec le même token.")
-                    logger.warning(f"   Nouvelle tentative dans {wait_time} secondes...")
-                    logger.warning("=" * 50)
-                    
-                    # Dernière tentative
-                    if attempt == max_retries - 1:
-                        logger.critical("=" * 50)
-                        logger.critical("❌ ÉCHEC APRÈS 20 TENTATIVES ET ~5 MINUTES D'ATTENTE")
-                        logger.critical("=" * 50)
-                        logger.critical("")
-                        logger.critical("🔴 PROBLÈME: Une instance zombie utilise toujours votre token.")
-                        logger.critical("")
-                        logger.critical("✅ SOLUTION RECOMMANDÉE:")
-                        logger.critical("   1. Ouvrez Telegram et parlez à @BotFather")
-                        logger.critical("   2. Tapez /revoke et sélectionnez votre bot")
-                        logger.critical("      OU tapez /newbot pour créer un nouveau bot")
-                        logger.critical("   3. Copiez le nouveau BOT_TOKEN")
-                        logger.critical("   4. Sur Render: Environment → BOT_TOKEN → collez le nouveau")
-                        logger.critical("   5. Redéployez le service")
-                        logger.critical("")
-                        logger.critical("💡 Cela tuera TOUTES les instances zombies instantanément.")
-                        logger.critical("=" * 50)
-                        raise
-                    
-                    await asyncio.sleep(wait_time)
-                else:
-                    # Erreur non-conflit
-                    logger.error(f"❌ Erreur inattendue: {e}")
-                    raise
+            except:
+                pass
         
-        if not polling_started:
-            raise RuntimeError("Impossible de démarrer le polling après toutes les tentatives")
+        # Arrêter le polling
+        if application.updater and application.updater.running:
+            await application.updater.stop()
+            logger.info("✅ Polling arrêté")
         
-        logger.info("=" * 50)
-        logger.info("✅ BOT OPÉRATIONNEL !")
-        logger.info("=" * 50)
+        # Arrêter l'application
+        if application.running:
+            await application.stop()
+            logger.info("✅ Application arrêtée")
         
-        # Créer un événement d'arrêt
-        stop_event = asyncio.Event()
-        
-        # Gestionnaire de signaux pour arrêt propre
-        import signal
-        
-        def handle_stop_signal(signum, frame):
-            logger.info(f"🛑 Signal {signum} reçu, arrêt en cours...")
-            stop_event.set()
-        
-        # Enregistrer les signaux
-        signal.signal(signal.SIGINT, handle_stop_signal)
-        signal.signal(signal.SIGTERM, handle_stop_signal)
-        
-        logger.info("⌛ En attente d'événements... (Ctrl+C pour arrêter)")
-        
-        # Attendre le signal d'arrêt
-        await stop_event.wait()
-        
-        # Arrêt propre
-        logger.info("🔄 Arrêt du bot...")
-        await application.updater.stop()
-        await application.stop()
+        # Fermer l'application
         await application.shutdown()
-        logger.info("✅ Bot arrêté proprement")
+        logger.info("✅ Application fermée")
     
     except Exception as e:
-        logger.critical(f"❌ ERREUR FATALE dans main(): {e}", exc_info=True)
-        raise
+        logger.error(f"❌ Erreur lors de l'arrêt: {e}")
+    
+    logger.info("=" * 60)
+    logger.info("👋 AU REVOIR")
+    logger.info("=" * 60)
 
 # ==================== POINT D'ENTRÉE ====================
 
 if __name__ == '__main__':
-    logger.info("=" * 50)
-    logger.info("🚀 LANCEMENT DU BOT")
-    logger.info("=" * 50)
-    logger.info(f"🐍 Python {sys.version}")
-    logger.info(f"📍 Fichier: {__file__}")
-    logger.info("=" * 50)
-    
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("⌨️ Arrêt par Ctrl+C")
+        logger.info("⚠️  Interruption clavier (Ctrl+C)")
     except Exception as e:
-        logger.critical(f"💥 ERREUR CRITIQUE: {e}", exc_info=True)
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+        logger.error(f"❌ Erreur fatale: {e}")
+        logger.error(traceback.format_exc())
     finally:
-        logger.info("👋 Fin du programme")
+        logger.info("🏁 Programme terminé")
 
-# FIN DU FICHIER
+# ==================== FIN DU FICHIER BOT.PY ====================

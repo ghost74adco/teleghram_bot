@@ -350,7 +350,7 @@ def error_handler(func):
                     await update.callback_query.answer("Erreur technique", show_alert=True)
                     await update.callback_query.message.reply_text(error_message)
                 elif update.message:
-                    await update.message.reply_text(error_message)
+                    await update.message.reply_text(error_message, parse_mode=None)
             except Exception as notify_error:
                 logger.error(f"Impossible de notifier l'erreur: {notify_error}")
     
@@ -1816,7 +1816,7 @@ Tapez /admin pour accéder au panel
     
     await update.message.reply_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
     
     logger.info(f"👤 ID demandé: {first_name} ({user_id}) - Admin: {is_already_admin}")
@@ -1941,14 +1941,17 @@ def create_backup(backup_dir: Path = None) -> Optional[Path]:
 
 @error_handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler pour la commande /start"""
     user = update.effective_user
     user_id = user.id
 
-    # Maintenance
     if is_maintenance_mode(user_id):
         await update.message.reply_text(
-            f"{EMOJI_THEME['warning']} BOT EN MAINTENANCE\n\n"
-            "Le service est temporairement indisponible.\n"
+            f"{EMOJI_THEME['warning']} BOT EN MAINTENANCE
+
+"
+            "Le service est temporairement indisponible.
+"
             "Veuillez réessayer dans quelques instants.",
             parse_mode=None
         )
@@ -2004,14 +2007,14 @@ Notre équipe est disponible {get_horaires_text()}
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode=None
         )
-
     else:
         update_user_visit(user_id)
         stats = get_client_stats(user_id)
 
         vip_message = ""
         if stats and stats.get("vip_status"):
-            vip_message = f"{EMOJI_THEME['vip']} Statut VIP actif - {VIP_DISCOUNT}% de réduction automatique\n"
+            vip_message = f"{EMOJI_THEME['vip']} Statut VIP actif - {VIP_DISCOUNT}% de réduction automatique
+"
 
         returning_message = f"""
 {EMOJI_THEME['wave']} Bon retour {user_data['first_name']} !
@@ -2027,7 +2030,13 @@ Choisissez votre pays pour commencer :
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode=None
         )
+{EMOJI_THEME['wave']} Bon retour {user_data['first_name']} !
 
+{vip_message}
+Choisissez votre pays pour commencer :
+
+🕐 Horaires : {get_horaires_text()}
+"""
         
         keyboard = [
             [InlineKeyboardButton("🇫🇷 France", callback_data="country_fr"),
@@ -2039,7 +2048,7 @@ Choisissez votre pays pour commencer :
         
         await update.message.reply_text(
             returning_message,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
         )
     
     logger.info(f"✅ /start traité: {user_id}")
@@ -2056,7 +2065,7 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{EMOJI_THEME['error']} Accès refusé.\n\n"
             "Cette commande est réservée aux administrateurs.\n\n"
             f"💡 Tapez /myid pour obtenir votre ID Telegram."
-        )
+        , parse_mode=None)
         logger.warning(f"⚠️ Tentative accès admin: {user_id}")
         return
     
@@ -2169,7 +2178,7 @@ Notre support est disponible pendant nos horaires d'ouverture.
     
     await update.message.reply_text(
         help_text,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
     
     logger.info(f"ℹ️ Aide affichée: {update.effective_user.id}")
@@ -2213,7 +2222,7 @@ Choisissez votre pays pour commencer :
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 # ==================== CALLBACK: AIDE INLINE ====================
@@ -2249,7 +2258,7 @@ async def help_inline(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         help_text,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 # ==================== CALLBACK: MON HISTORIQUE ====================
@@ -2306,7 +2315,7 @@ Commencez dès maintenant et profitez de nos offres !
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 # ==================== CALLBACK: INFO PARRAINAGE ====================
@@ -2357,7 +2366,7 @@ async def referral_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 # FIN DU BLOC 4
@@ -2399,7 +2408,7 @@ async def select_country(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
     
     logger.info(f"🌍 Pays sélectionné: {country_name} - User: {query.from_user.id}")
@@ -2450,7 +2459,7 @@ async def browse_products(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 # ==================== CALLBACK: DÉTAIL PRODUIT ====================
@@ -2474,7 +2483,7 @@ async def product_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Le produit {product_name} est actuellement indisponible.\n"
             "Revenez plus tard !",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 Retour", callback_data="browse_all")]
+                [InlineKeyboardButton("🔙 Retour", callback_data="browse_all", parse_mode=None)]
             ])
         )
         return
@@ -2521,7 +2530,7 @@ _(Entrez la quantité en grammes)_
         logger.error(f"Erreur envoi média: {e}")
         await query.edit_message_text(
             message,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
         )
     
     logger.info(f"📦 Produit affiché: {product_name} - User: {query.from_user.id}")
@@ -2553,7 +2562,7 @@ _(Exemple: 15 ou 37.5)_
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 # ==================== HANDLER: RÉCEPTION QUANTITÉ ====================
@@ -2576,13 +2585,13 @@ async def receive_custom_quantity(update: Update, context: ContextTypes.DEFAULT_
         if quantity <= 0:
             await update.message.reply_text(
                 f"{EMOJI_THEME['error']} La quantité doit être supérieure à 0."
-            )
+            , parse_mode=None)
             return
         
         if quantity > 1000:
             await update.message.reply_text(
                 f"{EMOJI_THEME['error']} Quantité maximale : 1000g"
-            )
+            , parse_mode=None)
             return
         
         # Vérifier stock
@@ -2591,7 +2600,7 @@ async def receive_custom_quantity(update: Update, context: ContextTypes.DEFAULT_
             await update.message.reply_text(
                 f"{EMOJI_THEME['warning']} Stock insuffisant.\n"
                 f"Disponible : {stock}g"
-            )
+            , parse_mode=None)
             return
         
         # Ajouter au panier
@@ -2628,7 +2637,7 @@ Total : {total:.2f}€
         
         await update.message.reply_text(
             message,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
         )
         
         logger.info(f"🛒 Ajouté panier: {product_name} {quantity}g - User: {user_id}")
@@ -2636,7 +2645,7 @@ Total : {total:.2f}€
     except ValueError:
         await update.message.reply_text(
             f"{EMOJI_THEME['error']} Quantité invalide. Entrez un nombre."
-        )
+        , parse_mode=None)
 
 # ==================== CALLBACK: AJOUTER AU PANIER ====================
 
@@ -2690,7 +2699,7 @@ Prix : {price}€/g × {quantity} = {total:.2f}€
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
     
     logger.info(f"✅ Ajouté: {product_name} {quantity}g - User: {query.from_user.id}")
@@ -2742,7 +2751,7 @@ Commencez vos achats dès maintenant !
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 # ==================== CALLBACK: VIDER PANIER ====================
@@ -2765,7 +2774,7 @@ Votre panier a été vidé avec succès.
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
     
     logger.info(f"🗑️ Panier vidé - User: {query.from_user.id}")
@@ -2852,13 +2861,13 @@ Choisissez une section :
     if is_callback:
         await query.edit_message_text(
             message,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
             # PAS DE parse_mode DU TOUT !
         )
     else:
         await update.message.reply_text(
             message,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
             # PAS DE parse_mode DU TOUT !
         )
     
@@ -2893,7 +2902,7 @@ Que souhaitez-vous faire ?
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 @error_handler
@@ -2919,7 +2928,7 @@ async def admin_list_products(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 @error_handler
@@ -2950,7 +2959,7 @@ async def admin_toggle_products(update: Update, context: ContextTypes.DEFAULT_TY
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 @error_handler
@@ -3016,7 +3025,7 @@ Que souhaitez-vous faire ?
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 @error_handler
@@ -3053,7 +3062,7 @@ async def admin_view_stocks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 @error_handler
@@ -3083,7 +3092,7 @@ async def admin_add_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 @error_handler
@@ -3116,7 +3125,7 @@ async def admin_stock_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 # ==================== GESTION PRIX ====================
@@ -3144,7 +3153,7 @@ Que souhaitez-vous faire ?
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 @error_handler
@@ -3171,7 +3180,7 @@ async def admin_prices_country(update: Update, context: ContextTypes.DEFAULT_TYP
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 # ==================== GESTION CODES PROMO ====================
@@ -3204,7 +3213,7 @@ Que souhaitez-vous faire ?
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 @error_handler
@@ -3245,7 +3254,7 @@ async def admin_list_promos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 # ==================== GESTION COMMANDES ====================
@@ -3268,7 +3277,7 @@ Les commandes sont actuellement gérées via les notifications en temps réel.
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 # ==================== GESTION ADMINS (SUPER-ADMIN) ====================
@@ -3308,7 +3317,7 @@ Que souhaitez-vous faire ?
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
     
     return ADMIN_MANAGE_MENU
@@ -3327,7 +3336,7 @@ async def admin_list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
     
     return ADMIN_VIEW_LIST
@@ -3356,7 +3365,7 @@ Envoyez l'ID Telegram du nouvel admin :
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
     
     return ADMIN_ADD_ID
@@ -3376,7 +3385,7 @@ async def admin_add_admin_receive_id(update: Update, context: ContextTypes.DEFAU
         if is_admin(new_admin_id):
             await update.message.reply_text(
                 f"{EMOJI_THEME['error']} Cet utilisateur est déjà administrateur."
-            )
+            , parse_mode=None)
             return ADMIN_ADD_ID
         
         # Stocker temporairement
@@ -3412,7 +3421,7 @@ Choisissez le niveau d'accès :
         
         await update.message.reply_text(
             message,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
         )
         
         return ADMIN_ADD_LEVEL
@@ -3421,7 +3430,7 @@ Choisissez le niveau d'accès :
         await update.message.reply_text(
             f"{EMOJI_THEME['error']} ID invalide. L'ID doit être un nombre.\n\n"
             "Réessayez ou appuyez sur Annuler."
-        )
+        , parse_mode=None)
         return ADMIN_ADD_ID
 
 @error_handler
@@ -3490,7 +3499,7 @@ Utilisez la commande /admin pour accéder au panel d'administration.
         
         await query.edit_message_text(
             message,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
         )
         
         logger.info(f"✅ Admin ajouté: {new_admin_id} ({level}) par {user_id}")
@@ -3545,7 +3554,7 @@ async def admin_remove_admin_start(update: Update, context: ContextTypes.DEFAULT
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
     
     return ADMIN_REMOVE_CONFIRM
@@ -3581,7 +3590,7 @@ Cette action est irréversible.
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
     
     return ADMIN_REMOVE_CONFIRM
@@ -3621,7 +3630,7 @@ L'administrateur {admin_to_remove} a été supprimé avec succès.
         
         await query.edit_message_text(
             message,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
         )
         
         logger.info(f"🗑️ Admin supprimé: {admin_to_remove} par {user_id}")
@@ -3669,7 +3678,7 @@ Que souhaitez-vous faire ?
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 @error_handler
@@ -3705,7 +3714,7 @@ Les administrateurs gardent l'accès complet.
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 @error_handler
@@ -3792,7 +3801,7 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 # ==================== CALLBACK: FERMER PANEL ====================
@@ -3805,7 +3814,7 @@ async def admin_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(
         f"{EMOJI_THEME['success']} Panel administrateur fermé."
-    )
+    , parse_mode=None)
 
 @error_handler
 async def admin_back_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3853,7 +3862,7 @@ Vous pouvez continuer votre commande, elle sera traitée à la réouverture.
         
         await query.edit_message_text(
             message,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
         )
         return
     
@@ -3902,7 +3911,7 @@ Choisissez votre mode de livraison :
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 # ==================== CALLBACK: MODE LIVRAISON SÉLECTIONNÉ ====================
@@ -3961,7 +3970,7 @@ _15 Rue de la Paix
         
         await query.edit_message_text(
             message,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
         )
         
         context.user_data['awaiting_address'] = True
@@ -3984,7 +3993,7 @@ async def receive_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(address) < 10:
         await update.message.reply_text(
             f"{EMOJI_THEME['error']} Adresse trop courte. Veuillez entrer une adresse complète."
-        )
+        , parse_mode=None)
         return
     
     context.user_data['delivery_address'] = address
@@ -4004,7 +4013,7 @@ async def receive_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if delivery_type == "express":
         message_calculating = await update.message.reply_text(
             f"{EMOJI_THEME['delivery']} Calcul de la distance en cours..."
-        )
+        , parse_mode=None)
         
         distance = calculate_distance_simple(address)
         delivery_fee = calculate_delivery_fee(delivery_type, distance, subtotal)
@@ -4046,7 +4055,7 @@ Sinon, tapez "NON" pour continuer.
     
     await update.message.reply_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
     
     context.user_data['awaiting_promo'] = True
@@ -4071,7 +4080,7 @@ Sinon, cliquez sur "Pas de code".
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
     
     context.user_data['awaiting_promo'] = True
@@ -4110,7 +4119,7 @@ async def receive_promo_code(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(
             f"{EMOJI_THEME['error']} Code invalide\n\n{message_status}\n\n"
             "Réessayez ou tapez NON pour continuer."
-        )
+        , parse_mode=None)
         return
     
     context.user_data['promo_code'] = promo_code
@@ -4120,7 +4129,7 @@ async def receive_promo_code(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.message.reply_text(
         f"{EMOJI_THEME['success']} Code promo validé !\n\n"
         f"Réduction : -{discount:.2f}€"
-    )
+    , parse_mode=None)
     
     await asyncio.sleep(1)
     await payment_select_message(update, context)
@@ -4157,7 +4166,7 @@ Choisissez votre mode de paiement :
     
     await update.message.reply_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 async def payment_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -4178,7 +4187,7 @@ Choisissez votre mode de paiement :
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 # ==================== CALLBACK: PAIEMENT SÉLECTIONNÉ ====================
@@ -4265,7 +4274,7 @@ Confirmez-vous cette commande ?
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
     
     # Stocker pour confirmation
@@ -4422,7 +4431,7 @@ Votre commande #{order_id} a été enregistrée avec succès.
     
     await query.edit_message_text(
         confirmation_message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
     
     # Vider le panier
@@ -4458,7 +4467,7 @@ async def admin_validate_order(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.edit_message_text(
         f"✅ COMMANDE VALIDÉE\n\n"
         f"Commande #{order_id} validée avec succès."
-    )
+    , parse_mode=None)
     
     logger.info(f"✅ Commande validée: {order_id} par admin {query.from_user.id}")
 
@@ -4481,7 +4490,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text(
             f"{EMOJI_THEME['warning']} BOT EN MAINTENANCE\n\n"
             "Le service est temporairement indisponible."
-        )
+        , parse_mode=None)
         return
     
     # ==================== ÉTAT: En attente de quantité personnalisée ====================
@@ -4518,7 +4527,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Si aucun état actif, proposer le menu principal
     await update.message.reply_text(
         f"{EMOJI_THEME['info']} Utilisez /start pour accéder au menu principal."
-    )
+    , parse_mode=None)
 
 # ==================== COMMANDE /CANCEL ====================
 
@@ -4537,7 +4546,7 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"{EMOJI_THEME['success']} Opération annulée.\n\n"
         "Utilisez /start pour revenir au menu."
-    )
+    , parse_mode=None)
     
     logger.info(f"❌ Opération annulée - User: {update.effective_user.id}")
 
@@ -4555,7 +4564,7 @@ async def receive_new_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not product_name or not country:
         await update.message.reply_text(
             f"{EMOJI_THEME['error']} Erreur: données manquantes."
-        )
+        , parse_mode=None)
         return
     
     try:
@@ -4564,12 +4573,12 @@ async def receive_new_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if new_price <= 0:
             await update.message.reply_text(
                 f"{EMOJI_THEME['error']} Le prix doit être supérieur à 0."
-            )
+            , parse_mode=None)
             return
         
         if new_price > 1000:
             await update.message.reply_text(
-                f"{EMOJI_THEME['error']} Prix trop élevé (max: 1000€)."
+                f"{EMOJI_THEME['error']} Prix trop élevé (max: 1000€, parse_mode=None)."
             )
             return
         
@@ -4587,18 +4596,18 @@ async def receive_new_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"{EMOJI_THEME['success']} PRIX MIS À JOUR\n\n"
                 f"{flag} {product_name}\n"
                 f"Nouveau prix: {new_price}€/g"
-            )
+            , parse_mode=None)
             
             logger.info(f"💰 Prix modifié: {product_name} ({country}) = {new_price}€")
         else:
             await update.message.reply_text(
                 f"{EMOJI_THEME['error']} Erreur lors de la mise à jour."
-            )
+            , parse_mode=None)
     
     except ValueError:
         await update.message.reply_text(
             f"{EMOJI_THEME['error']} Prix invalide. Entrez un nombre."
-        )
+        , parse_mode=None)
 
 # ==================== ADMIN: RÉCEPTION NOUVEAU STOCK ====================
 
@@ -4613,7 +4622,7 @@ async def receive_new_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not product_name:
         await update.message.reply_text(
             f"{EMOJI_THEME['error']} Erreur: produit non spécifié."
-        )
+        , parse_mode=None)
         return
     
     try:
@@ -4622,12 +4631,12 @@ async def receive_new_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if new_stock < 0:
             await update.message.reply_text(
                 f"{EMOJI_THEME['error']} Le stock ne peut pas être négatif."
-            )
+            , parse_mode=None)
             return
         
         if new_stock > 100000:
             await update.message.reply_text(
-                f"{EMOJI_THEME['error']} Stock trop élevé (max: 100000g)."
+                f"{EMOJI_THEME['error']} Stock trop élevé (max: 100000g, parse_mode=None)."
             )
             return
         
@@ -4654,18 +4663,18 @@ async def receive_new_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"{EMOJI_THEME['success']} STOCK MIS À JOUR\n\n"
                 f"{product_name}\n"
                 f"Nouveau stock: {new_stock}g{status_msg}"
-            )
+            , parse_mode=None)
             
             logger.info(f"📦 Stock modifié: {product_name} = {new_stock}g")
         else:
             await update.message.reply_text(
                 f"{EMOJI_THEME['error']} Erreur lors de la mise à jour."
-            )
+            , parse_mode=None)
     
     except ValueError:
         await update.message.reply_text(
             f"{EMOJI_THEME['error']} Stock invalide. Entrez un nombre."
-        )
+        , parse_mode=None)
 
 # ==================== ADMIN: CRÉATION CODE PROMO ====================
 
@@ -4684,13 +4693,13 @@ async def receive_promo_creation_data(update: Update, context: ContextTypes.DEFA
         if len(code) < 3:
             await update.message.reply_text(
                 f"{EMOJI_THEME['error']} Le code doit contenir au moins 3 caractères."
-            )
+            , parse_mode=None)
             return
         
         if len(code) > 20:
             await update.message.reply_text(
                 f"{EMOJI_THEME['error']} Le code ne peut pas dépasser 20 caractères."
-            )
+            , parse_mode=None)
             return
         
         # Vérifier si le code existe déjà
@@ -4698,7 +4707,7 @@ async def receive_promo_creation_data(update: Update, context: ContextTypes.DEFA
         if code in promo_codes:
             await update.message.reply_text(
                 f"{EMOJI_THEME['error']} Ce code existe déjà."
-            )
+            , parse_mode=None)
             return
         
         context.user_data['new_promo_code'] = code
@@ -4713,7 +4722,7 @@ async def receive_promo_creation_data(update: Update, context: ContextTypes.DEFA
         await update.message.reply_text(
             f"✅ Code: {code}\n\n"
             "Type de réduction ?",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
         )
     
     # ÉTAPE 2: Valeur de réduction (après sélection du type)
@@ -4726,13 +4735,13 @@ async def receive_promo_creation_data(update: Update, context: ContextTypes.DEFA
             if promo_type == 'percentage' and (value <= 0 or value > 100):
                 await update.message.reply_text(
                     f"{EMOJI_THEME['error']} Le pourcentage doit être entre 1 et 100."
-                )
+                , parse_mode=None)
                 return
             
             if promo_type == 'fixed' and value <= 0:
                 await update.message.reply_text(
                     f"{EMOJI_THEME['error']} Le montant doit être supérieur à 0."
-                )
+                , parse_mode=None)
                 return
             
             context.user_data['new_promo_value'] = value
@@ -4742,12 +4751,12 @@ async def receive_promo_creation_data(update: Update, context: ContextTypes.DEFA
                 f"💯 Nombre d'utilisations maximum\n\n"
                 "Entrez le nombre de fois que ce code peut être utilisé.\n"
                 "Tapez 0 pour illimité."
-            )
+            , parse_mode=None)
         
         except ValueError:
             await update.message.reply_text(
                 f"{EMOJI_THEME['error']} Valeur invalide. Entrez un nombre."
-            )
+            , parse_mode=None)
     
     # ÉTAPE 3: Nombre d'utilisations max
     elif step == 'max_uses':
@@ -4757,7 +4766,7 @@ async def receive_promo_creation_data(update: Update, context: ContextTypes.DEFA
             if max_uses < 0:
                 await update.message.reply_text(
                     f"{EMOJI_THEME['error']} Le nombre ne peut pas être négatif."
-                )
+                , parse_mode=None)
                 return
             
             if max_uses == 0:
@@ -4796,14 +4805,14 @@ async def receive_promo_creation_data(update: Update, context: ContextTypes.DEFA
                 f"Réduction: {value}{type_icon}\n"
                 f"Utilisations max: {uses_text}\n\n"
                 "Le code est immédiatement actif !"
-            )
+            , parse_mode=None)
             
             logger.info(f"🎁 Code promo créé: {code} ({value}{type_icon})")
         
         except ValueError:
             await update.message.reply_text(
                 f"{EMOJI_THEME['error']} Nombre invalide."
-            )
+            , parse_mode=None)
 
 # ==================== CALLBACKS POUR CRÉATION PROMO ====================
 
@@ -4826,7 +4835,7 @@ async def promo_type_selected(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     await query.edit_message_text(
         f"💰 VALEUR DE RÉDUCTION\n\n{prompt}\n\n_{example}_"
-    )
+    , parse_mode=None)
 
 # ==================== ADMIN: DÉMARRER MODIFICATION PRIX ====================
 
@@ -4858,7 +4867,7 @@ async def admin_edit_price_start(update: Update, context: ContextTypes.DEFAULT_T
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 @error_handler
@@ -4891,7 +4900,7 @@ async def admin_price_edit_product(update: Update, context: ContextTypes.DEFAULT
         f"{flag} {product_name}\n"
         f"Prix actuel: {current_price}€/g\n\n"
         f"Entrez le nouveau prix en €/g :"
-    )
+    , parse_mode=None)
 
 # ==================== ADMIN: DÉMARRER AJOUT STOCK ====================
 
@@ -4921,7 +4930,7 @@ async def admin_stock_select_product(update: Update, context: ContextTypes.DEFAU
         f"Produit: {product_name}\n"
         f"Stock actuel: {stock_text}\n\n"
         f"Entrez le nouveau stock en grammes :"
-    )
+    , parse_mode=None)
 
 # ==================== ADMIN: DÉMARRER CRÉATION PROMO ====================
 
@@ -4938,7 +4947,7 @@ async def admin_create_promo_start(update: Update, context: ContextTypes.DEFAULT
         f"🎁 CRÉER UN CODE PROMO\n\n"
         f"Étape 1/4: Entrez le code promo\n\n"
         f"Exemple: NOEL2025, WELCOME10, etc.\n"
-        f"(3-20 caractères, lettres et chiffres uniquement)"
+        f"(3-20 caractères, lettres et chiffres uniquement, parse_mode=None)"
     )
 
 # ==================== ADMIN: SUPPRIMER CODE PROMO ====================
@@ -4970,7 +4979,7 @@ async def admin_delete_promo_start(update: Update, context: ContextTypes.DEFAULT
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 @error_handler
@@ -5007,7 +5016,7 @@ Voulez-vous vraiment supprimer ce code ?
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 @error_handler
@@ -5027,7 +5036,7 @@ async def admin_delete_promo_execute(update: Update, context: ContextTypes.DEFAU
         await query.edit_message_text(
             f"{EMOJI_THEME['success']} CODE SUPPRIMÉ\n\n"
             f"Le code {code} a été supprimé avec succès."
-        )
+        , parse_mode=None)
         
         logger.info(f"🗑️ Code promo supprimé: {code}")
     else:
@@ -5104,7 +5113,7 @@ async def admin_detailed_stats(update: Update, context: ContextTypes.DEFAULT_TYP
     
     await query.edit_message_text(
         message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard, parse_mode=None)
     )
 
 # FIN DU BLOC 8

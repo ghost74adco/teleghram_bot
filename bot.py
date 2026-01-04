@@ -2838,13 +2838,13 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     out_stock = len(get_out_of_stock_products())
     
     message = f"""
-🎛️ *PANEL ADMINISTRATEUR*
+🎛️ <b>PANEL ADMINISTRATEUR</b>
 
 👤 {name} ({level.upper()})
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-📊 *STATISTIQUES RAPIDES*
+📊 <b>STATISTIQUES RAPIDES</b>
 
 👥 Utilisateurs : {users_count}
 📦 Produits : {len(load_product_registry())}
@@ -2889,13 +2889,13 @@ Choisissez une section :
         await query.edit_message_text(
             message,
             reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
+            parse_mode='HTML'
         )
     else:
         await update.message.reply_text(
             message,
             reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='Markdown'
+            parse_mode='HTML'
         )
     
     logger.info(f"🔐 Panel admin affiché: {user_id} ({level})")

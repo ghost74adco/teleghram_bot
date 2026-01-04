@@ -2838,7 +2838,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     out_stock = len(get_out_of_stock_products())
     
     message = f"""
-{EMOJI_THEME['admin']} *PANEL ADMINISTRATEUR*
+🎛️ *PANEL ADMINISTRATEUR*
 
 👤 {name} ({level.upper()})
 

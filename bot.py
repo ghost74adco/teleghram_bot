@@ -1795,9 +1795,11 @@ def save_order_to_csv(order_data):
                 'date', 'order_id', 'user_id', 'username', 'first_name', 'language',
                 'products', 'country', 'address', 'delivery_type', 'distance_km',
                 'payment_method', 'subtotal', 'delivery_fee', 'promo_discount',
-                'vip_discount', 'total', 'promo_code', 'status'
+                'vip_discount', 'total', 'promo_code', 'status', 'price_modified',
+                'old_total', 'delivery_modified', 'old_delivery_fee', 'validated_date',
+                'ready_date', 'delivered_date'
             ]
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
             if not file_exists:
                 writer.writeheader()
             writer.writerow(order_data)
@@ -4897,17 +4899,30 @@ async def admin_validate_order(update: Update, context: ContextTypes.DEFAULT_TYP
     # Charger les infos de la commande depuis le CSV
     csv_path = DATA_DIR / "orders.csv"
     order_data = None
+    orders = []
     
     try:
         if csv_path.exists():
             with open(csv_path, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
-                for row in reader:
-                    if row.get('order_id') == order_id:
-                        order_data = row
-                        break
+                orders = list(reader)
+                
+            for row in orders:
+                if row.get('order_id') == order_id:
+                    order_data = row
+                    # Mettre à jour le statut
+                    row['status'] = 'Livrée'
+                    row['delivered_date'] = datetime.now().isoformat()
+                    break
+            
+            # Sauvegarder le CSV mis à jour
+            if orders and order_data:
+                with open(csv_path, 'w', encoding='utf-8', newline='') as f:
+                    writer = csv.DictWriter(f, fieldnames=orders[0].keys())
+                    writer.writeheader()
+                    writer.writerows(orders)
     except Exception as e:
-        logger.error(f"Erreur lecture commande: {e}")
+        logger.error(f"Erreur lecture/écriture commande: {e}")
     
     # Enregistrer la vente dans le livre de comptes
     if order_data:
@@ -4925,6 +4940,8 @@ async def admin_validate_order(update: Update, context: ContextTypes.DEFAULT_TYP
             logger.info(f"📒 Vente ajoutée au livre de comptes: {total:.2f}€")
         except Exception as e:
             logger.error(f"Erreur ajout livre de comptes: {e}")
+    else:
+        logger.warning(f"⚠️ Commande {order_id} introuvable dans CSV - vente non enregistrée")
     
     # Notifier le client
     try:
@@ -4938,11 +4955,20 @@ async def admin_validate_order(update: Update, context: ContextTypes.DEFAULT_TYP
         logger.error(f"Erreur notification client: {e}")
     
     # Modifier le message admin
-    await query.edit_message_text(
-        f"✅ COMMANDE VALIDÉE ET LIVRÉE\n\n"
-        f"Commande #{order_id} validée avec succès.\n"
-        f"📒 Vente enregistrée dans le livre de comptes."
-    )
+    if order_data:
+        await query.edit_message_text(
+            f"✅ COMMANDE VALIDÉE ET LIVRÉE\n\n"
+            f"Commande #{order_id} validée avec succès.\n"
+            f"📒 Vente enregistrée dans le livre de comptes.\n"
+            f"💰 Montant: {order_data.get('total')}€"
+        )
+    else:
+        await query.edit_message_text(
+            f"⚠️ COMMANDE VALIDÉE\n\n"
+            f"Commande #{order_id} validée.\n"
+            f"⚠️ Erreur: commande introuvable dans CSV.\n"
+            f"Vérifiez les logs."
+        )
     
     logger.info(f"✅ Commande validée: {order_id} par admin {query.from_user.id}")
 
@@ -8381,7 +8407,10 @@ def add_ledger_entry(entry_type, amount, description, category, reference_id=Non
     category: catégorie (Vente, Salaire, Consommable, etc.)
     reference_id: ID de référence (order_id, payment_id, etc.)
     """
+    logger.info(f"📒 Début add_ledger_entry: type={entry_type}, amount={amount}, category={category}")
+    
     ledger = load_ledger()
+    logger.info(f"📒 Ledger chargé: {len(ledger.get('entries', []))} entrées, solde={ledger.get('balance', 0)}")
     
     entry = {
         "id": f"LED-{int(datetime.now().timestamp())}",
@@ -8404,6 +8433,8 @@ def add_ledger_entry(entry_type, amount, description, category, reference_id=Non
     
     # Ajouter l'entrée
     ledger['entries'].insert(0, entry)  # Plus récent en premier
+    
+    logger.info(f"📒 Entrée créée: {entry['id']}, nouveau solde={ledger['balance']}")
     
     save_ledger(ledger)
     logger.info(f"📒 Livre de comptes: {entry_type} {amount:.2f}€ - {description}")

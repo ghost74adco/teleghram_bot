@@ -5892,7 +5892,7 @@ Que souhaitez-vous consulter ?
 
 @error_handler
 async def admin_request_pay(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Admin demande une paye"""
+    """Admin demande une paye avec suggestion incluant consommables"""
     query = update.callback_query
     await query.answer()
     
@@ -5903,6 +5903,27 @@ async def admin_request_pay(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("Erreur: Admin non trouvé", show_alert=True)
         return
     
+    # Charger config salaire
+    config = load_salary_config()
+    admin_config = config['admins'].get(str(user_id), {})
+    fixed_salary = admin_config.get('fixed_salary', 0)
+    
+    # Charger commissions
+    commissions_data = load_commissions()
+    commissions = commissions_data.get(str(user_id), {}).get('current_period', {}).get('total_commission', 0)
+    
+    # Charger consommables non remboursés
+    expenses = load_expenses()
+    unreimbursed = sum(
+        e['amount'] for e in expenses['expenses']
+        if e['admin_id'] == str(user_id)
+        and e['status'] == 'approved'
+        and not e.get('reimbursed', False)
+    )
+    
+    # Total suggéré
+    suggested_amount = fixed_salary + commissions + unreimbursed
+    
     # Charger le solde actuel
     payroll = load_payroll()
     balance = payroll['balances'].get(str(user_id), 0)
@@ -5912,8 +5933,19 @@ async def admin_request_pay(update: Update, context: ContextTypes.DEFAULT_TYPE):
 👤 {admin_info['name']}
 💰 Solde actuel : {balance:.2f}€
 
+━━━━━━━━━━━━━━━━━━━━━━
+
+📊 DÉTAIL PÉRIODE ACTUELLE :
+• Salaire fixe : {fixed_salary:.2f}€
+• Commissions : {commissions:.2f}€
+• Remb. consommables : {unreimbursed:.2f}€
+
+💵 MONTANT SUGGÉRÉ : {suggested_amount:.2f}€
+
+━━━━━━━━━━━━━━━━━━━━━━
+
 Entrez le montant souhaité :
-Exemple : 250.50
+Exemple : {suggested_amount:.2f}
 """
     
     keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_finances")]]
@@ -6431,7 +6463,7 @@ DERNIERS CONSOMMABLES :
 
 @error_handler
 async def admin_finances_all_expenses(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Affiche tous les consommables (super-admin)"""
+    """Affiche tous les consommables en attente avec actions (super-admin)"""
     query = update.callback_query
     await query.answer()
     
@@ -6448,16 +6480,19 @@ async def admin_finances_all_expenses(update: Update, context: ContextTypes.DEFA
 
 ✅ Tous les consommables ont été traités.
 """
+        keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_finances")]]
     else:
         total_pending = sum(e['amount'] for e in pending)
         
-        message = f"""🧾 CONSOMMABLES EN ATTENTE
+        message = f"""🧾 CONSOMMABLES À TRAITER
 
 {len(pending)} consommable(s) - {total_pending:.2f}€
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
 """
+        
+        keyboard = []
         
         for expense in pending:
             date = expense['date'][:10]
@@ -6469,11 +6504,19 @@ async def admin_finances_all_expenses(update: Update, context: ContextTypes.DEFA
 📅 {date}
 
 """
-    
-    keyboard = [
-        [InlineKeyboardButton("🔄 Actualiser", callback_data="admin_finances_all_expenses")],
-        [InlineKeyboardButton("🔙 Retour", callback_data="admin_finances")]
-    ]
+            # Ajouter boutons pour ce consommable
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"✅ Approuver {expense['id'][-6:]}",
+                    callback_data=f"approve_expense_{expense['id']}"
+                ),
+                InlineKeyboardButton(
+                    f"❌ Rejeter {expense['id'][-6:]}",
+                    callback_data=f"reject_expense_{expense['id']}"
+                )
+            ])
+        
+        keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="admin_finances")])
     
     await query.edit_message_text(
         message,
@@ -6482,7 +6525,7 @@ async def admin_finances_all_expenses(update: Update, context: ContextTypes.DEFA
 
 @error_handler
 async def admin_finances_payroll(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Affiche les payes en attente (super-admin)"""
+    """Affiche les payes en attente avec actions (super-admin)"""
     query = update.callback_query
     await query.answer("🔄 Actualisation...", show_alert=False)
     
@@ -6505,10 +6548,11 @@ async def admin_finances_payroll(update: Update, context: ContextTypes.DEFAULT_T
 
 Actualisé à {datetime.now().strftime('%H:%M:%S')}
 """
+        keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_finances")]]
     else:
         total_pending = sum(p['amount'] for p in pending)
         
-        message = f"""💳 PAYES EN ATTENTE
+        message = f"""💳 PAYES À TRAITER
 
 {len(pending)} demande(s) - {total_pending:.2f}€
 
@@ -6516,21 +6560,32 @@ Actualisé à {datetime.now().strftime('%H:%M:%S')}
 
 """
         
+        keyboard = []
+        
         for payment in pending:
             date = payment['date'][:10]
             message += f"""📋 {payment['id']}
 👤 {payment['admin_name']}
 💰 {payment['amount']:.2f}€
 📅 {date}
+📝 {payment.get('note', 'Aucune note')}
 
 """
+            # Ajouter boutons pour cette paye
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"✅ Approuver {payment['id'][-6:]}",
+                    callback_data=f"approve_payment_{payment['id']}"
+                ),
+                InlineKeyboardButton(
+                    f"❌ Rejeter {payment['id'][-6:]}",
+                    callback_data=f"reject_payment_{payment['id']}"
+                )
+            ])
         
         message += f"\nActualisé à {datetime.now().strftime('%H:%M:%S')}"
-    
-    keyboard = [
-        [InlineKeyboardButton("🔄 Actualiser", callback_data=f"admin_finances_payroll_{timestamp}")],
-        [InlineKeyboardButton("🔙 Retour", callback_data="admin_finances")]
-    ]
+        
+        keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="admin_finances")])
     
     try:
         await query.edit_message_text(
@@ -6541,6 +6596,260 @@ Actualisé à {datetime.now().strftime('%H:%M:%S')}
         # Si le message est identique, ignorer l'erreur
         if "Message is not modified" not in str(e):
             raise
+
+@error_handler
+async def approve_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Approuve un consommable"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    expense_id = query.data.replace("approve_expense_", "")
+    
+    expenses = load_expenses()
+    
+    # Trouver et approuver le consommable
+    expense_found = None
+    for expense in expenses['expenses']:
+        if expense['id'] == expense_id:
+            expense['status'] = 'approved'
+            expense['approved_date'] = datetime.now().isoformat()
+            expense['approved_by'] = query.from_user.id
+            expense_found = expense
+            break
+    
+    if not expense_found:
+        await query.answer("Consommable introuvable", show_alert=True)
+        return
+    
+    save_expenses(expenses)
+    
+    # Notifier l'admin qui a fait la demande
+    try:
+        await context.bot.send_message(
+            chat_id=int(expense_found['admin_id']),
+            text=f"""✅ CONSOMMABLE APPROUVÉ
+
+📋 ID : {expense_id}
+📦 Catégorie : {expense_found['category']}
+💰 Montant : {expense_found['amount']:.2f}€
+📝 Description : {expense_found['description']}
+
+Votre demande a été approuvée.
+"""
+        )
+    except Exception as e:
+        logger.error(f"Erreur notification approbation: {e}")
+    
+    # Retour à la liste
+    await admin_finances_all_expenses(update, context)
+    
+    logger.info(f"✅ Consommable approuvé: {expense_id} - {expense_found['amount']}€")
+
+@error_handler
+async def reject_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Rejette un consommable"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    expense_id = query.data.replace("reject_expense_", "")
+    
+    expenses = load_expenses()
+    
+    # Trouver et rejeter le consommable
+    expense_found = None
+    for expense in expenses['expenses']:
+        if expense['id'] == expense_id:
+            expense['status'] = 'rejected'
+            expense['rejected_date'] = datetime.now().isoformat()
+            expense['rejected_by'] = query.from_user.id
+            expense_found = expense
+            break
+    
+    if not expense_found:
+        await query.answer("Consommable introuvable", show_alert=True)
+        return
+    
+    save_expenses(expenses)
+    
+    # Notifier l'admin qui a fait la demande
+    try:
+        await context.bot.send_message(
+            chat_id=int(expense_found['admin_id']),
+            text=f"""❌ CONSOMMABLE REJETÉ
+
+📋 ID : {expense_id}
+📦 Catégorie : {expense_found['category']}
+💰 Montant : {expense_found['amount']:.2f}€
+📝 Description : {expense_found['description']}
+
+Votre demande a été rejetée.
+Contactez le super-admin pour plus d'informations.
+"""
+        )
+    except Exception as e:
+        logger.error(f"Erreur notification rejet: {e}")
+    
+    # Retour à la liste
+    await admin_finances_all_expenses(update, context)
+    
+    logger.info(f"❌ Consommable rejeté: {expense_id} - {expense_found['amount']}€")
+
+@error_handler
+async def approve_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Approuve une demande de paye et marque consommables comme remboursés"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    payment_id = query.data.replace("approve_payment_", "")
+    
+    payroll = load_payroll()
+    
+    # Trouver et approuver la paye
+    payment_found = None
+    for payment in payroll['payments']:
+        if payment['id'] == payment_id:
+            payment['status'] = 'paid'
+            payment['paid_date'] = datetime.now().isoformat()
+            payment['paid_by'] = query.from_user.id
+            payment_found = payment
+            break
+    
+    if not payment_found:
+        await query.answer("Paye introuvable", show_alert=True)
+        return
+    
+    save_payroll(payroll)
+    
+    # Marquer les consommables de cet admin comme remboursés
+    expenses = load_expenses()
+    reimbursed_expenses = []
+    reimbursed_total = 0
+    
+    for expense in expenses['expenses']:
+        if (expense['admin_id'] == str(payment_found['admin_id']) 
+            and expense['status'] == 'approved' 
+            and not expense.get('reimbursed', False)):
+            expense['reimbursed'] = True
+            expense['reimbursed_date'] = datetime.now().isoformat()
+            expense['reimbursed_with_payment'] = payment_id
+            reimbursed_expenses.append(expense)
+            reimbursed_total += expense['amount']
+    
+    if reimbursed_expenses:
+        save_expenses(expenses)
+        logger.info(f"💰 {len(reimbursed_expenses)} consommables marqués remboursés ({reimbursed_total:.2f}€)")
+    
+    # Calculer détail du paiement
+    config = load_salary_config()
+    admin_config = config['admins'].get(str(payment_found['admin_id']), {})
+    fixed_salary = admin_config.get('fixed_salary', 0)
+    
+    commissions_data = load_commissions()
+    commissions = commissions_data.get(str(payment_found['admin_id']), {}).get('current_period', {}).get('total_commission', 0)
+    
+    # Notifier l'admin avec détail complet
+    try:
+        notification = f"""✅ PAYE APPROUVÉE
+
+📋 ID : {payment_id}
+💰 Montant total : {payment_found['amount']:.2f}€
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+💵 DÉTAIL :
+• Salaire fixe : {fixed_salary:.2f}€
+• Commissions : {commissions:.2f}€
+• Remb. consommables : {reimbursed_total:.2f}€
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+✅ Votre paiement sera effectué prochainement.
+"""
+        
+        if reimbursed_expenses:
+            notification += f"\n🧾 {len(reimbursed_expenses)} consommable(s) remboursé(s)"
+        
+        await context.bot.send_message(
+            chat_id=int(payment_found['admin_id']),
+            text=notification
+        )
+    except Exception as e:
+        logger.error(f"Erreur notification approbation paye: {e}")
+    
+    # Retour à la liste
+    await admin_finances_payroll(update, context)
+    
+    logger.info(f"✅ Paye approuvée: {payment_id} - {payment_found['amount']}€")
+
+@error_handler
+async def reject_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Rejette une demande de paye"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    payment_id = query.data.replace("reject_payment_", "")
+    
+    payroll = load_payroll()
+    
+    # Trouver et rejeter la paye
+    payment_found = None
+    for payment in payroll['payments']:
+        if payment['id'] == payment_id:
+            payment['status'] = 'rejected'
+            payment['rejected_date'] = datetime.now().isoformat()
+            payment['rejected_by'] = query.from_user.id
+            payment_found = payment
+            
+            # Restaurer le balance (retirer le négatif)
+            admin_id = str(payment['admin_id'])
+            if admin_id in payroll['balances']:
+                payroll['balances'][admin_id] += payment['amount']  # Annuler la déduction
+            
+            break
+    
+    if not payment_found:
+        await query.answer("Paye introuvable", show_alert=True)
+        return
+    
+    save_payroll(payroll)
+    
+    # Notifier l'admin qui a fait la demande
+    try:
+        await context.bot.send_message(
+            chat_id=int(payment_found['admin_id']),
+            text=f"""❌ PAYE REJETÉE
+
+📋 ID : {payment_id}
+💰 Montant : {payment_found['amount']:.2f}€
+📅 Date demande : {payment_found['date'][:10]}
+
+Votre demande de paye a été rejetée.
+Contactez le super-admin pour plus d'informations.
+"""
+        )
+    except Exception as e:
+        logger.error(f"Erreur notification rejet paye: {e}")
+    
+    # Retour à la liste
+    await admin_finances_payroll(update, context)
+    
+    logger.info(f"❌ Paye rejetée: {payment_id} - {payment_found['amount']}€")
 
 @error_handler
 async def admin_finances_full_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -6972,6 +7281,18 @@ async def salary_admin_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
     commissions_data = load_commissions()
     current_commissions = commissions_data.get(str(admin_id), {}).get('current_period', {}).get('total_commission', 0)
     
+    # Consommables approuvés non remboursés
+    expenses = load_expenses()
+    approved_expenses = sum(
+        e['amount'] for e in expenses['expenses']
+        if e['admin_id'] == str(admin_id) 
+        and e['status'] == 'approved' 
+        and not e.get('reimbursed', False)
+    )
+    
+    # Total à verser
+    total_to_pay = admin_config['fixed_salary'] + current_commissions + approved_expenses
+    
     message = f"""💼 CONFIGURATION SALAIRE
 
 👤 Admin : {admin_config['name']}
@@ -6985,7 +7306,13 @@ async def salary_admin_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
 📅 PAIEMENT
 {freq_info}
 
-📊 Commissions période actuelle : {current_commissions:.2f}€
+━━━━━━━━━━━━━━━━━━━━━━
+
+📊 PÉRIODE ACTUELLE :
+• Commissions : {current_commissions:.2f}€
+• Remb. consommables : {approved_expenses:.2f}€
+
+💵 TOTAL À VERSER : {total_to_pay:.2f}€
 
 🔔 Statut : {'Actif ✅' if admin_config['active'] else 'Inactif ❌'}
 
@@ -7364,12 +7691,13 @@ async def toggle_salary_active(update: Update, context: ContextTypes.DEFAULT_TYP
 
 @error_handler
 async def salary_overview(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Vue d'ensemble tous salaires"""
+    """Vue d'ensemble tous salaires avec remboursements"""
     query = update.callback_query
     await query.answer()
     
     config = load_salary_config()
     commissions_data = load_commissions()
+    expenses = load_expenses()
     
     message = """💼 VUE D'ENSEMBLE SALAIRES
 
@@ -7377,6 +7705,7 @@ async def salary_overview(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     total_fixed = 0
     total_commissions = 0
+    total_expenses = 0
     active_count = 0
     
     for admin_id, admin_config in config['admins'].items():
@@ -7386,17 +7715,28 @@ async def salary_overview(update: Update, context: ContextTypes.DEFAULT_TYPE):
         active_count += 1
         fixed = admin_config.get('fixed_salary', 0)
         commissions = commissions_data.get(admin_id, {}).get('current_period', {}).get('total_commission', 0)
-        total = fixed + commissions
+        
+        # Consommables approuvés non remboursés
+        admin_expenses = sum(
+            e['amount'] for e in expenses['expenses']
+            if e['admin_id'] == admin_id
+            and e['status'] == 'approved'
+            and not e.get('reimbursed', False)
+        )
+        
+        total = fixed + commissions + admin_expenses
         
         total_fixed += fixed
         total_commissions += commissions
+        total_expenses += admin_expenses
         
         freq = "Mensuel" if admin_config.get('salary_type') == 'monthly' else "Hebdo"
         
         message += f"""👤 {admin_config['name']}
 Fixe : {fixed:.2f}€ ({freq})
 Commissions : {commissions:.2f}€
-Période actuelle : {total:.2f}€
+Remb. consommables : {admin_expenses:.2f}€
+Total à verser : {total:.2f}€
 
 """
     
@@ -7408,7 +7748,9 @@ Période actuelle : {total:.2f}€
 💰 TOTAUX PÉRIODE ACTUELLE :
 Fixes : {total_fixed:.2f}€
 Commissions : {total_commissions:.2f}€
-TOTAL : {total_fixed + total_commissions:.2f}€
+Remboursements : {total_expenses:.2f}€
+
+💵 TOTAL À VERSER : {total_fixed + total_commissions + total_expenses:.2f}€
 
 👥 Admins actifs : {active_count}
 """
@@ -7421,6 +7763,7 @@ TOTAL : {total_fixed + total_commissions:.2f}€
         message,
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
+
 
 async def calculate_commission_on_order(context, admin_id, order_data):
     """Calcule et enregistre commission pour une commande"""
@@ -8007,6 +8350,10 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(admin_finances_margins, pattern="^admin_finances_margins"))
     application.add_handler(CallbackQueryHandler(admin_finances_my_expenses, pattern="^admin_finances_my_expenses$"))
     application.add_handler(CallbackQueryHandler(admin_finances_all_expenses, pattern="^admin_finances_all_expenses$"))
+    application.add_handler(CallbackQueryHandler(approve_expense, pattern="^approve_expense_"))
+    application.add_handler(CallbackQueryHandler(reject_expense, pattern="^reject_expense_"))
+    application.add_handler(CallbackQueryHandler(approve_payment, pattern="^approve_payment_"))
+    application.add_handler(CallbackQueryHandler(reject_payment, pattern="^reject_payment_"))
     application.add_handler(CallbackQueryHandler(admin_finances_payroll, pattern="^admin_finances_payroll"))
     application.add_handler(CallbackQueryHandler(admin_finances_full_report, pattern="^admin_finances_full_report"))
     

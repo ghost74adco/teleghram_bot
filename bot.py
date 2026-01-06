@@ -7370,8 +7370,14 @@ async def salary_admin_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
     admin_id = int(query.data.replace("salary_admin_", ""))
     
     config = load_salary_config()
+    
+    # Récupérer le nom de l'admin
+    admin_name = "Admin"
+    if str(admin_id) in ADMINS:
+        admin_name = ADMINS[str(admin_id)]['name']
+    
     admin_config = config['admins'].get(str(admin_id), {
-        "name": ADMINS[admin_id]['name'],
+        "name": admin_name,
         "fixed_salary": 0,
         "salary_type": "monthly",
         "commission_type": "none",

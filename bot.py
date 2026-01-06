@@ -2087,7 +2087,6 @@ async def get_my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🔐 Accès administrateur actif
 Niveau : {level}
 Tapez /admin pour accéder au panel
-"""
     
     keyboard = [[InlineKeyboardButton("🏠 Retour Menu", callback_data="back_to_main")]]
     

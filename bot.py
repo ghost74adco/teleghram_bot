@@ -537,7 +537,7 @@ MAX_CART_ITEMS = 50
 MAX_QUANTITY_PER_ITEM = 1000
 MIN_ORDER_AMOUNT = 10
 
-BOT_VERSION = "3.2.0"
+BOT_VERSION = "3.3.0"
 BOT_NAME = "E-Commerce Bot Multi-Admins"
 
 logger.info(f"🤖 {BOT_NAME} v{BOT_VERSION}")
@@ -1931,14 +1931,28 @@ async def notify_admin_new_order(context, order_data, user_info):
 - Adresse : {order_data['address']}
 - Type : {order_data['delivery_type']}
 - Paiement : {order_data['payment_method']}
+
+⚠️ Vérifiez et validez les montants avant de confirmer
 """
     
-    keyboard = [[
-        InlineKeyboardButton(
-            f"{EMOJI_THEME['success']} Valider",
-            callback_data=f"admin_validate_{order_data['order_id']}_{order_data['user_id']}"
-        )
-    ]]
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                "✏️ Modifier prix",
+                callback_data=f"edit_order_total_{order_data['order_id']}"
+            ),
+            InlineKeyboardButton(
+                "✏️ Modifier livraison",
+                callback_data=f"edit_order_delivery_{order_data['order_id']}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                f"{EMOJI_THEME['success']} Valider commande",
+                callback_data=f"confirm_order_{order_data['order_id']}_{order_data['user_id']}"
+            )
+        ]
+    ]
     
     try:
         for admin_id in get_admin_ids():
@@ -4948,6 +4962,16 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await receive_cost_update(update, context)
         return
     
+    # État: En attente nouveau prix commande (admin)
+    if context.user_data.get('editing_order_total'):
+        await receive_order_total(update, context)
+        return
+    
+    # État: En attente nouveaux frais livraison commande (admin)
+    if context.user_data.get('editing_order_delivery'):
+        await receive_order_delivery(update, context)
+        return
+    
     # Message par défaut
     await update.message.reply_text(
         f"{EMOJI_THEME['info']} Utilisez /start pour accéder au menu principal."
@@ -4976,6 +5000,8 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop('awaiting_expense_amount', None)
     context.user_data.pop('awaiting_expense_photo', None)
     context.user_data.pop('awaiting_cost_update', None)
+    context.user_data.pop('editing_order_total', None)
+    context.user_data.pop('editing_order_delivery', None)
     context.user_data.pop('new_admin_id', None)
     context.user_data.pop('new_admin_level', None)
     context.user_data.pop('admin_action', None)
@@ -6813,6 +6839,443 @@ def load_product_costs():
             return False
     return False
 
+# ==================== ADMIN: WORKFLOW VALIDATION COMMANDE ====================
+
+@error_handler
+async def edit_order_total(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Permet de modifier le prix total d'une commande"""
+    query = update.callback_query
+    await query.answer()
+    
+    order_id = query.data.replace("edit_order_total_", "")
+    
+    # Charger commande depuis CSV
+    csv_path = DATA_DIR / "orders.csv"
+    
+    if not csv_path.exists():
+        await query.answer("Erreur: commande introuvable", show_alert=True)
+        return
+    
+    try:
+        import csv as csv_module
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv_module.DictReader(f)
+            orders = list(reader)
+        
+        order = next((o for o in orders if o.get('order_id') == order_id), None)
+        
+        if not order:
+            await query.answer("Commande introuvable", show_alert=True)
+            return
+        
+        message = f"""✏️ MODIFIER PRIX TOTAL
+
+📋 Commande : {order_id}
+💰 Prix actuel : {order.get('total', 'N/A')}€
+
+Entrez le nouveau prix total :
+Exemple : 550.00
+"""
+        
+        keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data=f"cancel_edit_order_{order_id}")]]
+        
+        await query.edit_message_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+        context.user_data['editing_order_total'] = order_id
+    
+    except Exception as e:
+        logger.error(f"Erreur edit_order_total: {e}")
+        await query.answer("Erreur", show_alert=True)
+
+@error_handler
+async def edit_order_delivery(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Permet de modifier les frais de livraison d'une commande"""
+    query = update.callback_query
+    await query.answer()
+    
+    order_id = query.data.replace("edit_order_delivery_", "")
+    
+    # Charger commande
+    csv_path = DATA_DIR / "orders.csv"
+    
+    if not csv_path.exists():
+        await query.answer("Erreur: commande introuvable", show_alert=True)
+        return
+    
+    try:
+        import csv as csv_module
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv_module.DictReader(f)
+            orders = list(reader)
+        
+        order = next((o for o in orders if o.get('order_id') == order_id), None)
+        
+        if not order:
+            await query.answer("Commande introuvable", show_alert=True)
+            return
+        
+        message = f"""✏️ MODIFIER FRAIS LIVRAISON
+
+📋 Commande : {order_id}
+🚚 Frais actuels : {order.get('delivery_fee', 'N/A')}€
+📦 Type : {order.get('delivery_type', 'N/A')}
+
+Entrez les nouveaux frais de livraison :
+Exemple : 15.00
+"""
+        
+        keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data=f"cancel_edit_order_{order_id}")]]
+        
+        await query.edit_message_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+        context.user_data['editing_order_delivery'] = order_id
+    
+    except Exception as e:
+        logger.error(f"Erreur edit_order_delivery: {e}")
+        await query.answer("Erreur", show_alert=True)
+
+@error_handler
+async def receive_order_total(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Réceptionne le nouveau prix total"""
+    if not is_admin(update.effective_user.id):
+        return
+    
+    order_id = context.user_data.get('editing_order_total')
+    
+    if not order_id:
+        return
+    
+    try:
+        new_total = float(update.message.text.strip())
+        
+        if new_total < 0:
+            await update.message.reply_text(
+                f"{EMOJI_THEME['error']} Le prix ne peut pas être négatif."
+            )
+            return
+        
+        if new_total > 50000:
+            await update.message.reply_text(
+                f"{EMOJI_THEME['error']} Prix trop élevé (max 50,000€)."
+            )
+            return
+        
+        # Mettre à jour dans CSV
+        csv_path = DATA_DIR / "orders.csv"
+        
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            orders = list(reader)
+        
+        order_found = False
+        for order in orders:
+            if order.get('order_id') == order_id:
+                old_total = order.get('total', '0')
+                delivery_fee = float(order.get('delivery_fee', 0))
+                
+                order['total'] = str(new_total)
+                order['subtotal'] = str(new_total - delivery_fee)
+                order['price_modified'] = 'Yes'
+                order['old_total'] = old_total
+                
+                order_found = True
+                break
+        
+        if not order_found:
+            await update.message.reply_text(
+                f"{EMOJI_THEME['error']} Commande introuvable."
+            )
+            return
+        
+        # Sauvegarder
+        with open(csv_path, 'w', encoding='utf-8', newline='') as f:
+            if orders:
+                writer = csv.DictWriter(f, fieldnames=orders[0].keys())
+                writer.writeheader()
+                writer.writerows(orders)
+        
+        context.user_data.pop('editing_order_total', None)
+        
+        message = f"""{EMOJI_THEME['success']} PRIX MODIFIÉ
+
+📋 Commande : {order_id}
+
+Ancien prix : {old_total}€
+Nouveau prix : {new_total}€
+
+Cliquez sur "Valider commande" pour confirmer.
+"""
+        
+        keyboard = [[InlineKeyboardButton("🔙 Voir notification", callback_data=f"view_order_{order_id}")]]
+        
+        await update.message.reply_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+        logger.info(f"💰 Prix modifié: {order_id} - {old_total}€ → {new_total}€")
+    
+    except ValueError:
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} Prix invalide. Utilisez un nombre.\n"
+            "Exemple : 550.00"
+        )
+
+@error_handler
+async def receive_order_delivery(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Réceptionne les nouveaux frais de livraison"""
+    if not is_admin(update.effective_user.id):
+        return
+    
+    order_id = context.user_data.get('editing_order_delivery')
+    
+    if not order_id:
+        return
+    
+    try:
+        new_delivery_fee = float(update.message.text.strip())
+        
+        if new_delivery_fee < 0:
+            await update.message.reply_text(
+                f"{EMOJI_THEME['error']} Les frais ne peuvent pas être négatifs."
+            )
+            return
+        
+        if new_delivery_fee > 200:
+            await update.message.reply_text(
+                f"{EMOJI_THEME['error']} Frais trop élevés (max 200€)."
+            )
+            return
+        
+        # Mettre à jour dans CSV
+        csv_path = DATA_DIR / "orders.csv"
+        
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            orders = list(reader)
+        
+        order_found = False
+        for order in orders:
+            if order.get('order_id') == order_id:
+                old_delivery = order.get('delivery_fee', '0')
+                old_total = float(order.get('total', 0))
+                old_delivery_float = float(old_delivery)
+                subtotal = float(order.get('subtotal', 0))
+                
+                # Recalculer le total
+                new_total = subtotal + new_delivery_fee
+                
+                order['delivery_fee'] = str(new_delivery_fee)
+                order['total'] = str(new_total)
+                order['delivery_modified'] = 'Yes'
+                order['old_delivery_fee'] = old_delivery
+                
+                order_found = True
+                break
+        
+        if not order_found:
+            await update.message.reply_text(
+                f"{EMOJI_THEME['error']} Commande introuvable."
+            )
+            return
+        
+        # Sauvegarder
+        with open(csv_path, 'w', encoding='utf-8', newline='') as f:
+            if orders:
+                writer = csv.DictWriter(f, fieldnames=orders[0].keys())
+                writer.writeheader()
+                writer.writerows(orders)
+        
+        context.user_data.pop('editing_order_delivery', None)
+        
+        message = f"""{EMOJI_THEME['success']} FRAIS MODIFIÉS
+
+📋 Commande : {order_id}
+
+Anciens frais : {old_delivery}€
+Nouveaux frais : {new_delivery_fee}€
+
+Nouveau total : {new_total}€
+
+Cliquez sur "Valider commande" pour confirmer.
+"""
+        
+        keyboard = [[InlineKeyboardButton("🔙 Voir notification", callback_data=f"view_order_{order_id}")]]
+        
+        await update.message.reply_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+        logger.info(f"🚚 Frais modifiés: {order_id} - {old_delivery}€ → {new_delivery_fee}€")
+    
+    except ValueError:
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} Montant invalide. Utilisez un nombre.\n"
+            "Exemple : 15.00"
+        )
+
+@error_handler
+async def confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Valide la commande après vérification des prix"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Extraire order_id et user_id
+    data_parts = query.data.replace("confirm_order_", "").split("_")
+    order_id = data_parts[0]
+    user_id = int(data_parts[1])
+    
+    # Charger la commande
+    csv_path = DATA_DIR / "orders.csv"
+    
+    with open(csv_path, 'r', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        orders = list(reader)
+    
+    order = next((o for o in orders if o.get('order_id') == order_id), None)
+    
+    if not order:
+        await query.answer("Commande introuvable", show_alert=True)
+        return
+    
+    # Mettre à jour le statut
+    for o in orders:
+        if o.get('order_id') == order_id:
+            o['status'] = 'Validée'
+            o['validated_date'] = datetime.now().isoformat()
+            break
+    
+    # Sauvegarder
+    with open(csv_path, 'w', encoding='utf-8', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=orders[0].keys())
+        writer.writeheader()
+        writer.writerows(orders)
+    
+    # Notification admin
+    message = f"""{EMOJI_THEME['success']} COMMANDE VALIDÉE
+
+📋 Commande : {order_id}
+💰 Total : {order.get('total')}€
+🚚 Livraison : {order.get('delivery_fee')}€
+
+✅ Commande confirmée et figée
+📦 Vous pouvez maintenant la préparer
+
+Une fois prête, cliquez sur "Commande prête" pour prévenir le client.
+"""
+    
+    keyboard = [[
+        InlineKeyboardButton(
+            "✅ Commande prête",
+            callback_data=f"mark_ready_{order_id}_{user_id}"
+        )
+    ]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    logger.info(f"✅ Commande validée: {order_id}")
+
+@error_handler
+async def mark_order_ready(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Marque la commande comme prête et notifie le client"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Extraire order_id et user_id
+    data_parts = query.data.replace("mark_ready_", "").split("_")
+    order_id = data_parts[0]
+    user_id = int(data_parts[1])
+    
+    # Charger la commande
+    csv_path = DATA_DIR / "orders.csv"
+    
+    with open(csv_path, 'r', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        orders = list(reader)
+    
+    order = next((o for o in orders if o.get('order_id') == order_id), None)
+    
+    if not order:
+        await query.answer("Commande introuvable", show_alert=True)
+        return
+    
+    # Mettre à jour le statut
+    for o in orders:
+        if o.get('order_id') == order_id:
+            o['status'] = 'Prête'
+            o['ready_date'] = datetime.now().isoformat()
+            break
+    
+    # Sauvegarder
+    with open(csv_path, 'w', encoding='utf-8', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=orders[0].keys())
+        writer.writeheader()
+        writer.writerows(orders)
+    
+    # NOTIFICATION AU CLIENT
+    client_notification = f"""✅ VOTRE COMMANDE EST PRÊTE !
+
+📋 Commande : {order_id}
+
+Votre commande a été préparée et est prête à être livrée.
+
+🛍️ Produits :
+{order.get('products_display', order.get('products', 'N/A'))}
+
+💰 Total : {order.get('total')}€
+
+📍 Livraison : {order.get('delivery_type')}
+
+Nous vous contacterons très prochainement pour organiser la livraison.
+
+Merci de votre confiance ! 🙏
+"""
+    
+    try:
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=client_notification
+        )
+        logger.info(f"✅ Client notifié - Commande prête: {order_id}")
+    except Exception as e:
+        logger.error(f"Erreur notification client: {e}")
+    
+    # CONFIRMATION ADMIN
+    admin_message = f"""{EMOJI_THEME['success']} COMMANDE PRÊTE
+
+📋 Commande : {order_id}
+
+✅ Statut : Prête
+✅ Client automatiquement notifié par le bot
+
+Vous pouvez maintenant livrer la commande.
+Une fois livrée, cliquez sur "Marquer livrée".
+"""
+    
+    keyboard = [[
+        InlineKeyboardButton(
+            "✅ Marquer livrée",
+            callback_data=f"admin_validate_{order_id}_{user_id}"
+        )
+    ]]
+    
+    await query.edit_message_text(
+        admin_message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    logger.info(f"✅ Commande marquée prête: {order_id}")
+
 # ==================== CONFIGURATION DES HANDLERS ====================
 
 def setup_handlers(application):
@@ -6857,6 +7320,11 @@ def setup_handlers(application):
     
     # Callbacks commande
     application.add_handler(CallbackQueryHandler(confirm_order, pattern="^order_confirm$"))
+    # Callbacks admin - validation commandes
+    application.add_handler(CallbackQueryHandler(edit_order_total, pattern="^edit_order_total_"))
+    application.add_handler(CallbackQueryHandler(edit_order_delivery, pattern="^edit_order_delivery_"))
+    application.add_handler(CallbackQueryHandler(confirm_order, pattern="^confirm_order_"))
+    application.add_handler(CallbackQueryHandler(mark_order_ready, pattern="^mark_ready_"))
     application.add_handler(CallbackQueryHandler(admin_validate_order, pattern="^admin_validate_"))
     
     # Callbacks admin panel

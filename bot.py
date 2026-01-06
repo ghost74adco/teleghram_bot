@@ -537,7 +537,7 @@ MAX_CART_ITEMS = 50
 MAX_QUANTITY_PER_ITEM = 1000
 MIN_ORDER_AMOUNT = 10
 
-BOT_VERSION = "3.0.1"
+BOT_VERSION = "3.2.0"
 BOT_NAME = "E-Commerce Bot Multi-Admins"
 
 logger.info(f"🤖 {BOT_NAME} v{BOT_VERSION}")
@@ -2944,6 +2944,10 @@ Choisissez une section :
     # Finances (tous niveaux - accès différent selon niveau)
     keyboard.append([InlineKeyboardButton("💰 Finances", callback_data="admin_finances")])
     
+    # Prix de revient (admin et super-admin)
+    if level in ['super_admin', 'admin']:
+        keyboard.append([InlineKeyboardButton("💵 Prix de revient", callback_data="admin_costs")])
+    
     # Gestion admins (super-admin uniquement)
     if level == 'super_admin':
         keyboard.append([InlineKeyboardButton("👥 Gérer Admins", callback_data="admin_manage_admins")])
@@ -4939,6 +4943,11 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await receive_expense_amount(update, context)
         return
     
+    # État: En attente nouveau prix de revient (admin)
+    if context.user_data.get('awaiting_cost_update'):
+        await receive_cost_update(update, context)
+        return
+    
     # Message par défaut
     await update.message.reply_text(
         f"{EMOJI_THEME['info']} Utilisez /start pour accéder au menu principal."
@@ -4966,6 +4975,7 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop('awaiting_expense_description', None)
     context.user_data.pop('awaiting_expense_amount', None)
     context.user_data.pop('awaiting_expense_photo', None)
+    context.user_data.pop('awaiting_cost_update', None)
     context.user_data.pop('new_admin_id', None)
     context.user_data.pop('new_admin_level', None)
     context.user_data.pop('admin_action', None)
@@ -6345,7 +6355,7 @@ async def admin_finances_all_expenses(update: Update, context: ContextTypes.DEFA
 async def admin_finances_payroll(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Affiche les payes en attente (super-admin)"""
     query = update.callback_query
-    await query.answer()
+    await query.answer("🔄 Actualisation...", show_alert=False)
     
     if not is_super_admin(query.from_user.id):
         await query.answer("Accès refusé", show_alert=True)
@@ -6355,10 +6365,16 @@ async def admin_finances_payroll(update: Update, context: ContextTypes.DEFAULT_T
     
     pending = [p for p in payroll['payments'] if p['status'] == 'pending']
     
+    # Ajouter timestamp pour forcer le changement
+    import time
+    timestamp = int(time.time())
+    
     if not pending:
-        message = """💳 PAYES EN ATTENTE
+        message = f"""💳 PAYES EN ATTENTE
 
 ✅ Toutes les payes ont été traitées.
+
+Actualisé à {datetime.now().strftime('%H:%M:%S')}
 """
     else:
         total_pending = sum(p['amount'] for p in pending)
@@ -6379,16 +6395,23 @@ async def admin_finances_payroll(update: Update, context: ContextTypes.DEFAULT_T
 📅 {date}
 
 """
+        
+        message += f"\nActualisé à {datetime.now().strftime('%H:%M:%S')}"
     
     keyboard = [
-        [InlineKeyboardButton("🔄 Actualiser", callback_data="admin_finances_payroll")],
+        [InlineKeyboardButton("🔄 Actualiser", callback_data=f"admin_finances_payroll_{timestamp}")],
         [InlineKeyboardButton("🔙 Retour", callback_data="admin_finances")]
     ]
     
-    await query.edit_message_text(
-        message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    try:
+        await query.edit_message_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    except Exception as e:
+        # Si le message est identique, ignorer l'erreur
+        if "Message is not modified" not in str(e):
+            raise
 
 @error_handler
 async def admin_finances_full_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -6488,6 +6511,205 @@ Total : {approved_expenses + paid_payroll:.2f}€
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Retour", callback_data="admin_finances")]])
         )
 
+# ==================== ADMIN: GESTION PRIX DE REVIENT ====================
+
+@error_handler
+async def admin_costs(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu de gestion des prix de revient"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    message = """💵 GESTION PRIX DE REVIENT
+
+Prix d'achat actuels :
+
+"""
+    
+    for product_name, cost in PRODUCT_COSTS.items():
+        # Déterminer l'unité
+        if product_name in PRODUCT_WEIGHTS:
+            unit = PRODUCT_WEIGHTS[product_name].get('unit', 'g')
+            if unit == 'unités':
+                unit_str = "/unité"
+            else:
+                unit_str = "/g"
+        else:
+            unit_str = "/g"
+        
+        message += f"• {product_name}: {cost:.2f}€{unit_str}\n"
+    
+    message += """
+
+Sélectionnez un produit à modifier :
+"""
+    
+    keyboard = []
+    
+    # Un bouton par produit
+    for product_name in PRODUCT_COSTS.keys():
+        keyboard.append([InlineKeyboardButton(
+            f"✏️ {product_name}",
+            callback_data=f"admin_cost_edit_{product_name}"
+        )])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="admin_back_panel")])
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def admin_cost_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Éditer le prix de revient d'un produit"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Extraire le nom du produit
+    product_name = query.data.replace("admin_cost_edit_", "")
+    
+    current_cost = PRODUCT_COSTS.get(product_name, 0)
+    
+    # Déterminer l'unité
+    if product_name in PRODUCT_WEIGHTS:
+        unit = PRODUCT_WEIGHTS[product_name].get('unit', 'g')
+        if unit == 'unités':
+            unit_str = "par unité"
+        else:
+            unit_str = "par gramme"
+    else:
+        unit_str = "par gramme"
+    
+    message = f"""✏️ MODIFIER PRIX DE REVIENT
+
+📦 Produit : {product_name}
+💰 Prix actuel : {current_cost:.2f}€ {unit_str}
+
+Entrez le nouveau prix de revient :
+Exemple : 42.50
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_costs")]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    # Sauvegarder le produit en cours d'édition
+    context.user_data['awaiting_cost_update'] = product_name
+
+@error_handler
+async def receive_cost_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Réceptionne le nouveau prix de revient"""
+    if not is_admin(update.effective_user.id):
+        return
+    
+    product_name = context.user_data.get('awaiting_cost_update')
+    
+    if not product_name:
+        return
+    
+    try:
+        new_cost = float(update.message.text.strip())
+        
+        if new_cost < 0:
+            await update.message.reply_text(
+                f"{EMOJI_THEME['error']} Le prix ne peut pas être négatif."
+            )
+            return
+        
+        if new_cost > 10000:
+            await update.message.reply_text(
+                f"{EMOJI_THEME['error']} Prix trop élevé (max 10,000€)."
+            )
+            return
+        
+        # Sauvegarder dans un fichier JSON
+        costs_file = DATA_DIR / "product_costs.json"
+        
+        # Charger les coûts existants
+        if costs_file.exists():
+            with open(costs_file, 'r', encoding='utf-8') as f:
+                saved_costs = json.load(f)
+        else:
+            saved_costs = dict(PRODUCT_COSTS)
+        
+        old_cost = saved_costs.get(product_name, PRODUCT_COSTS.get(product_name, 0))
+        saved_costs[product_name] = new_cost
+        
+        # Sauvegarder
+        with open(costs_file, 'w', encoding='utf-8') as f:
+            json.dump(saved_costs, f, indent=2, ensure_ascii=False)
+        
+        # Mettre à jour PRODUCT_COSTS en mémoire
+        PRODUCT_COSTS[product_name] = new_cost
+        
+        context.user_data.pop('awaiting_cost_update', None)
+        
+        # Déterminer l'unité
+        if product_name in PRODUCT_WEIGHTS:
+            unit = PRODUCT_WEIGHTS[product_name].get('unit', 'g')
+            if unit == 'unités':
+                unit_str = "/unité"
+            else:
+                unit_str = "/g"
+        else:
+            unit_str = "/g"
+        
+        message = f"""{EMOJI_THEME['success']} PRIX MIS À JOUR
+
+📦 Produit : {product_name}
+
+Ancien prix : {old_cost:.2f}€{unit_str}
+Nouveau prix : {new_cost:.2f}€{unit_str}
+
+Les marges seront calculées avec ce nouveau prix à partir de maintenant.
+"""
+        
+        keyboard = [
+            [InlineKeyboardButton("💵 Prix de revient", callback_data="admin_costs")],
+            [InlineKeyboardButton("🏠 Panel", callback_data="admin_back_panel")]
+        ]
+        
+        await update.message.reply_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+        logger.info(f"💵 Prix de revient modifié: {product_name} - {old_cost:.2f}€ → {new_cost:.2f}€")
+    
+    except ValueError:
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} Prix invalide. Utilisez un nombre.\n"
+            "Exemple : 42.50"
+        )
+
+def load_product_costs():
+    """Charge les prix de revient depuis le fichier JSON"""
+    costs_file = DATA_DIR / "product_costs.json"
+    
+    if costs_file.exists():
+        try:
+            with open(costs_file, 'r', encoding='utf-8') as f:
+                saved_costs = json.load(f)
+            
+            # Mettre à jour PRODUCT_COSTS
+            for product_name, cost in saved_costs.items():
+                if product_name in PRODUCT_COSTS:
+                    PRODUCT_COSTS[product_name] = cost
+            
+            logger.info(f"💵 Prix de revient chargés: {len(saved_costs)} produits")
+            return True
+        except Exception as e:
+            logger.error(f"Erreur chargement prix: {e}")
+            return False
+    return False
+
 # ==================== CONFIGURATION DES HANDLERS ====================
 
 def setup_handlers(application):
@@ -6580,8 +6802,12 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(admin_finances_margins, pattern="^admin_finances_margins$"))
     application.add_handler(CallbackQueryHandler(admin_finances_my_expenses, pattern="^admin_finances_my_expenses$"))
     application.add_handler(CallbackQueryHandler(admin_finances_all_expenses, pattern="^admin_finances_all_expenses$"))
-    application.add_handler(CallbackQueryHandler(admin_finances_payroll, pattern="^admin_finances_payroll$"))
+    application.add_handler(CallbackQueryHandler(admin_finances_payroll, pattern="^admin_finances_payroll"))
     application.add_handler(CallbackQueryHandler(admin_finances_full_report, pattern="^admin_finances_full_report$"))
+    
+    # Callbacks admin - prix de revient
+    application.add_handler(CallbackQueryHandler(admin_costs, pattern="^admin_costs$"))
+    application.add_handler(CallbackQueryHandler(admin_cost_edit, pattern="^admin_cost_edit_"))
     
     # Callbacks admin - horaires
     application.add_handler(CallbackQueryHandler(admin_horaires, pattern="^admin_horaires$"))
@@ -6655,6 +6881,9 @@ async def main():
     global ADMINS
     ADMINS = load_admins()
     logger.info(f"✅ Admins chargés: {len(ADMINS)}")
+    
+    # Charger les prix de revient personnalisés
+    load_product_costs()
     
     init_product_codes()
     

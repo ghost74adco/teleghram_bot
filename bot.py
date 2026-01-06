@@ -5012,8 +5012,8 @@ async def main():
     job_queue.run_daily(check_stocks_job, time=time(9, 0))
     logger.info("✅ Job: Vérification stocks (9h)")
     
-    job_queue.run_weekly(schedule_reports, days=(6,), time=time(23, 59))
-    logger.info("✅ Job: Rapport hebdomadaire (dimanche 23h59)")
+    job_queue.run_daily(schedule_reports, time=time(23, 59))
+    logger.info("✅ Job: Rapport hebdomadaire (tous les jours 23h59, filtrage interne)")
     
     # Kill switch
     await kill_switch_check(application)

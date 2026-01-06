@@ -157,10 +157,7 @@ CLIENT_HISTORY_FILE = DATA_DIR / "client_history.json"
 REFERRALS_FILE = DATA_DIR / "referrals.json"
 HORAIRES_FILE = DATA_DIR / "horaires.json"
 STATS_FILE = DATA_DIR / "stats.json"
-PRICING_TIERS_FILE = DATA_DIR / "pricing_tiers.json"PAYROLL_FILE = DATA_DIR / "payroll.json"
-EXPENSES_FILE = DATA_DIR / "expenses.json"
-PRODUCT_COSTS_FILE = DATA_DIR / "product_costs.json"
-PRODUCT_WEIGHTS_FILE = DATA_DIR / "product_weights.json"
+PRICING_TIERS_FILE = DATA_DIR / "pricing_tiers.json"
 
 # ==================== CONSTANTES MÉTIER ====================
 
@@ -170,6 +167,38 @@ VIP_THRESHOLD = 500
 VIP_DISCOUNT = 5
 REFERRAL_REWARD = 5
 
+# ==================== CONFIGURATION SYSTÈME FINANCIER AVANCÉ ====================
+
+# Poids à peser par produit (ratio de pesée)
+PRODUCT_WEIGHTS = {
+    # Exception : Coco et K - 1g commandé = 0.9g à peser
+    "Coco": {"type": "weight", "ratio": 0.9},
+    "K": {"type": "weight", "ratio": 0.9},
+    
+    # Crystal : poids normal
+    "Crystal": {"type": "weight", "ratio": 1.0},
+    
+    # Pills : unités (pas de pesée)
+    "Pills Squid-Game": {"type": "unit", "ratio": 1},
+    "Pills Punisher": {"type": "unit", "ratio": 1}
+}
+
+# Prix coûtants (prix d'achat) en €
+PRODUCT_COSTS = {
+    "Coco": 45.00,              # €/g
+    "K": 50.00,                 # €/g
+    "Crystal": 55.00,           # €/g
+    "Pills Squid-Game": 8.00,   # €/unité
+    "Pills Punisher": 8.00      # €/unité
+}
+
+# Fichiers de données financières
+PAYROLL_FILE = DATA_DIR / "payroll.json"
+EXPENSES_FILE = DATA_DIR / "expenses.json"
+
+# Catégories de consommables
+EXPENSE_CATEGORIES = ["Emballage", "Transport", "Matériel", "Autre"]
+
 # ==================== ÉTATS DE CONVERSATION ====================
 
 ADMIN_MANAGE_MENU = 120
@@ -177,24 +206,6 @@ ADMIN_ADD_ID = 121
 ADMIN_ADD_LEVEL = 122
 ADMIN_REMOVE_CONFIRM = 123
 ADMIN_VIEW_LIST = 124
-
-# ==================== 🆕 CONFIGURATION PRODUITS AVANCÉE ====================
-
-DEFAULT_PRODUCT_WEIGHTS = {
-    "❄️ Coco": {"type": "weight", "ratio": 0.9},
-    "K": {"type": "weight", "ratio": 0.9},
-    "Crystal": {"type": "weight", "ratio": 1.0},
-    "💊 Squid Game": {"type": "unit", "ratio": 1},
-    "💊 Punisher": {"type": "unit", "ratio": 1}
-}
-
-DEFAULT_PRODUCT_COSTS = {
-    "❄️ Coco": 45.00,
-    "K": 50.00,
-    "Crystal": 55.00,
-    "💊 Squid Game": 8.00,
-    "💊 Punisher": 8.00
-}
 
 # ==================== MÉTHODE DE CALCUL DISTANCE ====================
 
@@ -378,6 +389,108 @@ def anonymize_admin_id(admin_id: int) -> str:
     hash_obj = hashlib.sha256(str(admin_id).encode())
     hash_hex = hash_obj.hexdigest()[:8].upper()
     return f"Admin-{hash_hex}"
+
+# ==================== SYSTÈME FINANCIER AVANCÉ ====================
+
+def calculate_weight_to_prepare(product_name: str, quantity_ordered: float) -> dict:
+    """
+    Calcule le poids/unité à préparer pour une commande
+    
+    Returns:
+        {
+            'to_prepare': float,  # Quantité à peser/préparer
+            'type': str,          # 'weight' ou 'unit'
+            'unit': str,          # 'g' ou 'unités'
+            'note': str           # Note pour l'admin
+        }
+    """
+    if product_name not in PRODUCT_WEIGHTS:
+        return {
+            'to_prepare': quantity_ordered,
+            'type': 'weight',
+            'unit': 'g',
+            'note': f'Peser {quantity_ordered:.1f}g normalement'
+        }
+    
+    config = PRODUCT_WEIGHTS[product_name]
+    
+    if config['type'] == 'unit':
+        return {
+            'to_prepare': quantity_ordered,
+            'type': 'unit',
+            'unit': 'unités',
+            'note': f'{int(quantity_ordered)} unité(s) - Pas de pesée'
+        }
+    else:
+        weight_to_prepare = quantity_ordered * config['ratio']
+        return {
+            'to_prepare': weight_to_prepare,
+            'type': 'weight',
+            'unit': 'g',
+            'note': f'Peser {weight_to_prepare:.1f}g (ratio {config["ratio"]})'
+        }
+
+def calculate_margins(product_name: str, quantity: float, selling_price: float) -> dict:
+    """
+    Calcule les marges d'une vente
+    
+    Returns:
+        {
+            'cost': float,        # Coût total
+            'revenue': float,     # CA (prix de vente)
+            'margin': float,      # Marge brute
+            'margin_rate': float  # Taux de marge en %
+        }
+    """
+    if product_name not in PRODUCT_COSTS:
+        return {
+            'cost': 0,
+            'revenue': selling_price,
+            'margin': selling_price,
+            'margin_rate': 100.0
+        }
+    
+    unit_cost = PRODUCT_COSTS[product_name]
+    total_cost = unit_cost * quantity
+    margin = selling_price - total_cost
+    margin_rate = (margin / selling_price * 100) if selling_price > 0 else 0
+    
+    return {
+        'cost': total_cost,
+        'revenue': selling_price,
+        'margin': margin,
+        'margin_rate': margin_rate
+    }
+
+def load_payroll():
+    """Charge les données de payes"""
+    if PAYROLL_FILE.exists():
+        with open(PAYROLL_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {
+        "payments": [],
+        "balances": {}
+    }
+
+def save_payroll(data):
+    """Sauvegarde les données de payes"""
+    with open(PAYROLL_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+def load_expenses():
+    """Charge les données de consommables"""
+    if EXPENSES_FILE.exists():
+        with open(EXPENSES_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {
+        "expenses": [],
+        "categories": EXPENSE_CATEGORIES
+    }
+
+def save_expenses(data):
+    """Sauvegarde les données de consommables"""
+    with open(EXPENSES_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
 # ==================== DÉCORATEUR ERROR HANDLER ====================
 
@@ -779,302 +892,6 @@ def get_available_products():
     """Récupère tous les produits disponibles"""
     return load_available_products()
 
-# ==================== 🆕 SYSTÈME DE GESTION DES POIDS ====================
-
-def load_product_weights() -> Dict:
-    """Charge la configuration des poids produits"""
-    if PRODUCT_WEIGHTS_FILE.exists():
-        try:
-            with open(PRODUCT_WEIGHTS_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            logger.error(f"Erreur chargement poids: {e}")
-    return DEFAULT_PRODUCT_WEIGHTS.copy()
-
-def save_product_weights(weights: Dict) -> bool:
-    """Sauvegarde la configuration des poids"""
-    try:
-        with open(PRODUCT_WEIGHTS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(weights, f, indent=2, ensure_ascii=False)
-        return True
-    except Exception as e:
-        logger.error(f"Erreur sauvegarde poids: {e}")
-        return False
-
-def calculate_weight_to_prepare(product_name: str, quantity_ordered: float) -> dict:
-    """
-    Calcule le poids/unité à préparer pour une commande
-    
-    Returns:
-        {
-            'to_prepare': float,
-            'type': str,
-            'unit': str,
-            'note': str
-        }
-    """
-    weights_config = load_product_weights()
-    
-    if product_name not in weights_config:
-        return {
-            'to_prepare': quantity_ordered,
-            'type': 'weight',
-            'unit': 'g',
-            'note': 'Peser normalement'
-        }
-    
-    config = weights_config[product_name]
-    
-    if config['type'] == 'unit':
-        return {
-            'to_prepare': quantity_ordered,
-            'type': 'unit',
-            'unit': 'unités',
-            'note': f'{int(quantity_ordered)} unité(s) - Pas de pesée'
-        }
-    else:
-        weight_to_prepare = quantity_ordered * config['ratio']
-        return {
-            'to_prepare': weight_to_prepare,
-            'type': 'weight',
-            'unit': 'g',
-            'note': f'Peser {weight_to_prepare:.1f}g (ratio {config["ratio"]})'
-        }
-
-# ==================== 🆕 SYSTÈME DE GESTION DES COÛTS ====================
-
-def load_product_costs() -> Dict:
-    """Charge les prix coûtants des produits"""
-    if PRODUCT_COSTS_FILE.exists():
-        try:
-            with open(PRODUCT_COSTS_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            logger.error(f"Erreur chargement coûts: {e}")
-    return DEFAULT_PRODUCT_COSTS.copy()
-
-def save_product_costs(costs: Dict) -> bool:
-    """Sauvegarde les prix coûtants"""
-    try:
-        with open(PRODUCT_COSTS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(costs, f, indent=2, ensure_ascii=False)
-        return True
-    except Exception as e:
-        logger.error(f"Erreur sauvegarde coûts: {e}")
-        return False
-
-def calculate_margins(product_name: str, quantity: float, selling_price: float) -> dict:
-    """
-    Calcule les marges d'une vente
-    
-    Returns:
-        {
-            'cost': float,
-            'revenue': float,
-            'margin': float,
-            'margin_rate': float
-        }
-    """
-    costs = load_product_costs()
-    
-    if product_name not in costs:
-        return {
-            'cost': 0,
-            'revenue': selling_price,
-            'margin': selling_price,
-            'margin_rate': 100.0
-        }
-    
-    unit_cost = costs[product_name]
-    total_cost = unit_cost * quantity
-    margin = selling_price - total_cost
-    margin_rate = (margin / selling_price * 100) if selling_price > 0 else 0
-    
-    return {
-        'cost': total_cost,
-        'revenue': selling_price,
-        'margin': margin,
-        'margin_rate': margin_rate
-    }
-
-# ==================== 🆕 SYSTÈME DE GESTION DES PAYES ====================
-
-class PayrollSystem:
-    """Système de gestion des payes administrateurs"""
-    
-    def __init__(self, data_dir: Path):
-        self.data_dir = data_dir
-        self.payroll_file = data_dir / "payroll.json"
-        self.load_payroll()
-    
-    def load_payroll(self):
-        if self.payroll_file.exists():
-            with open(self.payroll_file, 'r', encoding='utf-8') as f:
-                self.data = json.load(f)
-        else:
-            self.data = {"payments": [], "balances": {}}
-    
-    def save_payroll(self):
-        with open(self.payroll_file, 'w', encoding='utf-8') as f:
-            json.dump(self.data, f, indent=2, ensure_ascii=False)
-    
-    def add_payment_request(self, admin_id: int, admin_name: str, amount: float, note: str = ""):
-        payment = {
-            "id": f"PAY{int(datetime.now().timestamp())}",
-            "admin_id": admin_id,
-            "admin_name": admin_name,
-            "amount": amount,
-            "note": note,
-            "date": datetime.now().isoformat(),
-            "status": "pending"
-        }
-        
-        self.data["payments"].append(payment)
-        
-        if str(admin_id) not in self.data["balances"]:
-            self.data["balances"][str(admin_id)] = 0
-        
-        self.data["balances"][str(admin_id)] -= amount
-        self.save_payroll()
-        return payment
-    
-    def get_pending_payments(self):
-        return [p for p in self.data["payments"] if p["status"] == "pending"]
-    
-    def get_admin_balance(self, admin_id: int) -> float:
-        return self.data["balances"].get(str(admin_id), 0)
-    
-    def get_total_paid(self) -> float:
-        return sum(p["amount"] for p in self.data["payments"] if p["status"] == "paid")
-    
-    def mark_as_paid(self, payment_id: str):
-        for payment in self.data["payments"]:
-            if payment["id"] == payment_id:
-                payment["status"] = "paid"
-                payment["paid_at"] = datetime.now().isoformat()
-                break
-        self.save_payroll()
-
-# ==================== 🆕 SYSTÈME DE GESTION DES CONSOMMABLES ====================
-
-class ExpensesSystem:
-    """Système de gestion des consommables/frais"""
-    
-    def __init__(self, data_dir: Path):
-        self.data_dir = data_dir
-        self.expenses_file = data_dir / "expenses.json"
-        self.load_expenses()
-    
-    def load_expenses(self):
-        if self.expenses_file.exists():
-            with open(self.expenses_file, 'r', encoding='utf-8') as f:
-                self.data = json.load(f)
-        else:
-            self.data = {
-                "expenses": [],
-                "categories": ["Emballage", "Transport", "Matériel", "Autre"]
-            }
-    
-    def save_expenses(self):
-        with open(self.expenses_file, 'w', encoding='utf-8') as f:
-            json.dump(self.data, f, indent=2, ensure_ascii=False)
-    
-    def add_expense(self, admin_id: int, admin_name: str, amount: float, 
-                    category: str, description: str, receipt_photo_id: str = None):
-        expense = {
-            "id": f"EXP{int(datetime.now().timestamp())}",
-            "admin_id": admin_id,
-            "admin_name": admin_name,
-            "amount": amount,
-            "category": category,
-            "description": description,
-            "receipt_photo_id": receipt_photo_id,
-            "date": datetime.now().isoformat(),
-            "status": "pending"
-        }
-        
-        self.data["expenses"].append(expense)
-        self.save_expenses()
-        return expense
-    
-    def get_pending_expenses(self):
-        return [e for e in self.data["expenses"] if e["status"] == "pending"]
-    
-    def get_total_expenses(self, status: str = None) -> float:
-        if status:
-            return sum(e["amount"] for e in self.data["expenses"] if e["status"] == status)
-        return sum(e["amount"] for e in self.data["expenses"])
-    
-    def get_expenses_by_category(self) -> dict:
-        result = {}
-        for expense in self.data["expenses"]:
-            if expense["status"] == "approved":
-                cat = expense["category"]
-                result[cat] = result.get(cat, 0) + expense["amount"]
-        return result
-    
-    def approve_expense(self, expense_id: str):
-        for expense in self.data["expenses"]:
-            if expense["id"] == expense_id:
-                expense["status"] = "approved"
-                expense["approved_at"] = datetime.now().isoformat()
-                break
-        self.save_expenses()
-    
-    def reject_expense(self, expense_id: str, reason: str = ""):
-        for expense in self.data["expenses"]:
-            if expense["id"] == expense_id:
-                expense["status"] = "rejected"
-                expense["rejected_at"] = datetime.now().isoformat()
-                expense["rejection_reason"] = reason
-                break
-        self.save_expenses()
-
-# ==================== 🆕 ANALYSE FINANCIÈRE AVANCÉE ====================
-
-class FinancialAnalytics:
-    """Analyse financière complète"""
-    
-    @staticmethod
-    def calculate_net_profit(orders_data: list, expenses_approved: float, 
-                            payroll_paid: float) -> dict:
-        costs = load_product_costs()
-        
-        gross_revenue = sum(float(o.get('total', 0)) for o in orders_data)
-        delivery_fees = sum(float(o.get('delivery_fee', 0)) for o in orders_data)
-        product_revenue = gross_revenue - delivery_fees
-        
-        total_costs = 0
-        for order in orders_data:
-            products_str = order.get('products', '')
-            for item in products_str.split(','):
-                item = item.strip()
-                for product_name, cost in costs.items():
-                    if product_name in item:
-                        match = re.search(r'(\d+(?:\.\d+)?)\s*(?:g|unité)', item)
-                        if match:
-                            qty = float(match.group(1))
-                            total_costs += cost * qty
-        
-        gross_margin = product_revenue - total_costs
-        net_profit = gross_margin - expenses_approved - payroll_paid
-        
-        return {
-            'gross_revenue': gross_revenue,
-            'delivery_fees': delivery_fees,
-            'product_revenue': product_revenue,
-            'total_costs': total_costs,
-            'gross_margin': gross_margin,
-            'expenses': expenses_approved,
-            'payroll': payroll_paid,
-            'net_profit': net_profit,
-            'margin_rate': (gross_margin / product_revenue * 100) if product_revenue > 0 else 0
-        }
-
-# Initialiser les systèmes
-payroll_system = PayrollSystem(DATA_DIR)
-expenses_system = ExpensesSystem(DATA_DIR)
-
 # ==================== GESTION DES STOCKS ====================
 
 def save_stocks(stocks):
@@ -1100,9 +917,27 @@ def set_stock(product_name, quantity, alert_threshold=20):
     if product_name not in stocks:
         stocks[product_name] = {}
     
+    old_quantity = stocks[product_name].get("quantity", 0)
     stocks[product_name]["quantity"] = quantity
     stocks[product_name]["alert_threshold"] = alert_threshold
     stocks[product_name]["last_updated"] = datetime.now().isoformat()
+    
+    # GESTION AUTOMATIQUE RUPTURE DE STOCK
+    available_products = load_available_products()
+    
+    if quantity == 0 and old_quantity > 0:
+        # Rupture de stock : désactiver automatiquement
+        if product_name in available_products:
+            available_products.remove(product_name)
+            save_available_products(available_products)
+            logger.warning(f"📦 Rupture de stock : {product_name} désactivé automatiquement")
+    
+    elif quantity > 0 and old_quantity == 0:
+        # Réapprovisionnement : réactiver automatiquement
+        if product_name not in available_products:
+            available_products.append(product_name)
+            save_available_products(available_products)
+            logger.info(f"✅ Réappro : {product_name} réactivé automatiquement (stock: {quantity})")
     
     return save_stocks(stocks)
 
@@ -2017,69 +1852,90 @@ async def notify_admin_new_user(context, user_id, user_data):
 async def notify_admin_new_order(context, order_data, user_info):
     """Notifie l'admin d'une nouvelle commande avec détails de préparation"""
     total_info = order_data.get('total_info', {})
+    
+    # Anonymiser l'ID
     anonymous_id = anonymize_id(order_data['user_id'])
     
-    # Calculer les marges
-    total_cost = 0
-    total_margin = 0
-    country = order_data.get('country', 'FR')
-    
-    notification = f"""🛒 NOUVELLE COMMANDE
+    notification = f"""{EMOJI_THEME['cart']} NOUVELLE COMMANDE
 
 📋 Commande : {order_data['order_id']}
 👤 Client : {user_info['first_name']} (@{user_info['username']})
 🆔 ID : {anonymous_id}
 
-🛍️ PRODUITS :
+🛍️ PRODUITS À PRÉPARER :
 """
     
-    # Parser les produits avec détails de préparation
-    products_list = order_data.get('products', '').split(',')
+    # Parser les produits pour calculs avancés
+    import re
+    total_cost = 0
+    total_margin = 0
+    products_lines = order_data['products_display'].split('\n')
     
-    for product_line in products_list:
-        product_line = product_line.strip()
-        match = re.search(r'(.+?)\s+x\s*(\d+(?:\.\d+)?)', product_line)
-        if match:
-            product_name = match.group(1).strip()
-            qty = float(match.group(2))
-            
-            # Calcul poids à peser
-            prep = calculate_weight_to_prepare(product_name, qty)
-            
-            # Calcul marge
-            price = get_price(product_name, country)
-            selling_price = price * qty
-            margins = calculate_margins(product_name, qty, selling_price)
-            
-            total_cost += margins['cost']
-            total_margin += margins['margin']
-            
-            notification += f"\n• {product_name} - {qty}{prep['unit']}"
-            notification += f"\n  ⚖️ {prep['note']}"
-            notification += f"\n  💰 Coût: {margins['cost']:.2f}€ | Marge: {margins['margin']:.2f}€\n"
+    for line in products_lines:
+        if not line.strip() or line.strip().startswith('━'):
+            continue
+        
+        # Ajouter la ligne produit
+        notification += f"{line}\n"
+        
+        # Essayer d'extraire le nom du produit et la quantité
+        for product_name in PRODUCT_WEIGHTS.keys():
+            if product_name in line:
+                # Extraire la quantité
+                match = re.search(r'(\d+(?:\.\d+)?)\s*(?:g|unité)', line)
+                if match:
+                    qty = float(match.group(1))
+                    
+                    # Calcul poids à peser
+                    prep = calculate_weight_to_prepare(product_name, qty)
+                    notification += f"  ⚖️  {prep['note']}\n"
+                    
+                    # Calcul marge (estimation basée sur sous-total)
+                    # On prend le prix moyen par produit
+                    avg_price = total_info['subtotal'] / len([p for p in products_lines if p.strip() and not p.startswith('━')])
+                    margins = calculate_margins(product_name, qty, avg_price)
+                    
+                    total_cost += margins['cost']
+                    total_margin += margins['margin']
+                    
+                    notification += f"  💰 Coût: {margins['cost']:.2f}€ | Marge: {margins['margin']:.2f}€\n"
+                
+                break
     
     notification += f"""
-💵 FINANCIER :
+{EMOJI_THEME['money']} DÉTAILS FINANCIERS :
 - Sous-total : {total_info['subtotal']:.2f}€
 - Livraison : {total_info['delivery_fee']:.2f}€
-- Total : {total_info['total']:.2f}€
-
-📊 MARGES :
-- Coût total : {total_cost:.2f}€
+"""
+    
+    if total_info.get('promo_discount', 0) > 0:
+        notification += f"• {EMOJI_THEME['gift']} Promo : -{total_info['promo_discount']:.2f}€\n"
+    
+    if total_info.get('vip_discount', 0) > 0:
+        notification += f"• {EMOJI_THEME['vip']} VIP : -{total_info['vip_discount']:.2f}€\n"
+    
+    notification += f"\n💵 TOTAL : {total_info['total']:.2f}€\n"
+    
+    # Ajouter les marges calculées
+    if total_cost > 0:
+        margin_rate = (total_margin / total_info['total'] * 100) if total_info['total'] > 0 else 0
+        notification += f"""
+📊 ANALYSE MARGES :
+- Coût produits : {total_cost:.2f}€
 - Marge brute : {total_margin:.2f}€
-- Taux : {(total_margin/total_info['total']*100):.1f}%
-
-🚚 LIVRAISON :
+- Taux de marge : {margin_rate:.1f}%
+"""
+    
+    notification += f"""
+📍 LIVRAISON :
+- Adresse : {order_data['address']}
 - Type : {order_data['delivery_type']}
-- Adresse : {order_data.get('address', 'N/A')}
-- Pays : {order_data['country']}
-
-💳 Paiement : {order_data['payment_method']}
+- Paiement : {order_data['payment_method']}
 """
     
     keyboard = [[
         InlineKeyboardButton(
-            "✅ Valider",
+            f"{EMOJI_THEME['success']} Valider",
             callback_data=f"admin_validate_{order_data['order_id']}_{order_data['user_id']}"
         )
     ]]
@@ -3052,14 +2908,20 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # MESSAGE EN TEXTE BRUT - AUCUN FORMATAGE MARKDOWN/HTML
     message = f"""🎛️ PANEL ADMINISTRATEUR
+
 👤 {name} ({level.upper()})
+
 ━━━━━━━━━━━━━━━━━━━━━━
+
 📊 STATISTIQUES RAPIDES
+
 👥 Utilisateurs : {users_count}
 📦 Produits : {len(load_product_registry())}
 ⚠️ Stock faible : {low_stock}
 🔴 Ruptures : {out_stock}
+
 ━━━━━━━━━━━━━━━━━━━━━━
+
 Choisissez une section :
 """
     
@@ -3075,15 +2937,12 @@ Choisissez une section :
             InlineKeyboardButton("💰 Prix", callback_data="admin_prices"),
             InlineKeyboardButton("🎁 Promos", callback_data="admin_promos")
         ])
-        
-        # 🆕 AJOUTEZ CES LIGNES ICI (ÉTAPE 6)
-        keyboard.append([
-            InlineKeyboardButton("💰 Finances", callback_data="admin_finances"),
-            InlineKeyboardButton("📊 Analyse", callback_data="admin_financial_analysis")
-        ])
     
     # Commandes (tous niveaux)
     keyboard.append([InlineKeyboardButton("🛒 Commandes", callback_data="admin_orders")])
+    
+    # Finances (tous niveaux - accès différent selon niveau)
+    keyboard.append([InlineKeyboardButton("💰 Finances", callback_data="admin_finances")])
     
     # Gestion admins (super-admin uniquement)
     if level == 'super_admin':
@@ -3497,23 +3356,277 @@ async def admin_list_promos(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @error_handler
 async def admin_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Affiche les commandes en attente"""
+    """Affiche les commandes"""
     query = update.callback_query
     await query.answer()
     
-    message = f"""🛒 GESTION DES COMMANDES
+    message = """🛒 GESTION DES COMMANDES
 
-Fonctionnalité en développement.
-
-Les commandes sont actuellement gérées via les notifications en temps réel.
+Que souhaitez-vous consulter ?
 """
     
-    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_back_panel")]]
+    keyboard = [
+        [InlineKeyboardButton("📋 Toutes les commandes", callback_data="admin_orders_all")],
+        [InlineKeyboardButton("⏳ En attente", callback_data="admin_orders_pending")],
+        [InlineKeyboardButton("📊 Statistiques", callback_data="admin_orders_stats")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_panel")]
+    ]
     
     await query.edit_message_text(
         message,
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
+
+@error_handler
+async def admin_orders_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche toutes les commandes récentes"""
+    query = update.callback_query
+    await query.answer()
+    
+    csv_path = DATA_DIR / "orders.csv"
+    
+    if not csv_path.exists():
+        message = """🛒 AUCUNE COMMANDE
+
+Aucune commande n'a encore été enregistrée.
+"""
+        keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_orders")]]
+        
+        await query.edit_message_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+    
+    try:
+        import csv as csv_module
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv_module.DictReader(f)
+            orders = list(reader)
+        
+        if not orders:
+            message = """🛒 AUCUNE COMMANDE
+
+Aucune commande n'a encore été enregistrée.
+"""
+        else:
+            # Prendre les 10 dernières commandes
+            recent_orders = orders[-10:][::-1]  # Inverser pour avoir les plus récentes en premier
+            
+            message = f"""🛒 DERNIÈRES COMMANDES
+
+Total: {len(orders)} commandes
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+"""
+            
+            for order in recent_orders:
+                order_id = order.get('order_id', 'N/A')
+                date = order.get('date', 'N/A')[:16]  # Juste date et heure
+                client = order.get('first_name', 'N/A')
+                total = order.get('total', '0')
+                status = order.get('status', 'N/A')
+                
+                status_icon = "⏳" if status == "En attente" else "✅"
+                
+                message += f"""{status_icon} {order_id}
+📅 {date}
+👤 {client}
+💰 {total}€
+━━━━━━━━━━━━━━━━━━━━━━
+
+"""
+            
+            if len(orders) > 10:
+                message += f"\n... et {len(orders) - 10} autres commandes"
+        
+        keyboard = [
+            [InlineKeyboardButton("⏳ En attente", callback_data="admin_orders_pending")],
+            [InlineKeyboardButton("🔙 Retour", callback_data="admin_orders")]
+        ]
+        
+        await query.edit_message_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    
+    except Exception as e:
+        logger.error(f"Erreur lecture commandes: {e}")
+        await query.edit_message_text(
+            f"{EMOJI_THEME['error']} Erreur lors de la lecture des commandes.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Retour", callback_data="admin_orders")]])
+        )
+
+@error_handler
+async def admin_orders_pending(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche les commandes en attente"""
+    query = update.callback_query
+    await query.answer()
+    
+    csv_path = DATA_DIR / "orders.csv"
+    
+    if not csv_path.exists():
+        message = """⏳ AUCUNE COMMANDE EN ATTENTE
+
+Toutes les commandes ont été traitées.
+"""
+        keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_orders")]]
+        
+        await query.edit_message_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+    
+    try:
+        import csv as csv_module
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv_module.DictReader(f)
+            orders = list(reader)
+        
+        # Filtrer les commandes en attente
+        pending = [o for o in orders if o.get('status') == 'En attente']
+        
+        if not pending:
+            message = """✅ TOUTES LES COMMANDES TRAITÉES
+
+Aucune commande en attente actuellement.
+"""
+        else:
+            message = f"""⏳ COMMANDES EN ATTENTE
+
+{len(pending)} commande(s) à traiter
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+"""
+            
+            for order in pending[-20:]:  # Max 20 commandes
+                order_id = order.get('order_id', 'N/A')
+                date = order.get('date', 'N/A')[:16]
+                client = order.get('first_name', 'N/A')
+                username = order.get('username', 'N/A')
+                total = order.get('total', '0')
+                delivery = order.get('delivery_type', 'N/A')
+                
+                message += f"""📋 {order_id}
+📅 {date}
+👤 {client} (@{username})
+🚚 {delivery}
+💰 {total}€
+━━━━━━━━━━━━━━━━━━━━━━
+
+"""
+        
+        keyboard = [
+            [InlineKeyboardButton("📋 Toutes", callback_data="admin_orders_all")],
+            [InlineKeyboardButton("🔙 Retour", callback_data="admin_orders")]
+        ]
+        
+        await query.edit_message_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    
+    except Exception as e:
+        logger.error(f"Erreur lecture commandes en attente: {e}")
+        await query.edit_message_text(
+            f"{EMOJI_THEME['error']} Erreur lors de la lecture des commandes.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Retour", callback_data="admin_orders")]])
+        )
+
+@error_handler
+async def admin_orders_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche les statistiques des commandes"""
+    query = update.callback_query
+    await query.answer()
+    
+    csv_path = DATA_DIR / "orders.csv"
+    
+    if not csv_path.exists():
+        message = """📊 STATISTIQUES
+
+Aucune donnée disponible.
+"""
+        keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_orders")]]
+        
+        await query.edit_message_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+    
+    try:
+        import csv as csv_module
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv_module.DictReader(f)
+            orders = list(reader)
+        
+        if not orders:
+            message = "📊 STATISTIQUES\n\nAucune donnée disponible."
+        else:
+            total_orders = len(orders)
+            pending = len([o for o in orders if o.get('status') == 'En attente'])
+            
+            # Calcul CA total
+            try:
+                total_ca = sum(float(o.get('total', 0)) for o in orders)
+                avg_order = total_ca / total_orders if total_orders > 0 else 0
+            except:
+                total_ca = 0
+                avg_order = 0
+            
+            # Répartition par pays
+            fr_count = len([o for o in orders if o.get('country') == 'FR'])
+            ch_count = len([o for o in orders if o.get('country') == 'CH'])
+            
+            # Répartition par livraison
+            postal = len([o for o in orders if o.get('delivery_type') == 'postal'])
+            express = len([o for o in orders if o.get('delivery_type') == 'express'])
+            meetup = len([o for o in orders if o.get('delivery_type') == 'meetup'])
+            
+            message = f"""📊 STATISTIQUES COMMANDES
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+📈 GLOBAL
+Total commandes : {total_orders}
+⏳ En attente : {pending}
+✅ Traitées : {total_orders - pending}
+
+💰 CHIFFRE D'AFFAIRES
+CA total : {total_ca:.2f}€
+Panier moyen : {avg_order:.2f}€
+
+🌍 PAR PAYS
+🇫🇷 France : {fr_count} ({fr_count/total_orders*100:.1f}%)
+🇨🇭 Suisse : {ch_count} ({ch_count/total_orders*100:.1f}%)
+
+🚚 PAR LIVRAISON
+📦 Postale : {postal}
+⚡ Express : {express}
+🤝 Rendez-vous : {meetup}
+
+━━━━━━━━━━━━━━━━━━━━━━
+"""
+        
+        keyboard = [
+            [InlineKeyboardButton("📋 Voir commandes", callback_data="admin_orders_all")],
+            [InlineKeyboardButton("🔙 Retour", callback_data="admin_orders")]
+        ]
+        
+        await query.edit_message_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    
+    except Exception as e:
+        logger.error(f"Erreur calcul stats commandes: {e}")
+        await query.edit_message_text(
+            f"{EMOJI_THEME['error']} Erreur lors du calcul des statistiques.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Retour", callback_data="admin_orders")]])
+        )
 
 # ==================== GESTION ADMINS (SUPER-ADMIN) ====================
 
@@ -3704,6 +3817,205 @@ Que souhaitez-vous faire ?
         message,
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
+
+@error_handler
+async def admin_horaires(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gestion des horaires de livraison"""
+    query = update.callback_query
+    await query.answer()
+    
+    horaires = load_horaires()
+    enabled = horaires.get('enabled', True)
+    start = horaires.get('start', '09:00')
+    end = horaires.get('end', '22:00')
+    
+    status_icon = "✅" if enabled else "❌"
+    status_text = "Actif" if enabled else "Désactivé"
+    
+    message = f"""🕐 HORAIRES DE LIVRAISON
+
+Statut : {status_icon} {status_text}
+
+📅 Horaires actuels :
+De {start} à {end}
+
+ℹ️ Les commandes passées en dehors de ces horaires seront traitées le lendemain.
+
+Que souhaitez-vous faire ?
+"""
+    
+    keyboard = []
+    
+    if enabled:
+        keyboard.append([InlineKeyboardButton("❌ Désactiver", callback_data="admin_horaires_toggle")])
+    else:
+        keyboard.append([InlineKeyboardButton("✅ Activer", callback_data="admin_horaires_toggle")])
+    
+    keyboard.extend([
+        [InlineKeyboardButton("✏️ Modifier heures", callback_data="admin_horaires_edit")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_settings")]
+    ])
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def admin_horaires_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Active/désactive les horaires"""
+    query = update.callback_query
+    await query.answer()
+    
+    horaires = load_horaires()
+    enabled = horaires.get('enabled', True)
+    
+    # Inverser
+    horaires['enabled'] = not enabled
+    save_horaires(horaires)
+    
+    new_status = "activés" if horaires['enabled'] else "désactivés"
+    
+    await query.answer(f"✅ Horaires {new_status}", show_alert=True)
+    
+    # Retour au menu horaires
+    await admin_horaires(update, context)
+
+@error_handler
+async def admin_horaires_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Interface d'édition des horaires"""
+    query = update.callback_query
+    await query.answer()
+    
+    message = """✏️ MODIFIER LES HORAIRES
+
+Quelle heure souhaitez-vous modifier ?
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🌅 Heure d'ouverture", callback_data="admin_horaires_edit_start")],
+        [InlineKeyboardButton("🌙 Heure de fermeture", callback_data="admin_horaires_edit_end")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_horaires")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def admin_horaires_edit_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Demande la nouvelle heure d'ouverture"""
+    query = update.callback_query
+    await query.answer()
+    
+    horaires = load_horaires()
+    current = horaires.get('start', '09:00')
+    
+    message = f"""🌅 HEURE D'OUVERTURE
+
+Heure actuelle : {current}
+
+Entrez la nouvelle heure d'ouverture au format HH:MM
+
+Exemples : 08:00, 09:30, 10:00
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_horaires")]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    context.user_data['awaiting_horaire_start'] = True
+
+@error_handler
+async def admin_horaires_edit_end(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Demande la nouvelle heure de fermeture"""
+    query = update.callback_query
+    await query.answer()
+    
+    horaires = load_horaires()
+    current = horaires.get('end', '22:00')
+    
+    message = f"""🌙 HEURE DE FERMETURE
+
+Heure actuelle : {current}
+
+Entrez la nouvelle heure de fermeture au format HH:MM
+
+Exemples : 21:00, 22:30, 23:00
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_horaires")]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    context.user_data['awaiting_horaire_end'] = True
+
+@error_handler
+async def receive_horaire_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Réceptionne et valide la nouvelle heure"""
+    if not is_admin(update.effective_user.id):
+        return
+    
+    time_str = update.message.text.strip()
+    
+    # Valider le format HH:MM
+    import re
+    if not re.match(r'^([0-1][0-9]|2[0-3]):[0-5][0-9]$', time_str):
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} Format invalide !\n\n"
+            "Utilisez le format HH:MM\n"
+            "Exemples : 09:00, 14:30, 22:00"
+        )
+        return
+    
+    horaires = load_horaires()
+    
+    if context.user_data.get('awaiting_horaire_start'):
+        horaires['start'] = time_str
+        save_horaires(horaires)
+        
+        context.user_data.pop('awaiting_horaire_start', None)
+        
+        message = f"""{EMOJI_THEME['success']} HEURE D'OUVERTURE MISE À JOUR
+
+Nouvelle heure : {time_str}
+
+Les livraisons seront disponibles à partir de {time_str}.
+"""
+        
+    elif context.user_data.get('awaiting_horaire_end'):
+        horaires['end'] = time_str
+        save_horaires(horaires)
+        
+        context.user_data.pop('awaiting_horaire_end', None)
+        
+        message = f"""{EMOJI_THEME['success']} HEURE DE FERMETURE MISE À JOUR
+
+Nouvelle heure : {time_str}
+
+Les livraisons seront disponibles jusqu'à {time_str}.
+"""
+    else:
+        return
+    
+    keyboard = [
+        [InlineKeyboardButton("🕐 Horaires", callback_data="admin_horaires")],
+        [InlineKeyboardButton("🏠 Panel", callback_data="admin_back_panel")]
+    ]
+    
+    await update.message.reply_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    logger.info(f"⏰ Horaires modifiés: {horaires}")
 
 @error_handler
 async def admin_maintenance(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -4607,6 +4919,26 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await receive_admin_name(update, context)
         return
     
+    # État: En attente d'heure pour horaires (admin)
+    if context.user_data.get('awaiting_horaire_start') or context.user_data.get('awaiting_horaire_end'):
+        await receive_horaire_time(update, context)
+        return
+    
+    # État: En attente montant paye (admin)
+    if context.user_data.get('awaiting_pay_amount'):
+        await receive_pay_amount(update, context)
+        return
+    
+    # État: En attente description consommable (admin)
+    if context.user_data.get('awaiting_expense_description'):
+        await receive_expense_description(update, context)
+        return
+    
+    # État: En attente montant consommable (admin)
+    if context.user_data.get('awaiting_expense_amount'):
+        await receive_expense_amount(update, context)
+        return
+    
     # Message par défaut
     await update.message.reply_text(
         f"{EMOJI_THEME['info']} Utilisez /start pour accéder au menu principal."
@@ -4627,6 +4959,13 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop('awaiting_admin_id', None)
     context.user_data.pop('awaiting_admin_level', None)
     context.user_data.pop('awaiting_admin_name', None)
+    context.user_data.pop('awaiting_horaire_start', None)
+    context.user_data.pop('awaiting_horaire_end', None)
+    context.user_data.pop('awaiting_pay_amount', None)
+    context.user_data.pop('expense_category', None)
+    context.user_data.pop('awaiting_expense_description', None)
+    context.user_data.pop('awaiting_expense_amount', None)
+    context.user_data.pop('awaiting_expense_photo', None)
     context.user_data.pop('new_admin_id', None)
     context.user_data.pop('new_admin_level', None)
     context.user_data.pop('admin_action', None)
@@ -5429,6 +5768,726 @@ def create_backup(backup_dir: Path = None) -> Optional[Path]:
         logger.error(f"❌ Erreur création backup: {e}")
         return None
 
+# ==================== ADMIN: MENU FINANCES ====================
+
+@error_handler
+async def admin_finances(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu principal finances"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    
+    if not is_admin(user_id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    message = """💰 GESTION FINANCIÈRE
+
+Que souhaitez-vous consulter ?
+"""
+    
+    keyboard = []
+    
+    # Tous les admins peuvent voir les analyses
+    keyboard.append([InlineKeyboardButton("📊 Analyse marges", callback_data="admin_finances_margins")])
+    keyboard.append([InlineKeyboardButton("🧾 Mes consommables", callback_data="admin_finances_my_expenses")])
+    
+    # Seul le super-admin voit tout
+    if is_super_admin(user_id):
+        keyboard.append([InlineKeyboardButton("💳 Payes", callback_data="admin_finances_payroll")])
+        keyboard.append([InlineKeyboardButton("🧾 Tous consommables", callback_data="admin_finances_all_expenses")])
+        keyboard.append([InlineKeyboardButton("📈 Bilan complet", callback_data="admin_finances_full_report")])
+    else:
+        keyboard.append([InlineKeyboardButton("💳 Demander paye", callback_data="admin_request_pay")])
+        keyboard.append([InlineKeyboardButton("🧾 Ajouter consommable", callback_data="admin_add_expense")])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="admin_back_panel")])
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+# ==================== ADMIN: SYSTÈME DE PAYES ====================
+
+@error_handler
+async def admin_request_pay(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin demande une paye"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    admin_info = get_admin_info(user_id)
+    
+    if not admin_info:
+        await query.answer("Erreur: Admin non trouvé", show_alert=True)
+        return
+    
+    # Charger le solde actuel
+    payroll = load_payroll()
+    balance = payroll['balances'].get(str(user_id), 0)
+    
+    message = f"""💳 DEMANDER UNE PAYE
+
+👤 {admin_info['name']}
+💰 Solde actuel : {balance:.2f}€
+
+Entrez le montant souhaité :
+Exemple : 250.50
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_finances")]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    context.user_data['awaiting_pay_amount'] = True
+
+@error_handler
+async def receive_pay_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Réceptionne le montant de paye demandé"""
+    if not is_admin(update.effective_user.id):
+        return
+    
+    user_id = update.effective_user.id
+    admin_info = get_admin_info(user_id)
+    
+    try:
+        amount = float(update.message.text.strip())
+        
+        if amount <= 0:
+            await update.message.reply_text(
+                f"{EMOJI_THEME['error']} Le montant doit être positif."
+            )
+            return
+        
+        if amount > 10000:
+            await update.message.reply_text(
+                f"{EMOJI_THEME['error']} Montant trop élevé (max 10,000€)."
+            )
+            return
+        
+        # Enregistrer la demande
+        payroll = load_payroll()
+        
+        payment = {
+            "id": f"PAY{int(datetime.now().timestamp())}",
+            "admin_id": user_id,
+            "admin_name": admin_info['name'],
+            "amount": amount,
+            "note": "",
+            "date": datetime.now().isoformat(),
+            "status": "pending"
+        }
+        
+        payroll['payments'].append(payment)
+        
+        # Mettre à jour le solde (négatif = dette)
+        if str(user_id) not in payroll['balances']:
+            payroll['balances'][str(user_id)] = 0
+        
+        payroll['balances'][str(user_id)] -= amount
+        
+        save_payroll(payroll)
+        
+        context.user_data.pop('awaiting_pay_amount', None)
+        
+        # Notifier le super-admin
+        notification = f"""💳 NOUVELLE DEMANDE DE PAYE
+
+👤 Admin : {admin_info['name']}
+💰 Montant : {amount:.2f}€
+📅 Date : {datetime.now().strftime('%d/%m/%Y %H:%M')}
+
+ID : {payment['id']}
+"""
+        
+        keyboard = [
+            [InlineKeyboardButton("✅ Approuver", callback_data=f"approve_pay_{payment['id']}")],
+            [InlineKeyboardButton("❌ Refuser", callback_data=f"reject_pay_{payment['id']}")]
+        ]
+        
+        try:
+            for admin_id in get_admin_ids():
+                if is_super_admin(admin_id):
+                    await context.bot.send_message(
+                        chat_id=admin_id,
+                        text=notification,
+                        reply_markup=InlineKeyboardMarkup(keyboard)
+                    )
+        except Exception as e:
+            logger.error(f"Erreur notification paye: {e}")
+        
+        # Confirmation à l'admin
+        message = f"""{EMOJI_THEME['success']} DEMANDE ENVOYÉE
+
+💰 Montant : {amount:.2f}€
+📋 ID : {payment['id']}
+
+Votre demande a été transmise au super-admin.
+Vous serez notifié de la décision.
+"""
+        
+        keyboard_conf = [
+            [InlineKeyboardButton("💰 Finances", callback_data="admin_finances")],
+            [InlineKeyboardButton("🏠 Panel", callback_data="admin_back_panel")]
+        ]
+        
+        await update.message.reply_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard_conf)
+        )
+        
+        logger.info(f"💳 Demande paye: {admin_info['name']} - {amount}€")
+    
+    except ValueError:
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} Montant invalide. Utilisez un nombre.\n"
+            "Exemple : 250.50"
+        )
+
+# ==================== ADMIN: GESTION DES CONSOMMABLES ====================
+
+@error_handler
+async def admin_add_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ajouter un consommable"""
+    query = update.callback_query
+    await query.answer()
+    
+    message = """🧾 AJOUTER UN CONSOMMABLE
+
+Sélectionnez la catégorie :
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("📦 Emballage", callback_data="expense_cat_Emballage")],
+        [InlineKeyboardButton("🚗 Transport", callback_data="expense_cat_Transport")],
+        [InlineKeyboardButton("🔧 Matériel", callback_data="expense_cat_Matériel")],
+        [InlineKeyboardButton("📋 Autre", callback_data="expense_cat_Autre")],
+        [InlineKeyboardButton("❌ Annuler", callback_data="admin_finances")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def expense_category_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Catégorie de consommable sélectionnée"""
+    query = update.callback_query
+    await query.answer()
+    
+    category = query.data.replace("expense_cat_", "")
+    context.user_data['expense_category'] = category
+    
+    message = f"""📝 DESCRIPTION - {category}
+
+Décrivez l'achat effectué :
+Exemple : "Sachets zippés 100 pcs" ou "Essence pour livraison"
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_finances")]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    context.user_data['awaiting_expense_description'] = True
+
+@error_handler
+async def receive_expense_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Réceptionne la description du consommable"""
+    if not is_admin(update.effective_user.id):
+        return
+    
+    description = update.message.text.strip()
+    
+    if len(description) < 3:
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} Description trop courte (min 3 caractères)."
+        )
+        return
+    
+    context.user_data['expense_description'] = description
+    context.user_data.pop('awaiting_expense_description', None)
+    
+    message = f"""💰 MONTANT
+
+Description : {description}
+
+Entrez le montant payé :
+Exemple : 25.50
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_finances")]]
+    
+    await update.message.reply_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    context.user_data['awaiting_expense_amount'] = True
+
+@error_handler
+async def receive_expense_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Réceptionne le montant du consommable"""
+    if not is_admin(update.effective_user.id):
+        return
+    
+    user_id = update.effective_user.id
+    admin_info = get_admin_info(user_id)
+    
+    try:
+        amount = float(update.message.text.strip())
+        
+        if amount <= 0:
+            await update.message.reply_text(
+                f"{EMOJI_THEME['error']} Le montant doit être positif."
+            )
+            return
+        
+        if amount > 5000:
+            await update.message.reply_text(
+                f"{EMOJI_THEME['error']} Montant trop élevé (max 5,000€)."
+            )
+            return
+        
+        category = context.user_data.get('expense_category')
+        description = context.user_data.get('expense_description')
+        
+        # Enregistrer le consommable
+        expenses = load_expenses()
+        
+        expense = {
+            "id": f"EXP{int(datetime.now().timestamp())}",
+            "admin_id": user_id,
+            "admin_name": admin_info['name'],
+            "amount": amount,
+            "category": category,
+            "description": description,
+            "receipt_photo_id": None,
+            "date": datetime.now().isoformat(),
+            "status": "pending"
+        }
+        
+        expenses['expenses'].append(expense)
+        save_expenses(expenses)
+        
+        # Nettoyer user_data
+        context.user_data.pop('awaiting_expense_amount', None)
+        context.user_data.pop('expense_category', None)
+        context.user_data.pop('expense_description', None)
+        
+        # Demander photo justificatif (optionnel)
+        message = f"""📸 JUSTIFICATIF (Optionnel)
+
+✅ Consommable enregistré :
+📋 {expense['id']}
+📦 {category}
+💰 {amount:.2f}€
+📝 {description}
+
+Envoyez une photo du ticket de caisse
+ou tapez /skip pour passer.
+"""
+        
+        await update.message.reply_text(message)
+        
+        context.user_data['awaiting_expense_photo'] = expense['id']
+        
+        # Notifier le super-admin
+        notification = f"""🧾 NOUVEAU CONSOMMABLE
+
+👤 Admin : {admin_info['name']}
+📦 Catégorie : {category}
+💰 Montant : {amount:.2f}€
+📝 Description : {description}
+📅 Date : {datetime.now().strftime('%d/%m/%Y')}
+
+ID : {expense['id']}
+"""
+        
+        keyboard = [
+            [InlineKeyboardButton("✅ Approuver", callback_data=f"approve_expense_{expense['id']}")],
+            [InlineKeyboardButton("❌ Refuser", callback_data=f"reject_expense_{expense['id']}")]
+        ]
+        
+        try:
+            for admin_id in get_admin_ids():
+                if is_super_admin(admin_id):
+                    await context.bot.send_message(
+                        chat_id=admin_id,
+                        text=notification,
+                        reply_markup=InlineKeyboardMarkup(keyboard)
+                    )
+        except Exception as e:
+            logger.error(f"Erreur notification consommable: {e}")
+        
+        logger.info(f"🧾 Consommable ajouté: {admin_info['name']} - {category} - {amount}€")
+    
+    except ValueError:
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} Montant invalide. Utilisez un nombre.\n"
+            "Exemple : 25.50"
+        )
+
+# ==================== ADMIN: ANALYSE MARGES ====================
+
+@error_handler
+async def admin_finances_margins(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche l'analyse des marges"""
+    query = update.callback_query
+    await query.answer()
+    
+    csv_path = DATA_DIR / "orders.csv"
+    
+    if not csv_path.exists():
+        message = """📊 ANALYSE DES MARGES
+
+Aucune commande enregistrée.
+"""
+        keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_finances")]]
+        
+        await query.edit_message_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+    
+    try:
+        import csv as csv_module
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv_module.DictReader(f)
+            orders = list(reader)
+        
+        if not orders:
+            message = "📊 ANALYSE DES MARGES\n\nAucune donnée disponible."
+        else:
+            # Calculs
+            gross_revenue = sum(float(o.get('total', 0)) for o in orders)
+            delivery_fees = sum(float(o.get('delivery_fee', 0)) for o in orders)
+            product_revenue = gross_revenue - delivery_fees
+            
+            # Estimer les coûts (simplifié - à améliorer)
+            total_costs = product_revenue * 0.7  # Estimation 70% coût
+            gross_margin = product_revenue - total_costs
+            margin_rate = (gross_margin / product_revenue * 100) if product_revenue > 0 else 0
+            
+            # Consommables
+            expenses = load_expenses()
+            approved_expenses = sum(e['amount'] for e in expenses['expenses'] if e['status'] == 'approved')
+            
+            # Payes
+            payroll = load_payroll()
+            paid_payroll = sum(p['amount'] for p in payroll['payments'] if p['status'] == 'paid')
+            
+            net_profit = gross_margin - approved_expenses - paid_payroll
+            
+            message = f"""📊 ANALYSE FINANCIÈRE
+
+Ce mois : {len(orders)} commandes
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+💵 CHIFFRE D'AFFAIRES
+CA total TTC : {gross_revenue:.2f}€
+  • Livraisons : {delivery_fees:.2f}€ ({delivery_fees/gross_revenue*100:.1f}%)
+  • Produits : {product_revenue:.2f}€ ({product_revenue/gross_revenue*100:.1f}%)
+
+💰 MARGES
+Coûts estimés : {total_costs:.2f}€
+Marge brute : {gross_margin:.2f}€
+Taux marge : {margin_rate:.1f}%
+
+📉 DÉPENSES
+Consommables : {approved_expenses:.2f}€
+Payes : {paid_payroll:.2f}€
+Total : {approved_expenses + paid_payroll:.2f}€
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+✨ BÉNÉFICE NET : {net_profit:.2f}€
+"""
+        
+        keyboard = [
+            [InlineKeyboardButton("🔄 Actualiser", callback_data="admin_finances_margins")],
+            [InlineKeyboardButton("🔙 Retour", callback_data="admin_finances")]
+        ]
+        
+        await query.edit_message_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    
+    except Exception as e:
+        logger.error(f"Erreur analyse marges: {e}")
+        await query.edit_message_text(
+            f"{EMOJI_THEME['error']} Erreur lors de l'analyse.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Retour", callback_data="admin_finances")]])
+        )
+
+
+# ==================== ADMIN: FONCTIONS FINANCES SUPPLÉMENTAIRES ====================
+
+@error_handler
+async def admin_finances_my_expenses(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche les consommables de l'admin"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    expenses = load_expenses()
+    
+    my_expenses = [e for e in expenses['expenses'] if e['admin_id'] == user_id]
+    
+    if not my_expenses:
+        message = """🧾 MES CONSOMMABLES
+
+Aucun consommable enregistré.
+"""
+    else:
+        pending = [e for e in my_expenses if e['status'] == 'pending']
+        approved = [e for e in my_expenses if e['status'] == 'approved']
+        rejected = [e for e in my_expenses if e['status'] == 'rejected']
+        
+        total_pending = sum(e['amount'] for e in pending)
+        total_approved = sum(e['amount'] for e in approved)
+        
+        message = f"""🧾 MES CONSOMMABLES
+
+⏳ En attente : {len(pending)} ({total_pending:.2f}€)
+✅ Approuvés : {len(approved)} ({total_approved:.2f}€)
+❌ Refusés : {len(rejected)}
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+DERNIERS CONSOMMABLES :
+
+"""
+        
+        for expense in my_expenses[-5:]:
+            status_emoji = "⏳" if expense['status'] == 'pending' else "✅" if expense['status'] == 'approved' else "❌"
+            date = expense['date'][:10]
+            message += f"""{status_emoji} {expense['category']}
+💰 {expense['amount']:.2f}€
+📝 {expense['description']}
+📅 {date}
+
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🧾 Ajouter", callback_data="admin_add_expense")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_finances")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def admin_finances_all_expenses(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche tous les consommables (super-admin)"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    expenses = load_expenses()
+    
+    pending = [e for e in expenses['expenses'] if e['status'] == 'pending']
+    
+    if not pending:
+        message = """🧾 CONSOMMABLES EN ATTENTE
+
+✅ Tous les consommables ont été traités.
+"""
+    else:
+        total_pending = sum(e['amount'] for e in pending)
+        
+        message = f"""🧾 CONSOMMABLES EN ATTENTE
+
+{len(pending)} consommable(s) - {total_pending:.2f}€
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+"""
+        
+        for expense in pending:
+            date = expense['date'][:10]
+            message += f"""📋 {expense['id']}
+👤 {expense['admin_name']}
+📦 {expense['category']}
+💰 {expense['amount']:.2f}€
+📝 {expense['description']}
+📅 {date}
+
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🔄 Actualiser", callback_data="admin_finances_all_expenses")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_finances")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def admin_finances_payroll(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche les payes en attente (super-admin)"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    payroll = load_payroll()
+    
+    pending = [p for p in payroll['payments'] if p['status'] == 'pending']
+    
+    if not pending:
+        message = """💳 PAYES EN ATTENTE
+
+✅ Toutes les payes ont été traitées.
+"""
+    else:
+        total_pending = sum(p['amount'] for p in pending)
+        
+        message = f"""💳 PAYES EN ATTENTE
+
+{len(pending)} demande(s) - {total_pending:.2f}€
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+"""
+        
+        for payment in pending:
+            date = payment['date'][:10]
+            message += f"""📋 {payment['id']}
+👤 {payment['admin_name']}
+💰 {payment['amount']:.2f}€
+📅 {date}
+
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🔄 Actualiser", callback_data="admin_finances_payroll")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_finances")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def admin_finances_full_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Bilan financier complet (super-admin)"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    csv_path = DATA_DIR / "orders.csv"
+    
+    if not csv_path.exists():
+        message = """📈 BILAN FINANCIER COMPLET
+
+Aucune donnée disponible.
+"""
+        keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_finances")]]
+        
+        await query.edit_message_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+    
+    try:
+        import csv as csv_module
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv_module.DictReader(f)
+            orders = list(reader)
+        
+        # Calculs financiers
+        gross_revenue = sum(float(o.get('total', 0)) for o in orders)
+        delivery_fees = sum(float(o.get('delivery_fee', 0)) for o in orders)
+        product_revenue = gross_revenue - delivery_fees
+        
+        # Coûts estimés
+        total_costs = product_revenue * 0.7
+        gross_margin = product_revenue - total_costs
+        
+        # Dépenses
+        expenses = load_expenses()
+        approved_expenses = sum(e['amount'] for e in expenses['expenses'] if e['status'] == 'approved')
+        
+        # Payes
+        payroll = load_payroll()
+        paid_payroll = sum(p['amount'] for p in payroll['payments'] if p['status'] == 'paid')
+        
+        # Bénéfice net
+        net_profit = gross_margin - approved_expenses - paid_payroll
+        
+        message = f"""📈 BILAN FINANCIER COMPLET
+
+Période : Ce mois
+Commandes : {len(orders)}
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+💵 REVENUS
+CA total TTC : {gross_revenue:.2f}€
+• Livraisons : {delivery_fees:.2f}€
+• Produits : {product_revenue:.2f}€
+
+💰 MARGES
+Coûts : {total_costs:.2f}€
+Marge brute : {gross_margin:.2f}€
+Taux : {(gross_margin/product_revenue*100):.1f}%
+
+📉 DÉPENSES
+Consommables : {approved_expenses:.2f}€
+Payes : {paid_payroll:.2f}€
+Total : {approved_expenses + paid_payroll:.2f}€
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+✨ BÉNÉFICE NET : {net_profit:.2f}€
+
+💡 Taux profit : {(net_profit/gross_revenue*100):.1f}%
+"""
+        
+        keyboard = [
+            [InlineKeyboardButton("🔄 Actualiser", callback_data="admin_finances_full_report")],
+            [InlineKeyboardButton("💰 Finances", callback_data="admin_finances")],
+            [InlineKeyboardButton("🏠 Panel", callback_data="admin_back_panel")]
+        ]
+        
+        await query.edit_message_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    
+    except Exception as e:
+        logger.error(f"Erreur bilan complet: {e}")
+        await query.edit_message_text(
+            f"{EMOJI_THEME['error']} Erreur lors de l'analyse.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Retour", callback_data="admin_finances")]])
+        )
+
 # ==================== CONFIGURATION DES HANDLERS ====================
 
 def setup_handlers(application):
@@ -5509,6 +6568,27 @@ def setup_handlers(application):
     
     # Callbacks admin - commandes
     application.add_handler(CallbackQueryHandler(admin_orders, pattern="^admin_orders$"))
+    application.add_handler(CallbackQueryHandler(admin_orders_all, pattern="^admin_orders_all$"))
+    application.add_handler(CallbackQueryHandler(admin_orders_pending, pattern="^admin_orders_pending$"))
+    application.add_handler(CallbackQueryHandler(admin_orders_stats, pattern="^admin_orders_stats$"))
+    
+    # Callbacks admin - finances
+    application.add_handler(CallbackQueryHandler(admin_finances, pattern="^admin_finances$"))
+    application.add_handler(CallbackQueryHandler(admin_request_pay, pattern="^admin_request_pay$"))
+    application.add_handler(CallbackQueryHandler(admin_add_expense, pattern="^admin_add_expense$"))
+    application.add_handler(CallbackQueryHandler(expense_category_selected, pattern="^expense_cat_"))
+    application.add_handler(CallbackQueryHandler(admin_finances_margins, pattern="^admin_finances_margins$"))
+    application.add_handler(CallbackQueryHandler(admin_finances_my_expenses, pattern="^admin_finances_my_expenses$"))
+    application.add_handler(CallbackQueryHandler(admin_finances_all_expenses, pattern="^admin_finances_all_expenses$"))
+    application.add_handler(CallbackQueryHandler(admin_finances_payroll, pattern="^admin_finances_payroll$"))
+    application.add_handler(CallbackQueryHandler(admin_finances_full_report, pattern="^admin_finances_full_report$"))
+    
+    # Callbacks admin - horaires
+    application.add_handler(CallbackQueryHandler(admin_horaires, pattern="^admin_horaires$"))
+    application.add_handler(CallbackQueryHandler(admin_horaires_toggle, pattern="^admin_horaires_toggle$"))
+    application.add_handler(CallbackQueryHandler(admin_horaires_edit, pattern="^admin_horaires_edit$"))
+    application.add_handler(CallbackQueryHandler(admin_horaires_edit_start, pattern="^admin_horaires_edit_start$"))
+    application.add_handler(CallbackQueryHandler(admin_horaires_edit_end, pattern="^admin_horaires_edit_end$"))
     
     # Callbacks admin - admins
     application.add_handler(CallbackQueryHandler(admin_manage_admins, pattern="^admin_manage_admins$"))
@@ -5542,86 +6622,6 @@ async def kill_switch_check(application):
         await asyncio.sleep(1)
     
     logger.info("✅ Kill switch terminé - Démarrage du bot")
-
-# ==================== 🆕 HANDLERS FINANCIERS ====================
-
-@error_handler
-async def admin_finances(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menu gestion finances"""
-    query = update.callback_query
-    await query.answer()
-    
-    message = f"""💰 GESTION FINANCIÈRE
-
-Gérez les finances avancées du bot.
-
-Que souhaitez-vous faire ?
-"""
-    
-    keyboard = [
-        [InlineKeyboardButton("💵 Payes Admins", callback_data="admin_payroll")],
-        [InlineKeyboardButton("📦 Consommables", callback_data="admin_expenses")],
-        [InlineKeyboardButton("💎 Prix Coûtants", callback_data="admin_costs")],
-        [InlineKeyboardButton("⚖️ Config Poids", callback_data="admin_weights")],
-        [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_panel")]
-    ]
-    
-    await query.edit_message_text(
-        message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
-@error_handler
-async def admin_financial_analysis(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Affiche l'analyse financière complète"""
-    query = update.callback_query
-    await query.answer()
-    
-    # Charger les données
-    stats = load_stats()
-    orders = stats.get('monthly', [])
-    
-    expenses_approved = expenses_system.get_total_expenses('approved')
-    payroll_paid = payroll_system.get_total_paid()
-    
-    analysis = FinancialAnalytics.calculate_net_profit(orders, expenses_approved, payroll_paid)
-    
-    message = f"""📊 ANALYSE FINANCIÈRE COMPLÈTE
-
-━━━━━━━━━━━━━━━━━━━━━
-
-💰 CHIFFRE D'AFFAIRES
-CA Total TTC : {analysis['gross_revenue']:.2f}€
-CA Produits : {analysis['product_revenue']:.2f}€
-Frais Livraison : {analysis['delivery_fees']:.2f}€
-
-━━━━━━━━━━━━━━━━━━━━━
-
-💎 COÛTS & MARGES
-Coûts Produits : {analysis['total_costs']:.2f}€
-Marge Brute : {analysis['gross_margin']:.2f}€
-Taux de Marge : {analysis['margin_rate']:.1f}%
-
-━━━━━━━━━━━━━━━━━━━━━
-
-📦 DÉPENSES
-Consommables : {analysis['expenses']:.2f}€
-Payes Admins : {analysis['payroll']:.2f}€
-
-━━━━━━━━━━━━━━━━━━━━━
-
-✅ BÉNÉFICE NET
-{analysis['net_profit']:.2f}€
-
-━━━━━━━━━━━━━━━━━━━━━
-"""
-    
-    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_back_panel")]]
-    
-    await query.edit_message_text(
-        message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
 
 # ==================== FONCTION MAIN ====================
 

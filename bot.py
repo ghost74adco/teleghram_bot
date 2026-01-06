@@ -492,6 +492,34 @@ def save_expenses(data):
     with open(EXPENSES_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
+def load_salary_config():
+    """Charge la configuration des salaires"""
+    salary_config_file = DATA_DIR / "salary_config.json"
+    if salary_config_file.exists():
+        with open(salary_config_file, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {"admins": {}}
+
+def save_salary_config(data):
+    """Sauvegarde la configuration des salaires"""
+    salary_config_file = DATA_DIR / "salary_config.json"
+    with open(salary_config_file, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+def load_commissions():
+    """Charge les commissions accumulées"""
+    commissions_file = DATA_DIR / "commissions.json"
+    if commissions_file.exists():
+        with open(commissions_file, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
+
+def save_commissions(data):
+    """Sauvegarde les commissions"""
+    commissions_file = DATA_DIR / "commissions.json"
+    with open(commissions_file, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
 # ==================== DÉCORATEUR ERROR HANDLER ====================
 
 def error_handler(func):
@@ -2964,7 +2992,10 @@ Choisissez une section :
     
     # Gestion admins (super-admin uniquement)
     if level == 'super_admin':
-        keyboard.append([InlineKeyboardButton("👥 Gérer Admins", callback_data="admin_manage_admins")])
+        keyboard.append([
+            InlineKeyboardButton("👥 Gérer Admins", callback_data="admin_manage_admins"),
+            InlineKeyboardButton("💼 Gestion Salaires", callback_data="admin_salary_config")
+        ])
     
     # Paramètres (admin+)
     if level in ['super_admin', 'admin']:
@@ -4972,6 +5003,16 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await receive_order_delivery(update, context)
         return
     
+    # État: En attente salaire fixe (super-admin)
+    if context.user_data.get('setting_fixed_salary'):
+        await receive_fixed_salary(update, context)
+        return
+    
+    # État: En attente valeur commission (super-admin)
+    if context.user_data.get('setting_commission'):
+        await receive_commission_value(update, context)
+        return
+    
     # Message par défaut
     await update.message.reply_text(
         f"{EMOJI_THEME['info']} Utilisez /start pour accéder au menu principal."
@@ -5002,6 +5043,8 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop('awaiting_cost_update', None)
     context.user_data.pop('editing_order_total', None)
     context.user_data.pop('editing_order_delivery', None)
+    context.user_data.pop('setting_fixed_salary', None)
+    context.user_data.pop('setting_commission', None)
     context.user_data.pop('new_admin_id', None)
     context.user_data.pop('new_admin_level', None)
     context.user_data.pop('admin_action', None)
@@ -6839,6 +6882,594 @@ def load_product_costs():
             return False
     return False
 
+# ==================== ADMIN: GESTION SALAIRES ====================
+
+@error_handler
+async def admin_salary_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu configuration salaires (super-admin uniquement)"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    config = load_salary_config()
+    
+    message = """💼 GESTION DES SALAIRES
+
+Configurez les salaires de vos admins :
+• Salaire fixe (hebdo/mensuel)
+• Commissions sur ventes
+• Fréquence de paiement
+• Calcul automatique
+
+Sélectionnez un admin :
+"""
+    
+    keyboard = []
+    
+    for admin_id, admin_data in ADMINS.items():
+        admin_config = config['admins'].get(str(admin_id), {})
+        status = "✅" if admin_config.get('active', False) else "❌"
+        
+        keyboard.append([
+            InlineKeyboardButton(
+                f"{status} {admin_data['name']}",
+                callback_data=f"salary_admin_{admin_id}"
+            )
+        ])
+    
+    keyboard.append([InlineKeyboardButton("📊 Vue d'ensemble", callback_data="salary_overview")])
+    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="admin_back_panel")])
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def salary_admin_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche configuration salaire d'un admin"""
+    query = update.callback_query
+    await query.answer()
+    
+    admin_id = int(query.data.replace("salary_admin_", ""))
+    
+    config = load_salary_config()
+    admin_config = config['admins'].get(str(admin_id), {
+        "name": ADMINS[admin_id]['name'],
+        "fixed_salary": 0,
+        "salary_type": "monthly",
+        "commission_type": "none",
+        "commission_value": 0,
+        "payment_day": 1,
+        "active": False
+    })
+    
+    # Info salaire
+    if admin_config['salary_type'] == 'monthly':
+        salary_info = f"{admin_config['fixed_salary']:.2f}€/mois"
+    else:
+        salary_info = f"{admin_config['fixed_salary']:.2f}€/semaine"
+    
+    # Info commission
+    if admin_config['commission_type'] == 'percentage':
+        commission_info = f"{admin_config['commission_value']}% par commande"
+    elif admin_config['commission_type'] == 'fixed':
+        commission_info = f"{admin_config['commission_value']:.2f}€ par commande"
+    else:
+        commission_info = "Aucune"
+    
+    # Fréquence
+    if admin_config['salary_type'] == 'monthly':
+        freq_info = f"Mensuel (le {admin_config['payment_day']} du mois)"
+    else:
+        days = {1: "Lundi", 2: "Mardi", 3: "Mercredi", 4: "Jeudi", 5: "Vendredi", 6: "Samedi", 7: "Dimanche"}
+        freq_info = f"Hebdomadaire (chaque {days.get(admin_config['payment_day'], 'Lundi')})"
+    
+    # Commissions actuelles
+    commissions_data = load_commissions()
+    current_commissions = commissions_data.get(str(admin_id), {}).get('current_period', {}).get('total_commission', 0)
+    
+    message = f"""💼 CONFIGURATION SALAIRE
+
+👤 Admin : {admin_config['name']}
+
+💰 SALAIRE FIXE
+{salary_info}
+
+💸 COMMISSION
+{commission_info}
+
+📅 PAIEMENT
+{freq_info}
+
+📊 Commissions période actuelle : {current_commissions:.2f}€
+
+🔔 Statut : {'Actif ✅' if admin_config['active'] else 'Inactif ❌'}
+
+Modifier :
+"""
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("💰 Salaire fixe", callback_data=f"set_fixed_{admin_id}"),
+            InlineKeyboardButton("💸 Commission", callback_data=f"set_commission_{admin_id}")
+        ],
+        [
+            InlineKeyboardButton("📅 Fréquence", callback_data=f"set_frequency_{admin_id}"),
+            InlineKeyboardButton("📆 Jour", callback_data=f"set_day_{admin_id}")
+        ],
+        [
+            InlineKeyboardButton(
+                "✅ Activer" if not admin_config['active'] else "❌ Désactiver",
+                callback_data=f"toggle_salary_{admin_id}"
+            )
+        ],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_salary_config")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def set_fixed_salary(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Définir salaire fixe"""
+    query = update.callback_query
+    await query.answer()
+    
+    admin_id = query.data.replace("set_fixed_", "")
+    
+    message = f"""💰 SALAIRE FIXE
+
+Entrez le montant du salaire fixe :
+
+Exemple : 1500
+(pour 1500€/mois ou 1500€/semaine selon la fréquence)
+
+Entrez 0 pour aucun salaire fixe.
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data=f"salary_admin_{admin_id}")]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    context.user_data['setting_fixed_salary'] = admin_id
+
+@error_handler
+async def receive_fixed_salary(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Réceptionne montant salaire fixe"""
+    if not is_super_admin(update.effective_user.id):
+        return
+    
+    admin_id = context.user_data.get('setting_fixed_salary')
+    if not admin_id:
+        return
+    
+    try:
+        amount = float(update.message.text.strip())
+        
+        if amount < 0:
+            await update.message.reply_text(f"{EMOJI_THEME['error']} Le montant ne peut pas être négatif.")
+            return
+        
+        if amount > 100000:
+            await update.message.reply_text(f"{EMOJI_THEME['error']} Montant trop élevé (max 100,000€).")
+            return
+        
+        # Mettre à jour config
+        config = load_salary_config()
+        
+        if str(admin_id) not in config['admins']:
+            config['admins'][str(admin_id)] = {
+                "name": ADMINS[int(admin_id)]['name'],
+                "fixed_salary": 0,
+                "salary_type": "monthly",
+                "commission_type": "none",
+                "commission_value": 0,
+                "payment_day": 1,
+                "active": False
+            }
+        
+        config['admins'][str(admin_id)]['fixed_salary'] = amount
+        save_salary_config(config)
+        
+        context.user_data.pop('setting_fixed_salary', None)
+        
+        message = f"""{EMOJI_THEME['success']} SALAIRE FIXE DÉFINI
+
+Montant : {amount:.2f}€
+
+Configurez maintenant la fréquence (mensuel/hebdomadaire).
+"""
+        
+        keyboard = [[InlineKeyboardButton("📋 Voir configuration", callback_data=f"salary_admin_{admin_id}")]]
+        
+        await update.message.reply_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+        logger.info(f"💰 Salaire fixe défini: Admin {admin_id} - {amount:.2f}€")
+    
+    except ValueError:
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} Montant invalide. Utilisez un nombre.\n"
+            "Exemple : 1500"
+        )
+
+@error_handler
+async def set_commission_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Choisir type de commission"""
+    query = update.callback_query
+    await query.answer()
+    
+    admin_id = query.data.replace("set_commission_", "")
+    
+    message = """💸 TYPE DE COMMISSION
+
+Choisissez le type de commission :
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("📊 Pourcentage (%)", callback_data=f"commission_percent_{admin_id}")],
+        [InlineKeyboardButton("💵 Montant fixe (€)", callback_data=f"commission_fixed_{admin_id}")],
+        [InlineKeyboardButton("❌ Aucune", callback_data=f"commission_none_{admin_id}")],
+        [InlineKeyboardButton("🔙 Annuler", callback_data=f"salary_admin_{admin_id}")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def set_commission_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Définir valeur commission"""
+    query = update.callback_query
+    await query.answer()
+    
+    data_parts = query.data.split("_")
+    comm_type = data_parts[1]  # percent, fixed, none
+    admin_id = data_parts[2]
+    
+    if comm_type == "none":
+        # Pas de commission
+        config = load_salary_config()
+        
+        if str(admin_id) not in config['admins']:
+            config['admins'][str(admin_id)] = {
+                "name": ADMINS[int(admin_id)]['name'],
+                "fixed_salary": 0,
+                "salary_type": "monthly",
+                "commission_type": "none",
+                "commission_value": 0,
+                "payment_day": 1,
+                "active": False
+            }
+        
+        config['admins'][str(admin_id)]['commission_type'] = 'none'
+        config['admins'][str(admin_id)]['commission_value'] = 0
+        save_salary_config(config)
+        
+        await query.edit_message_text(
+            f"{EMOJI_THEME['success']} Commission désactivée",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("📋 Voir configuration", callback_data=f"salary_admin_{admin_id}")
+            ]])
+        )
+        return
+    
+    # Demander la valeur
+    if comm_type == "percent":
+        message = """💸 COMMISSION EN POURCENTAGE
+
+Entrez le pourcentage par commande validée :
+
+Exemple : 5
+(pour 5% du montant de chaque commande)
+"""
+    else:
+        message = """💸 COMMISSION MONTANT FIXE
+
+Entrez le montant fixe par commande validée :
+
+Exemple : 50
+(pour 50€ par commande)
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data=f"salary_admin_{admin_id}")]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    context.user_data['setting_commission'] = {
+        'admin_id': admin_id,
+        'type': comm_type
+    }
+
+@error_handler
+async def receive_commission_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Réceptionne valeur commission"""
+    if not is_super_admin(update.effective_user.id):
+        return
+    
+    comm_data = context.user_data.get('setting_commission')
+    if not comm_data:
+        return
+    
+    try:
+        value = float(update.message.text.strip())
+        
+        if value < 0:
+            await update.message.reply_text(f"{EMOJI_THEME['error']} La valeur ne peut pas être négative.")
+            return
+        
+        if comm_data['type'] == 'percent' and value > 100:
+            await update.message.reply_text(f"{EMOJI_THEME['error']} Pourcentage maximum : 100%")
+            return
+        
+        if comm_data['type'] == 'fixed' and value > 10000:
+            await update.message.reply_text(f"{EMOJI_THEME['error']} Montant trop élevé (max 10,000€).")
+            return
+        
+        # Mettre à jour config
+        config = load_salary_config()
+        admin_id = comm_data['admin_id']
+        
+        if str(admin_id) not in config['admins']:
+            config['admins'][str(admin_id)] = {
+                "name": ADMINS[int(admin_id)]['name'],
+                "fixed_salary": 0,
+                "salary_type": "monthly",
+                "commission_type": "none",
+                "commission_value": 0,
+                "payment_day": 1,
+                "active": False
+            }
+        
+        config['admins'][str(admin_id)]['commission_type'] = 'percentage' if comm_data['type'] == 'percent' else 'fixed'
+        config['admins'][str(admin_id)]['commission_value'] = value
+        save_salary_config(config)
+        
+        context.user_data.pop('setting_commission', None)
+        
+        if comm_data['type'] == 'percent':
+            info = f"{value}% par commande"
+        else:
+            info = f"{value:.2f}€ par commande"
+        
+        message = f"""{EMOJI_THEME['success']} COMMISSION DÉFINIE
+
+Type : {info}
+
+Les commissions seront calculées automatiquement.
+"""
+        
+        keyboard = [[InlineKeyboardButton("📋 Voir configuration", callback_data=f"salary_admin_{admin_id}")]]
+        
+        await update.message.reply_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+        logger.info(f"💸 Commission définie: Admin {admin_id} - {info}")
+    
+    except ValueError:
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} Valeur invalide. Utilisez un nombre.\n"
+            "Exemple : 5"
+        )
+
+@error_handler
+async def set_frequency(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Définir fréquence de paiement"""
+    query = update.callback_query
+    await query.answer()
+    
+    admin_id = query.data.replace("set_frequency_", "")
+    
+    message = """📅 FRÉQUENCE DE PAIEMENT
+
+Choisissez la fréquence :
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("📅 Mensuel", callback_data=f"freq_monthly_{admin_id}")],
+        [InlineKeyboardButton("📆 Hebdomadaire", callback_data=f"freq_weekly_{admin_id}")],
+        [InlineKeyboardButton("🔙 Annuler", callback_data=f"salary_admin_{admin_id}")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def save_frequency(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sauvegarde fréquence"""
+    query = update.callback_query
+    await query.answer()
+    
+    data_parts = query.data.split("_")
+    freq_type = data_parts[1]  # monthly, weekly
+    admin_id = data_parts[2]
+    
+    config = load_salary_config()
+    
+    if str(admin_id) not in config['admins']:
+        config['admins'][str(admin_id)] = {
+            "name": ADMINS[int(admin_id)]['name'],
+            "fixed_salary": 0,
+            "salary_type": "monthly",
+            "commission_type": "none",
+            "commission_value": 0,
+            "payment_day": 1,
+            "active": False
+        }
+    
+    config['admins'][str(admin_id)]['salary_type'] = freq_type
+    save_salary_config(config)
+    
+    freq_label = "Mensuel" if freq_type == "monthly" else "Hebdomadaire"
+    
+    await query.edit_message_text(
+        f"{EMOJI_THEME['success']} Fréquence : {freq_label}",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("📋 Voir configuration", callback_data=f"salary_admin_{admin_id}")
+        ]])
+    )
+
+@error_handler
+async def toggle_salary_active(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Active/désactive salaire d'un admin"""
+    query = update.callback_query
+    await query.answer()
+    
+    admin_id = query.data.replace("toggle_salary_", "")
+    
+    config = load_salary_config()
+    
+    if str(admin_id) not in config['admins']:
+        config['admins'][str(admin_id)] = {
+            "name": ADMINS[int(admin_id)]['name'],
+            "fixed_salary": 0,
+            "salary_type": "monthly",
+            "commission_type": "none",
+            "commission_value": 0,
+            "payment_day": 1,
+            "active": False
+        }
+    
+    current_status = config['admins'][str(admin_id)].get('active', False)
+    config['admins'][str(admin_id)]['active'] = not current_status
+    save_salary_config(config)
+    
+    status_label = "Activé" if not current_status else "Désactivé"
+    
+    await query.edit_message_text(
+        f"{EMOJI_THEME['success']} Salaire {status_label}",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("📋 Voir configuration", callback_data=f"salary_admin_{admin_id}")
+        ]])
+    )
+
+@error_handler
+async def salary_overview(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Vue d'ensemble tous salaires"""
+    query = update.callback_query
+    await query.answer()
+    
+    config = load_salary_config()
+    commissions_data = load_commissions()
+    
+    message = """💼 VUE D'ENSEMBLE SALAIRES
+
+"""
+    
+    total_fixed = 0
+    total_commissions = 0
+    active_count = 0
+    
+    for admin_id, admin_config in config['admins'].items():
+        if not admin_config.get('active', False):
+            continue
+        
+        active_count += 1
+        fixed = admin_config.get('fixed_salary', 0)
+        commissions = commissions_data.get(admin_id, {}).get('current_period', {}).get('total_commission', 0)
+        total = fixed + commissions
+        
+        total_fixed += fixed
+        total_commissions += commissions
+        
+        freq = "Mensuel" if admin_config.get('salary_type') == 'monthly' else "Hebdo"
+        
+        message += f"""👤 {admin_config['name']}
+Fixe : {fixed:.2f}€ ({freq})
+Commissions : {commissions:.2f}€
+Période actuelle : {total:.2f}€
+
+"""
+    
+    if active_count == 0:
+        message += "Aucun salaire actif.\n"
+    
+    message += f"""━━━━━━━━━━━━━━━━━━━━━━
+
+💰 TOTAUX PÉRIODE ACTUELLE :
+Fixes : {total_fixed:.2f}€
+Commissions : {total_commissions:.2f}€
+TOTAL : {total_fixed + total_commissions:.2f}€
+
+👥 Admins actifs : {active_count}
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_salary_config")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+async def calculate_commission_on_order(context, admin_id, order_data):
+    """Calcule et enregistre commission pour une commande"""
+    config = load_salary_config()
+    admin_config = config['admins'].get(str(admin_id))
+    
+    if not admin_config or not admin_config.get('active', False):
+        return
+    
+    # Calculer commission
+    commission = 0
+    order_total = float(order_data.get('total', 0))
+    
+    if admin_config.get('commission_type') == 'percentage':
+        commission = order_total * (admin_config.get('commission_value', 0) / 100)
+    elif admin_config.get('commission_type') == 'fixed':
+        commission = admin_config.get('commission_value', 0)
+    
+    if commission == 0:
+        return
+    
+    # Charger commissions
+    commissions_data = load_commissions()
+    
+    if str(admin_id) not in commissions_data:
+        commissions_data[str(admin_id)] = {
+            "current_period": {
+                "start_date": datetime.now().isoformat(),
+                "orders": [],
+                "total_commission": 0
+            },
+            "history": []
+        }
+    
+    # Ajouter la commission
+    commissions_data[str(admin_id)]['current_period']['orders'].append({
+        "order_id": order_data['order_id'],
+        "date": datetime.now().isoformat(),
+        "total": order_total,
+        "commission": commission
+    })
+    
+    commissions_data[str(admin_id)]['current_period']['total_commission'] += commission
+    
+    # Sauvegarder
+    save_commissions(commissions_data)
+    
+    logger.info(f"💸 Commission enregistrée: Admin {admin_id} - {commission:.2f}€ sur {order_total:.2f}€")
+
 # ==================== ADMIN: WORKFLOW VALIDATION COMMANDE ====================
 
 @error_handler
@@ -7158,6 +7789,9 @@ async def confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
         writer.writeheader()
         writer.writerows(orders)
     
+    # Calculer commission pour l'admin qui valide
+    await calculate_commission_on_order(context, query.from_user.id, order)
+    
     # Notification admin
     message = f"""{EMOJI_THEME['success']} COMMANDE VALIDÉE
 
@@ -7379,6 +8013,17 @@ def setup_handlers(application):
     # Callbacks admin - prix de revient
     application.add_handler(CallbackQueryHandler(admin_costs, pattern="^admin_costs$"))
     application.add_handler(CallbackQueryHandler(admin_cost_edit, pattern="^admin_cost_edit_"))
+    
+    # Callbacks admin - gestion salaires
+    application.add_handler(CallbackQueryHandler(admin_salary_config, pattern="^admin_salary_config$"))
+    application.add_handler(CallbackQueryHandler(salary_admin_detail, pattern="^salary_admin_"))
+    application.add_handler(CallbackQueryHandler(set_fixed_salary, pattern="^set_fixed_"))
+    application.add_handler(CallbackQueryHandler(set_commission_type, pattern="^set_commission_"))
+    application.add_handler(CallbackQueryHandler(set_commission_value, pattern="^commission_(percent|fixed|none)_"))
+    application.add_handler(CallbackQueryHandler(set_frequency, pattern="^set_frequency_"))
+    application.add_handler(CallbackQueryHandler(save_frequency, pattern="^freq_(monthly|weekly)_"))
+    application.add_handler(CallbackQueryHandler(toggle_salary_active, pattern="^toggle_salary_"))
+    application.add_handler(CallbackQueryHandler(salary_overview, pattern="^salary_overview$"))
     
     # Callbacks admin - horaires
     application.add_handler(CallbackQueryHandler(admin_horaires, pattern="^admin_horaires$"))

@@ -157,7 +157,10 @@ CLIENT_HISTORY_FILE = DATA_DIR / "client_history.json"
 REFERRALS_FILE = DATA_DIR / "referrals.json"
 HORAIRES_FILE = DATA_DIR / "horaires.json"
 STATS_FILE = DATA_DIR / "stats.json"
-PRICING_TIERS_FILE = DATA_DIR / "pricing_tiers.json"
+PRICING_TIERS_FILE = DATA_DIR / "pricing_tiers.json"PAYROLL_FILE = DATA_DIR / "payroll.json"
+EXPENSES_FILE = DATA_DIR / "expenses.json"
+PRODUCT_COSTS_FILE = DATA_DIR / "product_costs.json"
+PRODUCT_WEIGHTS_FILE = DATA_DIR / "product_weights.json"
 
 # ==================== CONSTANTES MÉTIER ====================
 
@@ -174,6 +177,24 @@ ADMIN_ADD_ID = 121
 ADMIN_ADD_LEVEL = 122
 ADMIN_REMOVE_CONFIRM = 123
 ADMIN_VIEW_LIST = 124
+
+# ==================== 🆕 CONFIGURATION PRODUITS AVANCÉE ====================
+
+DEFAULT_PRODUCT_WEIGHTS = {
+    "❄️ Coco": {"type": "weight", "ratio": 0.9},
+    "K": {"type": "weight", "ratio": 0.9},
+    "Crystal": {"type": "weight", "ratio": 1.0},
+    "💊 Squid Game": {"type": "unit", "ratio": 1},
+    "💊 Punisher": {"type": "unit", "ratio": 1}
+}
+
+DEFAULT_PRODUCT_COSTS = {
+    "❄️ Coco": 45.00,
+    "K": 50.00,
+    "Crystal": 55.00,
+    "💊 Squid Game": 8.00,
+    "💊 Punisher": 8.00
+}
 
 # ==================== MÉTHODE DE CALCUL DISTANCE ====================
 
@@ -757,6 +778,302 @@ def is_product_available(product_name):
 def get_available_products():
     """Récupère tous les produits disponibles"""
     return load_available_products()
+
+# ==================== 🆕 SYSTÈME DE GESTION DES POIDS ====================
+
+def load_product_weights() -> Dict:
+    """Charge la configuration des poids produits"""
+    if PRODUCT_WEIGHTS_FILE.exists():
+        try:
+            with open(PRODUCT_WEIGHTS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"Erreur chargement poids: {e}")
+    return DEFAULT_PRODUCT_WEIGHTS.copy()
+
+def save_product_weights(weights: Dict) -> bool:
+    """Sauvegarde la configuration des poids"""
+    try:
+        with open(PRODUCT_WEIGHTS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(weights, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        logger.error(f"Erreur sauvegarde poids: {e}")
+        return False
+
+def calculate_weight_to_prepare(product_name: str, quantity_ordered: float) -> dict:
+    """
+    Calcule le poids/unité à préparer pour une commande
+    
+    Returns:
+        {
+            'to_prepare': float,
+            'type': str,
+            'unit': str,
+            'note': str
+        }
+    """
+    weights_config = load_product_weights()
+    
+    if product_name not in weights_config:
+        return {
+            'to_prepare': quantity_ordered,
+            'type': 'weight',
+            'unit': 'g',
+            'note': 'Peser normalement'
+        }
+    
+    config = weights_config[product_name]
+    
+    if config['type'] == 'unit':
+        return {
+            'to_prepare': quantity_ordered,
+            'type': 'unit',
+            'unit': 'unités',
+            'note': f'{int(quantity_ordered)} unité(s) - Pas de pesée'
+        }
+    else:
+        weight_to_prepare = quantity_ordered * config['ratio']
+        return {
+            'to_prepare': weight_to_prepare,
+            'type': 'weight',
+            'unit': 'g',
+            'note': f'Peser {weight_to_prepare:.1f}g (ratio {config["ratio"]})'
+        }
+
+# ==================== 🆕 SYSTÈME DE GESTION DES COÛTS ====================
+
+def load_product_costs() -> Dict:
+    """Charge les prix coûtants des produits"""
+    if PRODUCT_COSTS_FILE.exists():
+        try:
+            with open(PRODUCT_COSTS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"Erreur chargement coûts: {e}")
+    return DEFAULT_PRODUCT_COSTS.copy()
+
+def save_product_costs(costs: Dict) -> bool:
+    """Sauvegarde les prix coûtants"""
+    try:
+        with open(PRODUCT_COSTS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(costs, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        logger.error(f"Erreur sauvegarde coûts: {e}")
+        return False
+
+def calculate_margins(product_name: str, quantity: float, selling_price: float) -> dict:
+    """
+    Calcule les marges d'une vente
+    
+    Returns:
+        {
+            'cost': float,
+            'revenue': float,
+            'margin': float,
+            'margin_rate': float
+        }
+    """
+    costs = load_product_costs()
+    
+    if product_name not in costs:
+        return {
+            'cost': 0,
+            'revenue': selling_price,
+            'margin': selling_price,
+            'margin_rate': 100.0
+        }
+    
+    unit_cost = costs[product_name]
+    total_cost = unit_cost * quantity
+    margin = selling_price - total_cost
+    margin_rate = (margin / selling_price * 100) if selling_price > 0 else 0
+    
+    return {
+        'cost': total_cost,
+        'revenue': selling_price,
+        'margin': margin,
+        'margin_rate': margin_rate
+    }
+
+# ==================== 🆕 SYSTÈME DE GESTION DES PAYES ====================
+
+class PayrollSystem:
+    """Système de gestion des payes administrateurs"""
+    
+    def __init__(self, data_dir: Path):
+        self.data_dir = data_dir
+        self.payroll_file = data_dir / "payroll.json"
+        self.load_payroll()
+    
+    def load_payroll(self):
+        if self.payroll_file.exists():
+            with open(self.payroll_file, 'r', encoding='utf-8') as f:
+                self.data = json.load(f)
+        else:
+            self.data = {"payments": [], "balances": {}}
+    
+    def save_payroll(self):
+        with open(self.payroll_file, 'w', encoding='utf-8') as f:
+            json.dump(self.data, f, indent=2, ensure_ascii=False)
+    
+    def add_payment_request(self, admin_id: int, admin_name: str, amount: float, note: str = ""):
+        payment = {
+            "id": f"PAY{int(datetime.now().timestamp())}",
+            "admin_id": admin_id,
+            "admin_name": admin_name,
+            "amount": amount,
+            "note": note,
+            "date": datetime.now().isoformat(),
+            "status": "pending"
+        }
+        
+        self.data["payments"].append(payment)
+        
+        if str(admin_id) not in self.data["balances"]:
+            self.data["balances"][str(admin_id)] = 0
+        
+        self.data["balances"][str(admin_id)] -= amount
+        self.save_payroll()
+        return payment
+    
+    def get_pending_payments(self):
+        return [p for p in self.data["payments"] if p["status"] == "pending"]
+    
+    def get_admin_balance(self, admin_id: int) -> float:
+        return self.data["balances"].get(str(admin_id), 0)
+    
+    def get_total_paid(self) -> float:
+        return sum(p["amount"] for p in self.data["payments"] if p["status"] == "paid")
+    
+    def mark_as_paid(self, payment_id: str):
+        for payment in self.data["payments"]:
+            if payment["id"] == payment_id:
+                payment["status"] = "paid"
+                payment["paid_at"] = datetime.now().isoformat()
+                break
+        self.save_payroll()
+
+# ==================== 🆕 SYSTÈME DE GESTION DES CONSOMMABLES ====================
+
+class ExpensesSystem:
+    """Système de gestion des consommables/frais"""
+    
+    def __init__(self, data_dir: Path):
+        self.data_dir = data_dir
+        self.expenses_file = data_dir / "expenses.json"
+        self.load_expenses()
+    
+    def load_expenses(self):
+        if self.expenses_file.exists():
+            with open(self.expenses_file, 'r', encoding='utf-8') as f:
+                self.data = json.load(f)
+        else:
+            self.data = {
+                "expenses": [],
+                "categories": ["Emballage", "Transport", "Matériel", "Autre"]
+            }
+    
+    def save_expenses(self):
+        with open(self.expenses_file, 'w', encoding='utf-8') as f:
+            json.dump(self.data, f, indent=2, ensure_ascii=False)
+    
+    def add_expense(self, admin_id: int, admin_name: str, amount: float, 
+                    category: str, description: str, receipt_photo_id: str = None):
+        expense = {
+            "id": f"EXP{int(datetime.now().timestamp())}",
+            "admin_id": admin_id,
+            "admin_name": admin_name,
+            "amount": amount,
+            "category": category,
+            "description": description,
+            "receipt_photo_id": receipt_photo_id,
+            "date": datetime.now().isoformat(),
+            "status": "pending"
+        }
+        
+        self.data["expenses"].append(expense)
+        self.save_expenses()
+        return expense
+    
+    def get_pending_expenses(self):
+        return [e for e in self.data["expenses"] if e["status"] == "pending"]
+    
+    def get_total_expenses(self, status: str = None) -> float:
+        if status:
+            return sum(e["amount"] for e in self.data["expenses"] if e["status"] == status)
+        return sum(e["amount"] for e in self.data["expenses"])
+    
+    def get_expenses_by_category(self) -> dict:
+        result = {}
+        for expense in self.data["expenses"]:
+            if expense["status"] == "approved":
+                cat = expense["category"]
+                result[cat] = result.get(cat, 0) + expense["amount"]
+        return result
+    
+    def approve_expense(self, expense_id: str):
+        for expense in self.data["expenses"]:
+            if expense["id"] == expense_id:
+                expense["status"] = "approved"
+                expense["approved_at"] = datetime.now().isoformat()
+                break
+        self.save_expenses()
+    
+    def reject_expense(self, expense_id: str, reason: str = ""):
+        for expense in self.data["expenses"]:
+            if expense["id"] == expense_id:
+                expense["status"] = "rejected"
+                expense["rejected_at"] = datetime.now().isoformat()
+                expense["rejection_reason"] = reason
+                break
+        self.save_expenses()
+
+# ==================== 🆕 ANALYSE FINANCIÈRE AVANCÉE ====================
+
+class FinancialAnalytics:
+    """Analyse financière complète"""
+    
+    @staticmethod
+    def calculate_net_profit(orders_data: list, expenses_approved: float, 
+                            payroll_paid: float) -> dict:
+        costs = load_product_costs()
+        
+        gross_revenue = sum(float(o.get('total', 0)) for o in orders_data)
+        delivery_fees = sum(float(o.get('delivery_fee', 0)) for o in orders_data)
+        product_revenue = gross_revenue - delivery_fees
+        
+        total_costs = 0
+        for order in orders_data:
+            products_str = order.get('products', '')
+            for item in products_str.split(','):
+                item = item.strip()
+                for product_name, cost in costs.items():
+                    if product_name in item:
+                        match = re.search(r'(\d+(?:\.\d+)?)\s*(?:g|unité)', item)
+                        if match:
+                            qty = float(match.group(1))
+                            total_costs += cost * qty
+        
+        gross_margin = product_revenue - total_costs
+        net_profit = gross_margin - expenses_approved - payroll_paid
+        
+        return {
+            'gross_revenue': gross_revenue,
+            'delivery_fees': delivery_fees,
+            'product_revenue': product_revenue,
+            'total_costs': total_costs,
+            'gross_margin': gross_margin,
+            'expenses': expenses_approved,
+            'payroll': payroll_paid,
+            'net_profit': net_profit,
+            'margin_rate': (gross_margin / product_revenue * 100) if product_revenue > 0 else 0
+        }
+
+# Initialiser les systèmes
+payroll_system = PayrollSystem(DATA_DIR)
+expenses_system = ExpensesSystem(DATA_DIR)
 
 # ==================== GESTION DES STOCKS ====================
 
@@ -1698,40 +2015,71 @@ async def notify_admin_new_user(context, user_id, user_data):
         logger.error(f"❌ Erreur notification admin: {e}")
 
 async def notify_admin_new_order(context, order_data, user_info):
-    """Notifie l'admin d'une nouvelle commande"""
+    """Notifie l'admin d'une nouvelle commande avec détails de préparation"""
     total_info = order_data.get('total_info', {})
-    
-    # Anonymiser l'ID
     anonymous_id = anonymize_id(order_data['user_id'])
     
-    notification = f"""{EMOJI_THEME['cart']} NOUVELLE COMMANDE
+    # Calculer les marges
+    total_cost = 0
+    total_margin = 0
+    country = order_data.get('country', 'FR')
+    
+    notification = f"""🛒 NOUVELLE COMMANDE
 
 📋 Commande : {order_data['order_id']}
 👤 Client : {user_info['first_name']} (@{user_info['username']})
 🆔 ID : {anonymous_id}
 
-🛍️ PANIER :
-{order_data['products_display']}
-
-{EMOJI_THEME['money']} DÉTAILS :
-- Sous-total : {total_info['subtotal']:.2f}€
-- Livraison : {total_info['delivery_fee']:.2f}€
+🛍️ PRODUITS :
 """
     
-    if total_info.get('promo_discount', 0) > 0:
-        notification += f"• {EMOJI_THEME['gift']} Promo : -{total_info['promo_discount']:.2f}€\n"
+    # Parser les produits avec détails de préparation
+    products_list = order_data.get('products', '').split(',')
     
-    if total_info.get('vip_discount', 0) > 0:
-        notification += f"• {EMOJI_THEME['vip']} VIP : -{total_info['vip_discount']:.2f}€\n"
+    for product_line in products_list:
+        product_line = product_line.strip()
+        match = re.search(r'(.+?)\s+x\s*(\d+(?:\.\d+)?)', product_line)
+        if match:
+            product_name = match.group(1).strip()
+            qty = float(match.group(2))
+            
+            # Calcul poids à peser
+            prep = calculate_weight_to_prepare(product_name, qty)
+            
+            # Calcul marge
+            price = get_price(product_name, country)
+            selling_price = price * qty
+            margins = calculate_margins(product_name, qty, selling_price)
+            
+            total_cost += margins['cost']
+            total_margin += margins['margin']
+            
+            notification += f"\n• {product_name} - {qty}{prep['unit']}"
+            notification += f"\n  ⚖️ {prep['note']}"
+            notification += f"\n  💰 Coût: {margins['cost']:.2f}€ | Marge: {margins['margin']:.2f}€\n"
     
-    notification += f"\n💵 TOTAL : {total_info['total']:.2f}€\n\n"
-    notification += f"📍 Adresse : {order_data['address']}\n"
-    notification += f"{EMOJI_THEME['delivery']} Livraison : {order_data['delivery_type']}\n"
-    notification += f"💳 Paiement : {order_data['payment_method']}"
+    notification += f"""
+💵 FINANCIER :
+- Sous-total : {total_info['subtotal']:.2f}€
+- Livraison : {total_info['delivery_fee']:.2f}€
+- Total : {total_info['total']:.2f}€
+
+📊 MARGES :
+- Coût total : {total_cost:.2f}€
+- Marge brute : {total_margin:.2f}€
+- Taux : {(total_margin/total_info['total']*100):.1f}%
+
+🚚 LIVRAISON :
+- Type : {order_data['delivery_type']}
+- Adresse : {order_data.get('address', 'N/A')}
+- Pays : {order_data['country']}
+
+💳 Paiement : {order_data['payment_method']}
+"""
     
     keyboard = [[
         InlineKeyboardButton(
-            f"{EMOJI_THEME['success']} Valider",
+            "✅ Valider",
             callback_data=f"admin_validate_{order_data['order_id']}_{order_data['user_id']}"
         )
     ]]
@@ -2704,20 +3052,14 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # MESSAGE EN TEXTE BRUT - AUCUN FORMATAGE MARKDOWN/HTML
     message = f"""🎛️ PANEL ADMINISTRATEUR
-
 👤 {name} ({level.upper()})
-
 ━━━━━━━━━━━━━━━━━━━━━━
-
 📊 STATISTIQUES RAPIDES
-
 👥 Utilisateurs : {users_count}
 📦 Produits : {len(load_product_registry())}
 ⚠️ Stock faible : {low_stock}
 🔴 Ruptures : {out_stock}
-
 ━━━━━━━━━━━━━━━━━━━━━━
-
 Choisissez une section :
 """
     
@@ -2732,6 +3074,12 @@ Choisissez une section :
         keyboard.append([
             InlineKeyboardButton("💰 Prix", callback_data="admin_prices"),
             InlineKeyboardButton("🎁 Promos", callback_data="admin_promos")
+        ])
+        
+        # 🆕 AJOUTEZ CES LIGNES ICI (ÉTAPE 6)
+        keyboard.append([
+            InlineKeyboardButton("💰 Finances", callback_data="admin_finances"),
+            InlineKeyboardButton("📊 Analyse", callback_data="admin_financial_analysis")
         ])
     
     # Commandes (tous niveaux)
@@ -5194,6 +5542,86 @@ async def kill_switch_check(application):
         await asyncio.sleep(1)
     
     logger.info("✅ Kill switch terminé - Démarrage du bot")
+
+# ==================== 🆕 HANDLERS FINANCIERS ====================
+
+@error_handler
+async def admin_finances(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu gestion finances"""
+    query = update.callback_query
+    await query.answer()
+    
+    message = f"""💰 GESTION FINANCIÈRE
+
+Gérez les finances avancées du bot.
+
+Que souhaitez-vous faire ?
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("💵 Payes Admins", callback_data="admin_payroll")],
+        [InlineKeyboardButton("📦 Consommables", callback_data="admin_expenses")],
+        [InlineKeyboardButton("💎 Prix Coûtants", callback_data="admin_costs")],
+        [InlineKeyboardButton("⚖️ Config Poids", callback_data="admin_weights")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_panel")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def admin_financial_analysis(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche l'analyse financière complète"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Charger les données
+    stats = load_stats()
+    orders = stats.get('monthly', [])
+    
+    expenses_approved = expenses_system.get_total_expenses('approved')
+    payroll_paid = payroll_system.get_total_paid()
+    
+    analysis = FinancialAnalytics.calculate_net_profit(orders, expenses_approved, payroll_paid)
+    
+    message = f"""📊 ANALYSE FINANCIÈRE COMPLÈTE
+
+━━━━━━━━━━━━━━━━━━━━━
+
+💰 CHIFFRE D'AFFAIRES
+CA Total TTC : {analysis['gross_revenue']:.2f}€
+CA Produits : {analysis['product_revenue']:.2f}€
+Frais Livraison : {analysis['delivery_fees']:.2f}€
+
+━━━━━━━━━━━━━━━━━━━━━
+
+💎 COÛTS & MARGES
+Coûts Produits : {analysis['total_costs']:.2f}€
+Marge Brute : {analysis['gross_margin']:.2f}€
+Taux de Marge : {analysis['margin_rate']:.1f}%
+
+━━━━━━━━━━━━━━━━━━━━━
+
+📦 DÉPENSES
+Consommables : {analysis['expenses']:.2f}€
+Payes Admins : {analysis['payroll']:.2f}€
+
+━━━━━━━━━━━━━━━━━━━━━
+
+✅ BÉNÉFICE NET
+{analysis['net_profit']:.2f}€
+
+━━━━━━━━━━━━━━━━━━━━━
+"""
+    
+    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_back_panel")]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
 
 # ==================== FONCTION MAIN ====================
 

@@ -6152,14 +6152,20 @@ ID : {expense['id']}
 async def admin_finances_margins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Affiche l'analyse des marges"""
     query = update.callback_query
-    await query.answer()
+    await query.answer("🔄 Actualisation...", show_alert=False)
     
     csv_path = DATA_DIR / "orders.csv"
     
+    # Ajouter timestamp pour éviter l'erreur
+    import time
+    timestamp = int(time.time())
+    
     if not csv_path.exists():
-        message = """📊 ANALYSE DES MARGES
+        message = f"""📊 ANALYSE DES MARGES
 
 Aucune commande enregistrée.
+
+Actualisé à {datetime.now().strftime('%H:%M:%S')}
 """
         keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_finances")]]
         
@@ -6176,7 +6182,7 @@ Aucune commande enregistrée.
             orders = list(reader)
         
         if not orders:
-            message = "📊 ANALYSE DES MARGES\n\nAucune donnée disponible."
+            message = f"📊 ANALYSE DES MARGES\n\nAucune donnée disponible.\n\nActualisé à {datetime.now().strftime('%H:%M:%S')}"
         else:
             # Calculs
             gross_revenue = sum(float(o.get('total', 0)) for o in orders)
@@ -6222,12 +6228,31 @@ Total : {approved_expenses + paid_payroll:.2f}€
 ━━━━━━━━━━━━━━━━━━━━━━
 
 ✨ BÉNÉFICE NET : {net_profit:.2f}€
+
+Actualisé à {datetime.now().strftime('%H:%M:%S')}
 """
         
         keyboard = [
-            [InlineKeyboardButton("🔄 Actualiser", callback_data="admin_finances_margins")],
+            [InlineKeyboardButton("🔄 Actualiser", callback_data=f"admin_finances_margins_{timestamp}")],
             [InlineKeyboardButton("🔙 Retour", callback_data="admin_finances")]
         ]
+        
+        try:
+            await query.edit_message_text(
+                message,
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        except Exception as e:
+            # Ignorer l'erreur "Message is not modified"
+            if "Message is not modified" not in str(e):
+                raise
+    
+    except Exception as e:
+        logger.error(f"Erreur analyse marges: {e}")
+        await query.edit_message_text(
+            f"{EMOJI_THEME['error']} Erreur lors de l'analyse.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Retour", callback_data="admin_finances")]])
+        )
         
         await query.edit_message_text(
             message,
@@ -6799,7 +6824,7 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(admin_request_pay, pattern="^admin_request_pay$"))
     application.add_handler(CallbackQueryHandler(admin_add_expense, pattern="^admin_add_expense$"))
     application.add_handler(CallbackQueryHandler(expense_category_selected, pattern="^expense_cat_"))
-    application.add_handler(CallbackQueryHandler(admin_finances_margins, pattern="^admin_finances_margins$"))
+    application.add_handler(CallbackQueryHandler(admin_finances_margins, pattern="^admin_finances_margins"))
     application.add_handler(CallbackQueryHandler(admin_finances_my_expenses, pattern="^admin_finances_my_expenses$"))
     application.add_handler(CallbackQueryHandler(admin_finances_all_expenses, pattern="^admin_finances_all_expenses$"))
     application.add_handler(CallbackQueryHandler(admin_finances_payroll, pattern="^admin_finances_payroll"))

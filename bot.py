@@ -6184,13 +6184,48 @@ Actualisé à {datetime.now().strftime('%H:%M:%S')}
         if not orders:
             message = f"📊 ANALYSE DES MARGES\n\nAucune donnée disponible.\n\nActualisé à {datetime.now().strftime('%H:%M:%S')}"
         else:
-            # Calculs
+            # Calculs revenus
             gross_revenue = sum(float(o.get('total', 0)) for o in orders)
             delivery_fees = sum(float(o.get('delivery_fee', 0)) for o in orders)
             product_revenue = gross_revenue - delivery_fees
             
-            # Estimer les coûts (simplifié - à améliorer)
-            total_costs = product_revenue * 0.7  # Estimation 70% coût
+            # CALCUL RÉEL DES COÛTS avec prix de revient
+            total_costs = 0
+            
+            for order in orders:
+                # Parser les produits de chaque commande
+                products_str = order.get('products', '')
+                
+                # Format attendu : "Coco (10.0g) × 1, K (5.0g) × 2"
+                if products_str:
+                    import re
+                    # Extraire chaque produit
+                    for product_entry in products_str.split(','):
+                        product_entry = product_entry.strip()
+                        
+                        # Chercher correspondance avec nos produits
+                        for product_name in PRODUCT_COSTS.keys():
+                            if product_name in product_entry:
+                                # Extraire quantité
+                                # Format: "Coco (10.0g) × 1" ou "Pills Squid-Game (5 unités) × 2"
+                                match_weight = re.search(r'\((\d+(?:\.\d+)?)\s*g\)', product_entry)
+                                match_units = re.search(r'\((\d+)\s*unités?\)', product_entry)
+                                match_multiplier = re.search(r'×\s*(\d+)', product_entry)
+                                
+                                quantity = 0
+                                multiplier = int(match_multiplier.group(1)) if match_multiplier else 1
+                                
+                                if match_weight:
+                                    quantity = float(match_weight.group(1)) * multiplier
+                                elif match_units:
+                                    quantity = int(match_units.group(1)) * multiplier
+                                
+                                if quantity > 0:
+                                    cost = PRODUCT_COSTS.get(product_name, 0) * quantity
+                                    total_costs += cost
+                                    
+                                break
+            
             gross_margin = product_revenue - total_costs
             margin_rate = (gross_margin / product_revenue * 100) if product_revenue > 0 else 0
             
@@ -6215,8 +6250,8 @@ CA total TTC : {gross_revenue:.2f}€
   • Livraisons : {delivery_fees:.2f}€ ({delivery_fees/gross_revenue*100:.1f}%)
   • Produits : {product_revenue:.2f}€ ({product_revenue/gross_revenue*100:.1f}%)
 
-💰 MARGES
-Coûts estimés : {total_costs:.2f}€
+💰 MARGES (PRIX RÉELS)
+Coûts produits : {total_costs:.2f}€
 Marge brute : {gross_margin:.2f}€
 Taux marge : {margin_rate:.1f}%
 
@@ -6465,17 +6500,50 @@ Aucune donnée disponible.
     
     try:
         import csv as csv_module
+        import re
         with open(csv_path, 'r', encoding='utf-8') as f:
             reader = csv_module.DictReader(f)
             orders = list(reader)
         
-        # Calculs financiers
+        # Calculs revenus
         gross_revenue = sum(float(o.get('total', 0)) for o in orders)
         delivery_fees = sum(float(o.get('delivery_fee', 0)) for o in orders)
         product_revenue = gross_revenue - delivery_fees
         
-        # Coûts estimés
-        total_costs = product_revenue * 0.7
+        # CALCUL RÉEL DES COÛTS avec prix de revient
+        total_costs = 0
+        
+        for order in orders:
+            # Parser les produits de chaque commande
+            products_str = order.get('products', '')
+            
+            if products_str:
+                # Extraire chaque produit
+                for product_entry in products_str.split(','):
+                    product_entry = product_entry.strip()
+                    
+                    # Chercher correspondance avec nos produits
+                    for product_name in PRODUCT_COSTS.keys():
+                        if product_name in product_entry:
+                            # Extraire quantité
+                            match_weight = re.search(r'\((\d+(?:\.\d+)?)\s*g\)', product_entry)
+                            match_units = re.search(r'\((\d+)\s*unités?\)', product_entry)
+                            match_multiplier = re.search(r'×\s*(\d+)', product_entry)
+                            
+                            quantity = 0
+                            multiplier = int(match_multiplier.group(1)) if match_multiplier else 1
+                            
+                            if match_weight:
+                                quantity = float(match_weight.group(1)) * multiplier
+                            elif match_units:
+                                quantity = int(match_units.group(1)) * multiplier
+                            
+                            if quantity > 0:
+                                cost = PRODUCT_COSTS.get(product_name, 0) * quantity
+                                total_costs += cost
+                                
+                            break
+        
         gross_margin = product_revenue - total_costs
         
         # Dépenses
@@ -6489,6 +6557,10 @@ Aucune donnée disponible.
         # Bénéfice net
         net_profit = gross_margin - approved_expenses - paid_payroll
         
+        # Timestamp pour éviter erreur
+        import time
+        timestamp = int(time.time())
+        
         message = f"""📈 BILAN FINANCIER COMPLET
 
 Période : Ce mois
@@ -6501,8 +6573,8 @@ CA total TTC : {gross_revenue:.2f}€
 • Livraisons : {delivery_fees:.2f}€
 • Produits : {product_revenue:.2f}€
 
-💰 MARGES
-Coûts : {total_costs:.2f}€
+💰 MARGES (PRIX RÉELS)
+Coûts produits : {total_costs:.2f}€
 Marge brute : {gross_margin:.2f}€
 Taux : {(gross_margin/product_revenue*100):.1f}%
 
@@ -6516,18 +6588,24 @@ Total : {approved_expenses + paid_payroll:.2f}€
 ✨ BÉNÉFICE NET : {net_profit:.2f}€
 
 💡 Taux profit : {(net_profit/gross_revenue*100):.1f}%
+
+Actualisé à {datetime.now().strftime('%H:%M:%S')}
 """
         
         keyboard = [
-            [InlineKeyboardButton("🔄 Actualiser", callback_data="admin_finances_full_report")],
+            [InlineKeyboardButton("🔄 Actualiser", callback_data=f"admin_finances_full_report_{timestamp}")],
             [InlineKeyboardButton("💰 Finances", callback_data="admin_finances")],
             [InlineKeyboardButton("🏠 Panel", callback_data="admin_back_panel")]
         ]
         
-        await query.edit_message_text(
-            message,
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        try:
+            await query.edit_message_text(
+                message,
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        except Exception as e:
+            if "Message is not modified" not in str(e):
+                raise
     
     except Exception as e:
         logger.error(f"Erreur bilan complet: {e}")
@@ -6828,7 +6906,7 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(admin_finances_my_expenses, pattern="^admin_finances_my_expenses$"))
     application.add_handler(CallbackQueryHandler(admin_finances_all_expenses, pattern="^admin_finances_all_expenses$"))
     application.add_handler(CallbackQueryHandler(admin_finances_payroll, pattern="^admin_finances_payroll"))
-    application.add_handler(CallbackQueryHandler(admin_finances_full_report, pattern="^admin_finances_full_report$"))
+    application.add_handler(CallbackQueryHandler(admin_finances_full_report, pattern="^admin_finances_full_report"))
     
     # Callbacks admin - prix de revient
     application.add_handler(CallbackQueryHandler(admin_costs, pattern="^admin_costs$"))

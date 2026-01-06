@@ -2996,6 +2996,9 @@ Choisissez une section :
             InlineKeyboardButton("👥 Gérer Admins", callback_data="admin_manage_admins"),
             InlineKeyboardButton("💼 Gestion Salaires", callback_data="admin_salary_config")
         ])
+        keyboard.append([
+            InlineKeyboardButton("📒 Livre de Comptes", callback_data="admin_ledger")
+        ])
     
     # Paramètres (admin+)
     if level in ['super_admin', 'admin']:
@@ -5013,6 +5016,19 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await receive_commission_value(update, context)
         return
     
+    # États: Livre de comptes (super-admin)
+    if context.user_data.get('awaiting_ledger_description'):
+        await receive_ledger_description(update, context)
+        return
+    
+    if context.user_data.get('awaiting_ledger_amount'):
+        await receive_ledger_amount(update, context)
+        return
+    
+    if context.user_data.get('awaiting_ledger_balance'):
+        await receive_ledger_balance(update, context)
+        return
+    
     # Message par défaut
     await update.message.reply_text(
         f"{EMOJI_THEME['info']} Utilisez /start pour accéder au menu principal."
@@ -5045,6 +5061,12 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop('editing_order_delivery', None)
     context.user_data.pop('setting_fixed_salary', None)
     context.user_data.pop('setting_commission', None)
+    context.user_data.pop('awaiting_ledger_description', None)
+    context.user_data.pop('awaiting_ledger_amount', None)
+    context.user_data.pop('awaiting_ledger_balance', None)
+    context.user_data.pop('ledger_entry_type', None)
+    context.user_data.pop('ledger_category', None)
+    context.user_data.pop('ledger_description', None)
     context.user_data.pop('new_admin_id', None)
     context.user_data.pop('new_admin_level', None)
     context.user_data.pop('admin_action', None)
@@ -8253,6 +8275,556 @@ Une fois livrée, cliquez sur "Marquer livrée".
     
     logger.info(f"✅ Commande marquée prête: {order_id}")
 
+# ==================== ADMIN: LIVRE DE COMPTES ====================
+
+def load_ledger():
+    """Charge le livre de comptes"""
+    ledger_file = DATA_DIR / "ledger.json"
+    if ledger_file.exists():
+        with open(ledger_file, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {
+        "entries": [],
+        "balance": 0,
+        "last_updated": datetime.now().isoformat()
+    }
+
+def save_ledger(data):
+    """Sauvegarde le livre de comptes"""
+    ledger_file = DATA_DIR / "ledger.json"
+    data['last_updated'] = datetime.now().isoformat()
+    with open(ledger_file, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+def add_ledger_entry(entry_type, amount, description, category, reference_id=None):
+    """Ajoute une entrée dans le livre de comptes
+    
+    entry_type: 'income' ou 'expense'
+    amount: montant positif
+    description: texte libre
+    category: catégorie (Vente, Salaire, Consommable, etc.)
+    reference_id: ID de référence (order_id, payment_id, etc.)
+    """
+    ledger = load_ledger()
+    
+    entry = {
+        "id": f"LED-{int(datetime.now().timestamp())}",
+        "date": datetime.now().isoformat(),
+        "type": entry_type,
+        "amount": float(amount),
+        "description": description,
+        "category": category,
+        "reference_id": reference_id,
+        "balance_after": 0  # sera calculé
+    }
+    
+    # Calculer nouveau solde
+    if entry_type == 'income':
+        ledger['balance'] += amount
+    else:  # expense
+        ledger['balance'] -= amount
+    
+    entry['balance_after'] = ledger['balance']
+    
+    # Ajouter l'entrée
+    ledger['entries'].insert(0, entry)  # Plus récent en premier
+    
+    save_ledger(ledger)
+    logger.info(f"📒 Livre de comptes: {entry_type} {amount:.2f}€ - {description}")
+    
+    return entry
+
+@error_handler
+async def admin_ledger(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu principal livre de comptes (super-admin uniquement)"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    ledger = load_ledger()
+    
+    # Statistiques rapides
+    total_income = sum(e['amount'] for e in ledger['entries'] if e['type'] == 'income')
+    total_expenses = sum(e['amount'] for e in ledger['entries'] if e['type'] == 'expense')
+    balance = ledger.get('balance', 0)
+    
+    message = f"""📒 LIVRE DE COMPTES
+
+💰 SOLDE ACTUEL : {balance:.2f}€
+
+📊 STATISTIQUES :
+• Entrées : {total_income:.2f}€
+• Sorties : {total_expenses:.2f}€
+• Total transactions : {len(ledger['entries'])}
+
+Que voulez-vous faire ?
+"""
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("📥 Voir Entrées", callback_data="ledger_income"),
+            InlineKeyboardButton("📤 Voir Sorties", callback_data="ledger_expenses")
+        ],
+        [
+            InlineKeyboardButton("📋 Toutes transactions", callback_data="ledger_all")
+        ],
+        [
+            InlineKeyboardButton("➕ Ajouter Entrée", callback_data="ledger_add_income"),
+            InlineKeyboardButton("➖ Ajouter Sortie", callback_data="ledger_add_expense")
+        ],
+        [
+            InlineKeyboardButton("✏️ Modifier Solde", callback_data="ledger_edit_balance")
+        ],
+        [
+            InlineKeyboardButton("📊 Rapport Mensuel", callback_data="ledger_monthly_report")
+        ],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_panel")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def ledger_view_entries(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche les transactions (filtrées par type)"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    # Déterminer le filtre
+    if "income" in query.data:
+        entry_filter = "income"
+        title = "📥 ENTRÉES D'ARGENT"
+        emoji = "💰"
+    elif "expenses" in query.data:
+        entry_filter = "expense"
+        title = "📤 SORTIES D'ARGENT"
+        emoji = "💸"
+    else:
+        entry_filter = None
+        title = "📋 TOUTES LES TRANSACTIONS"
+        emoji = "💵"
+    
+    ledger = load_ledger()
+    
+    # Filtrer les entrées
+    if entry_filter:
+        entries = [e for e in ledger['entries'] if e['type'] == entry_filter][:20]
+    else:
+        entries = ledger['entries'][:20]
+    
+    if not entries:
+        message = f"""{title}
+
+Aucune transaction trouvée.
+"""
+    else:
+        total = sum(e['amount'] for e in entries)
+        
+        message = f"""{title}
+
+{len(entries)} transaction(s) - Total: {total:.2f}€
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+"""
+        
+        for entry in entries:
+            date_str = entry['date'][:10]
+            sign = "+" if entry['type'] == 'income' else "-"
+            type_emoji = "💰" if entry['type'] == 'income' else "💸"
+            
+            message += f"""{type_emoji} {entry['category']}
+{sign}{entry['amount']:.2f}€ | Solde: {entry['balance_after']:.2f}€
+📝 {entry['description']}
+📅 {date_str}
+
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_ledger")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def ledger_add_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Demande le type d'entrée à ajouter"""
+    query = update.callback_query
+    await query.answer()
+    
+    entry_type = "income" if "income" in query.data else "expense"
+    
+    if entry_type == "income":
+        message = """➕ AJOUTER ENTRÉE D'ARGENT
+
+Sélectionnez la catégorie :
+"""
+        categories = [
+            ("💰 Vente", "ledger_cat_income_Vente"),
+            ("🎁 Remboursement", "ledger_cat_income_Remboursement"),
+            ("💵 Apport", "ledger_cat_income_Apport"),
+            ("📦 Autre entrée", "ledger_cat_income_Autre")
+        ]
+    else:
+        message = """➖ AJOUTER SORTIE D'ARGENT
+
+Sélectionnez la catégorie :
+"""
+        categories = [
+            ("💸 Salaire", "ledger_cat_expense_Salaire"),
+            ("🧾 Consommable", "ledger_cat_expense_Consommable"),
+            ("📦 Achat stock", "ledger_cat_expense_Stock"),
+            ("🚗 Frais divers", "ledger_cat_expense_Divers"),
+            ("📤 Autre sortie", "ledger_cat_expense_Autre")
+        ]
+    
+    keyboard = []
+    for label, callback in categories:
+        keyboard.append([InlineKeyboardButton(label, callback_data=callback)])
+    
+    keyboard.append([InlineKeyboardButton("❌ Annuler", callback_data="admin_ledger")])
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def ledger_select_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Catégorie sélectionnée, demander description"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Extraire type et catégorie
+    parts = query.data.replace("ledger_cat_", "").split("_")
+    entry_type = parts[0]  # income ou expense
+    category = parts[1]  # Vente, Salaire, etc.
+    
+    context.user_data['ledger_entry_type'] = entry_type
+    context.user_data['ledger_category'] = category
+    
+    type_label = "entrée" if entry_type == "income" else "sortie"
+    
+    message = f"""📝 {category.upper()}
+
+Entrez la description :
+Exemple : Vente commande ORD-123456
+
+Type : {type_label}
+Catégorie : {category}
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_ledger")]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    context.user_data['awaiting_ledger_description'] = True
+
+@error_handler
+async def receive_ledger_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Réceptionne la description"""
+    if not is_super_admin(update.effective_user.id):
+        return
+    
+    if not context.user_data.get('awaiting_ledger_description'):
+        return
+    
+    description = update.message.text.strip()
+    
+    if len(description) > 200:
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} Description trop longue (max 200 caractères)."
+        )
+        return
+    
+    context.user_data['ledger_description'] = description
+    context.user_data.pop('awaiting_ledger_description', None)
+    
+    # Demander montant
+    entry_type = context.user_data.get('ledger_entry_type')
+    type_label = "reçu" if entry_type == "income" else "dépensé"
+    
+    message = f"""💰 MONTANT
+
+Description : {description}
+
+Entrez le montant {type_label} :
+Exemple : 550.50
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_ledger")]]
+    
+    await update.message.reply_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    context.user_data['awaiting_ledger_amount'] = True
+
+@error_handler
+async def receive_ledger_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Réceptionne le montant et enregistre"""
+    if not is_super_admin(update.effective_user.id):
+        return
+    
+    if not context.user_data.get('awaiting_ledger_amount'):
+        return
+    
+    try:
+        amount = float(update.message.text.strip())
+        
+        if amount <= 0:
+            await update.message.reply_text(
+                f"{EMOJI_THEME['error']} Le montant doit être positif."
+            )
+            return
+        
+        if amount > 1000000:
+            await update.message.reply_text(
+                f"{EMOJI_THEME['error']} Montant trop élevé (max 1,000,000€)."
+            )
+            return
+        
+        # Récupérer les données
+        entry_type = context.user_data.get('ledger_entry_type')
+        category = context.user_data.get('ledger_category')
+        description = context.user_data.get('ledger_description')
+        
+        # Ajouter l'entrée
+        entry = add_ledger_entry(entry_type, amount, description, category)
+        
+        # Nettoyer
+        context.user_data.pop('ledger_entry_type', None)
+        context.user_data.pop('ledger_category', None)
+        context.user_data.pop('ledger_description', None)
+        context.user_data.pop('awaiting_ledger_amount', None)
+        
+        # Confirmation
+        sign = "+" if entry_type == "income" else "-"
+        type_emoji = "📥" if entry_type == "income" else "📤"
+        
+        message = f"""{EMOJI_THEME['success']} TRANSACTION ENREGISTRÉE
+
+{type_emoji} {category}
+{sign}{amount:.2f}€
+
+📝 {description}
+💰 Nouveau solde : {entry['balance_after']:.2f}€
+
+Transaction ID : {entry['id']}
+"""
+        
+        keyboard = [
+            [InlineKeyboardButton("📒 Livre de Comptes", callback_data="admin_ledger")],
+            [InlineKeyboardButton("🏠 Panel", callback_data="admin_back_panel")]
+        ]
+        
+        await update.message.reply_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    
+    except ValueError:
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} Montant invalide. Utilisez un nombre.\n"
+            "Exemple : 550.50"
+        )
+
+@error_handler
+async def ledger_edit_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Permet de corriger le solde manuellement"""
+    query = update.callback_query
+    await query.answer()
+    
+    ledger = load_ledger()
+    current_balance = ledger.get('balance', 0)
+    
+    message = f"""✏️ MODIFIER LE SOLDE
+
+Solde actuel : {current_balance:.2f}€
+
+⚠️ ATTENTION : Cette action modifie directement le solde.
+Utilisez uniquement pour corriger une erreur.
+
+Entrez le nouveau solde :
+Exemple : 5420.00
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_ledger")]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    context.user_data['awaiting_ledger_balance'] = True
+
+@error_handler
+async def receive_ledger_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Réceptionne nouveau solde"""
+    if not is_super_admin(update.effective_user.id):
+        return
+    
+    if not context.user_data.get('awaiting_ledger_balance'):
+        return
+    
+    try:
+        new_balance = float(update.message.text.strip())
+        
+        if abs(new_balance) > 10000000:
+            await update.message.reply_text(
+                f"{EMOJI_THEME['error']} Solde trop élevé (max ±10,000,000€)."
+            )
+            return
+        
+        ledger = load_ledger()
+        old_balance = ledger.get('balance', 0)
+        
+        # Créer une entrée de correction
+        diff = new_balance - old_balance
+        
+        if diff > 0:
+            entry = add_ledger_entry(
+                'income',
+                diff,
+                f"Correction solde : {old_balance:.2f}€ → {new_balance:.2f}€",
+                "Correction"
+            )
+        elif diff < 0:
+            entry = add_ledger_entry(
+                'expense',
+                abs(diff),
+                f"Correction solde : {old_balance:.2f}€ → {new_balance:.2f}€",
+                "Correction"
+            )
+        else:
+            await update.message.reply_text(
+                f"{EMOJI_THEME['warning']} Le solde est déjà à {new_balance:.2f}€"
+            )
+            context.user_data.pop('awaiting_ledger_balance', None)
+            return
+        
+        context.user_data.pop('awaiting_ledger_balance', None)
+        
+        message = f"""{EMOJI_THEME['success']} SOLDE MODIFIÉ
+
+Ancien solde : {old_balance:.2f}€
+Nouveau solde : {new_balance:.2f}€
+Différence : {diff:+.2f}€
+
+Une entrée de correction a été créée.
+"""
+        
+        keyboard = [
+            [InlineKeyboardButton("📒 Livre de Comptes", callback_data="admin_ledger")],
+            [InlineKeyboardButton("🏠 Panel", callback_data="admin_back_panel")]
+        ]
+        
+        await update.message.reply_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    
+    except ValueError:
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} Montant invalide. Utilisez un nombre.\n"
+            "Exemple : 5420.00"
+        )
+
+@error_handler
+async def ledger_monthly_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Génère un rapport mensuel"""
+    query = update.callback_query
+    await query.answer()
+    
+    ledger = load_ledger()
+    
+    # Filtrer ce mois
+    now = datetime.now()
+    month_start = datetime(now.year, now.month, 1)
+    
+    entries_this_month = [
+        e for e in ledger['entries']
+        if datetime.fromisoformat(e['date']) >= month_start
+    ]
+    
+    if not entries_this_month:
+        message = """📊 RAPPORT MENSUEL
+
+Aucune transaction ce mois.
+"""
+    else:
+        income_entries = [e for e in entries_this_month if e['type'] == 'income']
+        expense_entries = [e for e in entries_this_month if e['type'] == 'expense']
+        
+        total_income = sum(e['amount'] for e in income_entries)
+        total_expenses = sum(e['amount'] for e in expense_entries)
+        net = total_income - total_expenses
+        
+        # Par catégorie
+        income_by_cat = {}
+        expense_by_cat = {}
+        
+        for e in income_entries:
+            cat = e.get('category', 'Autre')
+            income_by_cat[cat] = income_by_cat.get(cat, 0) + e['amount']
+        
+        for e in expense_entries:
+            cat = e.get('category', 'Autre')
+            expense_by_cat[cat] = expense_by_cat.get(cat, 0) + e['amount']
+        
+        message = f"""📊 RAPPORT MENSUEL
+
+📅 {now.strftime('%B %Y')}
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+📥 ENTRÉES : {total_income:.2f}€
+"""
+        
+        for cat, amount in sorted(income_by_cat.items(), key=lambda x: x[1], reverse=True):
+            message += f"  • {cat}: {amount:.2f}€\n"
+        
+        message += f"""
+📤 SORTIES : {total_expenses:.2f}€
+"""
+        
+        for cat, amount in sorted(expense_by_cat.items(), key=lambda x: x[1], reverse=True):
+            message += f"  • {cat}: {amount:.2f}€\n"
+        
+        message += f"""
+━━━━━━━━━━━━━━━━━━━━━━
+
+💰 SOLDE NET : {net:+.2f}€
+
+📊 Transactions : {len(entries_this_month)}
+💰 Solde actuel : {ledger.get('balance', 0):.2f}€
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_ledger")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
 # ==================== CONFIGURATION DES HANDLERS ====================
 
 def setup_handlers(application):
@@ -8371,6 +8943,14 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(save_frequency, pattern="^freq_(monthly|weekly)_"))
     application.add_handler(CallbackQueryHandler(toggle_salary_active, pattern="^toggle_salary_"))
     application.add_handler(CallbackQueryHandler(salary_overview, pattern="^salary_overview$"))
+    
+    # Callbacks admin - livre de comptes
+    application.add_handler(CallbackQueryHandler(admin_ledger, pattern="^admin_ledger$"))
+    application.add_handler(CallbackQueryHandler(ledger_view_entries, pattern="^ledger_(income|expenses|all)$"))
+    application.add_handler(CallbackQueryHandler(ledger_add_entry, pattern="^ledger_add_(income|expense)$"))
+    application.add_handler(CallbackQueryHandler(ledger_select_category, pattern="^ledger_cat_"))
+    application.add_handler(CallbackQueryHandler(ledger_edit_balance, pattern="^ledger_edit_balance$"))
+    application.add_handler(CallbackQueryHandler(ledger_monthly_report, pattern="^ledger_monthly_report$"))
     
     # Callbacks admin - horaires
     application.add_handler(CallbackQueryHandler(admin_horaires, pattern="^admin_horaires$"))

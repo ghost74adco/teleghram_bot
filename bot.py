@@ -7825,6 +7825,97 @@ async def toggle_salary_active(update: Update, context: ContextTypes.DEFAULT_TYP
     )
 
 @error_handler
+async def set_payment_day(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Demande le jour de paiement"""
+    query = update.callback_query
+    await query.answer()
+    
+    admin_id = query.data.replace("set_day_", "")
+    
+    config = load_salary_config()
+    admin_config = config['admins'].get(str(admin_id), {})
+    
+    freq_type = admin_config.get('salary_type', 'monthly')
+    
+    if freq_type == 'monthly':
+        message = """📆 JOUR DE PAIEMENT MENSUEL
+
+Choisissez le jour du mois (1-31) :
+"""
+        keyboard = []
+        row = []
+        for day in range(1, 32):
+            row.append(InlineKeyboardButton(str(day), callback_data=f"payday_{admin_id}_{day}"))
+            if len(row) == 7:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+    else:  # weekly
+        message = """📆 JOUR DE PAIEMENT HEBDOMADAIRE
+
+Choisissez le jour de la semaine :
+"""
+        keyboard = [
+            [InlineKeyboardButton("Lundi", callback_data=f"payday_{admin_id}_1")],
+            [InlineKeyboardButton("Mardi", callback_data=f"payday_{admin_id}_2")],
+            [InlineKeyboardButton("Mercredi", callback_data=f"payday_{admin_id}_3")],
+            [InlineKeyboardButton("Jeudi", callback_data=f"payday_{admin_id}_4")],
+            [InlineKeyboardButton("Vendredi", callback_data=f"payday_{admin_id}_5")],
+            [InlineKeyboardButton("Samedi", callback_data=f"payday_{admin_id}_6")],
+            [InlineKeyboardButton("Dimanche", callback_data=f"payday_{admin_id}_7")]
+        ]
+    
+    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data=f"salary_admin_{admin_id}")])
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def save_payment_day(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sauvegarde le jour de paiement"""
+    query = update.callback_query
+    await query.answer()
+    
+    data_parts = query.data.replace("payday_", "").split("_")
+    admin_id = data_parts[0]
+    day = int(data_parts[1])
+    
+    config = load_salary_config()
+    
+    if str(admin_id) not in config['admins']:
+        admin_name = ADMINS.get(str(admin_id), {}).get('name', 'Admin')
+        config['admins'][str(admin_id)] = {
+            "name": admin_name,
+            "fixed_salary": 0,
+            "salary_type": "monthly",
+            "commission_type": "none",
+            "commission_value": 0,
+            "payment_day": 1,
+            "active": False
+        }
+    
+    config['admins'][str(admin_id)]['payment_day'] = day
+    save_salary_config(config)
+    
+    freq_type = config['admins'][str(admin_id)]['salary_type']
+    
+    if freq_type == 'monthly':
+        day_label = f"le {day} du mois"
+    else:
+        days = {1: "Lundi", 2: "Mardi", 3: "Mercredi", 4: "Jeudi", 5: "Vendredi", 6: "Samedi", 7: "Dimanche"}
+        day_label = f"chaque {days.get(day, 'Lundi')}"
+    
+    await query.edit_message_text(
+        f"{EMOJI_THEME['success']} Jour de paiement défini: {day_label}",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("📋 Voir configuration", callback_data=f"salary_admin_{admin_id}")
+        ]])
+    )
+
+@error_handler
 async def salary_overview(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Vue d'ensemble tous salaires avec remboursements"""
     query = update.callback_query
@@ -8465,21 +8556,62 @@ def import_existing_orders_to_ledger():
             reader = csv.DictReader(f)
             orders = list(reader)
         
+        logger.info(f"📒 {len(orders)} commande(s) trouvée(s) dans orders.csv")
+        
         # Filtrer les commandes livrées qui ne sont pas déjà dans le ledger
         ledger = load_ledger()
         existing_refs = {e.get('reference_id') for e in ledger['entries'] if e.get('reference_id')}
         
+        logger.info(f"📒 {len(existing_refs)} commande(s) déjà dans le livre")
+        
         imported = 0
+        skipped = 0
+        
         for order in orders:
             order_id = order.get('order_id')
-            status = order.get('status', '')
+            status = order.get('status', '').strip()
             
-            # Importer seulement les commandes livrées pas déjà importées
-            if status == 'Livrée' and order_id not in existing_refs:
+            logger.info(f"📒 Commande {order_id}: statut='{status}'")
+            
+            # Accepter: Livrée, vide (anciennes commandes), ou commandes validées
+            # On importe TOUTES les commandes sauf celles "En attente"
+            should_import = False
+            
+            if order_id in existing_refs:
+                logger.info(f"📒 Commande {order_id}: déjà importée, skip")
+                skipped += 1
+                continue
+            
+            # Importer si:
+            # - Status == "Livrée"
+            # - Status vide (anciennes commandes avant workflow)
+            # - Status == "Validée" (validées mais pas encore workflow complet)
+            if status == 'Livrée':
+                should_import = True
+                logger.info(f"📒 Commande {order_id}: statut Livrée, import")
+            elif status == '' or status == 'Validée' or status == 'Prête':
+                # Pour les anciennes commandes sans statut, on les importe aussi
+                should_import = True
+                logger.info(f"📒 Commande {order_id}: ancien système ou validée, import")
+            elif status == 'En attente':
+                logger.info(f"📒 Commande {order_id}: en attente, skip")
+                skipped += 1
+                continue
+            else:
+                # Autre statut, on importe quand même pour être sûr
+                should_import = True
+                logger.info(f"📒 Commande {order_id}: statut inconnu '{status}', import par sécurité")
+            
+            if should_import and order_id not in existing_refs:
                 try:
                     total = float(order.get('total', 0))
                     first_name = order.get('first_name', 'Client')
                     date = order.get('date', datetime.now().isoformat())
+                    
+                    if total <= 0:
+                        logger.warning(f"📒 Commande {order_id}: montant invalide {total}, skip")
+                        skipped += 1
+                        continue
                     
                     # Créer l'entrée avec la date originale
                     entry = {
@@ -8501,10 +8633,11 @@ def import_existing_orders_to_ledger():
                     ledger['entries'].append(entry)
                     imported += 1
                     
-                    logger.info(f"📒 Import commande {order_id}: {total:.2f}€")
+                    logger.info(f"✅ Import commande {order_id}: {total:.2f}€")
                     
                 except Exception as e:
-                    logger.error(f"Erreur import commande {order_id}: {e}")
+                    logger.error(f"❌ Erreur import commande {order_id}: {e}")
+                    skipped += 1
         
         if imported > 0:
             # Trier par date (plus récent en premier)
@@ -8512,7 +8645,7 @@ def import_existing_orders_to_ledger():
             save_ledger(ledger)
             logger.info(f"✅ {imported} commande(s) importée(s) dans le livre de comptes")
         else:
-            logger.info("📒 Aucune nouvelle commande à importer")
+            logger.info(f"📒 Aucune nouvelle commande à importer (skipped: {skipped})")
         
         return imported
         
@@ -9188,6 +9321,8 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(save_frequency, pattern="^freq_(monthly|weekly)_"))
     application.add_handler(CallbackQueryHandler(toggle_salary_active, pattern="^toggle_salary_"))
     application.add_handler(CallbackQueryHandler(salary_overview, pattern="^salary_overview$"))
+    application.add_handler(CallbackQueryHandler(set_payment_day, pattern="^set_day_"))
+    application.add_handler(CallbackQueryHandler(save_payment_day, pattern="^payday_"))
     
     # Callbacks admin - livre de comptes
     application.add_handler(CallbackQueryHandler(admin_ledger, pattern="^admin_ledger$"))

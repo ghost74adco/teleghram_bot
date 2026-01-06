@@ -343,6 +343,21 @@ def generate_order_id() -> str:
     timestamp = int(datetime.now().timestamp())
     return f"CMD{timestamp}"
 
+# ==================== FONCTION D'ANONYMISATION ====================
+
+def anonymize_id(user_id: int) -> str:
+    """Anonymise un ID utilisateur avec hash"""
+    # Créer un hash court et lisible de l'ID
+    hash_obj = hashlib.sha256(str(user_id).encode())
+    hash_hex = hash_obj.hexdigest()[:8].upper()
+    return f"User-{hash_hex}"
+
+def anonymize_admin_id(admin_id: int) -> str:
+    """Anonymise un ID admin avec hash"""
+    hash_obj = hashlib.sha256(str(admin_id).encode())
+    hash_hex = hash_obj.hexdigest()[:8].upper()
+    return f"Admin-{hash_hex}"
+
 # ==================== DÉCORATEUR ERROR HANDLER ====================
 
 def error_handler(func):
@@ -602,7 +617,9 @@ def format_admin_list() -> str:
         name = info.get('name', 'Admin')
         added_at = info.get('added_at', 'N/A')
         
-        admin_str = f"• {name}\n  ID: {user_id}\n  Depuis: {added_at[:10]}"
+        # Anonymiser l'ID
+        anonymous_id = anonymize_admin_id(int(user_id))
+        admin_str = f"• {name}\n  ID: {anonymous_id}\n  Depuis: {added_at[:10]}"
         
         if level == 'super_admin':
             super_admins.append(admin_str)
@@ -1656,12 +1673,15 @@ async def notify_admin_new_user(context, user_id, user_data):
     last_name = user_data.get("last_name", "")
     full_name = f"{first_name} {last_name}".strip()
     
+    # Anonymiser l'ID
+    anonymous_id = anonymize_id(user_id)
+    
     notification = f"""{EMOJI_THEME['celebration']} NOUVELLE CONNEXION
 
 👤 Utilisateur :
 - Nom : {full_name}
 - Username : @{username if username != 'N/A' else 'Non défini'}
-- ID : {user_id}
+- ID : {anonymous_id}
 
 📅 Date : {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
 
@@ -1681,11 +1701,14 @@ async def notify_admin_new_order(context, order_data, user_info):
     """Notifie l'admin d'une nouvelle commande"""
     total_info = order_data.get('total_info', {})
     
+    # Anonymiser l'ID
+    anonymous_id = anonymize_id(order_data['user_id'])
+    
     notification = f"""{EMOJI_THEME['cart']} NOUVELLE COMMANDE
 
 📋 Commande : {order_data['order_id']}
 👤 Client : {user_info['first_name']} (@{user_info['username']})
-🆔 ID : {order_data['user_id']}
+🆔 ID : {anonymous_id}
 
 🛍️ PANIER :
 {order_data['products_display']}
@@ -1764,12 +1787,15 @@ async def notify_admin_out_of_stock(context, product_name):
 
 async def notify_admin_vip_client(context, user_id, user_info, total_spent):
     """Notifie qu'un client devient VIP"""
+    # Anonymiser l'ID
+    anonymous_id = anonymize_id(user_id)
+    
     notification = f"""{EMOJI_THEME['vip']} NOUVEAU CLIENT VIP
 
 👤 Client :
 - Nom : {user_info['first_name']}
 - Username : @{user_info['username']}
-- ID : {user_id}
+- ID : {anonymous_id}
 
 {EMOJI_THEME['money']} Total dépensé : {total_spent:.2f}€
 
@@ -2020,6 +2046,9 @@ async def get_my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     is_already_admin = is_admin(user_id)
     
+    # Afficher l'ID RÉEL uniquement à l'utilisateur (pour communiquer aux admins)
+    # Mais anonymiser dans tous les messages publics/logs
+    
     if is_already_admin:
         admin_info = get_admin_info(user_id)
         level = admin_info.get('level', 'admin')
@@ -2043,6 +2072,12 @@ async def get_my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_already_admin:
         message += """
 ℹ️  Pour devenir administrateur :
+1. Copiez votre ID ci-dessus
+2. Envoyez-le à l'administrateur principal
+3. Attendez la validation
+
+⚠️ IMPORTANT : Gardez votre ID confidentiel
+"""
 1. Copiez votre ID ci-dessus
 2. Envoyez-le à l'administrateur principal
 3. Attendez la validation
@@ -3207,6 +3242,12 @@ async def admin_add_admin_start(update: Update, context: ContextTypes.DEFAULT_TY
     query = update.callback_query
     await query.answer()
     
+    user_id = query.from_user.id
+    
+    if not is_super_admin(user_id):
+        await query.answer("Accès refusé - Super-admin requis", show_alert=True)
+        return
+    
     message = f"""➕ AJOUTER UN ADMINISTRATEUR
 
 Pour ajouter un nouvel administrateur :
@@ -3227,7 +3268,9 @@ Envoyez l'ID Telegram du nouvel admin :
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
     
-    return ADMIN_ADD_ID
+    # Utiliser user_data au lieu de ConversationHandler
+    context.user_data['awaiting_admin_id'] = True
+    context.user_data['admin_action'] = 'add'
 
 @error_handler
 async def admin_remove_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3261,9 +3304,12 @@ async def admin_remove_admin_start(update: Update, context: ContextTypes.DEFAULT
         
         icon = level_icons.get(level, '👤')
         
+        # Anonymiser l'ID
+        anonymous_id = anonymize_admin_id(int(admin_id))
+        
         keyboard.append([
             InlineKeyboardButton(
-                f"{icon} {name} (ID: {admin_id})",
+                f"{icon} {name} (ID: {anonymous_id})",
                 callback_data=f"admin_remove_{admin_id}"
             )
         ])
@@ -4202,6 +4248,16 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await receive_promo_creation_data(update, context)
         return
     
+    # État: En attente d'ID admin (admin)
+    if context.user_data.get('awaiting_admin_id'):
+        await receive_admin_id(update, context)
+        return
+    
+    # État: En attente du nom admin (admin)
+    if context.user_data.get('awaiting_admin_name'):
+        await receive_admin_name(update, context)
+        return
+    
     # Message par défaut
     await update.message.reply_text(
         f"{EMOJI_THEME['info']} Utilisez /start pour accéder au menu principal."
@@ -4219,6 +4275,12 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop('awaiting_price', None)
     context.user_data.pop('awaiting_stock', None)
     context.user_data.pop('awaiting_promo_creation', None)
+    context.user_data.pop('awaiting_admin_id', None)
+    context.user_data.pop('awaiting_admin_level', None)
+    context.user_data.pop('awaiting_admin_name', None)
+    context.user_data.pop('new_admin_id', None)
+    context.user_data.pop('new_admin_level', None)
+    context.user_data.pop('admin_action', None)
     context.user_data.pop('pending_product', None)
     
     await update.message.reply_text(
@@ -4285,6 +4347,189 @@ async def receive_new_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except ValueError:
         await update.message.reply_text(
             f"{EMOJI_THEME['error']} Prix invalide. Entrez un nombre."
+        )
+
+# ==================== ADMIN: RÉCEPTION ID ADMIN ====================
+
+@error_handler
+async def receive_admin_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Réceptionne l'ID du nouvel admin"""
+    if not is_admin(update.effective_user.id):
+        return
+    
+    user_id = update.effective_user.id
+    admin_action = context.user_data.get('admin_action', 'add')
+    
+    try:
+        new_admin_id = int(update.message.text.strip())
+        
+        if admin_action == 'add':
+            # Vérifier que l'utilisateur n'est pas déjà admin
+            if is_admin(new_admin_id):
+                await update.message.reply_text(
+                    f"{EMOJI_THEME['error']} Cet utilisateur est déjà administrateur."
+                )
+                return
+            
+            # Demander le niveau d'admin
+            context.user_data['new_admin_id'] = new_admin_id
+            context.user_data['awaiting_admin_id'] = False
+            context.user_data['awaiting_admin_level'] = True
+            
+            # Anonymiser l'ID dans le message
+            anonymous_id = anonymize_id(new_admin_id)
+            
+            message = f"""👤 NIVEAU D'ADMINISTRATION
+
+ID: {anonymous_id}
+
+Choisissez le niveau d'accès :
+
+👑 SUPER-ADMIN
+   • Accès complet
+   • Gestion des admins
+   • Tous les privilèges
+
+🔐 ADMIN
+   • Gestion produits/stocks/prix
+   • Gestion commandes
+   • Pas de gestion des admins
+
+🛡️ MODÉRATEUR
+   • Vue des commandes
+   • Support client
+   • Pas de modifications
+"""
+            
+            keyboard = [
+                [InlineKeyboardButton("👑 Super-admin", callback_data="admin_level_super_admin")],
+                [InlineKeyboardButton("🔐 Admin", callback_data="admin_level_admin")],
+                [InlineKeyboardButton("🛡️ Modérateur", callback_data="admin_level_moderator")],
+                [InlineKeyboardButton("❌ Annuler", callback_data="admin_manage_admins")]
+            ]
+            
+            await update.message.reply_text(
+                message,
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        
+    except ValueError:
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} ID invalide. L'ID doit être un nombre.\\n\\n"
+            "Exemple: 123456789\\n\\n"
+            "Demandez à l'utilisateur d'envoyer /myid au bot pour obtenir son ID."
+        )
+
+@error_handler
+async def admin_level_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Traite la sélection du niveau d'admin"""
+    query = update.callback_query
+    await query.answer()
+    
+    level = query.data.replace("admin_level_", "")
+    new_admin_id = context.user_data.get('new_admin_id')
+    
+    if not new_admin_id:
+        await query.answer("Erreur: ID admin non trouvé", show_alert=True)
+        return
+    
+    # Demander le nom
+    context.user_data['new_admin_level'] = level
+    context.user_data['awaiting_admin_level'] = False
+    context.user_data['awaiting_admin_name'] = True
+    
+    level_names = {
+        'super_admin': '👑 Super-admin',
+        'admin': '🔐 Admin',
+        'moderator': '🛡️ Modérateur'
+    }
+    
+    # Anonymiser l'ID
+    anonymous_id = anonymize_id(new_admin_id)
+    
+    message = f"""✏️ NOM DE L'ADMINISTRATEUR
+
+ID: {anonymous_id}
+Niveau: {level_names.get(level, level)}
+
+Entrez le nom/pseudo de cet administrateur :
+(Ce nom sera affiché dans la liste des admins)
+
+Exemple: John Doe
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_manage_admins")]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def receive_admin_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Réceptionne le nom du nouvel admin et finalise l'ajout"""
+    if not is_admin(update.effective_user.id):
+        return
+    
+    user_id = update.effective_user.id
+    new_admin_id = context.user_data.get('new_admin_id')
+    level = context.user_data.get('new_admin_level')
+    name = update.message.text.strip()
+    
+    if len(name) < 2:
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} Le nom doit contenir au moins 2 caractères."
+        )
+        return
+    
+    if len(name) > 50:
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} Le nom ne peut pas dépasser 50 caractères."
+        )
+        return
+    
+    # Ajouter l'admin
+    success = await add_admin(new_admin_id, level, user_id, name)
+    
+    # Nettoyer user_data
+    context.user_data.pop('awaiting_admin_name', None)
+    context.user_data.pop('new_admin_id', None)
+    context.user_data.pop('new_admin_level', None)
+    context.user_data.pop('admin_action', None)
+    
+    if success:
+        level_names = {
+            'super_admin': '👑 Super-admin',
+            'admin': '🔐 Admin',
+            'moderator': '🛡️ Modérateur'
+        }
+        
+        # Anonymiser l'ID dans le message
+        anonymous_id = anonymize_id(new_admin_id)
+        
+        message = f"""{EMOJI_THEME['success']} ADMIN AJOUTÉ
+
+👤 Nom: {name}
+🆔 ID: {anonymous_id}
+📊 Niveau: {level_names.get(level, level)}
+
+L'utilisateur peut maintenant utiliser /admin pour accéder au panel.
+"""
+        
+        keyboard = [
+            [InlineKeyboardButton("📋 Liste admins", callback_data="admin_list_admins")],
+            [InlineKeyboardButton("🏠 Retour Panel", callback_data="admin_back_panel")]
+        ]
+        
+        await update.message.reply_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+        logger.info(f"✅ Admin ajouté: {name} (ID: {new_admin_id}, Niveau: {level}) par {user_id}")
+    else:
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} Erreur lors de l'ajout de l'administrateur."
         )
 
 # ==================== ADMIN: RÉCEPTION STOCK ====================
@@ -4910,6 +5155,7 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(admin_manage_admins, pattern="^admin_manage_admins$"))
     application.add_handler(CallbackQueryHandler(admin_list_admins, pattern="^admin_list_admins$"))
     application.add_handler(CallbackQueryHandler(admin_add_admin_start, pattern="^admin_add_admin$"))
+    application.add_handler(CallbackQueryHandler(admin_level_selected, pattern="^admin_level_"))
     application.add_handler(CallbackQueryHandler(admin_remove_admin_start, pattern="^admin_remove_admin$"))
     
     # Callbacks admin - paramètres

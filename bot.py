@@ -1,3 +1,26 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+╔═══════════════════════════════════════════════════════════════════╗
+║                                                                   ║
+║   BOT TELEGRAM V3.0.1 - VERSION CORRIGÉE                        ║
+║   Bug /admin résolu - Parse mode supprimé                        ║
+║                                                                   ║
+║   ✅ Ce fichier est la VERSION CORRIGÉE                          ║
+║   ✅ Le panel admin fonctionne sans erreur                        ║
+║   ✅ Toutes les fonctionnalités sont préservées                   ║
+║                                                                   ║
+║   Date du fix : 06/01/2026                                       ║
+║                                                                   ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+BOT TELEGRAM V3.0.1 - SYSTÈME MULTI-ADMINS (CORRIGÉ)
+Gestion complète e-commerce avec interface admin Telegram
+Version corrigée - Bug admin_panel résolu - Parse mode supprimé
+"""
+
+
 import os
 import sys
 import json
@@ -4862,7 +4885,7 @@ Votre commande #{order_id} a été enregistrée avec succès.
 
 @error_handler
 async def admin_validate_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Valide une commande (bouton admin)"""
+    """Valide une commande et enregistre la vente dans le livre de comptes"""
     query = update.callback_query
     await query.answer()
     
@@ -4871,21 +4894,54 @@ async def admin_validate_order(update: Update, context: ContextTypes.DEFAULT_TYP
     order_id = parts[2]
     customer_id = int(parts[3])
     
+    # Charger les infos de la commande depuis le CSV
+    csv_path = DATA_DIR / "orders.csv"
+    order_data = None
+    
+    try:
+        if csv_path.exists():
+            with open(csv_path, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    if row.get('order_id') == order_id:
+                        order_data = row
+                        break
+    except Exception as e:
+        logger.error(f"Erreur lecture commande: {e}")
+    
+    # Enregistrer la vente dans le livre de comptes
+    if order_data:
+        try:
+            total = float(order_data.get('total', 0))
+            first_name = order_data.get('first_name', 'Client')
+            
+            add_ledger_entry(
+                'income',
+                total,
+                f"Vente commande {order_id} - {first_name} (Livrée)",
+                'Vente',
+                order_id
+            )
+            logger.info(f"📒 Vente ajoutée au livre de comptes: {total:.2f}€")
+        except Exception as e:
+            logger.error(f"Erreur ajout livre de comptes: {e}")
+    
     # Notifier le client
     try:
         await context.bot.send_message(
             chat_id=customer_id,
-            text=f"{EMOJI_THEME['success']} COMMANDE VALIDÉE\n\n"
-                 f"Votre commande #{order_id} a été validée !\n\n"
-                 f"{EMOJI_THEME['delivery']} Préparation en cours..."
+            text=f"{EMOJI_THEME['success']} COMMANDE LIVRÉE\n\n"
+                 f"Votre commande #{order_id} a été livrée !\n\n"
+                 f"Merci d'avoir commandé chez nous ! 🙏"
         )
     except Exception as e:
         logger.error(f"Erreur notification client: {e}")
     
     # Modifier le message admin
     await query.edit_message_text(
-        f"✅ COMMANDE VALIDÉE\n\n"
-        f"Commande #{order_id} validée avec succès."
+        f"✅ COMMANDE VALIDÉE ET LIVRÉE\n\n"
+        f"Commande #{order_id} validée avec succès.\n"
+        f"📒 Vente enregistrée dans le livre de comptes."
     )
     
     logger.info(f"✅ Commande validée: {order_id} par admin {query.from_user.id}")
@@ -6643,6 +6699,23 @@ Votre demande a été approuvée.
     except Exception as e:
         logger.error(f"Erreur notification approbation: {e}")
     
+    # Enregistrer automatiquement dans le livre de comptes
+    try:
+        admin_name = expense_found.get('admin_name', 'Admin')
+        category = expense_found.get('category', 'Consommable')
+        description = f"{category} - {admin_name}: {expense_found['description']}"
+        
+        add_ledger_entry(
+            'expense',
+            expense_found['amount'],
+            description,
+            'Consommable',
+            expense_id
+        )
+        logger.info(f"📒 Consommable ajouté au livre de comptes: {expense_found['amount']:.2f}€")
+    except Exception as e:
+        logger.error(f"Erreur ajout livre de comptes: {e}")
+    
     # Retour à la liste
     await admin_finances_all_expenses(update, context)
     
@@ -6786,6 +6859,32 @@ async def approve_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     except Exception as e:
         logger.error(f"Erreur notification approbation paye: {e}")
+    
+    # Enregistrer automatiquement dans le livre de comptes
+    try:
+        admin_name = payment_found.get('admin_name', 'Admin')
+        description = f"Paiement salaire {admin_name}"
+        
+        # Ajouter détails si disponibles
+        if fixed_salary > 0:
+            description += f" (Fixe: {fixed_salary:.2f}€"
+        if commissions > 0:
+            description += f", Comm: {commissions:.2f}€"
+        if reimbursed_total > 0:
+            description += f", Remb: {reimbursed_total:.2f}€"
+        if fixed_salary > 0 or commissions > 0 or reimbursed_total > 0:
+            description += ")"
+        
+        add_ledger_entry(
+            'expense',
+            payment_found['amount'],
+            description,
+            'Salaire',
+            payment_id
+        )
+        logger.info(f"📒 Salaire ajouté au livre de comptes: {payment_found['amount']:.2f}€")
+    except Exception as e:
+        logger.error(f"Erreur ajout livre de comptes: {e}")
     
     # Retour à la liste
     await admin_finances_payroll(update, context)
@@ -8313,7 +8412,7 @@ def add_ledger_entry(entry_type, amount, description, category, reference_id=Non
 
 @error_handler
 async def admin_ledger(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menu principal livre de comptes (super-admin uniquement)"""
+    """Menu principal livre de comptes avec stats automatiques (super-admin uniquement)"""
     query = update.callback_query
     await query.answer()
     
@@ -8328,14 +8427,32 @@ async def admin_ledger(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total_expenses = sum(e['amount'] for e in ledger['entries'] if e['type'] == 'expense')
     balance = ledger.get('balance', 0)
     
+    # Stats par catégorie
+    ventes = sum(e['amount'] for e in ledger['entries'] if e['type'] == 'income' and e.get('category') == 'Vente')
+    salaires = sum(e['amount'] for e in ledger['entries'] if e['type'] == 'expense' and e.get('category') == 'Salaire')
+    consommables = sum(e['amount'] for e in ledger['entries'] if e['type'] == 'expense' and e.get('category') == 'Consommable')
+    
     message = f"""📒 LIVRE DE COMPTES
 
 💰 SOLDE ACTUEL : {balance:.2f}€
 
+━━━━━━━━━━━━━━━━━━━━━━
+
 📊 STATISTIQUES :
-• Entrées : {total_income:.2f}€
-• Sorties : {total_expenses:.2f}€
-• Total transactions : {len(ledger['entries'])}
+• Total entrées : {total_income:.2f}€
+  └ Ventes : {ventes:.2f}€
+• Total sorties : {total_expenses:.2f}€
+  └ Salaires : {salaires:.2f}€
+  └ Consommables : {consommables:.2f}€
+
+📋 Transactions : {len(ledger['entries'])}
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+🔄 SYNCHRONISATION AUTO :
+✅ Ventes clients
+✅ Paiements salaires
+✅ Consommables approuvés
 
 Que voulez-vous faire ?
 """

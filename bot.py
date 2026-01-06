@@ -7524,8 +7524,9 @@ async def receive_fixed_salary(update: Update, context: ContextTypes.DEFAULT_TYP
         config = load_salary_config()
         
         if str(admin_id) not in config['admins']:
+            admin_name = ADMINS.get(str(admin_id), {}).get('name', 'Admin')
             config['admins'][str(admin_id)] = {
-                "name": ADMINS[int(admin_id)]['name'],
+                "name": admin_name,
                 "fixed_salary": 0,
                 "salary_type": "monthly",
                 "commission_type": "none",
@@ -7601,8 +7602,9 @@ async def set_commission_value(update: Update, context: ContextTypes.DEFAULT_TYP
         config = load_salary_config()
         
         if str(admin_id) not in config['admins']:
+            admin_name = ADMINS.get(str(admin_id), {}).get('name', 'Admin')
             config['admins'][str(admin_id)] = {
-                "name": ADMINS[int(admin_id)]['name'],
+                "name": admin_name,
                 "fixed_salary": 0,
                 "salary_type": "monthly",
                 "commission_type": "none",
@@ -7683,8 +7685,9 @@ async def receive_commission_value(update: Update, context: ContextTypes.DEFAULT
         admin_id = comm_data['admin_id']
         
         if str(admin_id) not in config['admins']:
+            admin_name = ADMINS.get(str(admin_id), {}).get('name', 'Admin')
             config['admins'][str(admin_id)] = {
-                "name": ADMINS[int(admin_id)]['name'],
+                "name": admin_name,
                 "fixed_salary": 0,
                 "salary_type": "monthly",
                 "commission_type": "none",
@@ -7763,8 +7766,9 @@ async def save_frequency(update: Update, context: ContextTypes.DEFAULT_TYPE):
     config = load_salary_config()
     
     if str(admin_id) not in config['admins']:
+        admin_name = ADMINS.get(str(admin_id), {}).get('name', 'Admin')
         config['admins'][str(admin_id)] = {
-            "name": ADMINS[int(admin_id)]['name'],
+            "name": admin_name,
             "fixed_salary": 0,
             "salary_type": "monthly",
             "commission_type": "none",
@@ -7796,8 +7800,9 @@ async def toggle_salary_active(update: Update, context: ContextTypes.DEFAULT_TYP
     config = load_salary_config()
     
     if str(admin_id) not in config['admins']:
+        admin_name = ADMINS.get(str(admin_id), {}).get('name', 'Admin')
         config['admins'][str(admin_id)] = {
-            "name": ADMINS[int(admin_id)]['name'],
+            "name": admin_name,
             "fixed_salary": 0,
             "salary_type": "monthly",
             "commission_type": "none",
@@ -8447,6 +8452,74 @@ def add_ledger_entry(entry_type, amount, description, category, reference_id=Non
     
     return entry
 
+def import_existing_orders_to_ledger():
+    """Importe toutes les commandes livrées existantes dans le livre de comptes"""
+    csv_path = DATA_DIR / "orders.csv"
+    
+    if not csv_path.exists():
+        logger.info("📒 Aucun fichier orders.csv à importer")
+        return 0
+    
+    try:
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            orders = list(reader)
+        
+        # Filtrer les commandes livrées qui ne sont pas déjà dans le ledger
+        ledger = load_ledger()
+        existing_refs = {e.get('reference_id') for e in ledger['entries'] if e.get('reference_id')}
+        
+        imported = 0
+        for order in orders:
+            order_id = order.get('order_id')
+            status = order.get('status', '')
+            
+            # Importer seulement les commandes livrées pas déjà importées
+            if status == 'Livrée' and order_id not in existing_refs:
+                try:
+                    total = float(order.get('total', 0))
+                    first_name = order.get('first_name', 'Client')
+                    date = order.get('date', datetime.now().isoformat())
+                    
+                    # Créer l'entrée avec la date originale
+                    entry = {
+                        "id": f"LED-{int(datetime.now().timestamp())}-{imported}",
+                        "date": date,
+                        "type": "income",
+                        "amount": total,
+                        "description": f"Vente commande {order_id} - {first_name} (Import historique)",
+                        "category": "Vente",
+                        "reference_id": order_id,
+                        "balance_after": 0
+                    }
+                    
+                    # Calculer solde
+                    ledger['balance'] += total
+                    entry['balance_after'] = ledger['balance']
+                    
+                    # Ajouter l'entrée
+                    ledger['entries'].append(entry)
+                    imported += 1
+                    
+                    logger.info(f"📒 Import commande {order_id}: {total:.2f}€")
+                    
+                except Exception as e:
+                    logger.error(f"Erreur import commande {order_id}: {e}")
+        
+        if imported > 0:
+            # Trier par date (plus récent en premier)
+            ledger['entries'].sort(key=lambda x: x['date'], reverse=True)
+            save_ledger(ledger)
+            logger.info(f"✅ {imported} commande(s) importée(s) dans le livre de comptes")
+        else:
+            logger.info("📒 Aucune nouvelle commande à importer")
+        
+        return imported
+        
+    except Exception as e:
+        logger.error(f"Erreur import historique: {e}")
+        return 0
+
 @error_handler
 async def admin_ledger(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Menu principal livre de comptes avec stats automatiques (super-admin uniquement)"""
@@ -8505,6 +8578,9 @@ Que voulez-vous faire ?
         [
             InlineKeyboardButton("➕ Ajouter Entrée", callback_data="ledger_add_income"),
             InlineKeyboardButton("➖ Ajouter Sortie", callback_data="ledger_add_expense")
+        ],
+        [
+            InlineKeyboardButton("🔄 Importer historique", callback_data="ledger_import_history")
         ],
         [
             InlineKeyboardButton("✏️ Modifier Solde", callback_data="ledger_edit_balance")
@@ -8878,6 +8954,44 @@ Une entrée de correction a été créée.
         )
 
 @error_handler
+async def ledger_import_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Importe l'historique des commandes dans le livre de comptes"""
+    query = update.callback_query
+    await query.answer("🔄 Import en cours...", show_alert=False)
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    # Lancer l'import
+    imported = import_existing_orders_to_ledger()
+    
+    if imported > 0:
+        message = f"""✅ IMPORT TERMINÉ
+
+{imported} commande(s) livrée(s) importée(s) dans le livre de comptes.
+
+Le solde a été mis à jour automatiquement.
+"""
+    else:
+        message = """ℹ️ IMPORT TERMINÉ
+
+Aucune nouvelle commande à importer.
+
+Toutes les commandes livrées sont déjà dans le livre de comptes.
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("📒 Voir le livre", callback_data="admin_ledger")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_panel")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
 async def ledger_monthly_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Génère un rapport mensuel"""
     query = update.callback_query
@@ -9082,6 +9196,7 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(ledger_select_category, pattern="^ledger_cat_"))
     application.add_handler(CallbackQueryHandler(ledger_edit_balance, pattern="^ledger_edit_balance$"))
     application.add_handler(CallbackQueryHandler(ledger_monthly_report, pattern="^ledger_monthly_report$"))
+    application.add_handler(CallbackQueryHandler(ledger_import_history, pattern="^ledger_import_history$"))
     
     # Callbacks admin - horaires
     application.add_handler(CallbackQueryHandler(admin_horaires, pattern="^admin_horaires$"))

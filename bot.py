@@ -2078,15 +2078,12 @@ async def get_my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 ⚠️ IMPORTANT : Gardez votre ID confidentiel
 """
-1. Copiez votre ID ci-dessus
-2. Envoyez-le à l'administrateur principal
-3. Attendez la validation
-"""
     else:
         message += f"""
 🔐 Accès administrateur actif
 Niveau : {level}
 Tapez /admin pour accéder au panel
+"""
     
     keyboard = [[InlineKeyboardButton("🏠 Retour Menu", callback_data="back_to_main")]]
     
@@ -3270,6 +3267,9 @@ Envoyez l'ID Telegram du nouvel admin :
     # Utiliser user_data au lieu de ConversationHandler
     context.user_data['awaiting_admin_id'] = True
     context.user_data['admin_action'] = 'add'
+    
+    logger.info(f"✅ État admin configuré pour user {user_id}")
+    logger.info(f"🔍 user_data après config: {context.user_data}")
 
 @error_handler
 async def admin_remove_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -4249,11 +4249,13 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     # État: En attente d'ID admin (admin)
     if context.user_data.get('awaiting_admin_id'):
+        logger.info(f"🔍 État détecté: awaiting_admin_id pour user {user_id}")
         await receive_admin_id(update, context)
         return
     
     # État: En attente du nom admin (admin)
     if context.user_data.get('awaiting_admin_name'):
+        logger.info(f"🔍 État détecté: awaiting_admin_name pour user {user_id}")
         await receive_admin_name(update, context)
         return
     
@@ -4353,14 +4355,21 @@ async def receive_new_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @error_handler
 async def receive_admin_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Réceptionne l'ID du nouvel admin"""
+    logger.info(f"🔍 receive_admin_id appelé - User: {update.effective_user.id}")
+    logger.info(f"🔍 user_data: {context.user_data}")
+    
     if not is_admin(update.effective_user.id):
+        logger.warning(f"⚠️ Non-admin a tenté receive_admin_id: {update.effective_user.id}")
         return
     
     user_id = update.effective_user.id
     admin_action = context.user_data.get('admin_action', 'add')
     
+    logger.info(f"🔍 Action admin: {admin_action}")
+    
     try:
         new_admin_id = int(update.message.text.strip())
+        logger.info(f"✅ ID parsé: {new_admin_id}")
         
         if admin_action == 'add':
             # Vérifier que l'utilisateur n'est pas déjà admin
@@ -4368,12 +4377,15 @@ async def receive_admin_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(
                     f"{EMOJI_THEME['error']} Cet utilisateur est déjà administrateur."
                 )
+                logger.info(f"⚠️ Utilisateur déjà admin: {new_admin_id}")
                 return
             
             # Demander le niveau d'admin
             context.user_data['new_admin_id'] = new_admin_id
             context.user_data['awaiting_admin_id'] = False
             context.user_data['awaiting_admin_level'] = True
+            
+            logger.info(f"✅ État mis à jour - awaiting_admin_level: True")
             
             # Anonymiser l'ID dans le message
             anonymous_id = anonymize_id(new_admin_id)

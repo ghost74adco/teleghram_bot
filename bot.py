@@ -8287,6 +8287,8 @@ async def receive_order_total(update: Update, context: ContextTypes.DEFAULT_TYPE
         logger.info(f"📝 {len(orders)} commandes chargées, recherche de {order_id}")
         
         order_found = False
+        old_total = "0"  # Initialiser avant la boucle
+        
         for order in orders:
             if order.get('order_id') == order_id:
                 old_total = order.get('total', '0')
@@ -8337,7 +8339,8 @@ Cliquez sur "Valider commande" pour confirmer.
         
         logger.info(f"💰 Prix modifié: {order_id} - {old_total}€ → {new_total}€")
     
-    except ValueError:
+    except ValueError as e:
+        logger.error(f"❌ ValueError dans receive_order_total: {e}")
         await update.message.reply_text(
             f"{EMOJI_THEME['error']} Prix invalide. Utilisez un nombre.\n"
             "Exemple : 550.00"
@@ -8394,6 +8397,9 @@ async def receive_order_delivery(update: Update, context: ContextTypes.DEFAULT_T
         logger.info(f"📝 {len(orders)} commandes chargées, recherche de {order_id}")
         
         order_found = False
+        old_delivery = "0"  # Initialiser avant la boucle
+        new_total = 0.0  # Initialiser avant la boucle
+        
         for order in orders:
             if order.get('order_id') == order_id:
                 old_delivery = order.get('delivery_fee', '0')

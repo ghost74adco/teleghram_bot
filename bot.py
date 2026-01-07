@@ -933,6 +933,39 @@ def save_stocks(stocks):
         logger.error(f"Erreur sauvegarde stocks: {e}")
         return False
 
+def save_orders_csv(csv_path, orders):
+    """Sauvegarde le CSV des commandes en filtrant les clés None"""
+    try:
+        if not orders:
+            return True
+        
+        # Nettoyer TOUS les orders d'abord (supprimer clés None)
+        clean_orders = []
+        for order in orders:
+            clean_order = {k: v for k, v in order.items() if k is not None and k != ''}
+            clean_orders.append(clean_order)
+        
+        if not clean_orders:
+            return True
+        
+        # Collecter toutes les clés uniques de TOUS les orders
+        all_keys = set()
+        for order in clean_orders:
+            all_keys.update(order.keys())
+        
+        fieldnames = sorted([k for k in all_keys if k])  # Trier pour cohérence
+        
+        with open(csv_path, 'w', encoding='utf-8', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
+            writer.writeheader()
+            writer.writerows(clean_orders)
+        
+        return True
+    except Exception as e:
+        logger.error(f"❌ Erreur sauvegarde orders CSV: {e}")
+        return False
+
+
 def get_stock(product_name):
     """Récupère le stock d'un produit"""
     stocks = load_stocks()
@@ -4966,10 +4999,7 @@ async def admin_validate_order(update: Update, context: ContextTypes.DEFAULT_TYP
             
             # Sauvegarder le CSV mis à jour
             if orders and order_data:
-                with open(csv_path, 'w', encoding='utf-8', newline='') as f:
-                    writer = csv.DictWriter(f, fieldnames=orders[0].keys())
-                    writer.writeheader()
-                    writer.writerows(orders)
+                save_orders_csv(csv_path, orders)
     except Exception as e:
         logger.error(f"Erreur lecture/écriture commande: {e}")
     
@@ -8597,14 +8627,7 @@ async def receive_order_total(update: Update, context: ContextTypes.DEFAULT_TYPE
             return
         
         # Sauvegarder
-        try:
-            with open(csv_path, 'w', encoding='utf-8', newline='') as f:
-                if orders:
-                    writer = csv.DictWriter(f, fieldnames=orders[0].keys())
-                    writer.writeheader()
-                    writer.writerows(orders)
-        except Exception as csv_error:
-            logger.error(f"❌ Erreur sauvegarde CSV: {csv_error}")
+        if not save_orders_csv(csv_path, orders):
             await update.message.reply_text(
                 f"{EMOJI_THEME['error']} Erreur lors de la sauvegarde.\n"
                 "Veuillez réessayer."
@@ -8725,14 +8748,7 @@ async def receive_order_delivery(update: Update, context: ContextTypes.DEFAULT_T
             return
         
         # Sauvegarder
-        try:
-            with open(csv_path, 'w', encoding='utf-8', newline='') as f:
-                if orders:
-                    writer = csv.DictWriter(f, fieldnames=orders[0].keys())
-                    writer.writeheader()
-                    writer.writerows(orders)
-        except Exception as csv_error:
-            logger.error(f"❌ Erreur sauvegarde CSV: {csv_error}")
+        if not save_orders_csv(csv_path, orders):
             await update.message.reply_text(
                 f"{EMOJI_THEME['error']} Erreur lors de la sauvegarde.\n"
                 "Veuillez réessayer."
@@ -8817,10 +8833,7 @@ async def admin_confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE
             break
     
     # Sauvegarder
-    with open(csv_path, 'w', encoding='utf-8', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=orders[0].keys())
-        writer.writeheader()
-        writer.writerows(orders)
+    save_orders_csv(csv_path, orders)
     
     # Calculer commission pour l'admin qui valide
     await calculate_commission_on_order(context, query.from_user.id, order)
@@ -8912,10 +8925,7 @@ async def mark_order_ready(update: Update, context: ContextTypes.DEFAULT_TYPE):
             break
     
     # Sauvegarder
-    with open(csv_path, 'w', encoding='utf-8', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=orders[0].keys())
-        writer.writeheader()
-        writer.writerows(orders)
+    save_orders_csv(csv_path, orders)
     
     # NOTIFICATION AU CLIENT
     client_notification = f"""✅ VOTRE COMMANDE EST PRÊTE !

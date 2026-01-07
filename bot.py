@@ -38,7 +38,8 @@ from functools import wraps
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, 
-    MessageHandler, filters, ContextTypes, ConversationHandler
+    MessageHandler, filters, ContextTypes, ConversationHandler,
+    PicklePersistence
 )
 
 # Distance calculation
@@ -2693,6 +2694,9 @@ async def custom_quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['pending_product'] = product_name
     context.user_data['awaiting_quantity'] = True
     
+    logger.info(f"📝 custom_quantity: product={product_name}, awaiting_quantity=True, user_id={query.from_user.id}")
+    logger.info(f"📝 user_data après: {context.user_data}")
+    
     message = f"""📝 QUANTITÉ PERSONNALISÉE
 
 Produit : {product_name}
@@ -5022,6 +5026,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_id = update.effective_user.id
     text = update.message.text.strip()
     
+    logger.info(f"📩 Message texte: user={user_id}, text={text}, user_data={context.user_data}")
+    
     # Vérifier maintenance
     if is_maintenance_mode(user_id):
         await update.message.reply_text(
@@ -5032,6 +5038,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     # État: En attente de quantité personnalisée
     if context.user_data.get('awaiting_quantity'):
+        logger.info(f"✅ Routing vers receive_custom_quantity")
         await receive_custom_quantity(update, context)
         return
     
@@ -8168,6 +8175,7 @@ Exemple : 550.00
         )
         
         context.user_data['editing_order_total'] = order_id
+        logger.info(f"📝 État défini: editing_order_total={order_id}, user_data={context.user_data}")
     
     except Exception as e:
         logger.error(f"Erreur edit_order_total: {e}")
@@ -8218,6 +8226,7 @@ Exemple : 15.00
         )
         
         context.user_data['editing_order_delivery'] = order_id
+        logger.info(f"📝 État défini: editing_order_delivery={order_id}, user_data={context.user_data}")
     
     except Exception as e:
         logger.error(f"Erreur edit_order_delivery: {e}")
@@ -8338,11 +8347,19 @@ async def receive_order_delivery(update: Update, context: ContextTypes.DEFAULT_T
     
     order_id = context.user_data.get('editing_order_delivery')
     
+    logger.info(f"📝 receive_order_delivery appelé: order_id={order_id}, text={update.message.text}")
+    
     if not order_id:
+        logger.warning("⚠️ order_id manquant dans user_data")
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} Session expirée. Veuillez recommencer."
+        )
         return
     
     try:
-        new_delivery_fee = float(update.message.text.strip())
+        new_delivery_fee = float(update.message.text.strip().replace(',', '.'))
+        
+        logger.info(f"📝 Frais saisis: {new_delivery_fee}€")
         
         if new_delivery_fee < 0:
             await update.message.reply_text(
@@ -8359,9 +8376,18 @@ async def receive_order_delivery(update: Update, context: ContextTypes.DEFAULT_T
         # Mettre à jour dans CSV
         csv_path = DATA_DIR / "orders.csv"
         
+        if not csv_path.exists():
+            logger.error(f"❌ Fichier CSV introuvable: {csv_path}")
+            await update.message.reply_text(
+                f"{EMOJI_THEME['error']} Erreur: fichier commandes introuvable."
+            )
+            return
+        
         with open(csv_path, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             orders = list(reader)
+        
+        logger.info(f"📝 {len(orders)} commandes chargées, recherche de {order_id}")
         
         order_found = False
         for order in orders:
@@ -8380,11 +8406,14 @@ async def receive_order_delivery(update: Update, context: ContextTypes.DEFAULT_T
                 order['old_delivery_fee'] = old_delivery
                 
                 order_found = True
+                logger.info(f"✅ Commande trouvée et modifiée: {old_delivery}€ → {new_delivery_fee}€")
                 break
         
         if not order_found:
+            logger.error(f"❌ Commande {order_id} introuvable dans CSV")
             await update.message.reply_text(
-                f"{EMOJI_THEME['error']} Commande introuvable."
+                f"{EMOJI_THEME['error']} Commande introuvable.\n"
+                f"ID recherché: {order_id}"
             )
             return
         
@@ -9545,9 +9574,13 @@ async def main():
     # Création application
     logger.info("🔧 Création de l'application...")
     
+    # Créer persistence pour sauvegarder user_data
+    persistence = PicklePersistence(filepath=DATA_DIR / "bot_persistence.pkl")
+    
     application = (
         Application.builder()
         .token(BOT_TOKEN)
+        .persistence(persistence)
         .concurrent_updates(True)
         .read_timeout(30)
         .write_timeout(30)
@@ -9556,7 +9589,7 @@ async def main():
         .build()
     )
     
-    logger.info("✅ Application créée")
+    logger.info("✅ Application créée avec persistence")
     
     # Configuration handlers
     setup_handlers(application)

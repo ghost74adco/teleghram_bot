@@ -1,26 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-"""
-╔═══════════════════════════════════════════════════════════════════╗
-║                                                                   ║
-║   BOT TELEGRAM V3.0.1 - VERSION CORRIGÉE                        ║
-║   Bug /admin résolu - Parse mode supprimé                        ║
-║                                                                   ║
-║   ✅ Ce fichier est la VERSION CORRIGÉE                          ║
-║   ✅ Le panel admin fonctionne sans erreur                        ║
-║   ✅ Toutes les fonctionnalités sont préservées                   ║
-║                                                                   ║
-║   Date du fix : 06/01/2026                                       ║
-║                                                                   ║
-╚═══════════════════════════════════════════════════════════════════╝
-
-BOT TELEGRAM V3.0.1 - SYSTÈME MULTI-ADMINS (CORRIGÉ)
-Gestion complète e-commerce avec interface admin Telegram
-Version corrigée - Bug admin_panel résolu - Parse mode supprimé
-"""
-
-
 import os
 import sys
 import json
@@ -5095,6 +5072,11 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await receive_expense_amount(update, context)
         return
     
+    # État: En attente édition consommable (super-admin)
+    if context.user_data.get('editing_expense'):
+        await receive_expense_edit(update, context)
+        return
+    
     # État: En attente nouveau prix de revient (admin)
     if context.user_data.get('awaiting_cost_update'):
         await receive_cost_update(update, context)
@@ -6606,7 +6588,10 @@ async def admin_finances_all_expenses(update: Update, context: ContextTypes.DEFA
 
 ✅ Tous les consommables ont été traités.
 """
-        keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_finances")]]
+        keyboard = [
+            [InlineKeyboardButton("📋 Voir les classés", callback_data="admin_expenses_approved")],
+            [InlineKeyboardButton("🔙 Retour", callback_data="admin_finances")]
+        ]
     else:
         total_pending = sum(e['amount'] for e in pending)
         
@@ -6642,6 +6627,7 @@ async def admin_finances_all_expenses(update: Update, context: ContextTypes.DEFA
                 )
             ])
         
+        keyboard.append([InlineKeyboardButton("📋 Voir les classés", callback_data="admin_expenses_approved")])
         keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="admin_finances")])
     
     await query.edit_message_text(
@@ -6797,12 +6783,265 @@ Le montant sera payé avec votre prochain salaire de la semaine.
     except Exception as e:
         logger.error(f"Erreur ajout livre de comptes: {e}")
     
-    # Retour à la liste
-    await admin_finances_all_expenses(update, context)
+    # Éditer le message pour retirer les boutons (éviter double validation)
+    try:
+        validator_name = ADMINS.get(str(query.from_user.id), {}).get('name', 'Admin')
+        await query.edit_message_text(
+            f"✅ CONSOMMABLE CLASSÉ PAR {validator_name}\n\n"
+            f"📋 ID : {expense_id}\n"
+            f"💰 Montant : {expense_found['amount']:.2f}€\n"
+            f"📝 {expense_found['description']}\n\n"
+            f"✅ Validé et enregistré en comptabilité"
+        )
+    except Exception as e:
+        logger.error(f"Erreur édition message: {e}")
     
     logger.info(f"✅ Consommable classé: {expense_id} par {query.from_user.id}")
 
-    logger.info(f"✅ Consommable approuvé: {expense_id} - {expense_found['amount']}€")
+@error_handler
+async def admin_expenses_approved(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche les consommables classés avec possibilité de les éditer/supprimer"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    expenses = load_expenses()
+    
+    # Filtrer les classés (pas rejected)
+    approved = [e for e in expenses['expenses'] if e['status'] == 'classée']
+    
+    # Trier par date décroissante
+    approved.sort(key=lambda x: x['date'], reverse=True)
+    
+    if not approved:
+        message = """📋 CONSOMMABLES CLASSÉS
+
+Aucun consommable classé pour le moment.
+"""
+        keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_finances_expenses")]]
+    else:
+        total = sum(e['amount'] for e in approved)
+        
+        message = f"""📋 CONSOMMABLES CLASSÉS
+
+{len(approved)} consommable(s) - {total:.2f}€
+
+Derniers 10 :
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+"""
+        
+        keyboard = []
+        
+        # Afficher les 10 derniers
+        for expense in approved[:10]:
+            date = expense['date'][:10]
+            validator = expense.get('validated_by_name', 'N/A')
+            
+            message += f"""📋 {expense['id'][-8:]}
+👤 {expense['admin_name']}
+📦 {expense['category']}
+💰 {expense['amount']:.2f}€
+📝 {expense['description']}
+✅ Validé par: {validator}
+📅 {date}
+
+"""
+            # Boutons édition/suppression
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"✏️ Éditer {expense['id'][-6:]}",
+                    callback_data=f"edit_expense_{expense['id']}"
+                ),
+                InlineKeyboardButton(
+                    f"🗑️ Supprimer {expense['id'][-6:]}",
+                    callback_data=f"delete_expense_{expense['id']}"
+                )
+            ])
+        
+        keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="admin_finances_expenses")])
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def edit_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Édite un consommable classé"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Seul le super-admin peut éditer", show_alert=True)
+        return
+    
+    expense_id = query.data.replace("edit_expense_", "")
+    
+    expenses = load_expenses()
+    expense = next((e for e in expenses['expenses'] if e['id'] == expense_id), None)
+    
+    if not expense:
+        await query.answer("Consommable introuvable", show_alert=True)
+        return
+    
+    message = f"""✏️ ÉDITER CONSOMMABLE
+
+📋 ID : {expense_id}
+👤 Admin : {expense['admin_name']}
+📦 Catégorie : {expense['category']}
+💰 Montant actuel : {expense['amount']:.2f}€
+📝 Description : {expense['description']}
+
+Entrez le nouveau montant (ou 0 pour annuler) :
+"""
+    
+    context.user_data['editing_expense'] = expense_id
+    
+    await query.edit_message_text(message)
+
+@error_handler
+async def receive_expense_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Réceptionne le nouveau montant du consommable"""
+    if not is_super_admin(update.effective_user.id):
+        return
+    
+    expense_id = context.user_data.get('editing_expense')
+    
+    if not expense_id:
+        return
+    
+    try:
+        new_amount = float(update.message.text.strip().replace(',', '.'))
+        
+        if new_amount == 0:
+            await update.message.reply_text("❌ Édition annulée")
+            context.user_data.pop('editing_expense', None)
+            return
+        
+        if new_amount < 0:
+            await update.message.reply_text("❌ Le montant ne peut pas être négatif")
+            return
+        
+        # Charger expenses
+        expenses = load_expenses()
+        expense = next((e for e in expenses['expenses'] if e['id'] == expense_id), None)
+        
+        if not expense:
+            await update.message.reply_text("❌ Consommable introuvable")
+            context.user_data.pop('editing_expense', None)
+            return
+        
+        old_amount = expense['amount']
+        expense['amount'] = new_amount
+        expense['edited_date'] = datetime.now().isoformat()
+        expense['edited_by'] = update.effective_user.id
+        
+        save_expenses(expenses)
+        
+        # Mettre à jour dans le livre de comptes
+        ledger = load_ledger()
+        for entry in ledger['entries']:
+            if entry.get('reference_id') == expense_id:
+                # Recalculer le solde
+                diff = new_amount - old_amount
+                entry['amount'] = new_amount
+                
+                # Mettre à jour tous les soldes après
+                idx = ledger['entries'].index(entry)
+                for i in range(idx, len(ledger['entries'])):
+                    ledger['entries'][i]['balance_after'] -= diff
+                
+                ledger['balance'] -= diff
+                break
+        
+        save_ledger(ledger)
+        
+        await update.message.reply_text(
+            f"""✅ CONSOMMABLE MODIFIÉ
+
+📋 ID : {expense_id}
+💰 Ancien montant : {old_amount:.2f}€
+💰 Nouveau montant : {new_amount:.2f}€
+
+✅ Mise à jour effectuée dans :
+• Liste des consommables
+• Livre de comptes
+"""
+        )
+        
+        context.user_data.pop('editing_expense', None)
+        logger.info(f"✏️ Consommable édité: {expense_id} - {old_amount}€ → {new_amount}€")
+        
+    except ValueError:
+        await update.message.reply_text("❌ Montant invalide. Utilisez un nombre.")
+
+@error_handler
+async def delete_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Supprime un consommable et son entrée comptable"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Seul le super-admin peut supprimer", show_alert=True)
+        return
+    
+    expense_id = query.data.replace("delete_expense_", "")
+    
+    expenses = load_expenses()
+    expense = next((e for e in expenses['expenses'] if e['id'] == expense_id), None)
+    
+    if not expense:
+        await query.answer("Consommable introuvable", show_alert=True)
+        return
+    
+    # Supprimer du expenses.json
+    expenses['expenses'] = [e for e in expenses['expenses'] if e['id'] != expense_id]
+    save_expenses(expenses)
+    
+    # Supprimer du livre de comptes et recalculer les soldes
+    ledger = load_ledger()
+    removed_amount = 0
+    removed_idx = -1
+    
+    for i, entry in enumerate(ledger['entries']):
+        if entry.get('reference_id') == expense_id:
+            removed_amount = entry['amount']
+            removed_idx = i
+            break
+    
+    if removed_idx >= 0:
+        ledger['entries'].pop(removed_idx)
+        
+        # Recalculer tous les soldes après la suppression
+        balance = 0
+        for entry in ledger['entries']:
+            if entry['type'] == 'income':
+                balance += entry['amount']
+            else:
+                balance -= entry['amount']
+            entry['balance_after'] = balance
+        
+        ledger['balance'] = balance
+        save_ledger(ledger)
+    
+    await query.edit_message_text(
+        f"""✅ CONSOMMABLE SUPPRIMÉ
+
+📋 ID : {expense_id}
+💰 Montant : {expense['amount']:.2f}€
+
+✅ Suppression effectuée dans :
+• Liste des consommables
+• Livre de comptes (solde recalculé)
+"""
+    )
+    
+    logger.info(f"🗑️ Consommable supprimé: {expense_id} - {expense['amount']}€")
 
 @error_handler
 async def reject_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -7193,7 +7432,17 @@ async def admin_costs(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # Récupérer TOUS les produits (du registre)
-    all_products = load_product_registry().get('products', {})
+    all_products = load_product_registry()
+    
+    if not all_products:
+        await query.edit_message_text(
+            "❌ Aucun produit trouvé dans le registre.\n\n"
+            "Activez d'abord des produits depuis le menu Admin.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Retour", callback_data="admin_back_panel")
+            ]])
+        )
+        return
     
     message = """💵 GESTION PRIX DE REVIENT
 
@@ -8135,6 +8384,10 @@ async def edit_order_total(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     order_id = query.data.replace("edit_order_total_", "")
     
+    # Nettoyer les autres états d'édition
+    context.user_data.pop('editing_order_delivery', None)
+    context.user_data.pop('awaiting_ledger_balance', None)
+    
     # Charger commande depuis CSV
     csv_path = DATA_DIR / "orders.csv"
     
@@ -8186,6 +8439,10 @@ async def edit_order_delivery(update: Update, context: ContextTypes.DEFAULT_TYPE
     await query.answer()
     
     order_id = query.data.replace("edit_order_delivery_", "")
+    
+    # Nettoyer les autres états d'édition
+    context.user_data.pop('editing_order_total', None)
+    context.user_data.pop('awaiting_ledger_balance', None)
     
     # Charger commande
     csv_path = DATA_DIR / "orders.csv"
@@ -8292,8 +8549,12 @@ async def receive_order_total(update: Update, context: ContextTypes.DEFAULT_TYPE
                 
                 order['total'] = str(new_total)
                 order['subtotal'] = str(new_total - delivery_fee)
-                order['price_modified'] = 'Yes'
-                order['old_total'] = old_total
+                
+                # Ajouter colonnes seulement si elles existent déjà
+                if 'price_modified' in order:
+                    order['price_modified'] = 'Yes'
+                if 'old_total' in order:
+                    order['old_total'] = old_total
                 
                 order_found = True
                 logger.info(f"✅ Commande trouvée et modifiée: {old_total}€ → {new_total}€")
@@ -8408,8 +8669,12 @@ async def receive_order_delivery(update: Update, context: ContextTypes.DEFAULT_T
                 
                 order['delivery_fee'] = str(new_delivery_fee)
                 order['total'] = str(new_total)
-                order['delivery_modified'] = 'Yes'
-                order['old_delivery_fee'] = old_delivery
+                
+                # Ajouter colonnes seulement si elles existent déjà
+                if 'delivery_modified' in order:
+                    order['delivery_modified'] = 'Yes'
+                if 'old_delivery_fee' in order:
+                    order['old_delivery_fee'] = old_delivery
                 
                 order_found = True
                 logger.info(f"✅ Commande trouvée et modifiée: {old_delivery}€ → {new_delivery_fee}€")
@@ -9485,6 +9750,9 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(admin_finances_all_expenses, pattern="^admin_finances_all_expenses$"))
     application.add_handler(CallbackQueryHandler(approve_expense, pattern="^approve_expense_"))
     application.add_handler(CallbackQueryHandler(reject_expense, pattern="^reject_expense_"))
+    application.add_handler(CallbackQueryHandler(admin_expenses_approved, pattern="^admin_expenses_approved"))
+    application.add_handler(CallbackQueryHandler(edit_expense, pattern="^edit_expense_"))
+    application.add_handler(CallbackQueryHandler(delete_expense, pattern="^delete_expense_"))
     application.add_handler(CallbackQueryHandler(approve_payment, pattern="^approve_payment_"))
     application.add_handler(CallbackQueryHandler(reject_payment, pattern="^reject_payment_"))
     application.add_handler(CallbackQueryHandler(admin_finances_payroll, pattern="^admin_finances_payroll"))

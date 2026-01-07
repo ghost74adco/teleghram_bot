@@ -2247,7 +2247,6 @@ Avantages :
 
 Nous acceptons :
 - Espèces
-- Virement bancaire
 - Crypto-monnaies
 
 ━━━━━━━━━━━━━━━━━━━━━━
@@ -4655,7 +4654,6 @@ Choisissez votre mode de paiement :
     
     keyboard = [
         [InlineKeyboardButton("💵 Espèces", callback_data="payment_cash")],
-        [InlineKeyboardButton("🏦 Virement", callback_data="payment_transfer")],
         [InlineKeyboardButton("₿ Crypto", callback_data="payment_crypto")]
     ]
     
@@ -4675,7 +4673,6 @@ Choisissez votre mode de paiement :
     
     keyboard = [
         [InlineKeyboardButton("💵 Espèces", callback_data="payment_cash")],
-        [InlineKeyboardButton("🏦 Virement", callback_data="payment_transfer")],
         [InlineKeyboardButton("₿ Crypto", callback_data="payment_crypto")]
     ]
     
@@ -4694,7 +4691,6 @@ async def payment_method_selected(update: Update, context: ContextTypes.DEFAULT_
     
     payment_names = {
         "cash": "💵 Espèces",
-        "transfer": "🏦 Virement bancaire",
         "crypto": "₿ Crypto-monnaie"
     }
     
@@ -8518,6 +8514,34 @@ async def admin_confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     # Calculer commission pour l'admin qui valide
     await calculate_commission_on_order(context, query.from_user.id, order)
+    
+    # NOTIFICATION AU CLIENT
+    try:
+        client_message = f"""✅ COMMANDE VALIDÉE !
+
+📋 Commande : {order_id}
+
+Votre commande a été validée par notre équipe.
+
+🛍️ Produits :
+{order.get('products_display', order.get('products', 'N/A'))}
+
+💰 Total : {order.get('total')}€
+💳 Paiement : {order.get('payment_method', 'N/A')}
+
+📦 Nous préparons actuellement votre commande.
+Vous recevrez une notification dès qu'elle sera prête !
+
+Merci de votre confiance ! 🙏
+"""
+        
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=client_message
+        )
+        logger.info(f"✅ Client notifié - Commande validée: {order_id}")
+    except Exception as e:
+        logger.error(f"❌ Erreur notification client validation: {e}")
     
     # Notification admin
     message = f"""{EMOJI_THEME['success']} COMMANDE VALIDÉE

@@ -2715,17 +2715,29 @@ Envoyez la quantité souhaitée en grammes.
 @error_handler
 async def receive_custom_quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Réceptionne la quantité personnalisée"""
+    logger.info(f"📝 receive_custom_quantity appelé: awaiting={context.user_data.get('awaiting_quantity')}, text={update.message.text}")
+    
     if not context.user_data.get('awaiting_quantity'):
+        logger.warning("⚠️ awaiting_quantity=False, abandon")
         return
     
     user_id = update.effective_user.id
     product_name = context.user_data.get('pending_product')
     
+    logger.info(f"📝 product_name={product_name}")
+    
     if not product_name:
+        logger.warning("⚠️ product_name manquant")
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} Session expirée. Veuillez recommencer."
+        )
+        context.user_data.pop('awaiting_quantity', None)
         return
     
     try:
-        quantity = float(update.message.text.strip())
+        quantity = float(update.message.text.strip().replace(',', '.'))
+        
+        logger.info(f"📝 Quantité saisie: {quantity}g")
         
         if quantity <= 0:
             await update.message.reply_text(
@@ -2751,6 +2763,8 @@ async def receive_custom_quantity(update: Update, context: ContextTypes.DEFAULT_
         # Ajouter au panier
         context.user_data['awaiting_quantity'] = False
         context.user_data['pending_product'] = None
+        
+        logger.info(f"✅ Ajout au panier: {product_name} {quantity}g")
         
         if 'cart' not in context.user_data:
             context.user_data['cart'] = []
@@ -3299,6 +3313,34 @@ Que souhaitez-vous faire ?
         [InlineKeyboardButton("🇨🇭 Prix Suisse", callback_data="admin_prices_ch")],
         [InlineKeyboardButton("📊 Prix dégressifs", callback_data="admin_pricing_tiers")],
         [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_panel")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def admin_pricing_tiers(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Prix dégressifs - Fonctionnalité à venir"""
+    query = update.callback_query
+    await query.answer()
+    
+    message = """📊 PRIX DÉGRESSIFS
+
+Cette fonctionnalité est en cours de développement.
+
+Elle permettra de configurer des prix dégressifs par quantité :
+• 1-10g : Prix normal
+• 11-50g : -5%
+• 51-100g : -10%
+• etc.
+
+Pour l'instant, utilisez la gestion des prix par pays.
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_manage_prices")]
     ]
     
     await query.edit_message_text(
@@ -8189,11 +8231,19 @@ async def receive_order_total(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     order_id = context.user_data.get('editing_order_total')
     
+    logger.info(f"📝 receive_order_total appelé: order_id={order_id}, text={update.message.text}")
+    
     if not order_id:
+        logger.warning("⚠️ order_id manquant dans user_data")
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} Session expirée. Veuillez recommencer."
+        )
         return
     
     try:
-        new_total = float(update.message.text.strip())
+        new_total = float(update.message.text.strip().replace(',', '.'))
+        
+        logger.info(f"📝 Prix saisi: {new_total}€")
         
         if new_total < 0:
             await update.message.reply_text(
@@ -8210,9 +8260,18 @@ async def receive_order_total(update: Update, context: ContextTypes.DEFAULT_TYPE
         # Mettre à jour dans CSV
         csv_path = DATA_DIR / "orders.csv"
         
+        if not csv_path.exists():
+            logger.error(f"❌ Fichier CSV introuvable: {csv_path}")
+            await update.message.reply_text(
+                f"{EMOJI_THEME['error']} Erreur: fichier commandes introuvable."
+            )
+            return
+        
         with open(csv_path, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             orders = list(reader)
+        
+        logger.info(f"📝 {len(orders)} commandes chargées, recherche de {order_id}")
         
         order_found = False
         for order in orders:
@@ -8226,11 +8285,14 @@ async def receive_order_total(update: Update, context: ContextTypes.DEFAULT_TYPE
                 order['old_total'] = old_total
                 
                 order_found = True
+                logger.info(f"✅ Commande trouvée et modifiée: {old_total}€ → {new_total}€")
                 break
         
         if not order_found:
+            logger.error(f"❌ Commande {order_id} introuvable dans CSV")
             await update.message.reply_text(
-                f"{EMOJI_THEME['error']} Commande introuvable."
+                f"{EMOJI_THEME['error']} Commande introuvable.\n"
+                f"ID recherché: {order_id}"
             )
             return
         
@@ -9331,6 +9393,7 @@ def setup_handlers(application):
     # Callbacks admin - prix
     application.add_handler(CallbackQueryHandler(admin_prices, pattern="^admin_prices$"))
     application.add_handler(CallbackQueryHandler(admin_prices_country, pattern="^admin_prices_(fr|ch)$"))
+    application.add_handler(CallbackQueryHandler(admin_pricing_tiers, pattern="^admin_pricing_tiers$"))
     application.add_handler(CallbackQueryHandler(admin_edit_price_start, pattern="^admin_edit_prices_"))
     application.add_handler(CallbackQueryHandler(admin_price_edit_product, pattern="^admin_price_edit_"))
     

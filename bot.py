@@ -964,7 +964,7 @@ def set_stock(product_name, quantity, alert_threshold=20):
     elif quantity > 0 and old_quantity == 0:
         # Réapprovisionnement : réactiver automatiquement
         if product_name not in available_products:
-            available_products.append(product_name)
+            available_products.add(product_name)  # set.add() au lieu de list.append()
             save_available_products(available_products)
             logger.info(f"✅ Réappro : {product_name} réactivé automatiquement (stock: {quantity})")
     
@@ -8174,6 +8174,8 @@ Exemple : 550.00
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         
+        # Nettoyer les autres états d'édition
+        context.user_data.pop('editing_order_delivery', None)
         context.user_data['editing_order_total'] = order_id
         logger.info(f"📝 État défini: editing_order_total={order_id}, user_data={context.user_data}")
     
@@ -8225,6 +8227,8 @@ Exemple : 15.00
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         
+        # Nettoyer les autres états d'édition
+        context.user_data.pop('editing_order_total', None)
         context.user_data['editing_order_delivery'] = order_id
         logger.info(f"📝 État défini: editing_order_delivery={order_id}, user_data={context.user_data}")
     

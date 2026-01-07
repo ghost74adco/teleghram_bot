@@ -210,7 +210,7 @@ ADMIN_VIEW_LIST = 124
 # ==================== MÉTHODE DE CALCUL DISTANCE ====================
 
 DISTANCE_METHOD = "geopy"
-distance_client = Nominatim(user_agent="telegram_bot_v3")
+distance_client = Nominatim(user_agent="telegram_bot_v3", timeout=10)
 
 if OPENROUTE_API_KEY:
     try:
@@ -220,18 +220,18 @@ if OPENROUTE_API_KEY:
         logger.info("✅ OpenRouteService configuré")
     except ImportError:
         logger.warning("⚠️ openrouteservice non installé, fallback sur geopy")
-        distance_client = Nominatim(user_agent="telegram_bot_v3")
+        distance_client = Nominatim(user_agent="telegram_bot_v3", timeout=10)
         DISTANCE_METHOD = "geopy"
     except Exception as e:
         logger.warning(f"⚠️ Erreur OpenRouteService: {e}, fallback sur geopy")
-        distance_client = Nominatim(user_agent="telegram_bot_v3")
+        distance_client = Nominatim(user_agent="telegram_bot_v3", timeout=10)
         DISTANCE_METHOD = "geopy"
 else:
-    distance_client = Nominatim(user_agent="telegram_bot_v3")
+    distance_client = Nominatim(user_agent="telegram_bot_v3", timeout=10)
     logger.info("✅ Geopy - Distance approximative")
 
 if distance_client is None:
-    distance_client = Nominatim(user_agent="telegram_bot_v3")
+    distance_client = Nominatim(user_agent="telegram_bot_v3", timeout=10)
     logger.warning("⚠️ Fallback final sur Geopy")
 
 # ==================== GESTION DES ADMINS ====================
@@ -1979,7 +1979,7 @@ async def notify_admin_new_order(context, order_data, user_info):
         [
             InlineKeyboardButton(
                 f"{EMOJI_THEME['success']} Valider commande",
-                callback_data=f"confirm_order_{order_data['order_id']}_{order_data['user_id']}"
+                callback_data=f"admin_confirm_order_{order_data['order_id']}_{order_data['user_id']}"
             )
         ]
     ]
@@ -5998,7 +5998,7 @@ async def admin_request_pay(update: Update, context: ContextTypes.DEFAULT_TYPE):
     unreimbursed = sum(
         e['amount'] for e in expenses['expenses']
         if e['admin_id'] == str(user_id)
-        and e['status'] == 'approved'
+        and e['status'] == 'classée'
         and not e.get('reimbursed', False)
     )
     
@@ -6413,7 +6413,7 @@ Actualisé à {datetime.now().strftime('%H:%M:%S')}
             
             # Consommables
             expenses = load_expenses()
-            approved_expenses = sum(e['amount'] for e in expenses['expenses'] if e['status'] == 'approved')
+            approved_expenses = sum(e['amount'] for e in expenses['expenses'] if e['status'] == 'classée')
             
             # Payes
             payroll = load_payroll()
@@ -6504,7 +6504,7 @@ Aucun consommable enregistré.
 """
     else:
         pending = [e for e in my_expenses if e['status'] == 'pending']
-        approved = [e for e in my_expenses if e['status'] == 'approved']
+        approved = [e for e in my_expenses if e['status'] == 'classée']
         rejected = [e for e in my_expenses if e['status'] == 'rejected']
         
         total_pending = sum(e['amount'] for e in pending)
@@ -6523,7 +6523,7 @@ DERNIERS CONSOMMABLES :
 """
         
         for expense in my_expenses[-5:]:
-            status_emoji = "⏳" if expense['status'] == 'pending' else "✅" if expense['status'] == 'approved' else "❌"
+            status_emoji = "⏳" if expense['status'] == 'pending' else "✅" if expense['status'] == 'classée' else "❌"
             date = expense['date'][:10]
             message += f"""{status_emoji} {expense['category']}
 💰 {expense['amount']:.2f}€
@@ -6544,11 +6544,11 @@ DERNIERS CONSOMMABLES :
 
 @error_handler
 async def admin_finances_all_expenses(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Affiche tous les consommables en attente avec actions (super-admin)"""
+    """Affiche tous les consommables en attente avec actions (tous admins)"""
     query = update.callback_query
     await query.answer()
     
-    if not is_super_admin(query.from_user.id):
+    if not is_admin(query.from_user.id):
         await query.answer("Accès refusé", show_alert=True)
         return
     
@@ -6565,7 +6565,7 @@ async def admin_finances_all_expenses(update: Update, context: ContextTypes.DEFA
     else:
         total_pending = sum(e['amount'] for e in pending)
         
-        message = f"""🧾 CONSOMMABLES À TRAITER
+        message = f"""🧾 CONSOMMABLES À VALIDER
 
 {len(pending)} consommable(s) - {total_pending:.2f}€
 
@@ -6588,7 +6588,7 @@ async def admin_finances_all_expenses(update: Update, context: ContextTypes.DEFA
             # Ajouter boutons pour ce consommable
             keyboard.append([
                 InlineKeyboardButton(
-                    f"✅ Approuver {expense['id'][-6:]}",
+                    f"✅ Classer {expense['id'][-6:]}",
                     callback_data=f"approve_expense_{expense['id']}"
                 ),
                 InlineKeyboardButton(
@@ -6680,11 +6680,11 @@ Actualisé à {datetime.now().strftime('%H:%M:%S')}
 
 @error_handler
 async def approve_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Approuve un consommable"""
+    """Classe un consommable (tous admins)"""
     query = update.callback_query
     await query.answer()
     
-    if not is_super_admin(query.from_user.id):
+    if not is_admin(query.from_user.id):
         await query.answer("Accès refusé", show_alert=True)
         return
     
@@ -6692,13 +6692,19 @@ async def approve_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     expenses = load_expenses()
     
-    # Trouver et approuver le consommable
+    # Trouver et classer le consommable
     expense_found = None
     for expense in expenses['expenses']:
         if expense['id'] == expense_id:
-            expense['status'] = 'approved'
-            expense['approved_date'] = datetime.now().isoformat()
-            expense['approved_by'] = query.from_user.id
+            # Vérifier qu'il n'a pas déjà été traité
+            if expense['status'] != 'pending':
+                await query.answer("Ce consommable a déjà été traité", show_alert=True)
+                return
+            
+            expense['status'] = 'classée'
+            expense['validated_date'] = datetime.now().isoformat()
+            expense['validated_by'] = query.from_user.id
+            expense['validated_by_name'] = ADMINS.get(str(query.from_user.id), {}).get('name', 'Admin')
             expense_found = expense
             break
     
@@ -6710,20 +6716,24 @@ async def approve_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Notifier l'admin qui a fait la demande
     try:
+        validator_name = ADMINS.get(str(query.from_user.id), {}).get('name', 'Un admin')
         await context.bot.send_message(
             chat_id=int(expense_found['admin_id']),
-            text=f"""✅ CONSOMMABLE APPROUVÉ
+            text=f"""✅ CONSOMMABLE CLASSÉ
 
 📋 ID : {expense_id}
 📦 Catégorie : {expense_found['category']}
 💰 Montant : {expense_found['amount']:.2f}€
 📝 Description : {expense_found['description']}
 
-Votre demande a été approuvée.
+✅ Validé par : {validator_name}
+
+💵 PAIEMENT :
+Le montant sera payé avec votre prochain salaire de la semaine.
 """
         )
     except Exception as e:
-        logger.error(f"Erreur notification approbation: {e}")
+        logger.error(f"Erreur notification validation: {e}")
     
     # Enregistrer automatiquement dans le livre de comptes
     try:
@@ -6745,15 +6755,17 @@ Votre demande a été approuvée.
     # Retour à la liste
     await admin_finances_all_expenses(update, context)
     
+    logger.info(f"✅ Consommable classé: {expense_id} par {query.from_user.id}")
+
     logger.info(f"✅ Consommable approuvé: {expense_id} - {expense_found['amount']}€")
 
 @error_handler
 async def reject_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Rejette un consommable"""
+    """Rejette un consommable (tous admins)"""
     query = update.callback_query
     await query.answer()
     
-    if not is_super_admin(query.from_user.id):
+    if not is_admin(query.from_user.id):
         await query.answer("Accès refusé", show_alert=True)
         return
     
@@ -6765,9 +6777,15 @@ async def reject_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
     expense_found = None
     for expense in expenses['expenses']:
         if expense['id'] == expense_id:
+            # Vérifier qu'il n'a pas déjà été traité
+            if expense['status'] != 'pending':
+                await query.answer("Ce consommable a déjà été traité", show_alert=True)
+                return
+            
             expense['status'] = 'rejected'
             expense['rejected_date'] = datetime.now().isoformat()
             expense['rejected_by'] = query.from_user.id
+            expense['rejected_by_name'] = ADMINS.get(str(query.from_user.id), {}).get('name', 'Admin')
             expense_found = expense
             break
     
@@ -6779,6 +6797,7 @@ async def reject_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Notifier l'admin qui a fait la demande
     try:
+        rejector_name = ADMINS.get(str(query.from_user.id), {}).get('name', 'Un admin')
         await context.bot.send_message(
             chat_id=int(expense_found['admin_id']),
             text=f"""❌ CONSOMMABLE REJETÉ
@@ -6837,7 +6856,7 @@ async def approve_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     for expense in expenses['expenses']:
         if (expense['admin_id'] == str(payment_found['admin_id']) 
-            and expense['status'] == 'approved' 
+            and expense['status'] == 'classée' 
             and not expense.get('reimbursed', False)):
             expense['reimbursed'] = True
             expense['reimbursed_date'] = datetime.now().isoformat()
@@ -7050,7 +7069,7 @@ Aucune donnée disponible.
         
         # Dépenses
         expenses = load_expenses()
-        approved_expenses = sum(e['amount'] for e in expenses['expenses'] if e['status'] == 'approved')
+        approved_expenses = sum(e['amount'] for e in expenses['expenses'] if e['status'] == 'classée')
         
         # Payes
         payroll = load_payroll()
@@ -7128,13 +7147,19 @@ async def admin_costs(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("Accès refusé", show_alert=True)
         return
     
+    # Récupérer TOUS les produits (du registre)
+    all_products = load_product_registry().get('products', {})
+    
     message = """💵 GESTION PRIX DE REVIENT
 
 Prix d'achat actuels :
 
 """
     
-    for product_name, cost in PRODUCT_COSTS.items():
+    # Afficher les prix pour tous les produits
+    for product_name in all_products.keys():
+        cost = PRODUCT_COSTS.get(product_name, 0)
+        
         # Déterminer l'unité
         if product_name in PRODUCT_WEIGHTS:
             unit = PRODUCT_WEIGHTS[product_name].get('unit', 'g')
@@ -7145,7 +7170,10 @@ Prix d'achat actuels :
         else:
             unit_str = "/g"
         
-        message += f"• {product_name}: {cost:.2f}€{unit_str}\n"
+        if cost > 0:
+            message += f"• {product_name}: {cost:.2f}€{unit_str}\n"
+        else:
+            message += f"• {product_name}: ❌ Non défini\n"
     
     message += """
 
@@ -7154,10 +7182,16 @@ Sélectionnez un produit à modifier :
     
     keyboard = []
     
-    # Un bouton par produit
-    for product_name in PRODUCT_COSTS.keys():
+    # Un bouton par produit (TOUS les produits)
+    for product_name in all_products.keys():
+        cost = PRODUCT_COSTS.get(product_name, 0)
+        if cost > 0:
+            label = f"✏️ {product_name} ({cost:.2f}€)"
+        else:
+            label = f"➕ {product_name} (définir)"
+        
         keyboard.append([InlineKeyboardButton(
-            f"✏️ {product_name}",
+            label,
             callback_data=f"admin_cost_edit_{product_name}"
         )])
     
@@ -7189,10 +7223,17 @@ async def admin_cost_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         unit_str = "par gramme"
     
-    message = f"""✏️ MODIFIER PRIX DE REVIENT
+    if current_cost > 0:
+        title = "✏️ MODIFIER PRIX DE REVIENT"
+        status = f"💰 Prix actuel : {current_cost:.2f}€ {unit_str}"
+    else:
+        title = "➕ DÉFINIR PRIX DE REVIENT"
+        status = "❌ Prix non défini (nouveau produit)"
+    
+    message = f"""{title}
 
 📦 Produit : {product_name}
-💰 Prix actuel : {current_cost:.2f}€ {unit_str}
+{status}
 
 Entrez le nouveau prix de revient :
 Exemple : 42.50
@@ -7416,7 +7457,7 @@ async def salary_admin_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
     approved_expenses = sum(
         e['amount'] for e in expenses['expenses']
         if e['admin_id'] == str(admin_id) 
-        and e['status'] == 'approved' 
+        and e['status'] == 'classée' 
         and not e.get('reimbursed', False)
     )
     
@@ -7946,7 +7987,7 @@ async def salary_overview(update: Update, context: ContextTypes.DEFAULT_TYPE):
         admin_expenses = sum(
             e['amount'] for e in expenses['expenses']
             if e['admin_id'] == admin_id
-            and e['status'] == 'approved'
+            and e['status'] == 'classée'
             and not e.get('reimbursed', False)
         )
         
@@ -8322,15 +8363,31 @@ Cliquez sur "Valider commande" pour confirmer.
         )
 
 @error_handler
-async def confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Valide la commande après vérification des prix"""
+async def admin_confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Valide la commande après vérification des prix (admin)"""
     query = update.callback_query
     await query.answer()
     
+    logger.info(f"🔍 admin_confirm_order appelé avec callback_data: {query.data}")
+    
     # Extraire order_id et user_id
-    data_parts = query.data.replace("confirm_order_", "").split("_")
-    order_id = data_parts[0]
-    user_id = int(data_parts[1])
+    try:
+        data_parts = query.data.replace("admin_confirm_order_", "").split("_")
+        logger.info(f"🔍 data_parts après split: {data_parts}")
+        
+        if len(data_parts) < 2:
+            logger.error(f"❌ Format callback invalide: {query.data}, parts: {data_parts}")
+            await query.edit_message_text("❌ Erreur: format de callback invalide")
+            return
+        
+        order_id = data_parts[0]
+        user_id = int(data_parts[1])
+        
+        logger.info(f"🔍 Parsed: order_id={order_id}, user_id={user_id}")
+    except (ValueError, IndexError) as e:
+        logger.error(f"❌ Erreur parsing callback {query.data}: {e}")
+        await query.edit_message_text(f"❌ Erreur: impossible de parser les données ({e})")
+        return
     
     # Charger la commande
     csv_path = DATA_DIR / "orders.csv"
@@ -9250,7 +9307,7 @@ def setup_handlers(application):
     # Callbacks admin - validation commandes
     application.add_handler(CallbackQueryHandler(edit_order_total, pattern="^edit_order_total_"))
     application.add_handler(CallbackQueryHandler(edit_order_delivery, pattern="^edit_order_delivery_"))
-    application.add_handler(CallbackQueryHandler(confirm_order, pattern="^confirm_order_"))
+    application.add_handler(CallbackQueryHandler(admin_confirm_order, pattern="^admin_confirm_order_"))
     application.add_handler(CallbackQueryHandler(mark_order_ready, pattern="^mark_ready_"))
     application.add_handler(CallbackQueryHandler(admin_validate_order, pattern="^admin_validate_"))
     

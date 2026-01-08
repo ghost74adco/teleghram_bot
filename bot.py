@@ -4877,22 +4877,8 @@ async def confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
         vip_discount=total_info.get('vip_discount', 0)
     )
     
-    # Mettre à jour les stocks
-    for item in cart:
-        update_stock(item['produit'], -item['quantite'])
-        
-        # Vérifier stock après mise à jour
-        new_stock = get_stock(item['produit'])
-        if new_stock is not None:
-            if new_stock == 0:
-                await notify_admin_out_of_stock(context, item['produit'])
-                # Désactiver le produit
-                available = get_available_products()
-                if item['produit'] in available:
-                    available.remove(item['produit'])
-                    save_available_products(available)
-            elif new_stock <= 20:
-                await notify_admin_low_stock(context, item['produit'], new_stock)
+    # NOTE: Le stock sera déduit quand l'admin marquera la commande comme livrée
+    # (dans admin_validate_order)
     
     # Vérifier si client devient VIP
     stats = get_client_stats(user_id)
@@ -5017,8 +5003,39 @@ async def admin_validate_order(update: Update, context: ContextTypes.DEFAULT_TYP
                 order_id
             )
             logger.info(f"📒 Vente ajoutée au livre de comptes: {total:.2f}€")
+            
+            # DÉDUIRE LE STOCK (maintenant que la commande est livrée)
+            products_str = order_data.get('products', '')
+            if products_str:
+                # Parser les produits (format: "🍀 Weed x 30.0g\n💊 Pills x 10 unités\n")
+                import re
+                for line in products_str.strip().split('\n'):
+                    if ' x ' in line:
+                        # Extraire nom et quantité
+                        match = re.match(r'(.+?)\s+x\s+([\d.]+)\s*(g|unités?)', line.strip())
+                        if match:
+                            product_name = match.group(1).strip()
+                            quantity = float(match.group(2))
+                            
+                            # Déduire le stock
+                            update_stock(product_name, -quantity)
+                            logger.info(f"📦 Stock déduit: {product_name} -{quantity}")
+                            
+                            # Vérifier stock après mise à jour
+                            new_stock = get_stock(product_name)
+                            if new_stock is not None:
+                                if new_stock == 0:
+                                    await notify_admin_out_of_stock(context, product_name)
+                                    # Désactiver le produit
+                                    available = get_available_products()
+                                    if product_name in available:
+                                        available.remove(product_name)
+                                        save_available_products(available)
+                                elif new_stock <= 20:
+                                    await notify_admin_low_stock(context, product_name, new_stock)
+            
         except Exception as e:
-            logger.error(f"Erreur ajout livre de comptes: {e}")
+            logger.error(f"Erreur ajout livre de comptes / déduction stock: {e}")
     else:
         logger.warning(f"⚠️ Commande {order_id} introuvable dans CSV - vente non enregistrée")
     
@@ -8477,10 +8494,15 @@ Exemple : 550.00
         
         keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data=f"cancel_edit_order_{order_id}")]]
         
-        await query.edit_message_text(
-            message,
+        # Envoyer un nouveau message au lieu d'éditer
+        await context.bot.send_message(
+            chat_id=query.from_user.id,
+            text=message,
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
+        
+        # Répondre au callback pour arrêter le chargement
+        await query.answer("✏️ Prêt à modifier le prix")
         
         # Nettoyer les autres états d'édition
         context.user_data.pop('editing_order_delivery', None)
@@ -8488,7 +8510,9 @@ Exemple : 550.00
         logger.info(f"📝 État défini: editing_order_total={order_id}, user_data={context.user_data}")
     
     except Exception as e:
-        logger.error(f"Erreur edit_order_total: {e}")
+        import traceback
+        logger.error(f"❌ Erreur edit_order_total: {e}")
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
         await query.answer("Erreur", show_alert=True)
 
 @error_handler
@@ -8533,10 +8557,15 @@ Exemple : 15.00
         
         keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data=f"cancel_edit_order_{order_id}")]]
         
-        await query.edit_message_text(
-            message,
+        # Envoyer un nouveau message au lieu d'éditer
+        await context.bot.send_message(
+            chat_id=query.from_user.id,
+            text=message,
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
+        
+        # Répondre au callback pour arrêter le chargement
+        await query.answer("✏️ Prêt à modifier les frais")
         
         # Nettoyer les autres états d'édition
         context.user_data.pop('editing_order_total', None)
@@ -8544,7 +8573,9 @@ Exemple : 15.00
         logger.info(f"📝 État défini: editing_order_delivery={order_id}, user_data={context.user_data}")
     
     except Exception as e:
-        logger.error(f"Erreur edit_order_delivery: {e}")
+        import traceback
+        logger.error(f"❌ Erreur edit_order_delivery: {e}")
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
         await query.answer("Erreur", show_alert=True)
 
 @error_handler
@@ -8643,15 +8674,11 @@ async def receive_order_total(update: Update, context: ContextTypes.DEFAULT_TYPE
 Ancien prix : {old_total}€
 Nouveau prix : {new_total}€
 
-Cliquez sur "Valider commande" pour confirmer.
+✅ Modification enregistrée.
+Retournez à la notification de commande pour valider.
 """
         
-        keyboard = [[InlineKeyboardButton("🔙 Voir notification", callback_data=f"view_order_{order_id}")]]
-        
-        await update.message.reply_text(
-            message,
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        await update.message.reply_text(message)
         
         logger.info(f"💰 Prix modifié: {order_id} - {old_total}€ → {new_total}€")
     
@@ -8766,15 +8793,11 @@ Nouveaux frais : {new_delivery_fee}€
 
 Nouveau total : {new_total}€
 
-Cliquez sur "Valider commande" pour confirmer.
+✅ Modification enregistrée.
+Retournez à la notification de commande pour valider.
 """
         
-        keyboard = [[InlineKeyboardButton("🔙 Voir notification", callback_data=f"view_order_{order_id}")]]
-        
-        await update.message.reply_text(
-            message,
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        await update.message.reply_text(message)
         
         logger.info(f"🚚 Frais modifiés: {order_id} - {old_delivery}€ → {new_delivery_fee}€")
     
@@ -9215,6 +9238,9 @@ Que voulez-vous faire ?
             InlineKeyboardButton("➖ Ajouter Sortie", callback_data="ledger_add_expense")
         ],
         [
+            InlineKeyboardButton("🗑️ Gérer Doublons", callback_data="ledger_manage_duplicates")
+        ],
+        [
             InlineKeyboardButton("🔄 Importer historique", callback_data="ledger_import_history")
         ],
         [
@@ -9230,6 +9256,211 @@ Que voulez-vous faire ?
         message,
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
+
+@error_handler
+async def ledger_manage_duplicates(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche et gère les entrées en double/triple dans le livre de comptes"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    ledger = load_ledger()
+    
+    # Identifier les doublons par reference_id
+    from collections import Counter
+    ref_counts = Counter(e.get('reference_id') for e in ledger['entries'] if e.get('reference_id'))
+    duplicates = {ref: count for ref, count in ref_counts.items() if count > 1}
+    
+    if not duplicates:
+        message = """🗑️ GESTION DOUBLONS
+
+✅ Aucun doublon détecté !
+
+Toutes les entrées ont des reference_id uniques.
+"""
+        keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_ledger")]]
+    else:
+        total_duplicates = sum(count - 1 for count in duplicates.values())
+        
+        message = f"""🗑️ GESTION DOUBLONS
+
+⚠️ {len(duplicates)} référence(s) en double
+📋 {total_duplicates} entrée(s) à supprimer
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+"""
+        
+        keyboard = []
+        
+        # Afficher les premiers 10 doublons
+        for ref, count in list(duplicates.items())[:10]:
+            # Trouver la première entrée avec cette référence
+            entry = next((e for e in ledger['entries'] if e.get('reference_id') == ref), None)
+            if entry:
+                amount = entry.get('amount', 0)
+                entry_type = "📥" if entry.get('type') == 'income' else "📤"
+                
+                message += f"""{entry_type} {ref[-8:]}... x{count}
+💰 {amount:.2f}€ x {count} = {amount * count:.2f}€
+📝 {entry.get('description', 'N/A')[:40]}
+
+"""
+                
+                # Bouton pour gérer ce doublon
+                keyboard.append([
+                    InlineKeyboardButton(
+                        f"🗑️ Nettoyer {ref[-8:]} (garder 1)",
+                        callback_data=f"ledger_clean_dup_{ref}"
+                    )
+                ])
+        
+        if len(duplicates) > 10:
+            message += f"\n... et {len(duplicates) - 10} autre(s)\n"
+        
+        # Bouton pour tout nettoyer automatiquement
+        keyboard.append([InlineKeyboardButton("🧹 TOUT NETTOYER AUTO", callback_data="ledger_clean_all_dups")])
+        keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="admin_ledger")])
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def ledger_clean_duplicate(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Nettoie un doublon spécifique (garde la première occurrence)"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    reference_id = query.data.replace("ledger_clean_dup_", "")
+    
+    ledger = load_ledger()
+    
+    # Trouver toutes les entrées avec cette reference_id
+    duplicates = [e for e in ledger['entries'] if e.get('reference_id') == reference_id]
+    
+    if len(duplicates) <= 1:
+        await query.answer("Aucun doublon à nettoyer", show_alert=True)
+        return
+    
+    # Garder la première, supprimer les autres
+    first_entry = duplicates[0]
+    removed_count = len(duplicates) - 1
+    
+    # Nouvelle liste sans les doublons
+    cleaned_entries = []
+    seen = False
+    
+    for entry in ledger['entries']:
+        if entry.get('reference_id') == reference_id:
+            if not seen:
+                # Garder la première occurrence
+                cleaned_entries.append(entry)
+                seen = True
+            # Ignorer les suivantes
+        else:
+            cleaned_entries.append(entry)
+    
+    # Recalculer les soldes
+    ledger['entries'] = cleaned_entries
+    balance = 0
+    for entry in ledger['entries']:
+        if entry['type'] == 'income':
+            balance += entry['amount']
+        else:
+            balance -= entry['amount']
+        entry['balance_after'] = balance
+    
+    ledger['balance'] = balance
+    save_ledger(ledger)
+    
+    await query.answer(f"✅ {removed_count} doublon(s) supprimé(s)", show_alert=True)
+    
+    # Retourner à la liste des doublons
+    await ledger_manage_duplicates(update, context)
+
+@error_handler
+async def ledger_clean_all_duplicates(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Nettoie TOUS les doublons automatiquement"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    ledger = load_ledger()
+    
+    # Identifier tous les doublons
+    from collections import Counter
+    ref_counts = Counter(e.get('reference_id') for e in ledger['entries'] if e.get('reference_id'))
+    duplicates = {ref: count for ref, count in ref_counts.items() if count > 1}
+    
+    if not duplicates:
+        await query.answer("Aucun doublon à nettoyer", show_alert=True)
+        return
+    
+    # Nettoyer tous les doublons (garder première occurrence de chaque)
+    cleaned_entries = []
+    seen_refs = set()
+    total_removed = 0
+    
+    for entry in ledger['entries']:
+        ref = entry.get('reference_id')
+        
+        if ref and ref in duplicates:
+            # C'est un doublon potentiel
+            if ref not in seen_refs:
+                # Première occurrence : garder
+                cleaned_entries.append(entry)
+                seen_refs.add(ref)
+            else:
+                # Doublon : supprimer
+                total_removed += 1
+        else:
+            # Pas de doublon ou pas de reference_id : garder
+            cleaned_entries.append(entry)
+    
+    # Recalculer tous les soldes
+    ledger['entries'] = cleaned_entries
+    balance = 0
+    for entry in ledger['entries']:
+        if entry['type'] == 'income':
+            balance += entry['amount']
+        else:
+            balance -= entry['amount']
+        entry['balance_after'] = balance
+    
+    ledger['balance'] = balance
+    save_ledger(ledger)
+    
+    message = f"""✅ NETTOYAGE TERMINÉ
+
+🗑️ {total_removed} doublon(s) supprimé(s)
+📋 {len(cleaned_entries)} entrée(s) restantes
+💰 Nouveau solde : {balance:.2f}€
+
+Les soldes ont été recalculés automatiquement.
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Retour Livre de Comptes", callback_data="admin_ledger")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    logger.info(f"🧹 Nettoyage doublons: {total_removed} entrées supprimées")
 
 @error_handler
 async def ledger_view_entries(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -9838,6 +10069,9 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(ledger_edit_balance, pattern="^ledger_edit_balance$"))
     application.add_handler(CallbackQueryHandler(ledger_monthly_report, pattern="^ledger_monthly_report$"))
     application.add_handler(CallbackQueryHandler(ledger_import_history, pattern="^ledger_import_history$"))
+    application.add_handler(CallbackQueryHandler(ledger_manage_duplicates, pattern="^ledger_manage_duplicates$"))
+    application.add_handler(CallbackQueryHandler(ledger_clean_duplicate, pattern="^ledger_clean_dup_"))
+    application.add_handler(CallbackQueryHandler(ledger_clean_all_duplicates, pattern="^ledger_clean_all_dups$"))
     
     # Callbacks admin - horaires
     application.add_handler(CallbackQueryHandler(admin_horaires, pattern="^admin_horaires$"))

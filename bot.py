@@ -1918,8 +1918,11 @@ def save_order_to_csv(order_data):
                 logger.info(f"💾 Création header CSV")
                 writer.writeheader()
             writer.writerow(order_data)
+            f.flush()  # Forcer l'écriture sur disque
+            import os
+            os.fsync(f.fileno())  # Forcer la synchronisation
         
-        logger.info(f"✅ Commande {order_data.get('order_id')} sauvegardée dans CSV")
+        logger.info(f"✅ Commande {order_data.get('order_id')} sauvegardée dans CSV (flush done)")
         return True
     except Exception as e:
         logger.error(f"❌ Erreur save_order_to_csv: {e}")
@@ -8577,8 +8580,9 @@ async def edit_order_total(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"🔍 Recherche order_id: '{order_id}'")
         
         # Log des order_ids disponibles
-        available_ids = [o.get('order_id', 'NO_ID') for o in orders[:5]]
-        logger.info(f"🔍 Order IDs disponibles (5 premiers): {available_ids}")
+        all_ids = [o.get('order_id', 'NO_ID') for o in orders]
+        logger.info(f"🔍 Order IDs disponibles (5 premiers): {all_ids[:5]}")
+        logger.info(f"🔍 TOUS les Order IDs: {all_ids}")
         
         order = next((o for o in orders if o.get('order_id') == order_id), None)
         

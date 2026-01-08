@@ -1004,7 +1004,10 @@ def save_stocks(stocks):
 def save_orders_csv(csv_path, orders):
     """Sauvegarde le CSV des commandes en filtrant les clés None"""
     try:
+        logger.info(f"💾 save_orders_csv appelé: {len(orders)} commandes")
+        
         if not orders:
+            logger.info(f"💾 Aucune commande à sauvegarder")
             return True
         
         # Nettoyer TOUS les orders d'abord (supprimer clés None)
@@ -1014,6 +1017,7 @@ def save_orders_csv(csv_path, orders):
             clean_orders.append(clean_order)
         
         if not clean_orders:
+            logger.info(f"💾 Aucune commande propre après nettoyage")
             return True
         
         # Collecter toutes les clés uniques de TOUS les orders
@@ -1023,14 +1027,19 @@ def save_orders_csv(csv_path, orders):
         
         fieldnames = sorted([k for k in all_keys if k])  # Trier pour cohérence
         
+        logger.info(f"💾 Écriture de {len(clean_orders)} commandes avec {len(fieldnames)} colonnes")
+        
         with open(csv_path, 'w', encoding='utf-8', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
             writer.writeheader()
             writer.writerows(clean_orders)
         
+        logger.info(f"✅ CSV sauvegardé avec succès")
         return True
     except Exception as e:
         logger.error(f"❌ Erreur sauvegarde orders CSV: {e}")
+        import traceback
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
         return False
 
 
@@ -8750,14 +8759,20 @@ async def receive_order_total(update: Update, context: ContextTypes.DEFAULT_TYPE
             return
         
         # Sauvegarder
-        if not save_orders_csv(csv_path, orders):
+        logger.info(f"💾 Appel save_orders_csv...")
+        save_result = save_orders_csv(csv_path, orders)
+        logger.info(f"💾 Résultat save_orders_csv: {save_result}")
+        
+        if not save_result:
             await update.message.reply_text(
                 f"{EMOJI_THEME['error']} Erreur lors de la sauvegarde.\n"
                 "Veuillez réessayer."
             )
             return
         
+        logger.info(f"💾 CSV sauvegardé, nettoyage état...")
         context.user_data.pop('editing_order_total', None)
+        logger.info(f"💾 État nettoyé")
         
         message = f"""{EMOJI_THEME['success']} PRIX MODIFIÉ
 
@@ -8770,7 +8785,9 @@ Nouveau prix : {new_total}€
 Retournez à la notification de commande pour valider.
 """
         
+        logger.info(f"📤 Envoi message confirmation...")
         await update.message.reply_text(message)
+        logger.info(f"✅ Message confirmation envoyé")
         
         logger.info(f"💰 Prix modifié: {order_id} - {old_total}€ → {new_total}€")
     
@@ -8868,14 +8885,20 @@ async def receive_order_delivery(update: Update, context: ContextTypes.DEFAULT_T
             return
         
         # Sauvegarder
-        if not save_orders_csv(csv_path, orders):
+        logger.info(f"💾 Appel save_orders_csv (livraison)...")
+        save_result = save_orders_csv(csv_path, orders)
+        logger.info(f"💾 Résultat save_orders_csv (livraison): {save_result}")
+        
+        if not save_result:
             await update.message.reply_text(
                 f"{EMOJI_THEME['error']} Erreur lors de la sauvegarde.\n"
                 "Veuillez réessayer."
             )
             return
         
+        logger.info(f"💾 CSV livraison sauvegardé, nettoyage état...")
         context.user_data.pop('editing_order_delivery', None)
+        logger.info(f"💾 État livraison nettoyé")
         
         message = f"""{EMOJI_THEME['success']} FRAIS MODIFIÉS
 
@@ -8890,7 +8913,9 @@ Nouveau total : {new_total}€
 Retournez à la notification de commande pour valider.
 """
         
+        logger.info(f"📤 Envoi message confirmation livraison...")
         await update.message.reply_text(message)
+        logger.info(f"✅ Message confirmation livraison envoyé")
         
         logger.info(f"🚚 Frais modifiés: {order_id} - {old_delivery}€ → {new_delivery_fee}€")
     

@@ -8459,7 +8459,10 @@ async def edit_order_total(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
+    logger.info(f"🔧 edit_order_total appelé: callback_data={query.data}, user={query.from_user.id}")
+    
     order_id = query.data.replace("edit_order_total_", "")
+    logger.info(f"📋 order_id extrait: {order_id}")
     
     # Nettoyer les autres états d'édition
     context.user_data.pop('editing_order_delivery', None)
@@ -8501,8 +8504,12 @@ Exemple : 550.00
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         
+        logger.info(f"✅ Message envoyé à {query.from_user.id}")
+        
         # Répondre au callback pour arrêter le chargement
         await query.answer("✏️ Prêt à modifier le prix")
+        
+        logger.info(f"✅ Callback answer envoyé")
         
         # Nettoyer les autres états d'édition
         context.user_data.pop('editing_order_delivery', None)
@@ -8521,7 +8528,10 @@ async def edit_order_delivery(update: Update, context: ContextTypes.DEFAULT_TYPE
     query = update.callback_query
     await query.answer()
     
+    logger.info(f"🔧 edit_order_delivery appelé: callback_data={query.data}, user={query.from_user.id}")
+    
     order_id = query.data.replace("edit_order_delivery_", "")
+    logger.info(f"📋 order_id extrait: {order_id}")
     
     # Nettoyer les autres états d'édition
     context.user_data.pop('editing_order_total', None)
@@ -8564,8 +8574,12 @@ Exemple : 15.00
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         
+        logger.info(f"✅ Message envoyé à {query.from_user.id}")
+        
         # Répondre au callback pour arrêter le chargement
         await query.answer("✏️ Prêt à modifier les frais")
+        
+        logger.info(f"✅ Callback answer envoyé")
         
         # Nettoyer les autres états d'édition
         context.user_data.pop('editing_order_total', None)

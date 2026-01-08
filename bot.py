@@ -1,26 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-"""
-╔═══════════════════════════════════════════════════════════════════╗
-║                                                                   ║
-║   BOT TELEGRAM V3.0.1 - VERSION CORRIGÉE                        ║
-║   Bug /admin résolu - Parse mode supprimé                        ║
-║                                                                   ║
-║   ✅ Ce fichier est la VERSION CORRIGÉE                          ║
-║   ✅ Le panel admin fonctionne sans erreur                        ║
-║   ✅ Toutes les fonctionnalités sont préservées                   ║
-║                                                                   ║
-║   Date du fix : 06/01/2026                                       ║
-║                                                                   ║
-╚═══════════════════════════════════════════════════════════════════╝
-
-BOT TELEGRAM V3.0.1 - SYSTÈME MULTI-ADMINS (CORRIGÉ)
-Gestion complète e-commerce avec interface admin Telegram
-Version corrigée - Bug admin_panel résolu - Parse mode supprimé
-"""
-
-
 import os
 import sys
 import json
@@ -61,6 +38,74 @@ logger = logging.getLogger(__name__)
 # Réduire les logs des bibliothèques externes
 logging.getLogger('httpx').setLevel(logging.WARNING)
 logging.getLogger('telegram').setLevel(logging.WARNING)
+
+# ==================== DÉCORATEURS ET FONCTIONS DE LOGGING ====================
+
+def log_callback(func):
+    """Décorateur pour logger automatiquement tous les callbacks"""
+    @wraps(func)
+    async def wrapper(update, context):
+        query = update.callback_query
+        user_id = query.from_user.id
+        username = query.from_user.username or "N/A"
+        callback_data = query.data
+        
+        logger.info(f"🔘 CALLBACK: {func.__name__}")
+        logger.info(f"   👤 User: {user_id} (@{username})")
+        logger.info(f"   📲 Data: {callback_data}")
+        
+        try:
+            result = await func(update, context)
+            logger.info(f"✅ CALLBACK SUCCESS: {func.__name__}")
+            return result
+        except Exception as e:
+            logger.error(f"❌ CALLBACK ERROR: {func.__name__}")
+            logger.error(f"   Error: {e}")
+            import traceback
+            logger.error(f"   Traceback: {traceback.format_exc()}")
+            raise
+    
+    return wrapper
+
+def log_handler(func):
+    """Décorateur pour logger automatiquement tous les handlers"""
+    @wraps(func)
+    async def wrapper(update, context):
+        user = update.effective_user
+        message_text = update.message.text if update.message else "N/A"
+        
+        logger.info(f"📩 HANDLER: {func.__name__}")
+        logger.info(f"   👤 User: {user.id} (@{user.username or 'N/A'})")
+        logger.info(f"   💬 Message: {message_text[:50]}")
+        
+        try:
+            result = await func(update, context)
+            logger.info(f"✅ HANDLER SUCCESS: {func.__name__}")
+            return result
+        except Exception as e:
+            logger.error(f"❌ HANDLER ERROR: {func.__name__}")
+            logger.error(f"   Error: {e}")
+            import traceback
+            logger.error(f"   Traceback: {traceback.format_exc()}")
+            raise
+    
+    return wrapper
+
+def log_action(action: str, user_id: int, details: str = ""):
+    """Log une action utilisateur"""
+    logger.info(f"🎬 ACTION: {action} | User: {user_id} | {details}")
+
+def log_state_change(user_id: int, state_name: str, new_value):
+    """Log un changement d'état"""
+    logger.info(f"🔄 STATE: {state_name}={new_value} | User: {user_id}")
+
+def log_db_operation(operation: str, table: str, details: str = ""):
+    """Log une opération base de données"""
+    logger.info(f"💾 DB: {operation} | Table: {table} | {details}")
+
+def log_order_status(order_id: str, old_status: str, new_status: str, admin_id: int = None):
+    """Log un changement de statut de commande"""
+    logger.info(f"📦 ORDER STATUS: {order_id} | {old_status} → {new_status}" + (f" | By admin: {admin_id}" if admin_id else ""))
 
 # ==================== CHARGEMENT VARIABLES D'ENVIRONNEMENT ====================
 
@@ -4804,6 +4849,7 @@ Confirmez-vous cette commande ?
 # ==================== CONFIRMATION COMMANDE ====================
 
 @error_handler
+@log_callback
 async def confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Confirme et enregistre la commande"""
     query = update.callback_query
@@ -8454,6 +8500,7 @@ async def calculate_commission_on_order(context, admin_id, order_data):
 # ==================== ADMIN: WORKFLOW VALIDATION COMMANDE ====================
 
 @error_handler
+@log_callback
 async def edit_order_total(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Permet de modifier le prix total d'une commande"""
     query = update.callback_query
@@ -8523,6 +8570,7 @@ Exemple : 550.00
         await query.answer("Erreur", show_alert=True)
 
 @error_handler
+@log_callback
 async def edit_order_delivery(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Permet de modifier les frais de livraison d'une commande"""
     query = update.callback_query
@@ -8593,6 +8641,7 @@ Exemple : 15.00
         await query.answer("Erreur", show_alert=True)
 
 @error_handler
+@log_handler
 async def receive_order_total(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Réceptionne le nouveau prix total"""
     if not is_admin(update.effective_user.id):
@@ -8704,6 +8753,7 @@ Retournez à la notification de commande pour valider.
         )
 
 @error_handler
+@log_handler
 async def receive_order_delivery(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Réceptionne les nouveaux frais de livraison"""
     if not is_admin(update.effective_user.id):

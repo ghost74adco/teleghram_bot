@@ -1897,33 +1897,34 @@ def format_order_summary(cart, country, delivery_type, delivery_fee, promo_disco
 # ==================== SAUVEGARDE COMMANDES ====================
 
 def save_order_to_csv(order_data):
-    """Sauvegarde une commande en CSV"""
+    """Sauvegarde une commande en CSV (lecture + ajout + réécriture)"""
     csv_path = DATA_DIR / "orders.csv"
     try:
         logger.info(f"💾 save_order_to_csv: ordre {order_data.get('order_id')}")
-        file_exists = csv_path.exists()
-        logger.info(f"💾 CSV exists: {file_exists}, path: {csv_path}")
         
-        with open(csv_path, 'a', newline='', encoding='utf-8') as f:
-            fieldnames = [
-                'date', 'order_id', 'user_id', 'username', 'first_name', 'language',
-                'products', 'country', 'address', 'delivery_type', 'distance_km',
-                'payment_method', 'subtotal', 'delivery_fee', 'promo_discount',
-                'vip_discount', 'total', 'promo_code', 'status', 'price_modified',
-                'old_total', 'delivery_modified', 'old_delivery_fee', 'validated_date',
-                'ready_date', 'delivered_date'
-            ]
-            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
-            if not file_exists:
-                logger.info(f"💾 Création header CSV")
-                writer.writeheader()
-            writer.writerow(order_data)
-            f.flush()  # Forcer l'écriture sur disque
-            import os
-            os.fsync(f.fileno())  # Forcer la synchronisation
+        # Lire toutes les commandes existantes
+        orders = []
+        if csv_path.exists():
+            with open(csv_path, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                orders = list(reader)
+            logger.info(f"💾 {len(orders)} commandes existantes chargées")
+        else:
+            logger.info(f"💾 Nouveau fichier CSV")
         
-        logger.info(f"✅ Commande {order_data.get('order_id')} sauvegardée dans CSV (flush done)")
-        return True
+        # Ajouter la nouvelle commande
+        orders.append(order_data)
+        logger.info(f"💾 Nouvelle commande ajoutée, total: {len(orders)}")
+        
+        # Réécrire tout le fichier avec save_orders_csv
+        result = save_orders_csv(csv_path, orders)
+        
+        if result:
+            logger.info(f"✅ Commande {order_data.get('order_id')} sauvegardée dans CSV")
+        else:
+            logger.error(f"❌ Échec sauvegarde via save_orders_csv")
+        
+        return result
     except Exception as e:
         logger.error(f"❌ Erreur save_order_to_csv: {e}")
         import traceback

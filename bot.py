@@ -8550,7 +8550,8 @@ async def edit_order_total(update: Update, context: ContextTypes.DEFAULT_TYPE):
     csv_path = DATA_DIR / "orders.csv"
     
     if not csv_path.exists():
-        await query.answer("Erreur: commande introuvable", show_alert=True)
+        logger.error(f"❌ Fichier CSV introuvable: {csv_path}")
+        await query.answer("Erreur: fichier commandes introuvable", show_alert=True)
         return
     
     try:
@@ -8559,11 +8560,21 @@ async def edit_order_total(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reader = csv_module.DictReader(f)
             orders = list(reader)
         
+        logger.info(f"📋 CSV chargé: {len(orders)} commandes")
+        logger.info(f"🔍 Recherche order_id: '{order_id}'")
+        
+        # Log des order_ids disponibles
+        available_ids = [o.get('order_id', 'NO_ID') for o in orders[:5]]
+        logger.info(f"🔍 Order IDs disponibles (5 premiers): {available_ids}")
+        
         order = next((o for o in orders if o.get('order_id') == order_id), None)
         
         if not order:
-            await query.answer("Commande introuvable", show_alert=True)
+            logger.error(f"❌ Commande '{order_id}' INTROUVABLE dans {len(orders)} commandes")
+            await query.answer("Commande introuvable dans le CSV", show_alert=True)
             return
+        
+        logger.info(f"✅ Commande trouvée: {order_id}, total={order.get('total', 'N/A')}")
         
         message = f"""✏️ MODIFIER PRIX TOTAL
 
@@ -8623,7 +8634,8 @@ async def edit_order_delivery(update: Update, context: ContextTypes.DEFAULT_TYPE
     csv_path = DATA_DIR / "orders.csv"
     
     if not csv_path.exists():
-        await query.answer("Erreur: commande introuvable", show_alert=True)
+        logger.error(f"❌ Fichier CSV introuvable: {csv_path}")
+        await query.answer("Erreur: fichier commandes introuvable", show_alert=True)
         return
     
     try:
@@ -8632,11 +8644,21 @@ async def edit_order_delivery(update: Update, context: ContextTypes.DEFAULT_TYPE
             reader = csv_module.DictReader(f)
             orders = list(reader)
         
+        logger.info(f"🚚 CSV chargé: {len(orders)} commandes")
+        logger.info(f"🔍 Recherche order_id (delivery): '{order_id}'")
+        
+        # Log des order_ids disponibles
+        available_ids = [o.get('order_id', 'NO_ID') for o in orders[:5]]
+        logger.info(f"🔍 Order IDs disponibles (5 premiers): {available_ids}")
+        
         order = next((o for o in orders if o.get('order_id') == order_id), None)
         
         if not order:
-            await query.answer("Commande introuvable", show_alert=True)
+            logger.error(f"❌ Commande '{order_id}' INTROUVABLE (delivery) dans {len(orders)} commandes")
+            await query.answer("Commande introuvable dans le CSV", show_alert=True)
             return
+        
+        logger.info(f"✅ Commande trouvée (delivery): {order_id}")
         
         message = f"""✏️ MODIFIER FRAIS LIVRAISON
 

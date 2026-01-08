@@ -2277,6 +2277,96 @@ Choisissez votre pays pour commencer :
     
     logger.info(f"✅ /start traité: {user_id}")
 
+# ==================== COMMANDE /FIX_CSV ====================
+
+@error_handler
+async def fix_csv_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /fix_csv - Nettoie le CSV corrompu (super-admin uniquement)"""
+    user_id = update.effective_user.id
+    
+    if not is_super_admin(user_id):
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} Accès refusé.\n\n"
+            "Cette commande est réservée au super-administrateur."
+        )
+        logger.warning(f"⚠️ Tentative /fix_csv non autorisée: {user_id}")
+        return
+    
+    await update.message.reply_text("🔧 Démarrage du nettoyage du CSV...\n\nCela peut prendre quelques secondes...")
+    
+    csv_path = DATA_DIR / "orders.csv"
+    
+    if not csv_path.exists():
+        await update.message.reply_text("❌ Fichier orders.csv introuvable")
+        return
+    
+    try:
+        # Lire le CSV
+        import csv as csv_module
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv_module.DictReader(f)
+            orders = list(reader)
+        
+        total_lines = len(orders)
+        
+        # Filtrer les lignes valides
+        valid_orders = []
+        invalid_lines = []
+        
+        for idx, order in enumerate(orders):
+            order_id = order.get('order_id', '')
+            if order_id.startswith('ORD-') or order_id.startswith('CMD'):
+                valid_orders.append(order)
+            else:
+                invalid_lines.append(f"Ligne {idx+2}: '{order_id[:50]}'")
+        
+        # Rapport
+        if len(valid_orders) == len(orders):
+            await update.message.reply_text(
+                f"✅ Aucune corruption détectée !\n\n"
+                f"📋 Total: {total_lines} commandes\n"
+                f"✅ Toutes valides"
+            )
+            return
+        
+        # Sauvegarder backup
+        import shutil
+        backup_path = DATA_DIR / "orders_backup.csv"
+        shutil.copy(csv_path, backup_path)
+        
+        # Réécrire le fichier propre
+        if valid_orders:
+            # Utiliser save_orders_csv pour garantir la cohérence
+            result = save_orders_csv(csv_path, valid_orders)
+            
+            if result:
+                message = f"✅ NETTOYAGE RÉUSSI\n\n"
+                message += f"📊 Résumé:\n"
+                message += f"• Total lignes: {total_lines}\n"
+                message += f"• Lignes valides: {len(valid_orders)}\n"
+                message += f"• Lignes supprimées: {total_lines - len(valid_orders)}\n\n"
+                message += f"💾 Backup: orders_backup.csv\n\n"
+                
+                if len(invalid_lines) <= 10:
+                    message += "🗑️ Lignes supprimées:\n"
+                    message += "\n".join(invalid_lines[:10])
+                else:
+                    message += f"🗑️ {len(invalid_lines)} lignes supprimées\n"
+                    message += "(Voir logs pour détails)"
+                
+                await update.message.reply_text(message)
+                logger.info(f"✅ CSV nettoyé: {len(valid_orders)} commandes gardées, {len(invalid_lines)} supprimées")
+            else:
+                await update.message.reply_text("❌ Erreur lors de la sauvegarde du CSV nettoyé")
+        else:
+            await update.message.reply_text("⚠️ Aucune ligne valide trouvée dans le CSV")
+            
+    except Exception as e:
+        await update.message.reply_text(f"❌ Erreur: {e}")
+        logger.error(f"❌ Erreur fix_csv: {e}")
+        import traceback
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
+
 # ==================== COMMANDE /ADMIN ====================
 
 @error_handler
@@ -10103,6 +10193,7 @@ def setup_handlers(application):
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("admin", admin_command))
+    application.add_handler(CommandHandler("fix_csv", fix_csv_command))
     application.add_handler(CommandHandler("myid", get_my_id))
     application.add_handler(CommandHandler("cancel", cancel_command))
     

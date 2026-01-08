@@ -5191,33 +5191,59 @@ async def admin_validate_order(update: Update, context: ContextTypes.DEFAULT_TYP
             
             # DÉDUIRE LE STOCK (maintenant que la commande est livrée)
             products_str = order_data.get('products', '')
+            logger.info(f"📦 Déduction stock - products_str: {repr(products_str)}")
+            
             if products_str:
                 # Parser les produits (format: "🍀 Weed x 30.0g\n💊 Pills x 10 unités\n")
                 import re
                 for line in products_str.strip().split('\n'):
+                    logger.info(f"📦 Parsing ligne: {repr(line)}")
                     if ' x ' in line:
                         # Extraire nom et quantité
                         match = re.match(r'(.+?)\s+x\s+([\d.]+)\s*(g|unités?)', line.strip())
                         if match:
                             product_name = match.group(1).strip()
                             quantity = float(match.group(2))
+                            unit = match.group(3)
+                            
+                            logger.info(f"📦 Match trouvé: product_name='{product_name}', quantity={quantity}, unit={unit}")
+                            
+                            # Vérifier stock actuel AVANT déduction
+                            stock_before = get_stock(product_name)
+                            logger.info(f"📦 Stock AVANT déduction: {product_name} = {stock_before}")
                             
                             # Déduire le stock
-                            update_stock(product_name, -quantity)
-                            logger.info(f"📦 Stock déduit: {product_name} -{quantity}")
+                            result = update_stock(product_name, -quantity)
+                            logger.info(f"📦 update_stock appelé: result={result}")
+                            
+                            # Vérifier stock APRÈS déduction
+                            stock_after = get_stock(product_name)
+                            logger.info(f"📦 Stock APRÈS déduction: {product_name} = {stock_after}")
+                            
+                            if stock_after is None:
+                                logger.warning(f"⚠️ Produit '{product_name}' introuvable dans stock.json")
+                            elif stock_after == stock_before:
+                                logger.error(f"❌ Stock NON déduit ! {product_name}: {stock_before} → {stock_after}")
+                            else:
+                                logger.info(f"✅ Stock déduit avec succès: {product_name} {stock_before} → {stock_after}")
                             
                             # Vérifier stock après mise à jour
-                            new_stock = get_stock(product_name)
-                            if new_stock is not None:
-                                if new_stock == 0:
+                            if stock_after is not None:
+                                if stock_after == 0:
                                     await notify_admin_out_of_stock(context, product_name)
                                     # Désactiver le produit
                                     available = get_available_products()
                                     if product_name in available:
                                         available.remove(product_name)
                                         save_available_products(available)
-                                elif new_stock <= 20:
-                                    await notify_admin_low_stock(context, product_name, new_stock)
+                                elif stock_after <= 20:
+                                    await notify_admin_low_stock(context, product_name, stock_after)
+                        else:
+                            logger.warning(f"⚠️ Regex ne match pas: {repr(line)}")
+                    else:
+                        logger.info(f"📦 Ligne ignorée (pas de ' x '): {repr(line)}")
+            else:
+                logger.warning(f"⚠️ products_str vide pour commande {order_id}")
             
         except Exception as e:
             logger.error(f"Erreur ajout livre de comptes / déduction stock: {e}")
@@ -8912,11 +8938,13 @@ Ancien prix : {old_total}€
 Nouveau prix : {new_total}€
 
 ✅ Modification enregistrée.
-Retournez à la notification de commande pour valider.
 """
         
+        # Bouton pour retourner à la notification
+        keyboard = [[InlineKeyboardButton("🔙 Retour à la notification", callback_data=f"view_order_{order_id}")]]
+        
         logger.info(f"📤 Envoi message confirmation...")
-        await update.message.reply_text(message)
+        await update.message.reply_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
         logger.info(f"✅ Message confirmation envoyé")
         
         logger.info(f"💰 Prix modifié: {order_id} - {old_total}€ → {new_total}€")
@@ -8988,10 +9016,10 @@ async def receive_order_delivery(update: Update, context: ContextTypes.DEFAULT_T
                 old_delivery = order.get('delivery_fee', '0')
                 old_total = float(order.get('total', 0))
                 old_delivery_float = float(old_delivery)
-                subtotal = float(order.get('subtotal', 0))
                 
-                # Recalculer le total
-                new_total = subtotal + new_delivery_fee
+                # Calculer le nouveau total en remplaçant les anciens frais par les nouveaux
+                # (au lieu de recalculer depuis subtotal qui peut être obsolète)
+                new_total = old_total - old_delivery_float + new_delivery_fee
                 
                 order['delivery_fee'] = str(new_delivery_fee)
                 order['total'] = str(new_total)
@@ -9003,6 +9031,8 @@ async def receive_order_delivery(update: Update, context: ContextTypes.DEFAULT_T
                     order['old_delivery_fee'] = old_delivery
                 
                 order_found = True
+                logger.info(f"✅ Frais modifiés: {old_delivery}€ → {new_delivery_fee}€")
+                logger.info(f"💰 Nouveau total: {old_total}€ - {old_delivery_float}€ + {new_delivery_fee}€ = {new_total}€")
                 logger.info(f"✅ Commande trouvée et modifiée: {old_delivery}€ → {new_delivery_fee}€")
                 break
         
@@ -9040,11 +9070,13 @@ Nouveaux frais : {new_delivery_fee}€
 Nouveau total : {new_total}€
 
 ✅ Modification enregistrée.
-Retournez à la notification de commande pour valider.
 """
         
+        # Bouton pour retourner à la notification
+        keyboard = [[InlineKeyboardButton("🔙 Retour à la notification", callback_data=f"view_order_{order_id}")]]
+        
         logger.info(f"📤 Envoi message confirmation livraison...")
-        await update.message.reply_text(message)
+        await update.message.reply_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
         logger.info(f"✅ Message confirmation livraison envoyé")
         
         logger.info(f"🚚 Frais modifiés: {order_id} - {old_delivery}€ → {new_delivery_fee}€")
@@ -9055,6 +9087,90 @@ Retournez à la notification de commande pour valider.
             f"{EMOJI_THEME['error']} Montant invalide. Utilisez un nombre.\n"
             "Exemple : 15.00"
         )
+
+@error_handler
+async def view_order_notification(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche à nouveau la notification de commande (retour depuis modification)"""
+    query = update.callback_query
+    await query.answer()
+    
+    order_id = query.data.replace("view_order_", "")
+    logger.info(f"🔙 view_order_notification: {order_id}")
+    
+    # Charger la commande
+    csv_path = DATA_DIR / "orders.csv"
+    if not csv_path.exists():
+        await query.edit_message_text("❌ Fichier commandes introuvable")
+        return
+    
+    try:
+        import csv as csv_module
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv_module.DictReader(f)
+            orders = list(reader)
+        
+        order = next((o for o in orders if o.get('order_id') == order_id), None)
+        
+        if not order:
+            await query.edit_message_text("❌ Commande introuvable")
+            return
+        
+        # Reconstruire le message de notification
+        user_id = int(order.get('user_id', 0))
+        username = order.get('username', 'N/A')
+        first_name = order.get('first_name', 'Client')
+        products_str = order.get('products', 'N/A')
+        address = order.get('address', 'N/A')
+        delivery_type = order.get('delivery_type', 'N/A')
+        total = order.get('total', '0')
+        delivery_fee = order.get('delivery_fee', '0')
+        payment_method = order.get('payment_method', 'N/A')
+        status = order.get('status', 'En attente')
+        
+        message = f"""🔔 NOUVELLE COMMANDE
+
+📋 ID: {order_id}
+👤 Client: {first_name} (@{username})
+🆔 User ID: {user_id}
+
+📦 Produits:
+{products_str}
+
+📍 Adresse: {address}
+🚚 Livraison: {delivery_type}
+💰 Frais livraison: {delivery_fee}€
+
+💵 Paiement: {payment_method}
+💰 TOTAL: {total}€
+
+📊 Statut: {status}
+"""
+        
+        # Boutons selon statut
+        if status == "En attente":
+            keyboard = [
+                [InlineKeyboardButton("✅ Valider", callback_data=f"admin_confirm_order_{order_id}_{user_id}"),
+                 InlineKeyboardButton("❌ Refuser", callback_data=f"admin_reject_order_{order_id}_{user_id}")],
+                [InlineKeyboardButton("✏️ Modifier prix", callback_data=f"edit_order_total_{order_id}"),
+                 InlineKeyboardButton("✏️ Modifier livraison", callback_data=f"edit_order_delivery_{order_id}")]
+            ]
+        elif status == "Validée":
+            keyboard = [
+                [InlineKeyboardButton("📦 Marquer prête", callback_data=f"mark_ready_{order_id}_{user_id}")]
+            ]
+        elif status == "Prête":
+            keyboard = [
+                [InlineKeyboardButton("✅ Marquer livrée", callback_data=f"mark_delivered_{order_id}_{user_id}")]
+            ]
+        else:
+            keyboard = []
+        
+        await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard) if keyboard else None)
+        logger.info(f"✅ Notification réaffichée: {order_id}")
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur view_order_notification: {e}")
+        await query.edit_message_text(f"❌ Erreur: {e}")
 
 @error_handler
 async def admin_confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -10232,6 +10348,7 @@ def setup_handlers(application):
     # Callbacks admin - validation commandes
     application.add_handler(CallbackQueryHandler(edit_order_total, pattern="^edit_order_total_"))
     application.add_handler(CallbackQueryHandler(edit_order_delivery, pattern="^edit_order_delivery_"))
+    application.add_handler(CallbackQueryHandler(view_order_notification, pattern="^view_order_"))
     application.add_handler(CallbackQueryHandler(admin_confirm_order, pattern="^admin_confirm_order_"))
     application.add_handler(CallbackQueryHandler(mark_order_ready, pattern="^mark_ready_"))
     application.add_handler(CallbackQueryHandler(admin_validate_order, pattern="^admin_validate_"))

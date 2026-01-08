@@ -1900,7 +1900,10 @@ def save_order_to_csv(order_data):
     """Sauvegarde une commande en CSV"""
     csv_path = DATA_DIR / "orders.csv"
     try:
+        logger.info(f"💾 save_order_to_csv: ordre {order_data.get('order_id')}")
         file_exists = csv_path.exists()
+        logger.info(f"💾 CSV exists: {file_exists}, path: {csv_path}")
+        
         with open(csv_path, 'a', newline='', encoding='utf-8') as f:
             fieldnames = [
                 'date', 'order_id', 'user_id', 'username', 'first_name', 'language',
@@ -1912,11 +1915,16 @@ def save_order_to_csv(order_data):
             ]
             writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
             if not file_exists:
+                logger.info(f"💾 Création header CSV")
                 writer.writeheader()
             writer.writerow(order_data)
+        
+        logger.info(f"✅ Commande {order_data.get('order_id')} sauvegardée dans CSV")
         return True
     except Exception as e:
-        logger.error(f"CSV: {e}")
+        logger.error(f"❌ Erreur save_order_to_csv: {e}")
+        import traceback
+        logger.error(f"❌ Traceback: {traceback.format_exc()}")
         return False
 
 # ==================== ENVOI MÉDIAS ====================
@@ -4931,7 +4939,12 @@ async def confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     }
     
     # Sauvegarder en CSV
-    save_order_to_csv(order_data)
+    logger.info(f"💾 Appel save_order_to_csv pour {order_id}...")
+    save_result = save_order_to_csv(order_data)
+    logger.info(f"💾 Résultat save_order_to_csv: {save_result}")
+    
+    if not save_result:
+        logger.error(f"❌ Échec sauvegarde commande {order_id} dans CSV")
     
     # Mettre à jour l'historique client
     update_client_history(user_id, {

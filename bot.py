@@ -5240,15 +5240,15 @@ async def admin_validate_order(update: Update, context: ContextTypes.DEFAULT_TYP
                 
                 for line in lines:
                     line = line.strip()
-                    if not line or ' x ' not in line:
-                        logger.info(f"📦 Ligne ignorée: {repr(line)}")
+                    if not line or 'x' not in line:
+                        logger.info(f"📦 Ligne ignorée (pas de 'x'): {repr(line)}")
                         continue
                     
                     logger.info(f"📦 Processing: {repr(line)}")
                     
                     # Supprimer les emojis et nettoyer
-                    # Regex: "Nom x Quantité g/unités"
-                    match = re.match(r'[^\w\s]*(.+?)\s+x\s+([\d.]+)\s*(g|unités?)', line, re.UNICODE)
+                    # Regex: "Nom x Quantité g/unités" (avec ou SANS espaces autour du x)
+                    match = re.match(r'[^\w\s]*(.+?)\s*x\s*([\d.]+)\s*(g|unités?)', line, re.UNICODE)
                     
                     if match:
                         product_raw = match.group(1).strip()

@@ -634,7 +634,7 @@ MAX_CART_ITEMS = 50
 MAX_QUANTITY_PER_ITEM = 1000
 MIN_ORDER_AMOUNT = 10
 
-BOT_VERSION = "3.3.0"
+BOT_VERSION = "3.1.0"
 BOT_NAME = "E-Commerce Bot Multi-Admins"
 
 logger.info(f"🤖 {BOT_NAME} v{BOT_VERSION}")
@@ -5178,70 +5178,160 @@ async def admin_validate_order(update: Update, context: ContextTypes.DEFAULT_TYP
     if order_data:
         try:
             total = float(order_data.get('total', 0))
+            delivery_fee = float(order_data.get('delivery_fee', 0))
             first_name = order_data.get('first_name', 'Client')
+            products_str = order_data.get('products', '')
             
-            add_ledger_entry(
-                'income',
-                total,
-                f"Vente commande {order_id} - {first_name} (Livrée)",
-                'Vente',
-                order_id
-            )
-            logger.info(f"📒 Vente ajoutée au livre de comptes: {total:.2f}€")
+            # Déterminer la caisse selon le produit
+            is_weed = 'Weed' in products_str or '🍀' in products_str
+            
+            if is_weed:
+                # COMMANDE WEED: Tout → Caisse WEED
+                add_ledger_entry(
+                    'income',
+                    total,
+                    f"Vente Weed {order_id} - {first_name}",
+                    'Vente',
+                    order_id,
+                    ledger_type='weed'
+                )
+                logger.info(f"📒 Vente Weed ajoutée (Caisse WEED): {total:.2f}€")
+            else:
+                # COMMANDE AUTRES: Split Livraison + Produits
+                # 1. Frais livraison → Caisse WEED
+                if delivery_fee > 0:
+                    add_ledger_entry(
+                        'income',
+                        delivery_fee,
+                        f"Livraison {order_id} - {first_name}",
+                        'Livraison',
+                        order_id,
+                        ledger_type='weed'
+                    )
+                    logger.info(f"📒 Livraison ajoutée (Caisse WEED): {delivery_fee:.2f}€")
+                
+                # 2. Produits → Caisse AUTRES
+                products_amount = total - delivery_fee
+                if products_amount > 0:
+                    add_ledger_entry(
+                        'income',
+                        products_amount,
+                        f"Vente {order_id} - {first_name}",
+                        'Vente',
+                        order_id,
+                        ledger_type='autres'
+                    )
+                    logger.info(f"📒 Vente produits ajoutée (Caisse AUTRES): {products_amount:.2f}€")
             
             # DÉDUIRE LE STOCK (maintenant que la commande est livrée)
             products_str = order_data.get('products', '')
-            logger.info(f"📦 Déduction stock - products_str: {repr(products_str)}")
+            logger.info(f"📦 DÉDUCTION STOCK START - Commande {order_id}")
+            logger.info(f"📦 Raw products: {repr(products_str)}")
             
             if products_str:
-                # Parser les produits (format: "🍀 Weed x 30.0g\n💊 Pills x 10 unités\n")
+                # Parser les produits - formats possibles:
+                # "Coco x 10.0g"
+                # "Pills x 5 unités"
+                # "🍀 Weed x 30.0g\n💊 Pills x 10 unités"
                 import re
-                for line in products_str.strip().split('\n'):
-                    logger.info(f"📦 Parsing ligne: {repr(line)}")
-                    if ' x ' in line:
-                        # Extraire nom et quantité
-                        match = re.match(r'(.+?)\s+x\s+([\d.]+)\s*(g|unités?)', line.strip())
-                        if match:
-                            product_name = match.group(1).strip()
-                            quantity = float(match.group(2))
-                            unit = match.group(3)
+                
+                lines = products_str.strip().split('\n')
+                logger.info(f"📦 {len(lines)} produit(s) détecté(s)")
+                
+                for line in lines:
+                    line = line.strip()
+                    if not line or ' x ' not in line:
+                        logger.info(f"📦 Ligne ignorée: {repr(line)}")
+                        continue
+                    
+                    logger.info(f"📦 Processing: {repr(line)}")
+                    
+                    # Supprimer les emojis et nettoyer
+                    # Regex: "Nom x Quantité g/unités"
+                    match = re.match(r'[^\w\s]*(.+?)\s+x\s+([\d.]+)\s*(g|unités?)', line, re.UNICODE)
+                    
+                    if match:
+                        product_raw = match.group(1).strip()
+                        quantity_str = match.group(2)
+                        unit = match.group(3)
+                        
+                        # Nettoyer le nom du produit (enlever emojis résiduels)
+                        product_name = re.sub(r'[^\w\s-]', '', product_raw).strip()
+                        
+                        logger.info(f"✅ Product found: {product_name}")
+                        
+                        # Convertir quantité
+                        try:
+                            quantity = float(quantity_str)
+                            logger.info(f"📦 Quantity: {quantity}")
+                        except ValueError:
+                            logger.error(f"❌ Invalid quantity: {quantity_str}")
+                            continue
+                        
+                        # Si le produit n'est pas trouvé directement, essayer de matcher
+                        stock_before = get_stock(product_name)
+                        
+                        if stock_before is None:
+                            # Essayer de matcher avec les produits connus
+                            known_products = {
+                                'Coco': ['Coco', 'coco'],
+                                'K': ['K', 'Ketamine', 'ketamine'],
+                                'Crystal': ['Crystal', 'crystal', 'MDMA', 'mdma', '4MMC', '4mmc'],
+                                'Pills': ['Pills', 'pills', 'Squid-Game', 'Punisher']
+                            }
                             
-                            logger.info(f"📦 Match trouvé: product_name='{product_name}', quantity={quantity}, unit={unit}")
-                            
-                            # Vérifier stock actuel AVANT déduction
-                            stock_before = get_stock(product_name)
-                            logger.info(f"📦 Stock AVANT déduction: {product_name} = {stock_before}")
-                            
-                            # Déduire le stock
-                            result = update_stock(product_name, -quantity)
-                            logger.info(f"📦 update_stock appelé: result={result}")
-                            
-                            # Vérifier stock APRÈS déduction
-                            stock_after = get_stock(product_name)
-                            logger.info(f"📦 Stock APRÈS déduction: {product_name} = {stock_after}")
-                            
-                            if stock_after is None:
-                                logger.warning(f"⚠️ Produit '{product_name}' introuvable dans stock.json")
-                            elif stock_after == stock_before:
-                                logger.error(f"❌ Stock NON déduit ! {product_name}: {stock_before} → {stock_after}")
-                            else:
-                                logger.info(f"✅ Stock déduit avec succès: {product_name} {stock_before} → {stock_after}")
-                            
-                            # Vérifier stock après mise à jour
-                            if stock_after is not None:
-                                if stock_after == 0:
-                                    await notify_admin_out_of_stock(context, product_name)
-                                    # Désactiver le produit
-                                    available = get_available_products()
-                                    if product_name in available:
-                                        available.remove(product_name)
-                                        save_available_products(available)
-                                elif stock_after <= 20:
-                                    await notify_admin_low_stock(context, product_name, stock_after)
+                            for canonical_name, aliases in known_products.items():
+                                if product_name in aliases or any(alias.lower() in product_name.lower() for alias in aliases):
+                                    product_name = canonical_name
+                                    logger.info(f"🔄 Product matched to: {product_name}")
+                                    stock_before = get_stock(product_name)
+                                    break
+                        
+                        if stock_before is None:
+                            # Dernière tentative: chercher dans PRODUCT_COSTS
+                            from collections import OrderedDict
+                            PRODUCT_COSTS_KEYS = list(PRODUCT_COSTS.keys())
+                            for key in PRODUCT_COSTS_KEYS:
+                                if product_name.lower() in key.lower() or key.lower() in product_name.lower():
+                                    product_name = key
+                                    logger.info(f"🔄 Product matched via PRODUCT_COSTS: {product_name}")
+                                    stock_before = get_stock(product_name)
+                                    break
+                        
+                        if stock_before is None:
+                            logger.warning(f"⚠️ Produit '{product_name}' introuvable dans stocks.json - skip")
+                            continue
+                        
+                        logger.info(f"📦 Stock BEFORE: {stock_before}")
+                        
+                        # Déduire le stock
+                        result = update_stock(product_name, -quantity)
+                        
+                        # Vérifier stock APRÈS
+                        stock_after = get_stock(product_name)
+                        logger.info(f"📦 Stock AFTER: {stock_after}")
+                        
+                        if stock_after == stock_before:
+                            logger.error(f"❌ Stock NON déduit ! {product_name}: {stock_before} → {stock_after}")
                         else:
-                            logger.warning(f"⚠️ Regex ne match pas: {repr(line)}")
+                            logger.info(f"✅ Stock OK: {product_name} {stock_before} → {stock_after}")
+                        
+                        # Alertes stock
+                        if stock_after is not None:
+                            if stock_after == 0:
+                                await notify_admin_out_of_stock(context, product_name)
+                                # Désactiver le produit
+                                available = get_available_products()
+                                if product_name in available:
+                                    available.remove(product_name)
+                                    save_available_products(available)
+                                    logger.info(f"🔴 Produit {product_name} désactivé (rupture stock)")
+                            elif stock_after <= 20:
+                                await notify_admin_low_stock(context, product_name, stock_after)
                     else:
-                        logger.info(f"📦 Ligne ignorée (pas de ' x '): {repr(line)}")
+                        logger.warning(f"⚠️ Regex no match: {repr(line)}")
+                
+                logger.info(f"📦 DÉDUCTION STOCK END - Commande {order_id}")
             else:
                 logger.warning(f"⚠️ products_str vide pour commande {order_id}")
             
@@ -9370,38 +9460,68 @@ Une fois livrée, cliquez sur "Marquer livrée".
 
 # ==================== ADMIN: LIVRE DE COMPTES ====================
 
-def load_ledger():
-    """Charge le livre de comptes"""
-    ledger_file = DATA_DIR / "ledger.json"
+def load_ledger(ledger_type='global'):
+    """Charge le livre de comptes
+    
+    Args:
+        ledger_type: 'weed', 'autres', ou 'global' (compatibilité ancien système)
+    
+    Returns:
+        dict: Données du ledger avec entries, balance, last_updated
+    """
+    if ledger_type == 'weed':
+        ledger_file = DATA_DIR / "ledger_weed.json"
+    elif ledger_type == 'autres':
+        ledger_file = DATA_DIR / "ledger_autres.json"
+    else:  # global (ancien système ou combiné)
+        ledger_file = DATA_DIR / "ledger.json"
+    
     if ledger_file.exists():
         with open(ledger_file, 'r', encoding='utf-8') as f:
             return json.load(f)
+    
     return {
         "entries": [],
         "balance": 0,
         "last_updated": datetime.now().isoformat()
     }
 
-def save_ledger(data):
-    """Sauvegarde le livre de comptes"""
-    ledger_file = DATA_DIR / "ledger.json"
+def save_ledger(data, ledger_type='global'):
+    """Sauvegarde le livre de comptes
+    
+    Args:
+        data: Données du ledger à sauvegarder
+        ledger_type: 'weed', 'autres', ou 'global'
+    """
+    if ledger_type == 'weed':
+        ledger_file = DATA_DIR / "ledger_weed.json"
+    elif ledger_type == 'autres':
+        ledger_file = DATA_DIR / "ledger_autres.json"
+    else:
+        ledger_file = DATA_DIR / "ledger.json"
+    
     data['last_updated'] = datetime.now().isoformat()
     with open(ledger_file, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
-def add_ledger_entry(entry_type, amount, description, category, reference_id=None):
+def add_ledger_entry(entry_type, amount, description, category, reference_id=None, ledger_type='autres'):
     """Ajoute une entrée dans le livre de comptes
     
-    entry_type: 'income' ou 'expense'
-    amount: montant positif
-    description: texte libre
-    category: catégorie (Vente, Salaire, Consommable, etc.)
-    reference_id: ID de référence (order_id, payment_id, etc.)
-    """
-    logger.info(f"📒 Début add_ledger_entry: type={entry_type}, amount={amount}, category={category}")
+    Args:
+        entry_type: 'income' ou 'expense'
+        amount: montant positif
+        description: texte libre
+        category: catégorie (Vente, Salaire, Consommable, etc.)
+        reference_id: ID de référence (order_id, payment_id, etc.)
+        ledger_type: 'weed' ou 'autres' (défaut: 'autres')
     
-    ledger = load_ledger()
-    logger.info(f"📒 Ledger chargé: {len(ledger.get('entries', []))} entrées, solde={ledger.get('balance', 0)}")
+    Returns:
+        dict: Entrée créée
+    """
+    logger.info(f"📒 Début add_ledger_entry: type={entry_type}, amount={amount}, category={category}, ledger={ledger_type}")
+    
+    ledger = load_ledger(ledger_type)
+    logger.info(f"📒 Ledger {ledger_type} chargé: {len(ledger.get('entries', []))} entrées, solde={ledger.get('balance', 0)}")
     
     entry = {
         "id": f"LED-{int(datetime.now().timestamp())}",
@@ -9425,10 +9545,10 @@ def add_ledger_entry(entry_type, amount, description, category, reference_id=Non
     # Ajouter l'entrée
     ledger['entries'].insert(0, entry)  # Plus récent en premier
     
-    logger.info(f"📒 Entrée créée: {entry['id']}, nouveau solde={ledger['balance']}")
+    logger.info(f"📒 Entrée créée dans {ledger_type}: {entry['id']}, nouveau solde={ledger['balance']}")
     
-    save_ledger(ledger)
-    logger.info(f"📒 Livre de comptes: {entry_type} {amount:.2f}€ - {description}")
+    save_ledger(ledger, ledger_type)
+    logger.info(f"📒 Livre de comptes {ledger_type}: {entry_type} {amount:.2f}€ - {description}")
     
     return entry
 
@@ -9542,9 +9662,165 @@ def import_existing_orders_to_ledger():
         logger.error(f"Erreur import historique: {e}")
         return 0
 
+def import_existing_orders_to_ledger_split():
+    """Importe toutes les commandes livrées existantes dans les 2 caisses (WEED / AUTRES)
+    
+    Logique de split:
+    - Si commande contient Weed → Total va dans Caisse WEED
+    - Sinon → Frais livraison → Caisse WEED, Reste → Caisse AUTRES
+    
+    Returns:
+        tuple: (imported_weed, imported_autres)
+    """
+    csv_path = DATA_DIR / "orders.csv"
+    
+    if not csv_path.exists():
+        logger.info("📒 Aucun fichier orders.csv à importer")
+        return (0, 0)
+    
+    try:
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            orders = list(reader)
+        
+        logger.info(f"📒 {len(orders)} commande(s) trouvée(s) dans orders.csv")
+        
+        # Charger les 2 ledgers
+        ledger_weed = load_ledger('weed')
+        ledger_autres = load_ledger('autres')
+        
+        # Références existantes pour éviter doublons
+        existing_refs_weed = {e.get('reference_id') for e in ledger_weed['entries'] if e.get('reference_id')}
+        existing_refs_autres = {e.get('reference_id') for e in ledger_autres['entries'] if e.get('reference_id')}
+        
+        logger.info(f"📒 Weed: {len(existing_refs_weed)} réfs, Autres: {len(existing_refs_autres)} réfs")
+        
+        imported_weed = 0
+        imported_autres = 0
+        skipped = 0
+        
+        for order in orders:
+            order_id = order.get('order_id')
+            status = order.get('status', '').strip()
+            
+            # Skip commandes en attente
+            if status == 'En attente':
+                logger.info(f"📒 {order_id}: en attente, skip")
+                skipped += 1
+                continue
+            
+            # Extraire données commande
+            try:
+                total = float(order.get('total', 0))
+                delivery_fee = float(order.get('delivery_fee', 0))
+                products_str = order.get('products', '')
+                first_name = order.get('first_name', 'Client')
+                date = order.get('date', datetime.now().isoformat())
+                
+                if total <= 0:
+                    logger.warning(f"📒 {order_id}: montant invalide {total}, skip")
+                    skipped += 1
+                    continue
+                
+                # Déterminer si c'est une commande WEED
+                is_weed = 'Weed' in products_str or '🍀' in products_str
+                
+                if is_weed:
+                    # COMMANDE WEED: Tout va dans Caisse WEED
+                    if order_id not in existing_refs_weed:
+                        entry = {
+                            "id": f"LED-W-{int(datetime.now().timestamp())}-{imported_weed}",
+                            "date": date,
+                            "type": "income",
+                            "amount": total,
+                            "description": f"Vente Weed {order_id} - {first_name} (Import)",
+                            "category": "Vente",
+                            "reference_id": order_id,
+                            "balance_after": 0
+                        }
+                        
+                        ledger_weed['balance'] += total
+                        entry['balance_after'] = ledger_weed['balance']
+                        ledger_weed['entries'].append(entry)
+                        imported_weed += 1
+                        
+                        logger.info(f"✅ Import WEED {order_id}: {total:.2f}€")
+                    else:
+                        logger.info(f"📒 {order_id}: déjà dans WEED, skip")
+                        skipped += 1
+                        
+                else:
+                    # COMMANDE AUTRES: Split Livraison(WEED) / Produits(AUTRES)
+                    
+                    # 1. Frais de livraison → WEED
+                    if delivery_fee > 0 and order_id not in existing_refs_weed:
+                        entry_delivery = {
+                            "id": f"LED-W-{int(datetime.now().timestamp())}-{imported_weed}",
+                            "date": date,
+                            "type": "income",
+                            "amount": delivery_fee,
+                            "description": f"Frais livraison {order_id} - {first_name} (Import)",
+                            "category": "Livraison",
+                            "reference_id": order_id,
+                            "balance_after": 0
+                        }
+                        
+                        ledger_weed['balance'] += delivery_fee
+                        entry_delivery['balance_after'] = ledger_weed['balance']
+                        ledger_weed['entries'].append(entry_delivery)
+                        imported_weed += 1
+                        
+                        logger.info(f"✅ Import livraison→WEED {order_id}: {delivery_fee:.2f}€")
+                    
+                    # 2. Produits (total - livraison) → AUTRES
+                    products_amount = total - delivery_fee
+                    if products_amount > 0 and order_id not in existing_refs_autres:
+                        entry_products = {
+                            "id": f"LED-A-{int(datetime.now().timestamp())}-{imported_autres}",
+                            "date": date,
+                            "type": "income",
+                            "amount": products_amount,
+                            "description": f"Vente {order_id} - {first_name} (Import)",
+                            "category": "Vente",
+                            "reference_id": order_id,
+                            "balance_after": 0
+                        }
+                        
+                        ledger_autres['balance'] += products_amount
+                        entry_products['balance_after'] = ledger_autres['balance']
+                        ledger_autres['entries'].append(entry_products)
+                        imported_autres += 1
+                        
+                        logger.info(f"✅ Import produits→AUTRES {order_id}: {products_amount:.2f}€")
+                    
+            except Exception as e:
+                logger.error(f"❌ Erreur import {order_id}: {e}")
+                skipped += 1
+        
+        # Sauvegarder les 2 ledgers
+        if imported_weed > 0:
+            ledger_weed['entries'].sort(key=lambda x: x['date'], reverse=True)
+            save_ledger(ledger_weed, 'weed')
+            logger.info(f"✅ {imported_weed} entrée(s) importée(s) dans Caisse WEED")
+        
+        if imported_autres > 0:
+            ledger_autres['entries'].sort(key=lambda x: x['date'], reverse=True)
+            save_ledger(ledger_autres, 'autres')
+            logger.info(f"✅ {imported_autres} entrée(s) importée(s) dans Caisse AUTRES")
+        
+        logger.info(f"📊 Import terminé: WEED={imported_weed}, AUTRES={imported_autres}, Skipped={skipped}")
+        
+        return (imported_weed, imported_autres)
+        
+    except Exception as e:
+        logger.error(f"Erreur import historique split: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return (0, 0)
+
 @error_handler
 async def admin_ledger(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menu principal livre de comptes avec stats automatiques (super-admin uniquement)"""
+    """Menu principal livre de comptes avec 2 caisses (WEED / AUTRES) - super-admin uniquement"""
     query = update.callback_query
     await query.answer()
     
@@ -9552,69 +9828,212 @@ async def admin_ledger(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("Accès refusé", show_alert=True)
         return
     
-    ledger = load_ledger()
+    # Charger les 2 ledgers
+    ledger_weed = load_ledger('weed')
+    ledger_autres = load_ledger('autres')
     
-    # Statistiques rapides
-    total_income = sum(e['amount'] for e in ledger['entries'] if e['type'] == 'income')
-    total_expenses = sum(e['amount'] for e in ledger['entries'] if e['type'] == 'expense')
-    balance = ledger.get('balance', 0)
+    # Stats Caisse WEED
+    balance_weed = ledger_weed.get('balance', 0)
+    income_weed = sum(e['amount'] for e in ledger_weed['entries'] if e['type'] == 'income')
+    expenses_weed = sum(e['amount'] for e in ledger_weed['entries'] if e['type'] == 'expense')
+    count_weed = len(ledger_weed['entries'])
     
-    # Stats par catégorie
-    ventes = sum(e['amount'] for e in ledger['entries'] if e['type'] == 'income' and e.get('category') == 'Vente')
-    salaires = sum(e['amount'] for e in ledger['entries'] if e['type'] == 'expense' and e.get('category') == 'Salaire')
-    consommables = sum(e['amount'] for e in ledger['entries'] if e['type'] == 'expense' and e.get('category') == 'Consommable')
+    # Stats Caisse AUTRES
+    balance_autres = ledger_autres.get('balance', 0)
+    income_autres = sum(e['amount'] for e in ledger_autres['entries'] if e['type'] == 'income')
+    expenses_autres = sum(e['amount'] for e in ledger_autres['entries'] if e['type'] == 'expense')
+    count_autres = len(ledger_autres['entries'])
     
-    message = f"""📒 LIVRE DE COMPTES
+    # Totaux combinés
+    balance_total = balance_weed + balance_autres
+    income_total = income_weed + income_autres
+    expenses_total = expenses_weed + expenses_autres
+    
+    message = f"""📒 LIVRE DE COMPTES - 2 CAISSES
 
-💰 SOLDE ACTUEL : {balance:.2f}€
+💰 SOLDE TOTAL : {balance_total:.2f}€
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-📊 STATISTIQUES :
-• Total entrées : {total_income:.2f}€
-  └ Ventes : {ventes:.2f}€
-• Total sorties : {total_expenses:.2f}€
-  └ Salaires : {salaires:.2f}€
-  └ Consommables : {consommables:.2f}€
+🍀 CAISSE WEED
+• Solde : {balance_weed:.2f}€
+• Entrées : {income_weed:.2f}€
+• Sorties : {expenses_weed:.2f}€
+• Transactions : {count_weed}
 
-📋 Transactions : {len(ledger['entries'])}
+💎 CAISSE AUTRES
+• Solde : {balance_autres:.2f}€
+• Entrées : {income_autres:.2f}€
+• Sorties : {expenses_autres:.2f}€
+• Transactions : {count_autres}
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-🔄 SYNCHRONISATION AUTO :
-✅ Ventes clients
-✅ Paiements salaires
-✅ Consommables approuvés
+📊 TOTAL GÉNÉRAL
+• Entrées : {income_total:.2f}€
+• Sorties : {expenses_total:.2f}€
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+ℹ️ RÉPARTITION :
+🍀 Weed = Livraisons + Ventes Weed
+💎 Autres = Coco, K, Crystal, Pills
 
 Que voulez-vous faire ?
 """
     
     keyboard = [
         [
-            InlineKeyboardButton("📥 Voir Entrées", callback_data="ledger_income"),
-            InlineKeyboardButton("📤 Voir Sorties", callback_data="ledger_expenses")
-        ],
-        [
-            InlineKeyboardButton("📋 Toutes transactions", callback_data="ledger_all")
+            InlineKeyboardButton("🍀 Voir WEED", callback_data="ledger_view_weed"),
+            InlineKeyboardButton("💎 Voir AUTRES", callback_data="ledger_view_autres")
         ],
         [
             InlineKeyboardButton("➕ Ajouter Entrée", callback_data="ledger_add_income"),
             InlineKeyboardButton("➖ Ajouter Sortie", callback_data="ledger_add_expense")
         ],
         [
-            InlineKeyboardButton("🗑️ Gérer Doublons", callback_data="ledger_manage_duplicates")
-        ],
-        [
-            InlineKeyboardButton("🔄 Importer historique", callback_data="ledger_import_history")
-        ],
-        [
-            InlineKeyboardButton("✏️ Modifier Solde", callback_data="ledger_edit_balance")
+            InlineKeyboardButton("🔄 Réimporter historique", callback_data="ledger_reimport_split")
         ],
         [
             InlineKeyboardButton("📊 Rapport Mensuel", callback_data="ledger_monthly_report")
         ],
         [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_panel")]
     ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def ledger_view_weed(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche les transactions de la Caisse WEED"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    ledger = load_ledger('weed')
+    entries = ledger.get('entries', [])
+    balance = ledger.get('balance', 0)
+    
+    message = f"""🍀 CAISSE WEED
+
+💰 Solde : {balance:.2f}€
+📋 Transactions : {len(entries)}
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+📊 DERNIÈRES TRANSACTIONS :
+
+"""
+    
+    # Afficher les 10 dernières transactions
+    for entry in entries[:10]:
+        date = entry.get('date', '')[:10]
+        amount = entry.get('amount', 0)
+        desc = entry.get('description', '')
+        entry_type = entry.get('type', '')
+        
+        icon = "📥" if entry_type == 'income' else "📤"
+        sign = "+" if entry_type == 'income' else "-"
+        
+        message += f"{icon} {date} | {sign}{amount:.2f}€\n"
+        message += f"   {desc[:50]}\n\n"
+    
+    if len(entries) > 10:
+        message += f"\n... et {len(entries) - 10} transaction(s) de plus"
+    
+    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_ledger")]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def ledger_view_autres(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche les transactions de la Caisse AUTRES"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    ledger = load_ledger('autres')
+    entries = ledger.get('entries', [])
+    balance = ledger.get('balance', 0)
+    
+    message = f"""💎 CAISSE AUTRES
+
+💰 Solde : {balance:.2f}€
+📋 Transactions : {len(entries)}
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+📊 DERNIÈRES TRANSACTIONS :
+
+"""
+    
+    # Afficher les 10 dernières transactions
+    for entry in entries[:10]:
+        date = entry.get('date', '')[:10]
+        amount = entry.get('amount', 0)
+        desc = entry.get('description', '')
+        entry_type = entry.get('type', '')
+        
+        icon = "📥" if entry_type == 'income' else "📤"
+        sign = "+" if entry_type == 'income' else "-"
+        
+        message += f"{icon} {date} | {sign}{amount:.2f}€\n"
+        message += f"   {desc[:50]}\n\n"
+    
+    if len(entries) > 10:
+        message += f"\n... et {len(entries) - 10} transaction(s) de plus"
+    
+    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_ledger")]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def ledger_reimport_split(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Réimporte l'historique dans les 2 caisses avec classification"""
+    query = update.callback_query
+    await query.answer("⏳ Import en cours...", show_alert=True)
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    # Lancer l'import
+    imported_weed, imported_autres = import_existing_orders_to_ledger_split()
+    
+    message = f"""🔄 RÉIMPORT HISTORIQUE
+
+✅ Import terminé !
+
+📊 RÉSULTATS :
+• 🍀 Caisse WEED : {imported_weed} entrée(s)
+• 💎 Caisse AUTRES : {imported_autres} entrée(s)
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+Les commandes ont été classées :
+• Weed → Caisse WEED (total complet)
+• Autres → Split :
+  - Livraison → Caisse WEED
+  - Produits → Caisse AUTRES
+
+Les doublons ont été ignorés automatiquement.
+"""
+    
+    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_ledger")]]
     
     await query.edit_message_text(
         message,
@@ -10429,6 +10848,9 @@ def setup_handlers(application):
     
     # Callbacks admin - livre de comptes
     application.add_handler(CallbackQueryHandler(admin_ledger, pattern="^admin_ledger$"))
+    application.add_handler(CallbackQueryHandler(ledger_view_weed, pattern="^ledger_view_weed$"))
+    application.add_handler(CallbackQueryHandler(ledger_view_autres, pattern="^ledger_view_autres$"))
+    application.add_handler(CallbackQueryHandler(ledger_reimport_split, pattern="^ledger_reimport_split$"))
     application.add_handler(CallbackQueryHandler(ledger_view_entries, pattern="^ledger_(income|expenses|all)$"))
     application.add_handler(CallbackQueryHandler(ledger_add_entry, pattern="^ledger_add_(income|expense)$"))
     application.add_handler(CallbackQueryHandler(ledger_select_category, pattern="^ledger_cat_"))

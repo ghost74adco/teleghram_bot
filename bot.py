@@ -636,7 +636,7 @@ MAX_CART_ITEMS = 50
 MAX_QUANTITY_PER_ITEM = 1000
 MIN_ORDER_AMOUNT = 10
 
-BOT_VERSION = "3.1.3"
+BOT_VERSION = "3.2.0"
 BOT_NAME = "E-Commerce Bot Multi-Admins"
 
 logger.info(f"🤖 {BOT_NAME} v{BOT_VERSION}")
@@ -2860,18 +2860,12 @@ async def product_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
 💰 TARIFS
 {tiers_display}
 
-{EMOJI_THEME['info']} Quelle quantité souhaitez-vous ?
-(Entrez la quantité en grammes)
+Cliquez sur "Commander" pour choisir votre mode de commande.
 """
     
+    # NOUVEAU: Rediriger vers choix du mode (poids ou montant)
     keyboard = [
-        [InlineKeyboardButton("1g", callback_data=f"addcart_{product_name}_1"),
-         InlineKeyboardButton("5g", callback_data=f"addcart_{product_name}_5"),
-         InlineKeyboardButton("10g", callback_data=f"addcart_{product_name}_10")],
-        [InlineKeyboardButton("25g", callback_data=f"addcart_{product_name}_25"),
-         InlineKeyboardButton("50g", callback_data=f"addcart_{product_name}_50"),
-         InlineKeyboardButton("100g", callback_data=f"addcart_{product_name}_100")],
-        [InlineKeyboardButton("📝 Autre quantité", callback_data=f"customqty_{product_name}")],
+        [InlineKeyboardButton("🛍️ Commander ce produit", callback_data=f"choosemode_{product_name}")],
         [InlineKeyboardButton("🔙 Retour", callback_data="browse_all")]
     ]
     
@@ -3077,6 +3071,262 @@ Prix : {price}€/g × {quantity} = {total:.2f}€
     )
     
     logger.info(f"✅ Ajouté: {product_name} {quantity}g - User: {query.from_user.id}")
+
+# ==================== V3.2.0: COMMANDER PAR POIDS OU MONTANT ====================
+
+@error_handler
+async def choose_order_mode(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Choisir entre commander par poids ou par montant"""
+    query = update.callback_query
+    await query.answer()
+    
+    product_name = query.data.replace("choosemode_", "")
+    country = context.user_data.get('country', 'FR')
+    price = get_price(product_name, country)
+    
+    message = f"""🛍️ COMMANDER : {product_name}
+
+💰 Prix : {price}€/g
+
+Comment voulez-vous commander ?
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("⚖️ Par poids (grammes)", callback_data=f"mode_weight_{product_name}")],
+        [InlineKeyboardButton("💰 Par montant (euros)", callback_data=f"mode_amount_{product_name}")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="browse_all")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def order_by_weight(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche les options pour commander par poids (mode classique)"""
+    query = update.callback_query
+    await query.answer()
+    
+    product_name = query.data.replace("mode_weight_", "")
+    country = context.user_data.get('country', 'FR')
+    stock = get_stock(product_name)
+    price = get_price(product_name, country)
+    
+    # Prix dégressifs
+    tiers_display = get_pricing_tiers_display(product_name, country)
+    
+    message = f"""⚖️ COMMANDER PAR POIDS
+
+Produit : {product_name}
+Prix : {price}€/g
+
+💰 TARIFS
+{tiers_display}
+
+Choisissez la quantité :
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("1g", callback_data=f"addcart_{product_name}_1"),
+         InlineKeyboardButton("5g", callback_data=f"addcart_{product_name}_5"),
+         InlineKeyboardButton("10g", callback_data=f"addcart_{product_name}_10")],
+        [InlineKeyboardButton("25g", callback_data=f"addcart_{product_name}_25"),
+         InlineKeyboardButton("50g", callback_data=f"addcart_{product_name}_50"),
+         InlineKeyboardButton("100g", callback_data=f"addcart_{product_name}_100")],
+        [InlineKeyboardButton("✏️ Autre quantité", callback_data=f"customqty_{product_name}")],
+        [InlineKeyboardButton("🔙 Retour", callback_data=f"choosemode_{product_name}")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def order_by_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commander par montant"""
+    query = update.callback_query
+    await query.answer()
+    
+    product_name = query.data.replace("mode_amount_", "")
+    country = context.user_data.get('country', 'FR')
+    price = get_price(product_name, country)
+    stock = get_stock(product_name)
+    
+    stock_info = ""
+    if stock is not None:
+        max_amount = stock * price
+        stock_info = f"\n💡 Stock disponible : {stock}g (max {max_amount:.2f}€)"
+    
+    message = f"""💰 COMMANDER PAR MONTANT
+
+Produit : {product_name}
+Prix : {price}€/g{stock_info}
+
+Entrez le montant que vous souhaitez dépenser :
+
+Exemple : 50
+(pour 50€ de {product_name})
+
+Le bot calculera automatiquement le poids correspondant.
+"""
+    
+    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data=f"choosemode_{product_name}")]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    context.user_data['awaiting_amount'] = product_name
+    logger.info(f"💰 User {query.from_user.id} en attente montant pour {product_name}")
+
+@error_handler
+async def receive_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Réceptionne le montant et calcule le poids"""
+    product_name = context.user_data.get('awaiting_amount')
+    
+    if not product_name:
+        return
+    
+    try:
+        amount = float(update.message.text.strip().replace(',', '.'))
+        
+        if amount <= 0:
+            await update.message.reply_text("❌ Le montant doit être positif.")
+            return
+        
+        if amount > 10000:
+            await update.message.reply_text("❌ Montant maximum : 10,000€")
+            return
+        
+        country = context.user_data.get('country', 'FR')
+        price_per_g = get_price_for_quantity(product_name, country, 1)
+        
+        # Calculer le poids
+        quantity = round(amount / price_per_g, 2)
+        
+        logger.info(f"💰 Calcul: {amount}€ ÷ {price_per_g}€/g = {quantity}g")
+        
+        # Vérifier stock
+        stock = get_stock(product_name)
+        if stock is not None and quantity > stock:
+            await update.message.reply_text(
+                f"❌ STOCK INSUFFISANT\n\n"
+                f"Pour {amount}€, il faudrait {quantity}g\n"
+                f"Stock disponible : {stock}g\n"
+                f"Montant maximum : {stock * price_per_g:.2f}€"
+            )
+            return
+        
+        # Ajouter au panier
+        if 'cart' not in context.user_data:
+            context.user_data['cart'] = []
+        
+        context.user_data['cart'].append({
+            'produit': product_name,
+            'quantite': quantity
+        })
+        
+        # Calculer prix réel (avec dégressivité)
+        final_price = get_price_for_quantity(product_name, country, quantity)
+        final_total = final_price * quantity
+        
+        message = f"""✅ AJOUTÉ AU PANIER
+
+{product_name} - {quantity}g
+Montant demandé : {amount:.2f}€
+Prix final : {final_price:.2f}€/g × {quantity}g = {final_total:.2f}€
+
+{format_cart(context.user_data['cart'], context.user_data)}
+"""
+        
+        keyboard = [
+            [InlineKeyboardButton("➕ Continuer shopping", callback_data="browse_all")],
+            [InlineKeyboardButton(f"{EMOJI_THEME['cart']} Voir Panier", callback_data="view_cart")],
+            [InlineKeyboardButton("✅ Passer commande", callback_data="validate_cart")]
+        ]
+        
+        await update.message.reply_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+        context.user_data.pop('awaiting_amount', None)
+        
+        logger.info(f"✅ Ajouté par montant: {product_name} {quantity}g ({amount}€) - User: {update.effective_user.id}")
+        
+    except ValueError:
+        await update.message.reply_text("❌ Montant invalide. Entrez un nombre (ex: 50 ou 50.5)")
+
+async def notify_client_order_status(context, order_data, status_change):
+    """
+    Envoie une notification au client quand le statut de sa commande change
+    
+    Args:
+        context: Context Telegram
+        order_data: Données de la commande
+        status_change: Type de changement ('validated', 'ready', 'delivered')
+    """
+    user_id = order_data.get('user_id')
+    
+    if not user_id:
+        logger.warning("⚠️ Impossible de notifier: pas de user_id")
+        return
+    
+    try:
+        summary = format_order_summary(order_data, include_status=True)
+        
+        if status_change == 'validated':
+            message = f"""✅ COMMANDE VALIDÉE
+
+{summary}
+
+🔔 Nous préparons votre commande.
+Vous serez notifié quand elle sera prête."""
+        
+        elif status_change == 'ready':
+            delivery_type = order_data.get('delivery_type', 'meetup')
+            
+            if delivery_type == 'meetup':
+                delivery_info = "📍 Contactez-nous pour définir le lieu de rencontre."
+            else:
+                delivery_info = "🚗 Votre commande sera livrée bientôt."
+            
+            message = f"""📦 COMMANDE PRÊTE
+
+{summary}
+
+✅ Votre commande est prête !
+
+{delivery_info}"""
+        
+        elif status_change == 'delivered':
+            message = f"""✅ COMMANDE LIVRÉE
+
+{summary}
+
+⭐ Merci pour votre confiance !
+À bientôt pour une prochaine commande."""
+        
+        else:
+            return
+        
+        keyboard = [[
+            InlineKeyboardButton("🛍️ Commander à nouveau", callback_data="start")
+        ]]
+        
+        await context.bot.send_message(
+            chat_id=int(user_id),
+            text=message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+        logger.info(f"📬 Notification envoyée: {status_change} - User {user_id} - Order {order_data.get('order_id')}")
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur notification client: {e}")
 
 # ==================== CALLBACK: VOIR PANIER ====================
 
@@ -5342,16 +5592,23 @@ async def admin_validate_order(update: Update, context: ContextTypes.DEFAULT_TYP
     else:
         logger.warning(f"⚠️ Commande {order_id} introuvable dans CSV - vente non enregistrée")
     
-    # Notifier le client
-    try:
-        await context.bot.send_message(
-            chat_id=customer_id,
-            text=f"{EMOJI_THEME['success']} COMMANDE LIVRÉE\n\n"
-                 f"Votre commande #{order_id} a été livrée !\n\n"
-                 f"Merci d'avoir commandé chez nous ! 🙏"
-        )
-    except Exception as e:
-        logger.error(f"Erreur notification client: {e}")
+    # V3.2.0 - Notifier le client avec résumé complet
+    if order_data:
+        await notify_client_order_status(context, {
+            'user_id': str(customer_id),
+            'order_id': order_id,
+            'cart': order_data.get('products', ''),
+            'country': order_data.get('country', 'FR'),
+            'subtotal': float(order_data.get('subtotal', 0)),
+            'delivery_fee': float(order_data.get('delivery_fee', 0)),
+            'promo_discount': float(order_data.get('promo_discount', 0)),
+            'vip_discount': float(order_data.get('vip_discount', 0)),
+            'total': float(order_data.get('total', 0)),
+            'delivery_address': order_data.get('address', 'N/A'),
+            'delivery_type': order_data.get('delivery_type', 'meetup'),
+            'payment_method': order_data.get('payment_method', 'N/A'),
+            'status': 'livrée'
+        }, 'delivered')
     
     # Modifier le message admin
     if order_data:
@@ -5481,6 +5738,12 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     # État: En attente valeur commission (super-admin)
     if context.user_data.get('setting_commission'):
         await receive_commission_value(update, context)
+        return
+    
+    # État: V3.2.0 - En attente de montant pour commander par montant
+    if context.user_data.get('awaiting_amount'):
+        logger.info(f"💰 État détecté: awaiting_amount = {context.user_data.get('awaiting_amount')}")
+        await receive_amount(update, context)
         return
     
     # États: Livre de comptes (super-admin)
@@ -8158,9 +8421,37 @@ async def salary_admin_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     logger.info(f"  - TOTAL À PAYER: {total_to_pay}€ ({admin_config['fixed_salary']}+{current_commissions}+{approved_expenses})")
     
+    # Calculer prochaine échéance
+    from datetime import datetime, timedelta
+    
+    today = datetime.now()
+    if admin_config.get('salary_type') == 'weekly':
+        # Hebdomadaire - calculer prochain vendredi
+        days_until_friday = (4 - today.weekday()) % 7  # 4 = Vendredi
+        if days_until_friday == 0:
+            days_until_friday = 7  # Si aujourd'hui est vendredi, prochaine semaine
+        next_payment = today + timedelta(days=days_until_friday)
+        echeance = f"Vendredi {next_payment.strftime('%d/%m/%Y')}"
+        periode = "cette semaine"
+    else:
+        # Mensuel
+        payment_day = admin_config.get('payment_day', 1)
+        if today.day < payment_day:
+            next_payment = today.replace(day=payment_day)
+        else:
+            # Mois suivant
+            if today.month == 12:
+                next_payment = today.replace(year=today.year + 1, month=1, day=payment_day)
+            else:
+                next_payment = today.replace(month=today.month + 1, day=payment_day)
+        echeance = next_payment.strftime('%d/%m/%Y')
+        periode = "ce mois"
+    
     message = f"""💼 CONFIGURATION SALAIRE
 
 👤 Admin : {admin_config['name']}
+
+━━━━━━━━━━━━━━━━━━━━━━
 
 💰 SALAIRE FIXE
 {salary_info}
@@ -8168,16 +8459,18 @@ async def salary_admin_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
 💸 COMMISSION
 {commission_info}
 
-📅 PAIEMENT
-{freq_info}
+📅 ÉCHÉANCE
+{echeance}
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-📊 PÉRIODE ACTUELLE :
-• Commissions : {current_commissions:.2f}€
+💵 PROCHAIN PAIEMENT :
+
+• Salaire fixe : {admin_config['fixed_salary']:.2f}€
+• Commissions {periode} : {current_commissions:.2f}€
 • Remb. consommables : {approved_expenses:.2f}€
 
-💵 TOTAL À VERSER : {total_to_pay:.2f}€
+💰 TOTAL : {total_to_pay:.2f}€
 
 🔔 Statut : {'Actif ✅' if admin_config['active'] else 'Inactif ❌'}
 
@@ -8192,6 +8485,9 @@ Modifier :
         [
             InlineKeyboardButton("📅 Fréquence", callback_data=f"set_frequency_{admin_id}"),
             InlineKeyboardButton("📆 Jour", callback_data=f"set_day_{admin_id}")
+        ],
+        [
+            InlineKeyboardButton("💵 Effectuer paiement", callback_data=f"pay_salary_{admin_id}")
         ],
         [
             InlineKeyboardButton(
@@ -8541,6 +8837,148 @@ async def save_frequency(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{EMOJI_THEME['success']} Fréquence : {freq_label}",
         reply_markup=InlineKeyboardMarkup([[
             InlineKeyboardButton("📋 Voir configuration", callback_data=f"salary_admin_{admin_id}")
+        ]])
+    )
+
+@error_handler
+@error_handler
+async def pay_salary(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Effectue le paiement et réinitialise la période"""
+    query = update.callback_query
+    await query.answer()
+    
+    admin_id = query.data.replace("pay_salary_", "")
+    
+    # Charger données
+    config = load_salary_config()
+    admin_config = config['admins'].get(str(admin_id))
+    
+    if not admin_config:
+        await query.answer("Configuration introuvable", show_alert=True)
+        return
+    
+    # Calculer montant
+    commissions_data = load_commissions()
+    current_commissions = commissions_data.get(str(admin_id), {}).get('current_period', {}).get('total_commission', 0)
+    
+    expenses = load_expenses()
+    approved_expenses = sum(
+        e['amount'] for e in expenses['expenses']
+        if e['admin_id'] == str(admin_id) 
+        and e['status'] == 'classée' 
+        and not e.get('reimbursed', False)
+    )
+    
+    fixed_salary = admin_config.get('fixed_salary', 0)
+    total = fixed_salary + current_commissions + approved_expenses
+    
+    if total == 0:
+        await query.answer("Rien à payer", show_alert=True)
+        return
+    
+    # Message de confirmation
+    message = f"""💰 CONFIRMER PAIEMENT
+
+👤 Admin : {admin_config.get('name')}
+
+Détail :
+• Salaire fixe : {fixed_salary:.2f}€
+• Commissions : {current_commissions:.2f}€
+• Remb. consommables : {approved_expenses:.2f}€
+
+💵 TOTAL : {total:.2f}€
+
+⚠️ Cette action va :
+✅ Enregistrer le paiement dans le livre de comptes
+✅ Réinitialiser les commissions de la période
+✅ Marquer les consommables comme remboursés
+
+Confirmer le paiement ?
+"""
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Confirmer", callback_data=f"confirm_pay_{admin_id}_{total}"),
+            InlineKeyboardButton("❌ Annuler", callback_data=f"salary_admin_{admin_id}")
+        ]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def confirm_salary_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Confirme et effectue le paiement"""
+    query = update.callback_query
+    await query.answer()
+    
+    parts = query.data.replace("confirm_pay_", "").split("_")
+    admin_id = parts[0]
+    total = float(parts[1])
+    
+    config = load_salary_config()
+    admin_config = config['admins'].get(str(admin_id))
+    admin_name = admin_config.get('name', 'Admin')
+    
+    # 1. Enregistrer dans le livre de comptes (dépense)
+    add_ledger_entry(
+        'expense',
+        total,
+        f"Paye {admin_name}",
+        'Salaire',
+        f"SALARY-{admin_id}-{int(datetime.now().timestamp())}",
+        ledger_type='autres'  # Les salaires sortent de la caisse AUTRES
+    )
+    
+    # 2. Réinitialiser commissions
+    commissions_data = load_commissions()
+    if str(admin_id) in commissions_data:
+        # Archiver la période
+        if 'history' not in commissions_data[str(admin_id)]:
+            commissions_data[str(admin_id)]['history'] = []
+        
+        old_period = commissions_data[str(admin_id)].get('current_period', {})
+        old_period['paid_date'] = datetime.now().isoformat()
+        old_period['paid_amount'] = total
+        commissions_data[str(admin_id)]['history'].append(old_period)
+        
+        # Nouvelle période
+        commissions_data[str(admin_id)]['current_period'] = {
+            "start_date": datetime.now().isoformat(),
+            "orders": [],
+            "total_commission": 0
+        }
+        
+        save_commissions(commissions_data)
+    
+    # 3. Marquer consommables comme remboursés
+    expenses = load_expenses()
+    for exp in expenses['expenses']:
+        if exp['admin_id'] == str(admin_id) and exp['status'] == 'classée' and not exp.get('reimbursed', False):
+            exp['reimbursed'] = True
+            exp['reimbursed_date'] = datetime.now().isoformat()
+    save_expenses(expenses)
+    
+    logger.info(f"💰 Paiement salaire effectué: {admin_name} - {total:.2f}€")
+    
+    # Message confirmation
+    await query.edit_message_text(
+        f"""✅ PAIEMENT EFFECTUÉ
+
+👤 Admin : {admin_name}
+💰 Montant : {total:.2f}€
+
+✅ Enregistré dans le livre de comptes
+✅ Commissions réinitialisées
+✅ Consommables marqués remboursés
+
+Nouvelle période commencée.
+""",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("📋 Voir configuration", callback_data=f"salary_admin_{admin_id}"),
+            InlineKeyboardButton("🔙 Retour", callback_data="admin_salary_config")
         ]])
     )
 
@@ -9357,33 +9795,22 @@ async def admin_confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Calculer commission pour l'admin qui valide
     await calculate_commission_on_order(context, query.from_user.id, order)
     
-    # NOTIFICATION AU CLIENT
-    try:
-        client_message = f"""✅ COMMANDE VALIDÉE !
-
-📋 Commande : {order_id}
-
-Votre commande a été validée par notre équipe.
-
-🛍️ Produits :
-{order.get('products_display', order.get('products', 'N/A'))}
-
-💰 Total : {order.get('total')}€
-💳 Paiement : {order.get('payment_method', 'N/A')}
-
-📦 Nous préparons actuellement votre commande.
-Vous recevrez une notification dès qu'elle sera prête !
-
-Merci de votre confiance ! 🙏
-"""
-        
-        await context.bot.send_message(
-            chat_id=user_id,
-            text=client_message
-        )
-        logger.info(f"✅ Client notifié - Commande validée: {order_id}")
-    except Exception as e:
-        logger.error(f"❌ Erreur notification client validation: {e}")
+    # V3.2.0 - NOTIFICATION AU CLIENT avec résumé complet
+    await notify_client_order_status(context, {
+        'user_id': str(user_id),
+        'order_id': order_id,
+        'cart': order.get('products', ''),
+        'country': order.get('country', 'FR'),
+        'subtotal': float(order.get('subtotal', 0)),
+        'delivery_fee': float(order.get('delivery_fee', 0)),
+        'promo_discount': float(order.get('promo_discount', 0)),
+        'vip_discount': float(order.get('vip_discount', 0)),
+        'total': float(order.get('total', 0)),
+        'delivery_address': order.get('address', 'N/A'),
+        'delivery_type': order.get('delivery_type', 'meetup'),
+        'payment_method': order.get('payment_method', 'N/A'),
+        'status': 'validée'
+    }, 'validated')
     
     # Notification admin
     message = f"""{EMOJI_THEME['success']} COMMANDE VALIDÉE
@@ -9446,33 +9873,22 @@ async def mark_order_ready(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Sauvegarder
     save_orders_csv(csv_path, orders)
     
-    # NOTIFICATION AU CLIENT
-    client_notification = f"""✅ VOTRE COMMANDE EST PRÊTE !
-
-📋 Commande : {order_id}
-
-Votre commande a été préparée et est prête à être livrée.
-
-🛍️ Produits :
-{order.get('products_display', order.get('products', 'N/A'))}
-
-💰 Total : {order.get('total')}€
-
-📍 Livraison : {order.get('delivery_type')}
-
-Nous vous contacterons très prochainement pour organiser la livraison.
-
-Merci de votre confiance ! 🙏
-"""
-    
-    try:
-        await context.bot.send_message(
-            chat_id=user_id,
-            text=client_notification
-        )
-        logger.info(f"✅ Client notifié - Commande prête: {order_id}")
-    except Exception as e:
-        logger.error(f"Erreur notification client: {e}")
+    # V3.2.0 - NOTIFICATION AU CLIENT avec résumé complet
+    await notify_client_order_status(context, {
+        'user_id': str(user_id),
+        'order_id': order_id,
+        'cart': order.get('products', ''),
+        'country': order.get('country', 'FR'),
+        'subtotal': float(order.get('subtotal', 0)),
+        'delivery_fee': float(order.get('delivery_fee', 0)),
+        'promo_discount': float(order.get('promo_discount', 0)),
+        'vip_discount': float(order.get('vip_discount', 0)),
+        'total': float(order.get('total', 0)),
+        'delivery_address': order.get('address', 'N/A'),
+        'delivery_type': order.get('delivery_type', 'meetup'),
+        'payment_method': order.get('payment_method', 'N/A'),
+        'status': 'prête'
+    }, 'ready')
     
     # CONFIRMATION ADMIN
     admin_message = f"""{EMOJI_THEME['success']} COMMANDE PRÊTE
@@ -10789,6 +11205,11 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(custom_quantity, pattern="^customqty_"))
     application.add_handler(CallbackQueryHandler(add_to_cart, pattern="^addcart_"))
     
+    # V3.2.0 - Commander par poids ou montant
+    application.add_handler(CallbackQueryHandler(choose_order_mode, pattern="^choosemode_"))
+    application.add_handler(CallbackQueryHandler(order_by_weight, pattern="^mode_weight_"))
+    application.add_handler(CallbackQueryHandler(order_by_amount, pattern="^mode_amount_"))
+    
     # Callbacks panier
     application.add_handler(CallbackQueryHandler(view_cart, pattern="^view_cart$"))
     application.add_handler(CallbackQueryHandler(clear_cart, pattern="^clear_cart$"))
@@ -10884,6 +11305,8 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(set_frequency, pattern="^set_frequency_"))
     application.add_handler(CallbackQueryHandler(save_frequency, pattern="^freq_(monthly|weekly)_"))
     application.add_handler(CallbackQueryHandler(toggle_salary_active, pattern="^toggle_salary_"))
+    application.add_handler(CallbackQueryHandler(pay_salary, pattern="^pay_salary_"))
+    application.add_handler(CallbackQueryHandler(confirm_salary_payment, pattern="^confirm_pay_"))
     application.add_handler(CallbackQueryHandler(salary_overview, pattern="^salary_overview$"))
     application.add_handler(CallbackQueryHandler(set_payment_day, pattern="^set_day_"))
     application.add_handler(CallbackQueryHandler(save_payment_day, pattern="^payday_"))

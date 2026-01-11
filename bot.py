@@ -3135,7 +3135,7 @@ Choisissez la quantité :
          InlineKeyboardButton("50g", callback_data=f"addcart_{product_name}_50"),
          InlineKeyboardButton("100g", callback_data=f"addcart_{product_name}_100")],
         [InlineKeyboardButton("✏️ Autre quantité", callback_data=f"customqty_{product_name}")],
-        [InlineKeyboardButton("🔙 Retour", callback_data=f"choosemode_{product_name}")]
+        [InlineKeyboardButton("🔙 Retour", callback_data=f"product_{product_name}")]
     ]
     
     await query.edit_message_text(
@@ -3152,17 +3152,11 @@ async def order_by_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     product_name = query.data.replace("mode_amount_", "")
     country = context.user_data.get('country', 'FR')
     price = get_price(product_name, country)
-    stock = get_stock(product_name)
-    
-    stock_info = ""
-    if stock is not None:
-        max_amount = stock * price
-        stock_info = f"\n💡 Stock disponible : {stock}g (max {max_amount:.2f}€)"
     
     message = f"""💰 COMMANDER PAR MONTANT
 
 Produit : {product_name}
-Prix : {price}€/g{stock_info}
+Prix : {price}€/g
 
 Entrez le montant que vous souhaitez dépenser :
 
@@ -3172,7 +3166,7 @@ Exemple : 50
 Le bot calculera automatiquement le poids correspondant.
 """
     
-    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data=f"choosemode_{product_name}")]]
+    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data=f"product_{product_name}")]]
     
     await query.edit_message_text(
         message,

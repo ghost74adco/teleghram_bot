@@ -4,24 +4,22 @@
 """
 ╔═══════════════════════════════════════════════════════════════════╗
 ║                                                                   ║
-║   BOT TELEGRAM V3.1.0 FINAL - TOUTES CORRECTIONS APPLIQUÉES     ║
+║   BOT TELEGRAM V3.1.2 - Prix de revient persistants             ║
 ║   Stock + Livre de Comptes 2 Caisses + Regex Fix                ║
 ║                                                                   ║
 ║   ✅ Déduction stock automatique CORRIGÉE                         ║
 ║   ✅ Regex accepte format x10.0g et x 10.0g                       ║
 ║   ✅ Livre de comptes split : WEED / AUTRES                       ║
-║   ✅ Gestion doublons consommables                                ║
-║   ✅ Réimport historique avec classification                      ║
+║   ✅ Prix de revient PERSISTANTS au redémarrage                   ║
 ║                                                                   ║
-║   Date : 09/01/2025 - Version FINALE                             ║
+║   Date : 11/01/2025 - Version 3.1.2                              ║
 ║                                                                   ║
 ╚═══════════════════════════════════════════════════════════════════╝
 
-BOT TELEGRAM V3.1.0 FINAL
+BOT TELEGRAM V3.1.2
 - Déduction stock garantie (regex fixé pour x10.0g et x 10.0g)
 - Livre de comptes double caisse (Weed vs Autres produits)
-- Gestion complète des consommables en double
-- Réimport automatique de l'historique avec classification
+- Prix de revient persistants (ne s'effacent plus au redémarrage)
 """
 
 
@@ -638,7 +636,7 @@ MAX_CART_ITEMS = 50
 MAX_QUANTITY_PER_ITEM = 1000
 MIN_ORDER_AMOUNT = 10
 
-BOT_VERSION = "3.1.1"
+BOT_VERSION = "3.1.2"
 BOT_NAME = "E-Commerce Bot Multi-Admins"
 
 logger.info(f"🤖 {BOT_NAME} v{BOT_VERSION}")
@@ -8013,6 +8011,8 @@ Les marges seront calculées avec ce nouveau prix à partir de maintenant.
 
 def load_product_costs():
     """Charge les prix de revient depuis le fichier JSON"""
+    global PRODUCT_COSTS
+    
     costs_file = DATA_DIR / "product_costs.json"
     
     if costs_file.exists():
@@ -8020,17 +8020,22 @@ def load_product_costs():
             with open(costs_file, 'r', encoding='utf-8') as f:
                 saved_costs = json.load(f)
             
-            # Mettre à jour PRODUCT_COSTS
-            for product_name, cost in saved_costs.items():
-                if product_name in PRODUCT_COSTS:
-                    PRODUCT_COSTS[product_name] = cost
+            # IMPORTANT: Remplacer complètement PRODUCT_COSTS
+            # pour charger TOUS les produits du JSON
+            PRODUCT_COSTS.clear()
+            PRODUCT_COSTS.update(saved_costs)
             
-            logger.info(f"💵 Prix de revient chargés: {len(saved_costs)} produits")
+            logger.info(f"💵 Prix de revient chargés: {len(saved_costs)} produits - {list(PRODUCT_COSTS.keys())}")
             return True
         except Exception as e:
             logger.error(f"Erreur chargement prix: {e}")
             return False
-    return False
+    else:
+        # Créer le fichier avec les valeurs par défaut au premier démarrage
+        logger.info("💵 Création product_costs.json avec valeurs par défaut")
+        with open(costs_file, 'w', encoding='utf-8') as f:
+            json.dump(PRODUCT_COSTS, f, indent=2, ensure_ascii=False)
+        return True
 
 # ==================== ADMIN: GESTION SALAIRES ====================
 
@@ -8110,9 +8115,10 @@ async def salary_admin_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
         salary_info = f"{admin_config['fixed_salary']:.2f}€/semaine"
     
     # Info commission
-    commission_value = admin_config.get('commission_value', 0)
-    if commission_value > 0:
-        commission_info = f"{commission_value:.2f}€ par commande"
+    if admin_config['commission_type'] == 'percentage':
+        commission_info = f"{admin_config['commission_value']}% par commande"
+    elif admin_config['commission_type'] == 'fixed':
+        commission_info = f"{admin_config['commission_value']:.2f}€ par commande"
     else:
         commission_info = "Aucune"
     
@@ -8136,8 +8142,20 @@ async def salary_admin_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
         and not e.get('reimbursed', False)
     )
     
+    # Salaire fixe
+    fixed_salary = admin_config.get('fixed_salary', 0)
+    
+    # DEBUG: Logger les valeurs pour diagnostic
+    logger.info(f"💰 CALCUL PAYE Admin {admin_id}:")
+    logger.info(f"  - Salaire fixe configuré: {fixed_salary}€")
+    logger.info(f"  - Type paiement: {admin_config.get('salary_type', 'N/A')}")
+    logger.info(f"  - Commissions période: {current_commissions}€")
+    logger.info(f"  - Consommables approuvés: {approved_expenses}€")
+    
     # Total à verser
     total_to_pay = admin_config['fixed_salary'] + current_commissions + approved_expenses
+    
+    logger.info(f"  - TOTAL À PAYER: {total_to_pay}€ ({admin_config['fixed_salary']}+{current_commissions}+{approved_expenses})")
     
     message = f"""💼 CONFIGURATION SALAIRE
 
@@ -8280,37 +8298,28 @@ Configurez maintenant la fréquence (mensuel/hebdomadaire).
 
 @error_handler
 async def set_commission_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Définir commission (montant fixe par commande)"""
+    """Choisir type de commission"""
     query = update.callback_query
     await query.answer()
     
     admin_id = query.data.replace("set_commission_", "")
     
-    message = """💸 COMMISSION PAR COMMANDE
+    message = """💸 TYPE DE COMMISSION
 
-Entrez le montant FIXE que cet admin recevra 
-pour chaque commande qu'il valide :
-
-Exemples :
-• 5 → 5€ par commande
-• 10 → 10€ par commande
-• 0 → Désactiver les commissions
-
-Le montant est en EUROS (pas en %).
+Choisissez le type de commission :
 """
     
-    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data=f"salary_admin_{admin_id}")]]
+    keyboard = [
+        [InlineKeyboardButton("📊 Pourcentage (%)", callback_data=f"commission_percent_{admin_id}")],
+        [InlineKeyboardButton("💵 Montant fixe (€)", callback_data=f"commission_fixed_{admin_id}")],
+        [InlineKeyboardButton("❌ Aucune", callback_data=f"commission_none_{admin_id}")],
+        [InlineKeyboardButton("🔙 Annuler", callback_data=f"salary_admin_{admin_id}")]
+    ]
     
     await query.edit_message_text(
         message,
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
-    
-    # Sauvegarder dans user_data
-    context.user_data['setting_commission'] = {
-        'admin_id': admin_id,
-        'type': 'fixed'  # TOUJOURS fixe (pas de pourcentage)
-    }
 
 @error_handler
 async def set_commission_value(update: Update, context: ContextTypes.DEFAULT_TYPE):

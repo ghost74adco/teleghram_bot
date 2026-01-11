@@ -638,7 +638,7 @@ MAX_CART_ITEMS = 50
 MAX_QUANTITY_PER_ITEM = 1000
 MIN_ORDER_AMOUNT = 10
 
-BOT_VERSION = "3.1.0"
+BOT_VERSION = "3.1.1"
 BOT_NAME = "E-Commerce Bot Multi-Admins"
 
 logger.info(f"🤖 {BOT_NAME} v{BOT_VERSION}")
@@ -8110,10 +8110,9 @@ async def salary_admin_detail(update: Update, context: ContextTypes.DEFAULT_TYPE
         salary_info = f"{admin_config['fixed_salary']:.2f}€/semaine"
     
     # Info commission
-    if admin_config['commission_type'] == 'percentage':
-        commission_info = f"{admin_config['commission_value']}% par commande"
-    elif admin_config['commission_type'] == 'fixed':
-        commission_info = f"{admin_config['commission_value']:.2f}€ par commande"
+    commission_value = admin_config.get('commission_value', 0)
+    if commission_value > 0:
+        commission_info = f"{commission_value:.2f}€ par commande"
     else:
         commission_info = "Aucune"
     
@@ -8281,28 +8280,37 @@ Configurez maintenant la fréquence (mensuel/hebdomadaire).
 
 @error_handler
 async def set_commission_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Choisir type de commission"""
+    """Définir commission (montant fixe par commande)"""
     query = update.callback_query
     await query.answer()
     
     admin_id = query.data.replace("set_commission_", "")
     
-    message = """💸 TYPE DE COMMISSION
+    message = """💸 COMMISSION PAR COMMANDE
 
-Choisissez le type de commission :
+Entrez le montant FIXE que cet admin recevra 
+pour chaque commande qu'il valide :
+
+Exemples :
+• 5 → 5€ par commande
+• 10 → 10€ par commande
+• 0 → Désactiver les commissions
+
+Le montant est en EUROS (pas en %).
 """
     
-    keyboard = [
-        [InlineKeyboardButton("📊 Pourcentage (%)", callback_data=f"commission_percent_{admin_id}")],
-        [InlineKeyboardButton("💵 Montant fixe (€)", callback_data=f"commission_fixed_{admin_id}")],
-        [InlineKeyboardButton("❌ Aucune", callback_data=f"commission_none_{admin_id}")],
-        [InlineKeyboardButton("🔙 Annuler", callback_data=f"salary_admin_{admin_id}")]
-    ]
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data=f"salary_admin_{admin_id}")]]
     
     await query.edit_message_text(
         message,
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
+    
+    # Sauvegarder dans user_data
+    context.user_data['setting_commission'] = {
+        'admin_id': admin_id,
+        'type': 'fixed'  # TOUJOURS fixe (pas de pourcentage)
+    }
 
 @error_handler
 async def set_commission_value(update: Update, context: ContextTypes.DEFAULT_TYPE):

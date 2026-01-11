@@ -636,7 +636,7 @@ MAX_CART_ITEMS = 50
 MAX_QUANTITY_PER_ITEM = 1000
 MIN_ORDER_AMOUNT = 10
 
-BOT_VERSION = "3.1.2"
+BOT_VERSION = "3.1.3"
 BOT_NAME = "E-Commerce Bot Multi-Admins"
 
 logger.info(f"🤖 {BOT_NAME} v{BOT_VERSION}")
@@ -5474,6 +5474,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     # État: En attente salaire fixe (super-admin)
     if context.user_data.get('setting_fixed_salary'):
+        logger.info(f"🔍 État détecté: setting_fixed_salary = {context.user_data.get('setting_fixed_salary')}")
         await receive_fixed_salary(update, context)
         return
     
@@ -8214,6 +8215,8 @@ async def set_fixed_salary(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     admin_id = query.data.replace("set_fixed_", "")
     
+    logger.info(f"💰 set_fixed_salary APPELÉ pour admin_id: {admin_id}")
+    
     message = f"""💰 SALAIRE FIXE
 
 Entrez le montant du salaire fixe :
@@ -8232,19 +8235,28 @@ Entrez 0 pour aucun salaire fixe.
     )
     
     context.user_data['setting_fixed_salary'] = admin_id
+    logger.info(f"✅ set_fixed_salary: context.user_data['setting_fixed_salary'] = {admin_id}")
 
 @error_handler
 async def receive_fixed_salary(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Réceptionne montant salaire fixe"""
+    logger.info(f"💰 receive_fixed_salary APPELÉ - user: {update.effective_user.id}")
+    
     if not is_super_admin(update.effective_user.id):
+        logger.warning(f"❌ receive_fixed_salary: User {update.effective_user.id} n'est pas super-admin")
         return
     
     admin_id = context.user_data.get('setting_fixed_salary')
     if not admin_id:
+        logger.warning(f"❌ receive_fixed_salary: Pas de setting_fixed_salary dans user_data")
+        logger.info(f"   user_data actuel: {context.user_data}")
         return
+    
+    logger.info(f"💰 Tentative modification salaire pour admin_id: {admin_id}")
     
     try:
         amount = float(update.message.text.strip())
+        logger.info(f"💰 Montant reçu: {amount}€")
         
         if amount < 0:
             await update.message.reply_text(f"{EMOJI_THEME['error']} Le montant ne peut pas être négatif.")
@@ -8256,8 +8268,10 @@ async def receive_fixed_salary(update: Update, context: ContextTypes.DEFAULT_TYP
         
         # Mettre à jour config
         config = load_salary_config()
+        logger.info(f"💰 Config chargée, admins existants: {list(config.get('admins', {}).keys())}")
         
         if str(admin_id) not in config['admins']:
+            logger.info(f"💰 Admin {admin_id} n'existe pas, création...")
             admin_name = ADMINS.get(str(admin_id), {}).get('name', 'Admin')
             config['admins'][str(admin_id)] = {
                 "name": admin_name,
@@ -8269,14 +8283,19 @@ async def receive_fixed_salary(update: Update, context: ContextTypes.DEFAULT_TYP
                 "active": False
             }
         
+        old_salary = config['admins'][str(admin_id)].get('fixed_salary', 0)
         config['admins'][str(admin_id)]['fixed_salary'] = amount
+        
+        logger.info(f"💰 Salaire modifié: {old_salary}€ → {amount}€")
+        
         save_salary_config(config)
+        logger.info(f"✅ Configuration sauvegardée")
         
         context.user_data.pop('setting_fixed_salary', None)
         
         message = f"""{EMOJI_THEME['success']} SALAIRE FIXE DÉFINI
 
-Montant : {amount:.2f}€
+Montant : {amount:.2f}€ (ancien: {old_salary:.2f}€)
 
 Configurez maintenant la fréquence (mensuel/hebdomadaire).
 """
@@ -8287,6 +8306,8 @@ Configurez maintenant la fréquence (mensuel/hebdomadaire).
             message,
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
+        
+        logger.info(f"✅ receive_fixed_salary terminé avec succès")
         
         logger.info(f"💰 Salaire fixe défini: Admin {admin_id} - {amount:.2f}€")
     

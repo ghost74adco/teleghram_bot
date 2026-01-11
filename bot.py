@@ -4,20 +4,24 @@
 """
 ╔═══════════════════════════════════════════════════════════════════╗
 ║                                                                   ║
-║   BOT TELEGRAM V3.0.1 - VERSION CORRIGÉE                        ║
-║   Bug /admin résolu - Parse mode supprimé                        ║
+║   BOT TELEGRAM V3.1.0 FINAL - TOUTES CORRECTIONS APPLIQUÉES     ║
+║   Stock + Livre de Comptes 2 Caisses + Regex Fix                ║
 ║                                                                   ║
-║   ✅ Ce fichier est la VERSION CORRIGÉE                          ║
-║   ✅ Le panel admin fonctionne sans erreur                        ║
-║   ✅ Toutes les fonctionnalités sont préservées                   ║
+║   ✅ Déduction stock automatique CORRIGÉE                         ║
+║   ✅ Regex accepte format x10.0g et x 10.0g                       ║
+║   ✅ Livre de comptes split : WEED / AUTRES                       ║
+║   ✅ Gestion doublons consommables                                ║
+║   ✅ Réimport historique avec classification                      ║
 ║                                                                   ║
-║   Date du fix : 06/01/2026                                       ║
+║   Date : 09/01/2025 - Version FINALE                             ║
 ║                                                                   ║
 ╚═══════════════════════════════════════════════════════════════════╝
 
-BOT TELEGRAM V3.0.1 - SYSTÈME MULTI-ADMINS (CORRIGÉ)
-Gestion complète e-commerce avec interface admin Telegram
-Version corrigée - Bug admin_panel résolu - Parse mode supprimé
+BOT TELEGRAM V3.1.0 FINAL
+- Déduction stock garantie (regex fixé pour x10.0g et x 10.0g)
+- Livre de comptes double caisse (Weed vs Autres produits)
+- Gestion complète des consommables en double
+- Réimport automatique de l'historique avec classification
 """
 
 

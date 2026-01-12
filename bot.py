@@ -643,7 +643,7 @@ MAX_CART_ITEMS = 50
 MAX_QUANTITY_PER_ITEM = 1000
 MIN_ORDER_AMOUNT = 10
 
-BOT_VERSION = "3.2.2"
+BOT_VERSION = "3.2.3"
 BOT_NAME = "E-Commerce Bot Multi-Admins"
 
 logger.info(f"🤖 {BOT_NAME} v{BOT_VERSION}")
@@ -2473,7 +2473,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 {EMOJI_THEME['cart']} COMMENT COMMANDER ?
 
-1️⃣ Sélectionnez votre pays (🇫🇷 ou 🇨🇭)
+1️⃣ Sélectionnez votre pays (🇫🇷 🇨🇭 🇦🇺)
 2️⃣ Parcourez le catalogue
 3️⃣ Ajoutez des produits au panier
 4️⃣ Validez votre commande
@@ -2483,6 +2483,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ━━━━━━━━━━━━━━━━━━━━━━
 
 {EMOJI_THEME['delivery']} MODES DE LIVRAISON
+
+🇫🇷 France / 🇨🇭 Suisse :
 
 📮 Postale (48-72h)
 - Frais fixes : 10€
@@ -2498,6 +2500,13 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 - Gratuit
 - Rendez-vous à convenir
 - Discrétion assurée
+
+🇦🇺 Australie :
+
+📮 Postale uniquement (7-10 jours)
+- Frais : 25€
+- Livraison internationale
+- Suivi de colis
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
@@ -2659,6 +2668,7 @@ Choisissez votre pays pour commencer :
     keyboard = [
         [InlineKeyboardButton("🇫🇷 France", callback_data="country_fr"),
          InlineKeyboardButton("🇨🇭 Suisse", callback_data="country_ch")],
+        [InlineKeyboardButton("🇦🇺 Australie", callback_data="country_au")],
         [InlineKeyboardButton(f"{EMOJI_THEME['cart']} Mon Panier", callback_data="view_cart"),
          InlineKeyboardButton(f"{EMOJI_THEME['history']} Historique", callback_data="my_history")],
         [InlineKeyboardButton(f"{EMOJI_THEME['info']} Aide", callback_data="help_inline")]
@@ -8934,8 +8944,42 @@ async def set_commission_value(update: Update, context: ContextTypes.DEFAULT_TYP
         config['admins'][str(admin_id)]['commission_value'] = 0
         save_salary_config(config)
         
+        # NOUVEAU: Réinitialiser les commissions accumulées
+        commissions_data = load_commissions()
+        old_commission = 0
+        
+        if str(admin_id) in commissions_data:
+            old_commission = commissions_data[str(admin_id)].get('current_period', {}).get('total_commission', 0)
+            
+            # Archiver l'ancienne période si commissions > 0
+            if old_commission > 0:
+                old_period = commissions_data[str(admin_id)].get('current_period', {})
+                old_period['end_date'] = datetime.now().isoformat()
+                old_period['status'] = 'cancelled'  # Annulée car commission désactivée
+                
+                if 'history' not in commissions_data[str(admin_id)]:
+                    commissions_data[str(admin_id)]['history'] = []
+                
+                commissions_data[str(admin_id)]['history'].append(old_period)
+            
+            # Réinitialiser période actuelle
+            commissions_data[str(admin_id)]['current_period'] = {
+                'total_commission': 0,
+                'orders_count': 0,
+                'start_date': datetime.now().isoformat()
+            }
+            
+            save_commissions(commissions_data)
+            logger.info(f"💸 Commissions réinitialisées pour admin {admin_id}: {old_commission}€ → 0€")
+        
+        message = f"{EMOJI_THEME['success']} COMMISSION DÉSACTIVÉE\n\n"
+        if old_commission > 0:
+            message += f"Les commissions accumulées ({old_commission:.2f}€) ont été archivées et réinitialisées à 0€."
+        else:
+            message += "Aucune commission ne sera calculée pour les futures commandes."
+        
         await query.edit_message_text(
-            f"{EMOJI_THEME['success']} Commission désactivée",
+            message,
             reply_markup=InlineKeyboardMarkup([[
                 InlineKeyboardButton("📋 Voir configuration", callback_data=f"salary_admin_{admin_id}")
             ]])

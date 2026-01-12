@@ -715,7 +715,7 @@ MAX_CART_ITEMS = 50
 MAX_QUANTITY_PER_ITEM = 1000
 MIN_ORDER_AMOUNT = 10
 
-BOT_VERSION = "3.2.7"
+BOT_VERSION = "3.2.8"
 BOT_NAME = "E-Commerce Bot Multi-Admins"
 
 logger.info(f"🤖 {BOT_NAME} v{BOT_VERSION}")
@@ -2115,7 +2115,7 @@ async def notify_admin_new_user(context, user_id, user_data):
     last_name = user_data.get("last_name", "")
     full_name = f"{first_name} {last_name}".strip()
     
-    # Anonymiser l'ID
+    # Anonymiser l'ID pour les logs
     anonymous_id = anonymize_id(user_id)
     
     notification = f"""{EMOJI_THEME['celebration']} NOUVELLE CONNEXION
@@ -2123,21 +2123,133 @@ async def notify_admin_new_user(context, user_id, user_data):
 👤 Utilisateur :
 - Nom : {full_name}
 - Username : @{username if username != 'N/A' else 'Non défini'}
-- ID : {anonymous_id}
+- ID Anonyme : {anonymous_id}
+
+💬 Chat ID : <code>{user_id}</code>
+(Cliquez pour copier)
 
 📅 Date : {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
 
 💬 L'utilisateur vient de démarrer le bot
 """
+    
+    # Bouton pour envoyer un message directement
+    keyboard = [
+        [InlineKeyboardButton("💬 Envoyer un message", callback_data=f"send_msg_{user_id}")]
+    ]
+    
     try:
         for admin_id in get_admin_ids():
             await context.bot.send_message(
                 chat_id=admin_id,
-                text=notification
+                text=notification,
+                parse_mode='HTML',
+                reply_markup=InlineKeyboardMarkup(keyboard)
             )
         logger.info(f"✅ Admins notifiés - Nouveau user: {user_id}")
     except Exception as e:
         logger.error(f"❌ Erreur notification admin: {e}")
+
+@error_handler
+async def send_message_to_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Permet à l'admin d'envoyer un message à un utilisateur"""
+    query = update.callback_query
+    await query.answer()
+    
+    admin_id = query.from_user.id
+    
+    if not is_admin(admin_id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    # Extraire l'user_id
+    user_id = int(query.data.replace("send_msg_", ""))
+    
+    # LOG ADMIN ACTION
+    log_admin_action(admin_id, "SEND_MESSAGE", f"Préparation message pour User-{anonymize_id(user_id)}")
+    
+    # Nettoyer tous les états
+    context.user_data.clear()
+    
+    message = f"""💬 ENVOYER UN MESSAGE
+
+📤 Destinataire : <code>{user_id}</code>
+
+Entrez le message que vous souhaitez envoyer à cet utilisateur :
+
+💡 Le message sera envoyé immédiatement après validation.
+
+Tapez /cancel pour annuler
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="cancel_send_msg")]]
+    
+    await query.edit_message_text(
+        message,
+        parse_mode='HTML',
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    context.user_data['sending_message_to'] = user_id
+
+@error_handler
+async def receive_message_to_send(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Réceptionne le message à envoyer à un utilisateur"""
+    if not is_admin(update.effective_user.id):
+        return
+    
+    target_user_id = context.user_data.get('sending_message_to')
+    
+    if not target_user_id:
+        return
+    
+    message_text = update.message.text.strip()
+    admin_id = update.effective_user.id
+    
+    # LOG ADMIN ACTION
+    log_admin_action(admin_id, "SEND_MESSAGE", f"Envoi message à User-{anonymize_id(target_user_id)}")
+    
+    try:
+        # Envoyer le message à l'utilisateur
+        await context.bot.send_message(
+            chat_id=target_user_id,
+            text=f"📨 MESSAGE DE L'ÉQUIPE\n\n{message_text}"
+        )
+        
+        context.user_data.pop('sending_message_to', None)
+        
+        # Confirmer à l'admin
+        await update.message.reply_text(
+            f"✅ MESSAGE ENVOYÉ\n\n"
+            f"Destinataire : <code>{target_user_id}</code>\n"
+            f"Message : {message_text[:100]}{'...' if len(message_text) > 100 else ''}",
+            parse_mode='HTML'
+        )
+        
+        logger.info(f"💬 Message admin envoyé: {anonymize_admin_id(admin_id)} → {anonymize_id(target_user_id)}")
+    
+    except Exception as e:
+        logger.error(f"❌ Erreur envoi message: {e}")
+        await update.message.reply_text(
+            f"❌ ERREUR ENVOI\n\n"
+            f"Impossible d'envoyer le message à l'utilisateur {target_user_id}.\n"
+            f"L'utilisateur a peut-être bloqué le bot."
+        )
+        context.user_data.pop('sending_message_to', None)
+
+@error_handler
+async def cancel_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Annule l'action en cours et nettoie les états"""
+    query = update.callback_query
+    await query.answer("Action annulée")
+    
+    # Nettoyer tous les états
+    context.user_data.clear()
+    
+    await query.edit_message_text(
+        "❌ Action annulée",
+        reply_markup=None
+    )
 
 async def notify_admin_new_order(context, order_data, user_info):
     """Notifie l'admin d'une nouvelle commande avec détails de préparation"""
@@ -6577,6 +6689,12 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     if context.user_data.get('removing_vip_client'):
         logger.info(f"⭐ État détecté: removing_vip_client")
         await receive_vip_remove(update, context)
+        return
+    
+    # État: V3.2.8 - En attente message à envoyer à utilisateur
+    if context.user_data.get('sending_message_to'):
+        logger.info(f"💬 État détecté: sending_message_to")
+        await receive_message_to_send(update, context)
         return
     
     # État: En attente d'adresse
@@ -12320,6 +12438,10 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(vip_edit_threshold, pattern="^vip_edit_threshold$"))
     application.add_handler(CallbackQueryHandler(vip_activate_client, pattern="^vip_activate_client$"))
     application.add_handler(CallbackQueryHandler(vip_remove_client, pattern="^vip_remove_client$"))
+    
+    # V3.2.8 - Envoyer message à utilisateur
+    application.add_handler(CallbackQueryHandler(send_message_to_user, pattern="^send_msg_"))
+    application.add_handler(CallbackQueryHandler(cancel_action, pattern="^cancel_send_msg$"))
     application.add_handler(CallbackQueryHandler(admin_detailed_stats, pattern="^admin_detailed_stats$"))
     
     # Message handlers (doit être en dernier)

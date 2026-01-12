@@ -486,6 +486,60 @@ def anonymize_admin_id(admin_id: int) -> str:
     hash_hex = hash_obj.hexdigest()[:8].upper()
     return f"Admin-{hash_hex}"
 
+# ==================== LOGGING DÉTAILLÉ ANONYMISÉ ====================
+
+def log_user_action(user_id: int, action: str, details: str = "", level: str = "info"):
+    """
+    Log une action utilisateur avec ID anonymisé
+    
+    Args:
+        user_id: ID Telegram de l'utilisateur
+        action: Type d'action (ex: "COMMAND", "ORDER", "VIP", etc.)
+        details: Détails supplémentaires
+        level: Niveau de log (info, warning, error)
+    """
+    anon_id = anonymize_id(user_id)
+    
+    # Format du log : [ACTION] User-HASH | Détails
+    log_message = f"👤 [{action}] {anon_id}"
+    if details:
+        log_message += f" | {details}"
+    
+    # Logger selon le niveau
+    if level == "info":
+        logger.info(log_message)
+    elif level == "warning":
+        logger.warning(log_message)
+    elif level == "error":
+        logger.error(log_message)
+    else:
+        logger.info(log_message)
+
+def log_admin_action(admin_id: int, action: str, details: str = "", level: str = "info"):
+    """
+    Log une action admin avec ID anonymisé
+    
+    Args:
+        admin_id: ID Telegram de l'admin
+        action: Type d'action
+        details: Détails supplémentaires
+        level: Niveau de log
+    """
+    anon_id = anonymize_admin_id(admin_id)
+    
+    log_message = f"🔑 [{action}] {anon_id}"
+    if details:
+        log_message += f" | {details}"
+    
+    if level == "info":
+        logger.info(log_message)
+    elif level == "warning":
+        logger.warning(log_message)
+    elif level == "error":
+        logger.error(log_message)
+    else:
+        logger.info(log_message)
+
 # ==================== SYSTÈME FINANCIER AVANCÉ ====================
 
 def calculate_weight_to_prepare(product_name: str, quantity_ordered: float) -> dict:
@@ -661,7 +715,7 @@ MAX_CART_ITEMS = 50
 MAX_QUANTITY_PER_ITEM = 1000
 MIN_ORDER_AMOUNT = 10
 
-BOT_VERSION = "3.2.6.2"
+BOT_VERSION = "3.2.7"
 BOT_NAME = "E-Commerce Bot Multi-Admins"
 
 logger.info(f"🤖 {BOT_NAME} v{BOT_VERSION}")
@@ -2274,8 +2328,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler pour la commande /start"""
     user = update.effective_user
     user_id = user.id
+    
+    # LOG ACTION
+    log_user_action(user_id, "START", f"Démarrage bot - Nom: {user.first_name}")
 
     if is_maintenance_mode(user_id):
+        log_user_action(user_id, "START", "Bloqué - Maintenance active", "warning")
         await update.message.reply_text(
             f"{EMOJI_THEME['warning']} BOT EN MAINTENANCE\n\n"
             "Le service est temporairement indisponible.\n"
@@ -2842,6 +2900,9 @@ async def select_country(update: Update, context: ContextTypes.DEFAULT_TYPE):
     country_code = query.data.split('_')[1]
     context.user_data['country'] = country_code.upper()
     
+    # LOG ACTION
+    log_user_action(query.from_user.id, "SELECT_COUNTRY", f"Pays sélectionné: {country_code.upper()}")
+    
     # Définir drapeau et nom selon le pays
     if country_code == "fr":
         flag = "🇫🇷"
@@ -3135,6 +3196,9 @@ async def add_to_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     parts = query.data.split('_')
     product_name = '_'.join(parts[1:-1])
     quantity = float(parts[-1])
+    
+    # LOG ACTION
+    log_user_action(query.from_user.id, "ADD_TO_CART", f"Produit: {product_name} | Quantité: {quantity}g")
     
     # Vérifier stock
     stock = get_stock(product_name)
@@ -3523,6 +3587,9 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if not is_admin(user_id):
         return
+    
+    # LOG ADMIN ACTION
+    log_admin_action(user_id, "ADMIN_PANEL", "Accès au panel admin")
     
     admin_info = get_admin_info(user_id)
     level = admin_info.get('level', 'admin')
@@ -4927,6 +4994,9 @@ async def admin_vip_manager(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("Accès refusé", show_alert=True)
         return
     
+    # LOG ADMIN ACTION
+    log_admin_action(user_id, "VIP_MANAGER", "Accès menu gestion VIP")
+    
     # Charger historique clients
     history = load_client_history()
     
@@ -4975,6 +5045,9 @@ async def vip_recalculate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if not is_admin(query.from_user.id):
         return
+    
+    # LOG ADMIN ACTION
+    log_admin_action(query.from_user.id, "VIP_RECALCULATE", f"Démarrage recalcul VIP - Seuil: {VIP_THRESHOLD}€")
     
     history = load_client_history()
     
@@ -6459,7 +6532,20 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_id = update.effective_user.id
     text = update.message.text.strip()
     
-    logger.info(f"📩 Message texte: user={user_id}, text={text}, user_data={context.user_data}")
+    # LOG MESSAGE REÇU (texte tronqué pour sécurité)
+    text_preview = text[:50] + "..." if len(text) > 50 else text
+    
+    # Déterminer quel état est actif
+    active_states = [key for key, value in context.user_data.items() if value is True]
+    states_str = ", ".join(active_states) if active_states else "Aucun"
+    
+    log_user_action(
+        user_id, 
+        "TEXT_MESSAGE", 
+        f"Texte: '{text_preview}' | États actifs: [{states_str}]"
+    )
+    
+    logger.info(f"📩 Message texte: user={anonymize_id(user_id)}, text={text}, user_data={context.user_data}")
     
     # Vérifier maintenance
     if is_maintenance_mode(user_id):

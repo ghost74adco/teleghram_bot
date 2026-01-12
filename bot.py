@@ -413,7 +413,14 @@ PRIX_CH = {
     "🪨 4MMC": 25, "🍄 Ketamine": 50
 }
 
-# ==================== TRADUCTIONS ====================
+# Prix Australie (en AUD)
+PRIX_AU = {
+    "❄️ Coco": 120, "💊 Squid Game": 30, "💊 Punisher": 30,
+    "🫒 Hash": 25, "🍀 Weed": 25, "🪨 MDMA": 80,
+    "🪨 4MMC": 40, "🍄 Ketamine": 80
+}
+
+# ====================  TRADUCTIONS ====================
 
 TRANSLATIONS = {
     'fr': {
@@ -636,7 +643,7 @@ MAX_CART_ITEMS = 50
 MAX_QUANTITY_PER_ITEM = 1000
 MIN_ORDER_AMOUNT = 10
 
-BOT_VERSION = "3.2.0"
+BOT_VERSION = "3.2.2"
 BOT_NAME = "E-Commerce Bot Multi-Admins"
 
 logger.info(f"🤖 {BOT_NAME} v{BOT_VERSION}")
@@ -694,8 +701,8 @@ def load_prices():
             with open(PRICES_FILE, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except:
-            return {"FR": PRIX_FR.copy(), "CH": PRIX_CH.copy()}
-    return {"FR": PRIX_FR.copy(), "CH": PRIX_CH.copy()}
+            return {"FR": PRIX_FR.copy(), "CH": PRIX_CH.copy(), "AU": PRIX_AU.copy()}
+    return {"FR": PRIX_FR.copy(), "CH": PRIX_CH.copy(), "AU": PRIX_AU.copy()}
 
 def load_stocks():
     """Charge les stocks"""
@@ -1635,30 +1642,43 @@ def check_downtime_and_activate_maintenance():
 
 # ==================== CALCULS DE DISTANCE ET LIVRAISON ====================
 
-def calculate_delivery_fee(delivery_type, distance=0, subtotal=0):
+def calculate_delivery_fee(delivery_type, distance=0, subtotal=0, country="FR"):
     """Calcule les frais de livraison"""
+    fees = load_delivery_fees()
+    
     if delivery_type == "postal":
-        return FRAIS_POSTAL
+        # Déterminer frais selon le pays
+        if country == "AU":
+            return fees.get('postal_au', 25)
+        elif country == "CH":
+            return fees.get('postal_ch', 10)
+        else:  # FR
+            return fees.get('postal_fr', 10)
     
     elif delivery_type == "express":
-        if subtotal < 30:
-            logger.warning(f"⚠️ Commande {subtotal}€ < 30€ minimum pour Express")
+        express_min = fees.get('express_min', 30)
         
-        frais_brut = (distance / 10) * 10
+        if subtotal < express_min:
+            logger.warning(f"⚠️ Commande {subtotal}€ < {express_min}€ minimum pour Express")
+        
+        express_rate = fees.get('express_rate', 10)
+        express_max = fees.get('express_max', 70)
+        
+        frais_brut = (distance / 10) * express_rate
         
         if distance >= 25:
             frais_arrondi = math.ceil(frais_brut / 10) * 10
         else:
             frais_arrondi = math.floor(frais_brut / 10) * 10
         
-        frais_final = min(frais_arrondi, 70)
+        frais_final = min(frais_arrondi, express_max)
         
         logger.info(f"🚚 Express: {distance:.1f}km → {frais_brut:.1f}€ → {frais_arrondi}€ → plafonné {frais_final}€")
         
         return frais_final
     
     elif delivery_type == "meetup":
-        return FRAIS_MEETUP
+        return fees.get('meetup', 0)
     
     return 0
 
@@ -1734,7 +1754,18 @@ def calculate_distance_simple(address):
 def calculate_total(cart, country, delivery_type=None, distance=0, promo_code=None, user_id=None):
     """Calcule le total avec tous les éléments"""
     prices = load_prices()
-    prix_table = prices.get(country, PRIX_FR if country == "FR" else PRIX_CH)
+    
+    # Déterminer table de prix par défaut
+    if country == "FR":
+        default_prices = PRIX_FR
+    elif country == "CH":
+        default_prices = PRIX_CH
+    elif country == "AU":
+        default_prices = PRIX_AU
+    else:
+        default_prices = PRIX_FR
+    
+    prix_table = prices.get(country, default_prices)
     
     subtotal = 0
     for item in cart:
@@ -1745,7 +1776,7 @@ def calculate_total(cart, country, delivery_type=None, distance=0, promo_code=No
     
     delivery_fee = 0
     if delivery_type:
-        delivery_fee = calculate_delivery_fee(delivery_type, distance, subtotal)
+        delivery_fee = calculate_delivery_fee(delivery_type, distance, subtotal, country)
     
     promo_discount = 0
     promo_valid = False
@@ -1820,8 +1851,22 @@ def format_product_card(product_name, country, stock=None):
 def get_formatted_price_list(country_code):
     """Génère la liste formatée des prix"""
     prices = load_prices()
-    country = "FR" if country_code == "fr" else "CH"
-    country_prices = prices.get(country, PRIX_FR if country == "FR" else PRIX_CH)
+    
+    # Déterminer code pays et table de prix
+    if country_code == "fr":
+        country = "FR"
+        default_prices = PRIX_FR
+    elif country_code == "ch":
+        country = "CH"
+        default_prices = PRIX_CH
+    elif country_code == "au":
+        country = "AU"
+        default_prices = PRIX_AU
+    else:
+        country = "FR"
+        default_prices = PRIX_FR
+    
+    country_prices = prices.get(country, default_prices)
     
     available = get_available_products()
     
@@ -1842,9 +1887,14 @@ def get_formatted_price_list(country_code):
             text += f"{product_name} : {price}€/g\n"
     
     text += f"\n{EMOJI_THEME['delivery']} Livraison :\n"
-    text += f"  • Postale (48-72h) : 10€\n"
-    text += f"  • Express (30min+) : 10€/10km (min 30€, max 70€)\n"
-    text += f"  • Meetup : Gratuit"
+    
+    # Afficher options selon le pays
+    if country.upper() == "AU":
+        text += f"  • Postale (7-10 jours) : 25€"
+    else:
+        text += f"  • Postale (48-72h) : 10€\n"
+        text += f"  • Express (30min+) : 10€/10km (min 30€, max 70€)\n"
+        text += f"  • Meetup : Gratuit"
     
     return text
 
@@ -2214,6 +2264,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("🇫🇷 France", callback_data="country_fr"),
             InlineKeyboardButton("🇨🇭 Suisse", callback_data="country_ch")
         ],
+        [InlineKeyboardButton("🇦🇺 Australie", callback_data="country_au")],
         [InlineKeyboardButton(f"{EMOJI_THEME['info']} Aide", callback_data="help")]
     ]
 
@@ -2230,15 +2281,19 @@ Merci de nous rejoindre sur notre plateforme.
 Utilisez le code WELCOME10 pour bénéficier de 10% de réduction sur votre première commande !
 
 {EMOJI_THEME['info']} COMMENT COMMANDER ?
-1️⃣ Choisissez votre pays 🇫🇷 🇨🇭
+1️⃣ Choisissez votre pays 🇫🇷 🇨🇭 🇦🇺
 2️⃣ Parcourez nos produits
 3️⃣ Ajoutez au panier
 4️⃣ Validez votre commande
 
 {EMOJI_THEME['delivery']} MODES DE LIVRAISON
+🇫🇷 France / 🇨🇭 Suisse :
 - Postale (48-72h) - 10€
 - Express (30min+) - Variable selon distance
 - Meetup - Gratuit
+
+🇦🇺 Australie :
+- Postale uniquement (7-10 jours) - 25€
 
 {EMOJI_THEME['support']} BESOIN D'AIDE ?
 Notre équipe est disponible {get_horaires_text()}
@@ -2267,6 +2322,7 @@ Choisissez votre pays pour commencer :
         keyboard = [
             [InlineKeyboardButton("🇫🇷 France", callback_data="country_fr"),
              InlineKeyboardButton("🇨🇭 Suisse", callback_data="country_ch")],
+            [InlineKeyboardButton("🇦🇺 Australie", callback_data="country_au")],
             [InlineKeyboardButton(f"{EMOJI_THEME['cart']} Mon Panier", callback_data="view_cart"),
              InlineKeyboardButton(f"{EMOJI_THEME['history']} Historique", callback_data="my_history")],
             [InlineKeyboardButton(f"{EMOJI_THEME['gift']} Parrainage", callback_data="referral_info")]
@@ -2745,8 +2801,19 @@ async def select_country(update: Update, context: ContextTypes.DEFAULT_TYPE):
     country_code = query.data.split('_')[1]
     context.user_data['country'] = country_code.upper()
     
-    flag = "🇫🇷" if country_code == "fr" else "🇨🇭"
-    country_name = "France" if country_code == "fr" else "Suisse"
+    # Définir drapeau et nom selon le pays
+    if country_code == "fr":
+        flag = "🇫🇷"
+        country_name = "France"
+    elif country_code == "ch":
+        flag = "🇨🇭"
+        country_name = "Suisse"
+    elif country_code == "au":
+        flag = "🇦🇺"
+        country_name = "Australie"
+    else:
+        flag = "🌍"
+        country_name = "Inconnu"
     
     message = f"""{flag} {country_name} sélectionné
 
@@ -4366,6 +4433,7 @@ Que souhaitez-vous faire ?
     
     keyboard = [
         [InlineKeyboardButton("🕐 Horaires", callback_data="admin_horaires")],
+        [InlineKeyboardButton("🚚 Frais de livraison", callback_data="admin_delivery_fees")],
         [InlineKeyboardButton("🔧 Maintenance", callback_data="admin_maintenance")],
         [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_panel")]
     ]
@@ -4627,6 +4695,180 @@ async def admin_maintenance_toggle(update: Update, context: ContextTypes.DEFAULT
     await query.answer(message, show_alert=True)
     await admin_maintenance(update, context)
 
+# ==================== ADMIN: FRAIS DE LIVRAISON ====================
+
+def load_delivery_fees():
+    """Charge les frais de livraison personnalisés"""
+    fees_file = DATA_DIR / "delivery_fees.json"
+    if fees_file.exists():
+        try:
+            with open(fees_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            pass
+    
+    # Valeurs par défaut
+    return {
+        "postal_fr": 10,
+        "postal_ch": 10,
+        "postal_au": 25,
+        "meetup": 0,
+        "express_min": 30,
+        "express_max": 70,
+        "express_rate": 10  # €/10km
+    }
+
+def save_delivery_fees(fees):
+    """Sauvegarde les frais de livraison"""
+    fees_file = DATA_DIR / "delivery_fees.json"
+    with open(fees_file, 'w', encoding='utf-8') as f:
+        json.dump(fees, f, indent=2, ensure_ascii=False)
+
+@error_handler
+async def admin_delivery_fees(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu gestion des frais de livraison"""
+    query = update.callback_query
+    await query.answer()
+    
+    fees = load_delivery_fees()
+    
+    message = f"""🚚 FRAIS DE LIVRAISON
+
+📮 POSTAL :
+• France : {fees['postal_fr']}€
+• Suisse : {fees['postal_ch']}€
+• Australie : {fees['postal_au']}€
+
+🤝 MEETUP : {fees['meetup']}€ (Gratuit)
+
+⚡ EXPRESS :
+• Taux : {fees['express_rate']}€ / 10km
+• Minimum : {fees['express_min']}€
+• Maximum : {fees['express_max']}€
+
+Que souhaitez-vous modifier ?
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("📮 Postal France", callback_data="edit_fee_postal_fr"),
+         InlineKeyboardButton("📮 Postal Suisse", callback_data="edit_fee_postal_ch")],
+        [InlineKeyboardButton("📮 Postal Australie", callback_data="edit_fee_postal_au")],
+        [InlineKeyboardButton("⚡ Express - Taux", callback_data="edit_fee_express_rate")],
+        [InlineKeyboardButton("⚡ Express - Min", callback_data="edit_fee_express_min"),
+         InlineKeyboardButton("⚡ Express - Max", callback_data="edit_fee_express_max")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_settings")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def edit_delivery_fee(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Demande le nouveau montant pour un frais"""
+    query = update.callback_query
+    await query.answer()
+    
+    fee_type = query.data.replace("edit_fee_", "")
+    
+    fee_names = {
+        "postal_fr": "Postal France",
+        "postal_ch": "Postal Suisse",
+        "postal_au": "Postal Australie",
+        "express_rate": "Express - Taux (€/10km)",
+        "express_min": "Express - Minimum",
+        "express_max": "Express - Maximum"
+    }
+    
+    fee_name = fee_names.get(fee_type, fee_type)
+    
+    fees = load_delivery_fees()
+    current_value = fees.get(fee_type, 0)
+    
+    message = f"""✏️ MODIFIER : {fee_name}
+
+Valeur actuelle : {current_value}€
+
+Entrez la nouvelle valeur :
+
+💡 Exemples :
+• Postal : 10, 15, 20, 25
+• Express rate : 8, 10, 12
+• Express min/max : 20, 30, 50, 70
+
+Tapez /cancel pour annuler
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_delivery_fees")]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    context.user_data['editing_delivery_fee'] = fee_type
+
+@error_handler
+async def receive_delivery_fee(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Réceptionne et sauvegarde le nouveau frais"""
+    fee_type = context.user_data.get('editing_delivery_fee')
+    
+    if not fee_type:
+        return
+    
+    try:
+        new_value = float(update.message.text.strip())
+        
+        if new_value < 0:
+            await update.message.reply_text("❌ Le montant ne peut pas être négatif.")
+            return
+        
+        if new_value > 1000:
+            await update.message.reply_text("❌ Montant trop élevé (max 1000€).")
+            return
+        
+        fees = load_delivery_fees()
+        old_value = fees.get(fee_type, 0)
+        fees[fee_type] = new_value
+        save_delivery_fees(fees)
+        
+        fee_names = {
+            "postal_fr": "Postal France",
+            "postal_ch": "Postal Suisse",
+            "postal_au": "Postal Australie",
+            "express_rate": "Express - Taux",
+            "express_min": "Express - Minimum",
+            "express_max": "Express - Maximum"
+        }
+        
+        fee_name = fee_names.get(fee_type, fee_type)
+        
+        context.user_data.pop('editing_delivery_fee', None)
+        
+        message = f"""✅ FRAIS MIS À JOUR
+
+{fee_name}
+{old_value}€ → {new_value}€
+
+Les nouveaux frais s'appliquent immédiatement aux prochaines commandes.
+"""
+        
+        keyboard = [[
+            InlineKeyboardButton("🚚 Voir tous les frais", callback_data="admin_delivery_fees"),
+            InlineKeyboardButton("🔙 Retour", callback_data="admin_settings")
+        ]]
+        
+        await update.message.reply_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+        logger.info(f"💰 Frais livraison modifié: {fee_name} {old_value}€ → {new_value}€")
+        
+    except ValueError:
+        await update.message.reply_text("❌ Montant invalide. Entrez un nombre (ex: 10 ou 15.5)")
+
 # ==================== STATISTIQUES ====================
 
 @error_handler
@@ -4855,16 +5097,25 @@ async def delivery_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
 Choisissez votre mode de livraison :
 """
     
-    keyboard = [
-        [InlineKeyboardButton("📮 Postale (10€)", callback_data="delivery_postal")],
-        [InlineKeyboardButton("⚡ Express (variable)", callback_data="delivery_express")],
-        [InlineKeyboardButton("🤝 Meetup (gratuit)", callback_data="delivery_meetup")],
-        [InlineKeyboardButton("🔙 Retour panier", callback_data="view_cart")]
-    ]
-    
-    # Info Express si sous-total < 30€
-    if subtotal < 30:
-        message += f"\n⚠️ Express nécessite 30€ minimum (actuel: {subtotal:.2f}€)"
+    # Australie : Livraison postale uniquement
+    if country == "AU":
+        keyboard = [
+            [InlineKeyboardButton("📮 Postale (25€)", callback_data="delivery_postal")],
+            [InlineKeyboardButton("🔙 Retour panier", callback_data="view_cart")]
+        ]
+        message += "\n🇦🇺 Australie : Livraison postale uniquement (7-10 jours)"
+    else:
+        # France et Suisse : Tous les modes
+        keyboard = [
+            [InlineKeyboardButton("📮 Postale (10€)", callback_data="delivery_postal")],
+            [InlineKeyboardButton("⚡ Express (variable)", callback_data="delivery_express")],
+            [InlineKeyboardButton("🤝 Meetup (gratuit)", callback_data="delivery_meetup")],
+            [InlineKeyboardButton("🔙 Retour panier", callback_data="view_cart")]
+        ]
+        
+        # Info Express si sous-total < 30€
+        if subtotal < 30:
+            message += f"\n⚠️ Express nécessite 30€ minimum (actuel: {subtotal:.2f}€)"
     
     await query.edit_message_text(
         message,
@@ -4970,7 +5221,7 @@ async def receive_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
         distance = calculate_distance_simple(address)
-        delivery_fee = calculate_delivery_fee(delivery_type, distance, subtotal)
+        delivery_fee = calculate_delivery_fee(delivery_type, distance, subtotal, country)
         
         context.user_data['distance'] = distance
         context.user_data['delivery_fee'] = delivery_fee
@@ -4982,7 +5233,9 @@ async def receive_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     elif delivery_type == "postal":
         context.user_data['distance'] = 0
-        context.user_data['delivery_fee'] = FRAIS_POSTAL
+        # Calculer frais postal selon le pays
+        postal_fee = calculate_delivery_fee("postal", 0, subtotal, country)
+        context.user_data['delivery_fee'] = postal_fee
     
     # Passer au code promo
     await asyncio.sleep(1)
@@ -5738,6 +5991,12 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     if context.user_data.get('awaiting_amount'):
         logger.info(f"💰 État détecté: awaiting_amount = {context.user_data.get('awaiting_amount')}")
         await receive_amount(update, context)
+        return
+    
+    # État: V3.2.1 - En attente modification frais livraison
+    if context.user_data.get('editing_delivery_fee'):
+        logger.info(f"🚚 État détecté: editing_delivery_fee = {context.user_data.get('editing_delivery_fee')}")
+        await receive_delivery_fee(update, context)
         return
     
     # États: Livre de comptes (super-admin)
@@ -11326,6 +11585,10 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(admin_horaires_edit, pattern="^admin_horaires_edit$"))
     application.add_handler(CallbackQueryHandler(admin_horaires_edit_start, pattern="^admin_horaires_edit_start$"))
     application.add_handler(CallbackQueryHandler(admin_horaires_edit_end, pattern="^admin_horaires_edit_end$"))
+    
+    # V3.2.2 - Frais de livraison
+    application.add_handler(CallbackQueryHandler(admin_delivery_fees, pattern="^admin_delivery_fees$"))
+    application.add_handler(CallbackQueryHandler(edit_delivery_fee, pattern="^edit_fee_"))
     
     # Callbacks admin - admins
     application.add_handler(CallbackQueryHandler(admin_manage_admins, pattern="^admin_manage_admins$"))

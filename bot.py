@@ -643,7 +643,7 @@ MAX_CART_ITEMS = 50
 MAX_QUANTITY_PER_ITEM = 1000
 MIN_ORDER_AMOUNT = 10
 
-BOT_VERSION = "3.2.4"
+BOT_VERSION = "3.2.5"
 BOT_NAME = "E-Commerce Bot Multi-Admins"
 
 logger.info(f"🤖 {BOT_NAME} v{BOT_VERSION}")
@@ -3573,6 +3573,9 @@ Choisissez une section :
             InlineKeyboardButton("⚙️ Paramètres", callback_data="admin_settings"),
             InlineKeyboardButton("📈 Statistiques", callback_data="admin_stats")
         ])
+        keyboard.append([
+            InlineKeyboardButton("⭐ Clients VIP", callback_data="admin_vip_manager")
+        ])
     
     keyboard.append([InlineKeyboardButton("🔙 Fermer", callback_data="admin_close")])
     
@@ -4891,6 +4894,223 @@ Les nouveaux frais s'appliquent immédiatement aux prochaines commandes.
         
     except ValueError:
         await update.message.reply_text("❌ Montant invalide. Entrez un nombre (ex: 10 ou 15.5)")
+
+# ==================== ADMIN: GESTION VIP ====================
+
+@error_handler
+async def admin_vip_manager(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu de gestion des clients VIP"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    
+    if not is_admin(user_id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    # Charger historique clients
+    history = load_client_history()
+    
+    # Compter VIP actuels
+    vip_count = sum(1 for data in history.values() if data.get('vip_status'))
+    
+    # Compter clients éligibles mais pas VIP
+    eligible_count = 0
+    for user_id_str, data in history.items():
+        total_spent = data.get('total_spent', 0)
+        is_vip = data.get('vip_status', False)
+        if total_spent >= VIP_THRESHOLD and not is_vip:
+            eligible_count += 1
+    
+    message = f"""⭐ GESTION CLIENTS VIP
+
+📊 STATISTIQUES :
+• Clients VIP : {vip_count}
+• Éligibles non VIP : {eligible_count}
+• Seuil VIP : {VIP_THRESHOLD}€
+• Réduction VIP : {VIP_DISCOUNT}%
+
+Que souhaitez-vous faire ?
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🔄 Recalculer statuts VIP", callback_data="vip_recalculate")],
+        [InlineKeyboardButton("👥 Liste VIP", callback_data="vip_list")],
+        [InlineKeyboardButton("🎯 Éligibles non VIP", callback_data="vip_eligible")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_panel")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def vip_recalculate(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Recalcule automatiquement le statut VIP de tous les clients"""
+    query = update.callback_query
+    await query.answer("Recalcul en cours...")
+    
+    if not is_admin(query.from_user.id):
+        return
+    
+    history = load_client_history()
+    
+    updated_count = 0
+    new_vip_count = 0
+    removed_vip_count = 0
+    
+    for user_id_str, data in history.items():
+        total_spent = data.get('total_spent', 0)
+        was_vip = data.get('vip_status', False)
+        should_be_vip = total_spent >= VIP_THRESHOLD
+        
+        if should_be_vip and not was_vip:
+            # Devient VIP
+            data['vip_status'] = True
+            new_vip_count += 1
+            updated_count += 1
+            logger.info(f"⭐ User {user_id_str} devient VIP ({total_spent}€ >= {VIP_THRESHOLD}€)")
+        elif not should_be_vip and was_vip:
+            # Perd le statut VIP
+            data['vip_status'] = False
+            removed_vip_count += 1
+            updated_count += 1
+            logger.info(f"⚠️ User {user_id_str} perd VIP ({total_spent}€ < {VIP_THRESHOLD}€)")
+    
+    # Sauvegarder
+    save_client_history(history)
+    
+    # Total VIP après recalcul
+    total_vip = sum(1 for data in history.values() if data.get('vip_status'))
+    
+    message = f"""✅ RECALCUL TERMINÉ
+
+📊 RÉSULTAT :
+• Modifications : {updated_count}
+  - Nouveaux VIP : {new_vip_count}
+  - VIP retirés : {removed_vip_count}
+
+• Total VIP : {total_vip}
+• Seuil : {VIP_THRESHOLD}€
+
+Tous les statuts VIP sont maintenant à jour !
+"""
+    
+    keyboard = [[
+        InlineKeyboardButton("👥 Voir liste VIP", callback_data="vip_list"),
+        InlineKeyboardButton("🔙 Retour", callback_data="admin_vip_manager")
+    ]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    logger.info(f"✅ Recalcul VIP terminé: {new_vip_count} ajoutés, {removed_vip_count} retirés")
+
+@error_handler
+async def vip_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche la liste des clients VIP"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_admin(query.from_user.id):
+        return
+    
+    history = load_client_history()
+    users = load_users()
+    
+    # Filtrer clients VIP et trier par dépenses
+    vip_clients = []
+    for user_id_str, data in history.items():
+        if data.get('vip_status'):
+            vip_clients.append({
+                'user_id': user_id_str,
+                'total_spent': data.get('total_spent', 0),
+                'orders_count': data.get('orders_count', 0),
+                'first_name': users.get(user_id_str, {}).get('first_name', 'Inconnu')
+            })
+    
+    vip_clients.sort(key=lambda x: x['total_spent'], reverse=True)
+    
+    if not vip_clients:
+        message = "⭐ CLIENTS VIP\n\nAucun client VIP pour le moment."
+    else:
+        message = f"""⭐ CLIENTS VIP ({len(vip_clients)})
+
+"""
+        for i, client in enumerate(vip_clients[:20], 1):  # Limite 20
+            message += f"{i}. {client['first_name']}\n"
+            message += f"   💰 {client['total_spent']:.2f}€ | 🛒 {client['orders_count']} cmd\n"
+        
+        if len(vip_clients) > 20:
+            message += f"\n... et {len(vip_clients) - 20} autres"
+    
+    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_vip_manager")]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def vip_eligible(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche les clients éligibles mais pas encore VIP"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_admin(query.from_user.id):
+        return
+    
+    history = load_client_history()
+    users = load_users()
+    
+    # Filtrer clients éligibles non VIP
+    eligible = []
+    for user_id_str, data in history.items():
+        total_spent = data.get('total_spent', 0)
+        is_vip = data.get('vip_status', False)
+        if total_spent >= VIP_THRESHOLD and not is_vip:
+            eligible.append({
+                'user_id': user_id_str,
+                'total_spent': total_spent,
+                'orders_count': data.get('orders_count', 0),
+                'first_name': users.get(user_id_str, {}).get('first_name', 'Inconnu')
+            })
+    
+    eligible.sort(key=lambda x: x['total_spent'], reverse=True)
+    
+    if not eligible:
+        message = f"""🎯 CLIENTS ÉLIGIBLES VIP
+
+Tous les clients ayant dépensé ≥ {VIP_THRESHOLD}€ sont déjà VIP ! ✅
+"""
+    else:
+        message = f"""🎯 CLIENTS ÉLIGIBLES VIP ({len(eligible)})
+
+Ces clients ont dépensé ≥ {VIP_THRESHOLD}€ mais ne sont pas VIP :
+
+"""
+        for i, client in enumerate(eligible[:15], 1):
+            message += f"{i}. {client['first_name']}\n"
+            message += f"   💰 {client['total_spent']:.2f}€ | 🛒 {client['orders_count']} cmd\n"
+        
+        if len(eligible) > 15:
+            message += f"\n... et {len(eligible) - 15} autres"
+        
+        message += f"\n\n💡 Utilisez 'Recalculer statuts VIP' pour les activer automatiquement."
+    
+    keyboard = [[
+        InlineKeyboardButton("🔄 Recalculer maintenant", callback_data="vip_recalculate"),
+        InlineKeyboardButton("🔙 Retour", callback_data="admin_vip_manager")
+    ]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
 
 # ==================== STATISTIQUES ====================
 
@@ -11652,6 +11872,12 @@ def setup_handlers(application):
     
     # Callbacks admin - stats
     application.add_handler(CallbackQueryHandler(admin_stats, pattern="^admin_stats$"))
+    
+    # V3.2.5 - Gestion VIP
+    application.add_handler(CallbackQueryHandler(admin_vip_manager, pattern="^admin_vip_manager$"))
+    application.add_handler(CallbackQueryHandler(vip_recalculate, pattern="^vip_recalculate$"))
+    application.add_handler(CallbackQueryHandler(vip_list, pattern="^vip_list$"))
+    application.add_handler(CallbackQueryHandler(vip_eligible, pattern="^vip_eligible$"))
     application.add_handler(CallbackQueryHandler(admin_detailed_stats, pattern="^admin_detailed_stats$"))
     
     # Message handlers (doit être en dernier)

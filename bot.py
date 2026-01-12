@@ -236,6 +236,24 @@ FRAIS_POSTAL = 10
 FRAIS_MEETUP = 0
 VIP_THRESHOLD = 500
 VIP_DISCOUNT = 5
+
+# Charger config VIP si elle existe
+def load_vip_config():
+    """Charge la configuration VIP depuis le fichier"""
+    global VIP_THRESHOLD, VIP_DISCOUNT
+    config_file = DATA_DIR / "vip_config.json"
+    if config_file.exists():
+        try:
+            with open(config_file, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                VIP_THRESHOLD = config.get('threshold', VIP_THRESHOLD)
+                VIP_DISCOUNT = config.get('discount', VIP_DISCOUNT)
+                logger.info(f"⭐ Config VIP chargée: Seuil={VIP_THRESHOLD}€, Réduction={VIP_DISCOUNT}%")
+        except Exception as e:
+            logger.error(f"Erreur chargement config VIP: {e}")
+
+# Charger au démarrage
+load_vip_config()
 REFERRAL_REWARD = 5
 
 # ==================== CONFIGURATION SYSTÈME FINANCIER AVANCÉ ====================
@@ -643,7 +661,7 @@ MAX_CART_ITEMS = 50
 MAX_QUANTITY_PER_ITEM = 1000
 MIN_ORDER_AMOUNT = 10
 
-BOT_VERSION = "3.2.5"
+BOT_VERSION = "3.2.6"
 BOT_NAME = "E-Commerce Bot Multi-Admins"
 
 logger.info(f"🤖 {BOT_NAME} v{BOT_VERSION}")
@@ -4936,8 +4954,11 @@ Que souhaitez-vous faire ?
     
     keyboard = [
         [InlineKeyboardButton("🔄 Recalculer statuts VIP", callback_data="vip_recalculate")],
-        [InlineKeyboardButton("👥 Liste VIP", callback_data="vip_list")],
-        [InlineKeyboardButton("🎯 Éligibles non VIP", callback_data="vip_eligible")],
+        [InlineKeyboardButton("✏️ Modifier seuil VIP", callback_data="vip_edit_threshold")],
+        [InlineKeyboardButton("👥 Liste VIP", callback_data="vip_list"),
+         InlineKeyboardButton("🎯 Éligibles", callback_data="vip_eligible")],
+        [InlineKeyboardButton("➕ Activer VIP client", callback_data="vip_activate_client"),
+         InlineKeyboardButton("➖ Retirer VIP client", callback_data="vip_remove_client")],
         [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_panel")]
     ]
     
@@ -5111,6 +5132,309 @@ Ces clients ont dépensé ≥ {VIP_THRESHOLD}€ mais ne sont pas VIP :
         message,
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
+
+@error_handler
+async def vip_edit_threshold(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Permet de modifier le seuil VIP"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_admin(query.from_user.id):
+        return
+    
+    message = f"""✏️ MODIFIER SEUIL VIP
+
+💰 Seuil actuel : {VIP_THRESHOLD}€
+
+Entrez le nouveau seuil VIP :
+(Montant en euros que les clients doivent dépenser pour devenir VIP)
+
+💡 Exemples :
+• 300 (plus accessible)
+• 500 (actuel)
+• 1000 (plus élitiste)
+
+Tapez /cancel pour annuler
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_vip_manager")]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    context.user_data['editing_vip_threshold'] = True
+
+@error_handler
+async def vip_activate_client(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Activer manuellement le statut VIP d'un client"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_admin(query.from_user.id):
+        return
+    
+    message = f"""➕ ACTIVER VIP CLIENT
+
+Pour activer manuellement le statut VIP d'un client, entrez son ID Telegram.
+
+💡 Comment trouver l'ID ?
+• Consultez la liste des clients
+• L'ID est affiché dans les commandes
+• Format : nombre (ex: 8450278584)
+
+Entrez l'ID du client :
+
+Tapez /cancel pour annuler
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_vip_manager")]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    context.user_data['activating_vip_client'] = True
+
+@error_handler
+async def vip_remove_client(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Retirer manuellement le statut VIP d'un client"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_admin(query.from_user.id):
+        return
+    
+    # Charger liste VIP
+    history = load_client_history()
+    users = load_users()
+    
+    vip_clients = []
+    for user_id_str, data in history.items():
+        if data.get('vip_status'):
+            vip_clients.append({
+                'user_id': user_id_str,
+                'first_name': users.get(user_id_str, {}).get('first_name', 'Inconnu'),
+                'total_spent': data.get('total_spent', 0)
+            })
+    
+    vip_clients.sort(key=lambda x: x['total_spent'], reverse=True)
+    
+    if not vip_clients:
+        message = "➖ RETIRER VIP CLIENT\n\nAucun client VIP actuellement."
+        keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_vip_manager")]]
+    else:
+        message = f"""➖ RETIRER VIP CLIENT ({len(vip_clients)})
+
+Entrez l'ID du client dont vous voulez retirer le statut VIP :
+
+"""
+        # Afficher les 10 premiers VIP
+        for i, client in enumerate(vip_clients[:10], 1):
+            message += f"{i}. {client['first_name']} (ID: {client['user_id']})\n"
+            message += f"   💰 {client['total_spent']:.2f}€\n"
+        
+        if len(vip_clients) > 10:
+            message += f"\n... et {len(vip_clients) - 10} autres"
+        
+        message += "\n\nTapez /cancel pour annuler"
+        
+        keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_vip_manager")]]
+        
+        context.user_data['removing_vip_client'] = True
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def receive_vip_threshold(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Réceptionne le nouveau seuil VIP"""
+    if not is_admin(update.effective_user.id):
+        return
+    
+    if not context.user_data.get('editing_vip_threshold'):
+        return
+    
+    try:
+        new_threshold = float(update.message.text.strip())
+        
+        if new_threshold < 0:
+            await update.message.reply_text("❌ Le seuil ne peut pas être négatif.")
+            return
+        
+        if new_threshold > 100000:
+            await update.message.reply_text("❌ Seuil trop élevé (max 100,000€).")
+            return
+        
+        # Mettre à jour dans la config (fichier temporaire ou variable globale)
+        # Note : VIP_THRESHOLD est une constante, on la change dans un fichier de config
+        config_file = DATA_DIR / "vip_config.json"
+        vip_config = {
+            "threshold": new_threshold,
+            "discount": VIP_DISCOUNT
+        }
+        
+        with open(config_file, 'w', encoding='utf-8') as f:
+            json.dump(vip_config, f, indent=2)
+        
+        # Mettre à jour la variable globale
+        global VIP_THRESHOLD
+        old_threshold = VIP_THRESHOLD
+        VIP_THRESHOLD = new_threshold
+        
+        context.user_data.pop('editing_vip_threshold', None)
+        
+        message = f"""✅ SEUIL VIP MODIFIÉ
+
+Ancien seuil : {old_threshold}€
+Nouveau seuil : {new_threshold}€
+
+💡 Utilisez 'Recalculer statuts VIP' pour appliquer le nouveau seuil à tous les clients.
+"""
+        
+        keyboard = [[
+            InlineKeyboardButton("🔄 Recalculer maintenant", callback_data="vip_recalculate"),
+            InlineKeyboardButton("🔙 Retour", callback_data="admin_vip_manager")
+        ]]
+        
+        await update.message.reply_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+        logger.info(f"💰 Seuil VIP modifié: {old_threshold}€ → {new_threshold}€")
+    
+    except ValueError:
+        await update.message.reply_text("❌ Montant invalide. Entrez un nombre (ex: 500)")
+
+@error_handler
+async def receive_vip_activate(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Réceptionne l'ID pour activer VIP"""
+    if not is_admin(update.effective_user.id):
+        return
+    
+    if not context.user_data.get('activating_vip_client'):
+        return
+    
+    try:
+        user_id = update.message.text.strip()
+        
+        # Charger données
+        history = load_client_history()
+        users = load_users()
+        
+        if user_id not in history:
+            await update.message.reply_text(
+                f"❌ Client {user_id} introuvable.\n"
+                "Vérifiez l'ID ou assurez-vous que le client a déjà passé une commande."
+            )
+            return
+        
+        if history[user_id].get('vip_status'):
+            user_name = users.get(user_id, {}).get('first_name', 'Client')
+            await update.message.reply_text(
+                f"⚠️ {user_name} (ID: {user_id}) est déjà VIP."
+            )
+            return
+        
+        # Activer VIP
+        history[user_id]['vip_status'] = True
+        save_client_history(history)
+        
+        user_name = users.get(user_id, {}).get('first_name', 'Client')
+        total_spent = history[user_id].get('total_spent', 0)
+        
+        context.user_data.pop('activating_vip_client', None)
+        
+        message = f"""✅ VIP ACTIVÉ
+
+👤 Client : {user_name}
+🆔 ID : {user_id}
+💰 Dépenses : {total_spent:.2f}€
+
+Le client bénéficie maintenant de {VIP_DISCOUNT}% de réduction sur ses commandes.
+"""
+        
+        keyboard = [[
+            InlineKeyboardButton("👥 Voir liste VIP", callback_data="vip_list"),
+            InlineKeyboardButton("🔙 Retour", callback_data="admin_vip_manager")
+        ]]
+        
+        await update.message.reply_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+        logger.info(f"⭐ VIP activé manuellement: {user_id} ({user_name})")
+    
+    except Exception as e:
+        logger.error(f"❌ Erreur activation VIP: {e}")
+        await update.message.reply_text("❌ Erreur lors de l'activation VIP")
+
+@error_handler
+async def receive_vip_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Réceptionne l'ID pour retirer VIP"""
+    if not is_admin(update.effective_user.id):
+        return
+    
+    if not context.user_data.get('removing_vip_client'):
+        return
+    
+    try:
+        user_id = update.message.text.strip()
+        
+        # Charger données
+        history = load_client_history()
+        users = load_users()
+        
+        if user_id not in history:
+            await update.message.reply_text(f"❌ Client {user_id} introuvable.")
+            return
+        
+        if not history[user_id].get('vip_status'):
+            user_name = users.get(user_id, {}).get('first_name', 'Client')
+            await update.message.reply_text(
+                f"⚠️ {user_name} (ID: {user_id}) n'est pas VIP."
+            )
+            return
+        
+        # Retirer VIP
+        history[user_id]['vip_status'] = False
+        save_client_history(history)
+        
+        user_name = users.get(user_id, {}).get('first_name', 'Client')
+        total_spent = history[user_id].get('total_spent', 0)
+        
+        context.user_data.pop('removing_vip_client', None)
+        
+        message = f"""✅ VIP RETIRÉ
+
+👤 Client : {user_name}
+🆔 ID : {user_id}
+💰 Dépenses : {total_spent:.2f}€
+
+Le client n'a plus la réduction VIP.
+"""
+        
+        keyboard = [[
+            InlineKeyboardButton("👥 Voir liste VIP", callback_data="vip_list"),
+            InlineKeyboardButton("🔙 Retour", callback_data="admin_vip_manager")
+        ]]
+        
+        await update.message.reply_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+        logger.info(f"⚠️ VIP retiré manuellement: {user_id} ({user_name})")
+    
+    except Exception as e:
+        logger.error(f"❌ Erreur retrait VIP: {e}")
+        await update.message.reply_text("❌ Erreur lors du retrait VIP")
 
 # ==================== STATISTIQUES ====================
 
@@ -6240,6 +6564,24 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     if context.user_data.get('editing_delivery_fee'):
         logger.info(f"🚚 État détecté: editing_delivery_fee = {context.user_data.get('editing_delivery_fee')}")
         await receive_delivery_fee(update, context)
+        return
+    
+    # État: V3.2.6 - En attente modification seuil VIP
+    if context.user_data.get('editing_vip_threshold'):
+        logger.info(f"⭐ État détecté: editing_vip_threshold")
+        await receive_vip_threshold(update, context)
+        return
+    
+    # État: V3.2.6 - En attente activation VIP client
+    if context.user_data.get('activating_vip_client'):
+        logger.info(f"⭐ État détecté: activating_vip_client")
+        await receive_vip_activate(update, context)
+        return
+    
+    # État: V3.2.6 - En attente retrait VIP client
+    if context.user_data.get('removing_vip_client'):
+        logger.info(f"⭐ État détecté: removing_vip_client")
+        await receive_vip_remove(update, context)
         return
     
     # États: Livre de comptes (super-admin)
@@ -11878,6 +12220,11 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(vip_recalculate, pattern="^vip_recalculate$"))
     application.add_handler(CallbackQueryHandler(vip_list, pattern="^vip_list$"))
     application.add_handler(CallbackQueryHandler(vip_eligible, pattern="^vip_eligible$"))
+    
+    # V3.2.6 - Gestion VIP manuelle
+    application.add_handler(CallbackQueryHandler(vip_edit_threshold, pattern="^vip_edit_threshold$"))
+    application.add_handler(CallbackQueryHandler(vip_activate_client, pattern="^vip_activate_client$"))
+    application.add_handler(CallbackQueryHandler(vip_remove_client, pattern="^vip_remove_client$"))
     application.add_handler(CallbackQueryHandler(admin_detailed_stats, pattern="^admin_detailed_stats$"))
     
     # Message handlers (doit être en dernier)

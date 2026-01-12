@@ -1,0 +1,319 @@
+{
+  "languages": {
+    "fr": {
+      "name": "Français",
+      "flag": "🇫🇷",
+      "active": true
+    },
+    "en": {
+      "name": "English",
+      "flag": "🇬🇧",
+      "active": true
+    },
+    "de": {
+      "name": "Deutsch",
+      "flag": "🇩🇪",
+      "active": true
+    },
+    "es": {
+      "name": "Español",
+      "flag": "🇪🇸",
+      "active": true
+    },
+    "it": {
+      "name": "Italiano",
+      "flag": "🇮🇹",
+      "active": true
+    }
+  },
+  
+  "translations": {
+    "choose_language": {
+      "fr": "🌍 Choisir la langue",
+      "en": "🌍 Choose language",
+      "de": "🌍 Sprache wählen",
+      "es": "🌍 Elegir idioma",
+      "it": "🌍 Scegli lingua"
+    },
+    
+    "welcome": {
+      "fr": "Bienvenue {name} !",
+      "en": "Welcome {name}!",
+      "de": "Willkommen {name}!",
+      "es": "¡Bienvenido {name}!",
+      "it": "Benvenuto {name}!"
+    },
+    
+    "welcome_new_user": {
+      "fr": "🎉 BIENVENUE {name} !\n\nMerci de nous rejoindre.\n\n🎁 Code promo : WELCOME10 pour -10%",
+      "en": "🎉 WELCOME {name}!\n\nThank you for joining us.\n\n🎁 Promo code: WELCOME10 for -10%",
+      "de": "🎉 WILLKOMMEN {name}!\n\nDanke, dass Sie sich uns anschließen.\n\n🎁 Promo-Code: WELCOME10 für -10%",
+      "es": "🎉 ¡BIENVENIDO {name}!\n\nGracias por unirte a nosotros.\n\n🎁 Código promocional: WELCOME10 para -10%",
+      "it": "🎉 BENVENUTO {name}!\n\nGrazie per esserti unito a noi.\n\n🎁 Codice promo: WELCOME10 per -10%"
+    },
+    
+    "choose_country": {
+      "fr": "Choisissez votre pays",
+      "en": "Choose your country",
+      "de": "Wählen Sie Ihr Land",
+      "es": "Elija su país",
+      "it": "Scegli il tuo paese"
+    },
+    
+    "view_products": {
+      "fr": "📦 Voir tous les produits",
+      "en": "📦 View all products",
+      "de": "📦 Alle Produkte anzeigen",
+      "es": "📦 Ver todos los productos",
+      "it": "📦 Visualizza tutti i prodotti"
+    },
+    
+    "cart": {
+      "fr": "🛒 Panier",
+      "en": "🛒 Cart",
+      "de": "🛒 Warenkorb",
+      "es": "🛒 Carrito",
+      "it": "🛒 Carrello"
+    },
+    
+    "order": {
+      "fr": "Commander",
+      "en": "Order",
+      "de": "Bestellen",
+      "es": "Ordenar",
+      "it": "Ordinare"
+    },
+    
+    "total": {
+      "fr": "Total",
+      "en": "Total",
+      "de": "Gesamt",
+      "es": "Total",
+      "it": "Totale"
+    },
+    
+    "delivery": {
+      "fr": "Livraison",
+      "en": "Delivery",
+      "de": "Lieferung",
+      "es": "Entrega",
+      "it": "Consegna"
+    },
+    
+    "payment": {
+      "fr": "Paiement",
+      "en": "Payment",
+      "de": "Zahlung",
+      "es": "Pago",
+      "it": "Pagamento"
+    },
+    
+    "confirm_order": {
+      "fr": "✅ Confirmer la commande",
+      "en": "✅ Confirm order",
+      "de": "✅ Bestellung bestätigen",
+      "es": "✅ Confirmar pedido",
+      "it": "✅ Conferma ordine"
+    },
+    
+    "order_confirmed": {
+      "fr": "✅ Commande confirmée !",
+      "en": "✅ Order confirmed!",
+      "de": "✅ Bestellung bestätigt!",
+      "es": "✅ Pedido confirmado!",
+      "it": "✅ Ordine confermato!"
+    },
+    
+    "help": {
+      "fr": "Aide",
+      "en": "Help",
+      "de": "Hilfe",
+      "es": "Ayuda",
+      "it": "Aiuto"
+    },
+    
+    "back": {
+      "fr": "🔙 Retour",
+      "en": "🔙 Back",
+      "de": "🔙 Zurück",
+      "es": "🔙 Volver",
+      "it": "🔙 Indietro"
+    },
+    
+    "cancel": {
+      "fr": "❌ Annuler",
+      "en": "❌ Cancel",
+      "de": "❌ Abbrechen",
+      "es": "❌ Cancelar",
+      "it": "❌ Annulla"
+    },
+    
+    "add_to_cart": {
+      "fr": "➕ Ajouter au panier",
+      "en": "➕ Add to cart",
+      "de": "➕ In den Warenkorb",
+      "es": "➕ Añadir al carrito",
+      "it": "➕ Aggiungi al carrello"
+    },
+    
+    "empty_cart": {
+      "fr": "Votre panier est vide",
+      "en": "Your cart is empty",
+      "de": "Ihr Warenkorb ist leer",
+      "es": "Tu carrito está vacío",
+      "it": "Il tuo carrello è vuoto"
+    },
+    
+    "subtotal": {
+      "fr": "Sous-total",
+      "en": "Subtotal",
+      "de": "Zwischensumme",
+      "es": "Subtotal",
+      "it": "Subtotale"
+    },
+    
+    "discount": {
+      "fr": "Réduction",
+      "en": "Discount",
+      "de": "Rabatt",
+      "es": "Descuento",
+      "it": "Sconto"
+    },
+    
+    "vip_discount": {
+      "fr": "Réduction VIP ({percent}%)",
+      "en": "VIP discount ({percent}%)",
+      "de": "VIP-Rabatt ({percent}%)",
+      "es": "Descuento VIP ({percent}%)",
+      "it": "Sconto VIP ({percent}%)"
+    },
+    
+    "promo_code": {
+      "fr": "Code promo",
+      "en": "Promo code",
+      "de": "Promo-Code",
+      "es": "Código promocional",
+      "it": "Codice promo"
+    },
+    
+    "enter_promo": {
+      "fr": "Entrer un code promo",
+      "en": "Enter promo code",
+      "de": "Promo-Code eingeben",
+      "es": "Introducir código promocional",
+      "it": "Inserisci codice promo"
+    },
+    
+    "delivery_mode": {
+      "fr": "Mode de livraison",
+      "en": "Delivery mode",
+      "de": "Versandart",
+      "es": "Modo de entrega",
+      "it": "Modalità di consegna"
+    },
+    
+    "postal": {
+      "fr": "📮 Postale",
+      "en": "📮 Postal",
+      "de": "📮 Post",
+      "es": "📮 Postal",
+      "it": "📮 Postale"
+    },
+    
+    "express": {
+      "fr": "🚀 Express",
+      "en": "🚀 Express",
+      "de": "🚀 Express",
+      "es": "🚀 Express",
+      "it": "🚀 Express"
+    },
+    
+    "meetup": {
+      "fr": "🤝 Rendez-vous",
+      "en": "🤝 Meetup",
+      "de": "🤝 Treffen",
+      "es": "🤝 Encuentro",
+      "it": "🤝 Incontro"
+    },
+    
+    "enter_address": {
+      "fr": "Entrez votre adresse complète",
+      "en": "Enter your full address",
+      "de": "Geben Sie Ihre vollständige Adresse ein",
+      "es": "Ingrese su dirección completa",
+      "it": "Inserisci il tuo indirizzo completo"
+    },
+    
+    "payment_method": {
+      "fr": "Méthode de paiement",
+      "en": "Payment method",
+      "de": "Zahlungsmethode",
+      "es": "Método de pago",
+      "it": "Metodo di pagamento"
+    },
+    
+    "crypto": {
+      "fr": "💎 Crypto",
+      "en": "💎 Crypto",
+      "de": "💎 Krypto",
+      "es": "💎 Cripto",
+      "it": "💎 Cripto"
+    },
+    
+    "cash": {
+      "fr": "💵 Espèces",
+      "en": "💵 Cash",
+      "de": "💵 Bargeld",
+      "es": "💵 Efectivo",
+      "it": "💵 Contanti"
+    },
+    
+    "stock_available": {
+      "fr": "Stock : {stock} {unit}",
+      "en": "Stock: {stock} {unit}",
+      "de": "Bestand: {stock} {unit}",
+      "es": "Existencias: {stock} {unit}",
+      "it": "Scorta: {stock} {unit}"
+    },
+    
+    "out_of_stock": {
+      "fr": "❌ Rupture de stock",
+      "en": "❌ Out of stock",
+      "de": "❌ Nicht vorrätig",
+      "es": "❌ Agotado",
+      "it": "❌ Esaurito"
+    },
+    
+    "low_stock": {
+      "fr": "⚠️ Stock faible",
+      "en": "⚠️ Low stock",
+      "de": "⚠️ Niedriger Bestand",
+      "es": "⚠️ Stock bajo",
+      "it": "⚠️ Scorta bassa"
+    },
+    
+    "thank_you": {
+      "fr": "Merci pour votre commande !",
+      "en": "Thank you for your order!",
+      "de": "Danke für Ihre Bestellung!",
+      "es": "¡Gracias por su pedido!",
+      "it": "Grazie per il tuo ordine!"
+    },
+    
+    "order_number": {
+      "fr": "Numéro de commande : {order_id}",
+      "en": "Order number: {order_id}",
+      "de": "Bestellnummer: {order_id}",
+      "es": "Número de pedido: {order_id}",
+      "it": "Numero d'ordine: {order_id}"
+    },
+    
+    "error": {
+      "fr": "❌ Une erreur est survenue",
+      "en": "❌ An error occurred",
+      "de": "❌ Ein Fehler ist aufgetreten",
+      "es": "❌ Ocurrió un error",
+      "it": "❌ Si è verificato un errore"
+    }
+  }
+}

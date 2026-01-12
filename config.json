@@ -1,0 +1,243 @@
+{
+  "bot_token": "VOTRE_BOT_TOKEN_ICI",
+  "shop_name": "Commerce Anonyme",
+  "currency": "EUR",
+  "timezone": "Europe/Paris",
+  
+  "countries": {
+    "FR": {
+      "name": "France",
+      "flag": "🇫🇷",
+      "active": true,
+      "currency": "EUR",
+      "delivery": {
+        "postal": {
+          "enabled": true,
+          "fee": 10,
+          "delay": "48-72h",
+          "description": {
+            "fr": "Livraison par La Poste",
+            "en": "Postal delivery",
+            "de": "Postversand",
+            "es": "Envío postal",
+            "it": "Consegna postale"
+          }
+        },
+        "express": {
+          "enabled": true,
+          "rate_per_km": 10,
+          "min_fee": 30,
+          "max_fee": 70,
+          "max_distance": 50,
+          "description": {
+            "fr": "Livraison express (30min+)",
+            "en": "Express delivery (30min+)",
+            "de": "Expressversand (30min+)",
+            "es": "Entrega express (30min+)",
+            "it": "Consegna express (30min+)"
+          }
+        },
+        "meetup": {
+          "enabled": true,
+          "fee": 0,
+          "description": {
+            "fr": "Rendez-vous en personne",
+            "en": "In-person meetup",
+            "de": "Persönliches Treffen",
+            "es": "Encuentro en persona",
+            "it": "Incontro di persona"
+          }
+        }
+      }
+    },
+    
+    "CH": {
+      "name": "Suisse",
+      "flag": "🇨🇭",
+      "active": true,
+      "currency": "CHF",
+      "delivery": {
+        "postal": {
+          "enabled": true,
+          "fee": 15,
+          "delay": "72-96h",
+          "description": {
+            "fr": "Livraison par La Poste Suisse",
+            "en": "Swiss Post delivery",
+            "de": "Schweizer Post Versand",
+            "es": "Correo Suizo",
+            "it": "Posta Svizzera"
+          }
+        },
+        "express": {
+          "enabled": true,
+          "rate_per_km": 15,
+          "min_fee": 40,
+          "max_fee": 90,
+          "max_distance": 40,
+          "description": {
+            "fr": "Livraison express (30min+)",
+            "en": "Express delivery (30min+)",
+            "de": "Expressversand (30min+)",
+            "es": "Entrega express (30min+)",
+            "it": "Consegna express (30min+)"
+          }
+        },
+        "meetup": {
+          "enabled": true,
+          "fee": 0,
+          "description": {
+            "fr": "Rendez-vous en personne",
+            "en": "In-person meetup",
+            "de": "Persönliches Treffen",
+            "es": "Encuentro en persona",
+            "it": "Incontro di persona"
+          }
+        }
+      }
+    },
+    
+    "AU": {
+      "name": "Australie",
+      "flag": "🇦🇺",
+      "active": true,
+      "currency": "AUD",
+      "delivery": {
+        "postal": {
+          "enabled": true,
+          "fee": 25,
+          "delay": "7-10 jours",
+          "description": {
+            "fr": "Livraison par Australia Post",
+            "en": "Australia Post delivery",
+            "de": "Australia Post Versand",
+            "es": "Correo de Australia",
+            "it": "Posta Australiana"
+          }
+        }
+      }
+    }
+  },
+  
+  "payment": {
+    "methods": {
+      "crypto": {
+        "enabled": true,
+        "currencies": ["BTC", "ETH", "USDT"],
+        "wallets": {
+          "BTC": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
+          "ETH": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+          "USDT": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
+        }
+      },
+      "cash": {
+        "enabled": true,
+        "meetup_only": true,
+        "description": {
+          "fr": "Espèces (rendez-vous uniquement)",
+          "en": "Cash (meetup only)",
+          "de": "Bargeld (nur Treffen)",
+          "es": "Efectivo (solo encuentro)",
+          "it": "Contanti (solo incontro)"
+        }
+      }
+    },
+    "confirmation_required": true
+  },
+  
+  "vip": {
+    "active": true,
+    "threshold": 500,
+    "discount": 5,
+    "message": {
+      "fr": "🌟 Vous êtes VIP ! Profitez de {discount}% de réduction",
+      "en": "🌟 You are VIP! Enjoy {discount}% discount",
+      "de": "🌟 Sie sind VIP! Genießen Sie {discount}% Rabatt",
+      "es": "🌟 ¡Eres VIP! Disfruta de {discount}% de descuento",
+      "it": "🌟 Sei VIP! Goditi {discount}% di sconto"
+    }
+  },
+  
+  "promo_codes": {
+    "WELCOME10": {
+      "active": true,
+      "type": "percent",
+      "value": 10,
+      "min_order": 0,
+      "max_uses": null,
+      "expires": null,
+      "description": {
+        "fr": "Code de bienvenue -10%",
+        "en": "Welcome code -10%",
+        "de": "Willkommenscode -10%",
+        "es": "Código de bienvenida -10%",
+        "it": "Codice di benvenuto -10%"
+      }
+    }
+  },
+  
+  "schedule": {
+    "timezone": "Europe/Paris",
+    "working_hours": {
+      "monday": {"open": "09:00", "close": "22:00"},
+      "tuesday": {"open": "09:00", "close": "22:00"},
+      "wednesday": {"open": "09:00", "close": "22:00"},
+      "thursday": {"open": "09:00", "close": "22:00"},
+      "friday": {"open": "09:00", "close": "23:00"},
+      "saturday": {"open": "10:00", "close": "23:00"},
+      "sunday": {"open": "10:00", "close": "20:00"}
+    },
+    "closed_dates": []
+  },
+  
+  "theme": {
+    "emojis": {
+      "cart": "🛒",
+      "success": "✅",
+      "error": "❌",
+      "warning": "⚠️",
+      "money": "💰",
+      "delivery": "🚚",
+      "gift": "🎁",
+      "vip": "⭐",
+      "celebration": "🎉",
+      "info": "ℹ️",
+      "support": "💬"
+    }
+  },
+  
+  "notifications": {
+    "admin_notifications": {
+      "new_user": true,
+      "new_order": true,
+      "low_stock": true,
+      "payment_received": true,
+      "daily_report": false,
+      "daily_report_time": "23:00"
+    },
+    "user_notifications": {
+      "order_confirmed": true,
+      "order_prepared": true,
+      "order_shipped": true,
+      "vip_status": true
+    }
+  },
+  
+  "security": {
+    "rate_limiting": {
+      "max_orders_per_day": 10,
+      "max_orders_per_hour": 3
+    },
+    "maintenance": {
+      "active": false,
+      "message": {
+        "fr": "Bot en maintenance. Réessayez plus tard.",
+        "en": "Bot under maintenance. Try again later.",
+        "de": "Bot in Wartung. Versuchen Sie es später noch einmal.",
+        "es": "Bot en mantenimiento. Inténtalo más tarde.",
+        "it": "Bot in manutenzione. Riprova più tardi."
+      },
+      "allowed_users": []
+    }
+  }
+}

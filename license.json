@@ -1,0 +1,95 @@
+{
+  "license": {
+    "level": 3,
+    "status": "active",
+    "activated_at": "2025-01-12T00:00:00Z",
+    "expires_at": null,
+    "owner": {
+      "telegram_id": "ADMIN_ID_ICI",
+      "name": "Admin Principal"
+    }
+  },
+  
+  "features": {
+    "multi_admin": {
+      "enabled": true,
+      "max_admins": null
+    },
+    "countries": {
+      "enabled": true,
+      "max_countries": null,
+      "available": ["FR", "CH", "AU"]
+    },
+    "languages": {
+      "enabled": true,
+      "count": 5,
+      "available": ["fr", "en", "de", "es", "it"]
+    },
+    "vip_system": true,
+    "promo_codes": true,
+    "advanced_stats": true,
+    "accounting": true,
+    "salary_management": true,
+    "ledger": true,
+    "cost_management": true,
+    "commissions": true,
+    "exports": true
+  },
+  
+  "activation_history": [
+    {
+      "date": "2025-01-12T00:00:00Z",
+      "level": 3,
+      "activated_by": "ADMIN_ID_ICI",
+      "method": "migration_v4"
+    }
+  ],
+  
+  "level_descriptions": {
+    "1": {
+      "name": "Starter",
+      "emoji": "🥉",
+      "price_monthly": 9,
+      "price_yearly": 90,
+      "features": [
+        "1 seul admin",
+        "Catalogue produits",
+        "Panier & commandes",
+        "1 pays (FR)",
+        "1 langue (FR)",
+        "Livraison simple"
+      ]
+    },
+    "2": {
+      "name": "Business",
+      "emoji": "🥈",
+      "price_monthly": 29,
+      "price_yearly": 290,
+      "features": [
+        "Multi-admins (5 max)",
+        "Stats & Analytics",
+        "Système VIP",
+        "Codes promo",
+        "3 pays (FR, CH, AU)",
+        "5 langues",
+        "Gestion stocks avancée"
+      ]
+    },
+    "3": {
+      "name": "Enterprise",
+      "emoji": "🥇",
+      "price_monthly": 99,
+      "price_yearly": 990,
+      "features": [
+        "Admins illimités",
+        "Comptabilité complète",
+        "Gestion salaires",
+        "Livre de comptes",
+        "Prix de revient",
+        "Commissions",
+        "Exports comptables",
+        "Analytics avancées"
+      ]
+    }
+  }
+}

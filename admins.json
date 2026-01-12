@@ -1,0 +1,42 @@
+{
+  "roles": {
+    "super_admin": {
+      "name": "Super Admin",
+      "permissions": ["all"],
+      "can_add_admins": true,
+      "can_edit_prices": true,
+      "can_view_finances": true,
+      "can_manage_salaries": true,
+      "can_export_data": true
+    },
+    "admin": {
+      "name": "Admin",
+      "permissions": ["manage_orders", "manage_stock", "view_stats"],
+      "can_add_admins": false,
+      "can_edit_prices": true,
+      "can_view_finances": false,
+      "can_manage_salaries": false,
+      "can_export_data": false
+    },
+    "support": {
+      "name": "Support",
+      "permissions": ["view_orders", "message_users"],
+      "can_add_admins": false,
+      "can_edit_prices": false,
+      "can_view_finances": false,
+      "can_manage_salaries": false,
+      "can_export_data": false
+    }
+  },
+  
+  "admins": {
+    "ADMIN_ID_ICI": {
+      "telegram_id": "ADMIN_ID_ICI",
+      "name": "Admin Principal",
+      "role": "super_admin",
+      "active": true,
+      "added_at": "2025-01-12T00:00:00Z",
+      "added_by": "system"
+    }
+  }
+}

@@ -643,7 +643,7 @@ MAX_CART_ITEMS = 50
 MAX_QUANTITY_PER_ITEM = 1000
 MIN_ORDER_AMOUNT = 10
 
-BOT_VERSION = "3.2.3"
+BOT_VERSION = "3.2.4"
 BOT_NAME = "E-Commerce Bot Multi-Admins"
 
 logger.info(f"🤖 {BOT_NAME} v{BOT_VERSION}")
@@ -9549,7 +9549,7 @@ async def calculate_commission_on_order(context, admin_id, order_data):
 async def edit_order_total(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Permet de modifier le prix total d'une commande"""
     query = update.callback_query
-    await query.answer()
+    await query.answer("✏️ Prêt à modifier le prix")
     
     logger.info(f"🔧 edit_order_total appelé: callback_data={query.data}, user={query.from_user.id}")
     
@@ -9564,7 +9564,10 @@ async def edit_order_total(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if not csv_path.exists():
         logger.error(f"❌ Fichier CSV introuvable: {csv_path}")
-        await query.answer("Erreur: fichier commandes introuvable", show_alert=True)
+        await context.bot.send_message(
+            chat_id=query.from_user.id,
+            text="❌ Erreur: fichier commandes introuvable"
+        )
         return
     
     try:
@@ -9574,18 +9577,15 @@ async def edit_order_total(update: Update, context: ContextTypes.DEFAULT_TYPE):
             orders = list(reader)
         
         logger.info(f"📋 CSV chargé: {len(orders)} commandes")
-        logger.info(f"🔍 Recherche order_id: '{order_id}'")
-        
-        # Log des order_ids disponibles
-        all_ids = [o.get('order_id', 'NO_ID') for o in orders]
-        logger.info(f"🔍 Order IDs disponibles (5 premiers): {all_ids[:5]}")
-        logger.info(f"🔍 TOUS les Order IDs: {all_ids}")
         
         order = next((o for o in orders if o.get('order_id') == order_id), None)
         
         if not order:
-            logger.error(f"❌ Commande '{order_id}' INTROUVABLE dans {len(orders)} commandes")
-            await query.answer("Commande introuvable dans le CSV", show_alert=True)
+            logger.error(f"❌ Commande '{order_id}' INTROUVABLE")
+            await context.bot.send_message(
+                chat_id=query.from_user.id,
+                text="❌ Commande introuvable"
+            )
             return
         
         logger.info(f"✅ Commande trouvée: {order_id}, total={order.get('total', 'N/A')}")
@@ -9601,10 +9601,7 @@ Exemple : 550.00
         
         keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data=f"cancel_edit_order_{order_id}")]]
         
-        logger.info(f"📤 Prêt à envoyer message PRIX à {query.from_user.id}")
-        logger.info(f"📤 Message length: {len(message)} chars")
-        
-        # Envoyer un nouveau message au lieu d'éditer
+        # Envoyer un nouveau message
         await context.bot.send_message(
             chat_id=query.from_user.id,
             text=message,
@@ -9613,28 +9610,26 @@ Exemple : 550.00
         
         logger.info(f"✅ Message PRIX envoyé à {query.from_user.id}")
         
-        # Répondre au callback pour arrêter le chargement
-        await query.answer("✏️ Prêt à modifier le prix")
-        
-        logger.info(f"✅ Callback answer envoyé")
-        
         # Nettoyer les autres états d'édition
         context.user_data.pop('editing_order_delivery', None)
         context.user_data['editing_order_total'] = order_id
-        logger.info(f"📝 État défini: editing_order_total={order_id}, user_data={context.user_data}")
+        logger.info(f"📝 État défini: editing_order_total={order_id}")
     
     except Exception as e:
         import traceback
         logger.error(f"❌ Erreur edit_order_total: {e}")
         logger.error(f"❌ Traceback: {traceback.format_exc()}")
-        await query.answer("Erreur", show_alert=True)
+        await context.bot.send_message(
+            chat_id=query.from_user.id,
+            text="❌ Erreur lors de la modification"
+        )
 
 @error_handler
 @log_callback
 async def edit_order_delivery(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Permet de modifier les frais de livraison d'une commande"""
     query = update.callback_query
-    await query.answer()
+    await query.answer("✏️ Prêt à modifier les frais")
     
     logger.info(f"🔧 edit_order_delivery appelé: callback_data={query.data}, user={query.from_user.id}")
     
@@ -9649,7 +9644,10 @@ async def edit_order_delivery(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     if not csv_path.exists():
         logger.error(f"❌ Fichier CSV introuvable: {csv_path}")
-        await query.answer("Erreur: fichier commandes introuvable", show_alert=True)
+        await context.bot.send_message(
+            chat_id=query.from_user.id,
+            text="❌ Erreur: fichier commandes introuvable"
+        )
         return
     
     try:
@@ -9659,17 +9657,15 @@ async def edit_order_delivery(update: Update, context: ContextTypes.DEFAULT_TYPE
             orders = list(reader)
         
         logger.info(f"🚚 CSV chargé: {len(orders)} commandes")
-        logger.info(f"🔍 Recherche order_id (delivery): '{order_id}'")
-        
-        # Log des order_ids disponibles
-        available_ids = [o.get('order_id', 'NO_ID') for o in orders[:5]]
-        logger.info(f"🔍 Order IDs disponibles (5 premiers): {available_ids}")
         
         order = next((o for o in orders if o.get('order_id') == order_id), None)
         
         if not order:
-            logger.error(f"❌ Commande '{order_id}' INTROUVABLE (delivery) dans {len(orders)} commandes")
-            await query.answer("Commande introuvable dans le CSV", show_alert=True)
+            logger.error(f"❌ Commande '{order_id}' INTROUVABLE")
+            await context.bot.send_message(
+                chat_id=query.from_user.id,
+                text="❌ Commande introuvable"
+            )
             return
         
         logger.info(f"✅ Commande trouvée (delivery): {order_id}")
@@ -9686,10 +9682,7 @@ Exemple : 15.00
         
         keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data=f"cancel_edit_order_{order_id}")]]
         
-        logger.info(f"📤 Prêt à envoyer message LIVRAISON à {query.from_user.id}")
-        logger.info(f"📤 Message length: {len(message)} chars")
-        
-        # Envoyer un nouveau message au lieu d'éditer
+        # Envoyer un nouveau message
         await context.bot.send_message(
             chat_id=query.from_user.id,
             text=message,
@@ -9698,21 +9691,19 @@ Exemple : 15.00
         
         logger.info(f"✅ Message LIVRAISON envoyé à {query.from_user.id}")
         
-        # Répondre au callback pour arrêter le chargement
-        await query.answer("✏️ Prêt à modifier les frais")
-        
-        logger.info(f"✅ Callback answer envoyé")
-        
         # Nettoyer les autres états d'édition
         context.user_data.pop('editing_order_total', None)
         context.user_data['editing_order_delivery'] = order_id
-        logger.info(f"📝 État défini: editing_order_delivery={order_id}, user_data={context.user_data}")
+        logger.info(f"📝 État défini: editing_order_delivery={order_id}")
     
     except Exception as e:
         import traceback
         logger.error(f"❌ Erreur edit_order_delivery: {e}")
         logger.error(f"❌ Traceback: {traceback.format_exc()}")
-        await query.answer("Erreur", show_alert=True)
+        await context.bot.send_message(
+            chat_id=query.from_user.id,
+            text="❌ Erreur lors de la modification"
+        )
 
 @error_handler
 @log_handler

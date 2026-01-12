@@ -1,28 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-"""
-╔═══════════════════════════════════════════════════════════════════╗
-║                                                                   ║
-║   BOT TELEGRAM V3.1.2 - Prix de revient persistants             ║
-║   Stock + Livre de Comptes 2 Caisses + Regex Fix                ║
-║                                                                   ║
-║   ✅ Déduction stock automatique CORRIGÉE                         ║
-║   ✅ Regex accepte format x10.0g et x 10.0g                       ║
-║   ✅ Livre de comptes split : WEED / AUTRES                       ║
-║   ✅ Prix de revient PERSISTANTS au redémarrage                   ║
-║                                                                   ║
-║   Date : 11/01/2025 - Version 3.1.2                              ║
-║                                                                   ║
-╚═══════════════════════════════════════════════════════════════════╝
-
-BOT TELEGRAM V3.1.2
-- Déduction stock garantie (regex fixé pour x10.0g et x 10.0g)
-- Livre de comptes double caisse (Weed vs Autres produits)
-- Prix de revient persistants (ne s'effacent plus au redémarrage)
-"""
-
-
 import os
 import sys
 import json

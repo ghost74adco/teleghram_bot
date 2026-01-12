@@ -1,3 +1,28 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+╔═══════════════════════════════════════════════════════════════════╗
+║                                                                   ║
+║   BOT TELEGRAM V3.1.2 - Prix de revient persistants             ║
+║   Stock + Livre de Comptes 2 Caisses + Regex Fix                ║
+║                                                                   ║
+║   ✅ Déduction stock automatique CORRIGÉE                         ║
+║   ✅ Regex accepte format x10.0g et x 10.0g                       ║
+║   ✅ Livre de comptes split : WEED / AUTRES                       ║
+║   ✅ Prix de revient PERSISTANTS au redémarrage                   ║
+║                                                                   ║
+║   Date : 11/01/2025 - Version 3.1.2                              ║
+║                                                                   ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+BOT TELEGRAM V3.1.2
+- Déduction stock garantie (regex fixé pour x10.0g et x 10.0g)
+- Livre de comptes double caisse (Weed vs Autres produits)
+- Prix de revient persistants (ne s'effacent plus au redémarrage)
+"""
+
+
 import os
 import sys
 import json
@@ -1863,12 +1888,25 @@ def get_formatted_price_list(country_code):
     
     text += f"\n{EMOJI_THEME['delivery']} Livraison :\n"
     
+    # Charger frais dynamiques
+    fees = load_delivery_fees()
+    
     # Afficher options selon le pays
     if country.upper() == "AU":
-        text += f"  • Postale (7-10 jours) : 25€"
+        postal_au = fees.get('postal_au', 25)
+        text += f"  • Postale (7-10 jours) : {postal_au}€"
     else:
-        text += f"  • Postale (48-72h) : 10€\n"
-        text += f"  • Express (30min+) : 10€/10km (min 30€, max 70€)\n"
+        postal_fr = fees.get('postal_fr', 10)
+        postal_ch = fees.get('postal_ch', 10)
+        express_rate = fees.get('express_rate', 10)
+        express_min = fees.get('express_min', 30)
+        express_max = fees.get('express_max', 70)
+        
+        # Afficher frais selon pays FR ou CH
+        postal_fee = postal_ch if country.upper() == "CH" else postal_fr
+        
+        text += f"  • Postale (48-72h) : {postal_fee}€\n"
+        text += f"  • Express (30min+) : {express_rate}€/10km (min {express_min}€, max {express_max}€)\n"
         text += f"  • Meetup : Gratuit"
     
     return text
@@ -11425,7 +11463,7 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(referral_info, pattern="^referral_info$"))
     
     # Callbacks pays
-    application.add_handler(CallbackQueryHandler(select_country, pattern="^country_(fr|ch)$"))
+    application.add_handler(CallbackQueryHandler(select_country, pattern="^country_(fr|ch|au)$"))
     
     # Callbacks shopping
     application.add_handler(CallbackQueryHandler(browse_products, pattern="^browse_(all|pills|rocks)$"))

@@ -1,72 +1,348 @@
-[
-  {
-    "id": 1,
-    "name": "🍀🚬 (Prix au Gramme)",
-    "price": 10.0,
-    "description": "THC rate 21%, origine californie",
-    "category": "🚬",
-    "image_url": "",
-    "video_url": "https://res.cloudinary.com/dfhrrtzsd/video/upload/v1760191920/catalogue/cz6k44nnevjxxa9djyv6.mp4",
-    "stock": 112
+{
+  "shop_info": {
+    "name": "Commerce Anonyme",
+    "description": "Plateforme de commerce sécurisée",
+    "currency": "EUR",
+    "logo_emoji": "🏪",
+    "version": "4.0.0"
   },
-  {
-    "id": 2,
-    "name": "🍫🚬 Hash (Prix au Gramme)",
-    "price": 8.0,
-    "description": "produit pure non coupé, origine Maroc",
-    "category": "🚬",
-    "image_url": "",
-    "video_url": "https://res.cloudinary.com/dfhrrtzsd/video/upload/v1760192090/catalogue/opw85ch1re68eiyu9kqu.mp4",
-    "stock": 80
+  
+  "categories": {
+    "cocaine": {
+      "id": "cocaine",
+      "name": {
+        "fr": "Cocaïne",
+        "en": "Cocaine",
+        "de": "Kokain",
+        "es": "Cocaína",
+        "it": "Cocaina"
+      },
+      "emoji": "❄️",
+      "order": 1,
+      "active": true
+    },
+    "pills": {
+      "id": "pills",
+      "name": {
+        "fr": "Pilules",
+        "en": "Pills",
+        "de": "Pillen",
+        "es": "Píldoras",
+        "it": "Pillole"
+      },
+      "emoji": "💊",
+      "order": 2,
+      "active": true
+    },
+    "hash": {
+      "id": "hash",
+      "name": {
+        "fr": "Hash",
+        "en": "Hash",
+        "de": "Hash",
+        "es": "Hash",
+        "it": "Hash"
+      },
+      "emoji": "🫒",
+      "order": 3,
+      "active": true
+    },
+    "weed": {
+      "id": "weed",
+      "name": {
+        "fr": "Weed",
+        "en": "Weed",
+        "de": "Gras",
+        "es": "Hierba",
+        "it": "Erba"
+      },
+      "emoji": "🍀",
+      "order": 4,
+      "active": true
+    },
+    "mdma": {
+      "id": "mdma",
+      "name": {
+        "fr": "MDMA / Cristaux",
+        "en": "MDMA / Crystals",
+        "de": "MDMA / Kristalle",
+        "es": "MDMA / Cristales",
+        "it": "MDMA / Cristalli"
+      },
+      "emoji": "🪨",
+      "order": 5,
+      "active": true
+    },
+    "ketamine": {
+      "id": "ketamine",
+      "name": {
+        "fr": "Ketamine",
+        "en": "Ketamine",
+        "de": "Ketamin",
+        "es": "Ketamina",
+        "it": "Ketamina"
+      },
+      "emoji": "🐎",
+      "order": 6,
+      "active": true
+    }
   },
-  {
-    "id": 3,
-    "name": "❄️ Coco (Prix au Gramme)",
-    "price": 70.0,
-    "description": "produit pur non coupé",
-    "category": "Premium",
-    "image_url": "https://res.cloudinary.com/dfhrrtzsd/image/upload/v1760205047/catalogue/g98yu72ylhj7jvtwxqo2.png",
-    "video_url": "",
-    "stock": 43
-  },
-  {
-    "id": 4,
-    "name": "💊 Punisher (Prix pour une pillule)",
-    "price": 10.0,
-    "description": "Exta Pills",
-    "category": "💊",
-    "image_url": "https://res.cloudinary.com/dfhrrtzsd/image/upload/v1760193686/catalogue/kt7ubtitppuqrvet0dzn.jpg",
-    "video_url": "",
-    "stock": 150
-  },
-  {
-    "id": 5,
-    "name": "💊 Squid Game (Prix pour une pillule)",
-    "price": 10.0,
-    "description": "Exta Pills",
-    "category": "💊",
-    "image_url": "https://res.cloudinary.com/dfhrrtzsd/image/upload/v1760205208/catalogue/z3xy2zy1kkuntegltslh.jpg",
-    "video_url": "",
-    "stock": 69
-  },
-  {
-    "id": 6,
-    "name": "🪨4MMC (Prix au Gramme)",
-    "price": 50.0,
-    "description": "",
-    "category": "",
-    "image_url": "https://res.cloudinary.com/dfhrrtzsd/image/upload/v1760204577/catalogue/uyjoteyygyxazlee2p4w.jpg",
-    "video_url": "",
-    "stock": 7
-  },
-  {
-    "id": 7,
-    "name": "🪨MDMA (Prix au Gramme)",
-    "price": 50.0,
-    "description": "",
-    "category": "",
-    "image_url": "https://res.cloudinary.com/dfhrrtzsd/image/upload/v1760204609/catalogue/b5zsqvvxqpjcavtpwh8n.jpg",
-    "video_url": "",
-    "stock": 3
+  
+  "products": {
+    "coco_001": {
+      "id": "coco_001",
+      "name": {
+        "fr": "Coco",
+        "en": "Coco",
+        "de": "Coco",
+        "es": "Coco",
+        "it": "Coco"
+      },
+      "emoji": "❄️",
+      "category": "cocaine",
+      "description": {
+        "fr": "Qualité supérieure",
+        "en": "Superior quality",
+        "de": "Überlegene Qualität",
+        "es": "Calidad superior",
+        "it": "Qualità superiore"
+      },
+      "active": true,
+      "prices": {
+        "FR": 60,
+        "CH": 80,
+        "AU": 120
+      },
+      "available_quantities": [1, 2, 5, 10, 25],
+      "stock": 500,
+      "unit": "g",
+      "min_order": 1,
+      "max_order": 100,
+      "ledger_type": "weed"
+    },
+    
+    "squid_game_001": {
+      "id": "squid_game_001",
+      "name": {
+        "fr": "Squid Game",
+        "en": "Squid Game",
+        "de": "Squid Game",
+        "es": "Squid Game",
+        "it": "Squid Game"
+      },
+      "emoji": "💊",
+      "category": "pills",
+      "description": {
+        "fr": "Pilules premium",
+        "en": "Premium pills",
+        "de": "Premium-Pillen",
+        "es": "Píldoras premium",
+        "it": "Pillole premium"
+      },
+      "active": true,
+      "prices": {
+        "FR": 15,
+        "CH": 20,
+        "AU": 30
+      },
+      "available_quantities": [1, 5, 10, 20, 50],
+      "stock": 1000,
+      "unit": "unité",
+      "min_order": 1,
+      "max_order": 200,
+      "ledger_type": "autres"
+    },
+    
+    "punisher_001": {
+      "id": "punisher_001",
+      "name": {
+        "fr": "Punisher",
+        "en": "Punisher",
+        "de": "Punisher",
+        "es": "Punisher",
+        "it": "Punisher"
+      },
+      "emoji": "💊",
+      "category": "pills",
+      "description": {
+        "fr": "Forte concentration",
+        "en": "High concentration",
+        "de": "Hohe Konzentration",
+        "es": "Alta concentración",
+        "it": "Alta concentrazione"
+      },
+      "active": true,
+      "prices": {
+        "FR": 15,
+        "CH": 20,
+        "AU": 30
+      },
+      "available_quantities": [1, 5, 10, 20, 50],
+      "stock": 1000,
+      "unit": "unité",
+      "min_order": 1,
+      "max_order": 200,
+      "ledger_type": "autres"
+    },
+    
+    "hash_001": {
+      "id": "hash_001",
+      "name": {
+        "fr": "Hash",
+        "en": "Hash",
+        "de": "Hash",
+        "es": "Hash",
+        "it": "Hash"
+      },
+      "emoji": "🫒",
+      "category": "hash",
+      "description": {
+        "fr": "Hash de qualité",
+        "en": "Quality hash",
+        "de": "Qualitäts-Hash",
+        "es": "Hash de calidad",
+        "it": "Hash di qualità"
+      },
+      "active": true,
+      "prices": {
+        "FR": 10,
+        "CH": 15,
+        "AU": 25
+      },
+      "available_quantities": [1, 2, 5, 10, 25, 50],
+      "stock": 800,
+      "unit": "g",
+      "min_order": 1,
+      "max_order": 200,
+      "ledger_type": "weed"
+    },
+    
+    "weed_001": {
+      "id": "weed_001",
+      "name": {
+        "fr": "Weed",
+        "en": "Weed",
+        "de": "Gras",
+        "es": "Hierba",
+        "it": "Erba"
+      },
+      "emoji": "🍀",
+      "category": "weed",
+      "description": {
+        "fr": "Weed premium",
+        "en": "Premium weed",
+        "de": "Premium-Gras",
+        "es": "Hierba premium",
+        "it": "Erba premium"
+      },
+      "active": true,
+      "prices": {
+        "FR": 10,
+        "CH": 15,
+        "AU": 25
+      },
+      "available_quantities": [1, 2, 5, 10, 25, 50, 100],
+      "stock": 1500,
+      "unit": "g",
+      "min_order": 1,
+      "max_order": 500,
+      "ledger_type": "weed"
+    },
+    
+    "mdma_001": {
+      "id": "mdma_001",
+      "name": {
+        "fr": "MDMA",
+        "en": "MDMA",
+        "de": "MDMA",
+        "es": "MDMA",
+        "it": "MDMA"
+      },
+      "emoji": "🪨",
+      "category": "mdma",
+      "description": {
+        "fr": "Cristaux purs",
+        "en": "Pure crystals",
+        "de": "Reine Kristalle",
+        "es": "Cristales puros",
+        "it": "Cristalli puri"
+      },
+      "active": true,
+      "prices": {
+        "FR": 40,
+        "CH": 50,
+        "AU": 80
+      },
+      "available_quantities": [1, 2, 5, 10],
+      "stock": 300,
+      "unit": "g",
+      "min_order": 1,
+      "max_order": 50,
+      "ledger_type": "autres"
+    },
+    
+    "4mmc_001": {
+      "id": "4mmc_001",
+      "name": {
+        "fr": "4MMC",
+        "en": "4MMC",
+        "de": "4MMC",
+        "es": "4MMC",
+        "it": "4MMC"
+      },
+      "emoji": "🪨",
+      "category": "mdma",
+      "description": {
+        "fr": "Cristaux 4MMC",
+        "en": "4MMC crystals",
+        "de": "4MMC-Kristalle",
+        "es": "Cristales 4MMC",
+        "it": "Cristalli 4MMC"
+      },
+      "active": true,
+      "prices": {
+        "FR": 20,
+        "CH": 25,
+        "AU": 40
+      },
+      "available_quantities": [1, 2, 5, 10, 25],
+      "stock": 400,
+      "unit": "g",
+      "min_order": 1,
+      "max_order": 100,
+      "ledger_type": "autres"
+    },
+    
+    "ketamine_001": {
+      "id": "ketamine_001",
+      "name": {
+        "fr": "Ketamine",
+        "en": "Ketamine",
+        "de": "Ketamin",
+        "es": "Ketamina",
+        "it": "Ketamina"
+      },
+      "emoji": "🐎",
+      "category": "ketamine",
+      "description": {
+        "fr": "Ketamine pure",
+        "en": "Pure ketamine",
+        "de": "Reines Ketamin",
+        "es": "Ketamina pura",
+        "it": "Ketamina pura"
+      },
+      "active": true,
+      "prices": {
+        "FR": 40,
+        "CH": 50,
+        "AU": 80
+      },
+      "available_quantities": [1, 2, 5, 10],
+      "stock": 250,
+      "unit": "g",
+      "min_order": 1,
+      "max_order": 50,
+      "ledger_type": "autres"
+    }
   }
-]
+}

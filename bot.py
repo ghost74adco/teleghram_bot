@@ -661,7 +661,7 @@ MAX_CART_ITEMS = 50
 MAX_QUANTITY_PER_ITEM = 1000
 MIN_ORDER_AMOUNT = 10
 
-BOT_VERSION = "3.2.6"
+BOT_VERSION = "3.2.6.2"
 BOT_NAME = "E-Commerce Bot Multi-Admins"
 
 logger.info(f"🤖 {BOT_NAME} v{BOT_VERSION}")
@@ -5142,6 +5142,9 @@ async def vip_edit_threshold(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not is_admin(query.from_user.id):
         return
     
+    # NETTOYER TOUS LES ÉTATS AVANT
+    context.user_data.clear()
+    
     message = f"""✏️ MODIFIER SEUIL VIP
 
 💰 Seuil actuel : {VIP_THRESHOLD}€
@@ -5175,6 +5178,9 @@ async def vip_activate_client(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not is_admin(query.from_user.id):
         return
     
+    # NETTOYER TOUS LES ÉTATS AVANT
+    context.user_data.clear()
+    
     message = f"""➕ ACTIVER VIP CLIENT
 
 Pour activer manuellement le statut VIP d'un client, entrez son ID Telegram.
@@ -5206,6 +5212,9 @@ async def vip_remove_client(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if not is_admin(query.from_user.id):
         return
+    
+    # NETTOYER TOUS LES ÉTATS AVANT
+    context.user_data.clear()
     
     # Charger liste VIP
     history = load_client_history()
@@ -6466,6 +6475,24 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await receive_custom_quantity(update, context)
         return
     
+    # État: V3.2.6 - En attente modification seuil VIP (AVANT awaiting_address)
+    if context.user_data.get('editing_vip_threshold'):
+        logger.info(f"⭐ État détecté: editing_vip_threshold")
+        await receive_vip_threshold(update, context)
+        return
+    
+    # État: V3.2.6 - En attente activation VIP client
+    if context.user_data.get('activating_vip_client'):
+        logger.info(f"⭐ État détecté: activating_vip_client")
+        await receive_vip_activate(update, context)
+        return
+    
+    # État: V3.2.6 - En attente retrait VIP client
+    if context.user_data.get('removing_vip_client'):
+        logger.info(f"⭐ État détecté: removing_vip_client")
+        await receive_vip_remove(update, context)
+        return
+    
     # État: En attente d'adresse
     if context.user_data.get('awaiting_address'):
         await receive_address(update, context)
@@ -6564,24 +6591,6 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     if context.user_data.get('editing_delivery_fee'):
         logger.info(f"🚚 État détecté: editing_delivery_fee = {context.user_data.get('editing_delivery_fee')}")
         await receive_delivery_fee(update, context)
-        return
-    
-    # État: V3.2.6 - En attente modification seuil VIP
-    if context.user_data.get('editing_vip_threshold'):
-        logger.info(f"⭐ État détecté: editing_vip_threshold")
-        await receive_vip_threshold(update, context)
-        return
-    
-    # État: V3.2.6 - En attente activation VIP client
-    if context.user_data.get('activating_vip_client'):
-        logger.info(f"⭐ État détecté: activating_vip_client")
-        await receive_vip_activate(update, context)
-        return
-    
-    # État: V3.2.6 - En attente retrait VIP client
-    if context.user_data.get('removing_vip_client'):
-        logger.info(f"⭐ État détecté: removing_vip_client")
-        await receive_vip_remove(update, context)
         return
     
     # États: Livre de comptes (super-admin)

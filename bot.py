@@ -5,20 +5,17 @@
 ╔═══════════════════════════════════════════════════════════════════╗
 ║                                                                   ║
 ║   BOT TELEGRAM V4.0.0 - SQUELETTE COMMERCIAL UNIVERSEL           ║
-║   🔒 TOKEN DEPUIS VARIABLE D'ENVIRONNEMENT (SÉCURISÉ)             ║
+║   🔒 CONFIGURATION 100% DEPUIS ENVIRONNEMENT                      ║
 ║                                                                   ║
-║   ✅ Tout en JSON (produits, config, langues)                     ║
-║   ✅ Système de licences 3 niveaux                                ║
-║   ✅ 5 langues complètes (FR, EN, DE, ES, IT)                     ║
 ║   ✅ Token depuis BOT_TOKEN ou TELEGRAM_BOT_TOKEN                 ║
+║   ✅ Admin ID depuis ADMIN_ID ou TELEGRAM_ADMIN_ID                ║
+║   ✅ Aucun secret dans le code                                    ║
+║   ✅ Production-ready & Sécurisé                                  ║
 ║                                                                   ║
-║   Date : 13/01/2025 - Version 4.0.0                              ║
+║   Date : 13/01/2025 - Version 4.0.0-FINAL                        ║
 ║                                                                   ║
 ╚═══════════════════════════════════════════════════════════════════╝
 """
-
-import os
-import sys
 
 import os
 import sys
@@ -53,7 +50,7 @@ logging.basicConfig(
     level=logging.INFO,
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler('/data/bot.log', encoding='utf-8')
+        logging.FileHandler('bot.log', encoding='utf-8')
     ]
 )
 logger = logging.getLogger(__name__)
@@ -65,7 +62,7 @@ logging.getLogger('telegram').setLevel(logging.WARNING)
 # ==================== CONSTANTES ====================
 
 DATA_DIR = Path(".")
-BOT_VERSION = "4.0.0"
+BOT_VERSION = "4.0.0-FINAL"
 
 # Fichiers JSON
 PRODUCTS_FILE = DATA_DIR / "products.json"
@@ -74,7 +71,7 @@ LICENSE_FILE = DATA_DIR / "license.json"
 LANGUAGES_FILE = DATA_DIR / "languages.json"
 ADMINS_FILE = DATA_DIR / "admins.json"
 
-# Fichiers de données (conservés)
+# Fichiers de données
 ORDERS_FILE = DATA_DIR / "orders.csv"
 CLIENT_HISTORY_FILE = DATA_DIR / "client_history.json"
 USERS_FILE = DATA_DIR / "users.json"
@@ -84,6 +81,59 @@ COMMISSIONS_FILE = DATA_DIR / "commissions.json"
 EXPENSES_FILE = DATA_DIR / "expenses.json"
 VIP_CONFIG_FILE = DATA_DIR / "vip_config.json"
 
+# ==================== RÉCUPÉRATION DEPUIS ENVIRONNEMENT ====================
+
+def get_bot_token() -> str:
+    """Récupère le token bot depuis l'environnement"""
+    token = os.getenv('BOT_TOKEN') or os.getenv('TELEGRAM_BOT_TOKEN')
+    
+    if token:
+        logger.info("✅ Token récupéré depuis environnement")
+        return token
+    
+    # Fallback config.json (dev local uniquement)
+    try:
+        config = load_json_file(CONFIG_FILE, {})
+        token = config.get('bot_token', '')
+        if token and token != "VOTRE_BOT_TOKEN_ICI" and token.strip():
+            logger.warning("⚠️ Token depuis config.json (dev local)")
+            return token
+    except:
+        pass
+    
+    logger.error("❌ Token introuvable !")
+    logger.error("📝 Configurez: BOT_TOKEN ou TELEGRAM_BOT_TOKEN")
+    return ""
+
+def get_admin_id() -> Optional[int]:
+    """Récupère l'admin ID depuis l'environnement"""
+    admin_id_str = os.getenv('ADMIN_ID') or os.getenv('TELEGRAM_ADMIN_ID')
+    
+    if admin_id_str:
+        try:
+            admin_id = int(admin_id_str)
+            logger.info(f"✅ Admin ID récupéré depuis environnement: {admin_id}")
+            return admin_id
+        except ValueError:
+            logger.error(f"❌ Admin ID invalide: {admin_id_str}")
+            return None
+    
+    # Fallback admins.json (essayer de récupérer le premier admin actif)
+    try:
+        admins = ADMINS_DATA.get('admins', {})
+        for uid_str, data in admins.items():
+            if uid_str.isdigit() and data.get('active', True):
+                admin_id = int(uid_str)
+                logger.warning(f"⚠️ Admin ID depuis admins.json: {admin_id} (dev local)")
+                return admin_id
+    except:
+        pass
+    
+    logger.error("❌ Admin ID introuvable !")
+    logger.error("📝 Configurez: ADMIN_ID ou TELEGRAM_ADMIN_ID")
+    return None
+
+# ==================== CHARGEMENT JSON ====================
 # ==================== CHARGEMENT JSON ====================
 
 def load_json_file(filepath: Path, default: Any = None) -> Any:
@@ -364,13 +414,97 @@ def has_permission(user_id: int, permission: str) -> bool:
     # Super admin a tous les droits
     if 'all' in role.get('permissions', []):
         return True
+
+# ==================== GESTION DES ADMINS (DEPUIS ENVIRONNEMENT) ====================
+
+def is_admin(user_id: int) -> bool:
+    """Vérifie si un utilisateur est admin"""
+    # Vérifier l'admin depuis environnement en priorité
+    env_admin_id = get_admin_id()
+    if env_admin_id and user_id == env_admin_id:
+        return True
+    
+    # Vérifier dans admins.json
+    admins = ADMINS_DATA.get('admins', {})
+    user_id_str = str(user_id)
+    
+    if user_id_str in admins:
+        admin = admins[user_id_str]
+        return admin.get('active', True)
+    
+    return False
+
+def is_super_admin(user_id: int) -> bool:
+    """Vérifie si un utilisateur est super admin"""
+    # Admin depuis environnement = super admin
+    env_admin_id = get_admin_id()
+    if env_admin_id and user_id == env_admin_id:
+        return True
+    
+    if not is_admin(user_id):
+        return False
+    
+    role = get_admin_role(user_id)
+    return role == 'super_admin'
+
+def get_admin_role(user_id: int) -> Optional[str]:
+    """Récupère le rôle d'un admin"""
+    # Admin depuis environnement = super admin
+    env_admin_id = get_admin_id()
+    if env_admin_id and user_id == env_admin_id:
+        return 'super_admin'
+    
+    admins = ADMINS_DATA.get('admins', {})
+    admin = admins.get(str(user_id))
+    
+    if admin:
+        return admin.get('role', 'admin')
+    
+    return None
+
+def has_permission(user_id: int, permission: str) -> bool:
+    """Vérifie si un admin a une permission"""
+    # Admin depuis environnement a tous les droits
+    env_admin_id = get_admin_id()
+    if env_admin_id and user_id == env_admin_id:
+        return True
+    
+    role_name = get_admin_role(user_id)
+    if not role_name:
+        return False
+    
+    roles = ADMINS_DATA.get('roles', {})
+    role = roles.get(role_name, {})
+    
+    # Super admin a tous les droits
+    if 'all' in role.get('permissions', []):
+        return True
     
     return permission in role.get('permissions', [])
 
 def get_admin_ids() -> List[int]:
     """Retourne la liste des IDs admin actifs"""
+    admin_ids = []
+    
+    # Ajouter l'admin depuis environnement
+    env_admin_id = get_admin_id()
+    if env_admin_id:
+        admin_ids.append(env_admin_id)
+    
+    # Ajouter les admins depuis admins.json
     admins = ADMINS_DATA.get('admins', {})
-    return [int(uid) for uid, data in admins.items() if data.get('active', True)]
+    for uid_str, data in admins.items():
+        try:
+            if uid_str.isdigit() and data.get('active', True):
+                uid = int(uid_str)
+                if uid not in admin_ids:
+                    admin_ids.append(uid)
+        except ValueError:
+            logger.warning(f"⚠️ ID admin invalide ignoré: {uid_str}")
+            continue
+    
+    return admin_ids
+
 
 # ==================== DÉCORATEURS ET LOGGING ====================
 

@@ -5,18 +5,20 @@
 ╔═══════════════════════════════════════════════════════════════════╗
 ║                                                                   ║
 ║   BOT TELEGRAM V4.0.0 - SQUELETTE COMMERCIAL UNIVERSEL           ║
-║   Système de licences + Multi-langues + 100% JSON                ║
+║   🔒 TOKEN DEPUIS VARIABLE D'ENVIRONNEMENT (SÉCURISÉ)             ║
 ║                                                                   ║
 ║   ✅ Tout en JSON (produits, config, langues)                     ║
 ║   ✅ Système de licences 3 niveaux                                ║
 ║   ✅ 5 langues complètes (FR, EN, DE, ES, IT)                     ║
-║   ✅ Interface adaptative selon licence                           ║
-║   ✅ Migration complète depuis V3.2.8                             ║
+║   ✅ Token depuis BOT_TOKEN ou TELEGRAM_BOT_TOKEN                 ║
 ║                                                                   ║
-║   Date : 12/01/2025 - Version 4.0.0                              ║
+║   Date : 13/01/2025 - Version 4.0.0                              ║
 ║                                                                   ║
 ╚═══════════════════════════════════════════════════════════════════╝
 """
+
+import os
+import sys
 
 import os
 import sys
@@ -1617,45 +1619,59 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     log_admin_action(user_id, "ADMIN_PANEL", "Accès au panel admin")
+
+# ==================== RÉCUPÉRATION TOKEN SÉCURISÉE ====================
+
+def get_bot_token() -> str:
+    """
+    Récupère le token depuis les variables d'environnement
+    Priorité : BOT_TOKEN > TELEGRAM_BOT_TOKEN > config.json (dev local)
+    """
+    # 1. Essayer BOT_TOKEN (recommandé)
+    token = os.getenv('BOT_TOKEN')
+    if token:
+        logger.info("✅ Token récupéré depuis variable BOT_TOKEN")
+        return token
     
-    level = get_license_level()
-    level_badges = {1: "🥉 Starter", 2: "🥈 Business", 3: "🥇 Enterprise"}
+    # 2. Essayer TELEGRAM_BOT_TOKEN
+    token = os.getenv('TELEGRAM_BOT_TOKEN')
+    if token:
+        logger.info("✅ Token récupéré depuis variable TELEGRAM_BOT_TOKEN")
+        return token
     
-    message = f"🎛️ PANEL ADMINISTRATEUR\n\nNiveau : {level_badges.get(level, 'Inconnu')}\n\nChoisissez une section :"
+    # 3. Fallback config.json (pour développement local UNIQUEMENT)
+    try:
+        config = load_json_file(CONFIG_FILE, {})
+        token = config.get('bot_token', '')
+        if token and token != "VOTRE_BOT_TOKEN_ICI" and token.strip():
+            logger.warning("⚠️ Token récupéré depuis config.json (NON RECOMMANDÉ EN PRODUCTION)")
+            logger.warning("⚠️ Configurez BOT_TOKEN dans les variables d'environnement")
+            return token
+    except:
+        pass
     
-    keyboard = [
-        [InlineKeyboardButton("📦 Produits", callback_data="admin_products")],
-        [InlineKeyboardButton("🛒 Commandes", callback_data="admin_orders")],
-    ]
-    
-    # Niveau 2+
-    if level >= 2:
-        keyboard.append([InlineKeyboardButton("📊 Statistiques", callback_data="admin_stats")])
-        keyboard.append([InlineKeyboardButton("⭐ VIP", callback_data="admin_vip")])
-    
-    # Niveau 3
-    if level >= 3:
-        keyboard.append([InlineKeyboardButton("💰 Finances", callback_data="admin_finances")])
-    
-    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="back_main")])
-    
-    await query.edit_message_text(
-        message,
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    # Aucun token trouvé
+    logger.error("❌ Token bot introuvable !")
+    logger.error("📝 Configurez une variable d'environnement :")
+    logger.error("   - BOT_TOKEN=votre_token")
+    logger.error("   - ou TELEGRAM_BOT_TOKEN=votre_token")
+    return ""
 
 # ==================== MAIN ====================
 
 def main():
     """Point d'entrée principal"""
     
-    # Créer l'application
-    token = CONFIG_DATA.get('bot_token')
-    if not token or token == "VOTRE_BOT_TOKEN_ICI":
-        logger.error("❌ Token bot non configuré dans config.json")
+    # Récupérer le token de manière sécurisée
+    token = get_bot_token()
+    
+    if not token:
+        logger.error("❌ Impossible de démarrer sans token")
+        logger.error("💡 Railway/Render : Ajoutez BOT_TOKEN dans les variables d'environnement")
+        logger.error("💡 Local : export BOT_TOKEN='votre_token'")
         sys.exit(1)
     
-    persistence = PicklePersistence(filepath="/data/bot_data")
+    persistence = PicklePersistence(filepath="bot_data")
     application = Application.builder().token(token).persistence(persistence).build()
     
     # Handlers commandes
@@ -1698,6 +1714,7 @@ def main():
 📦 Produits : {len(PRODUCTS_DATA.get('products', {}))}
 🔐 Licence : Niveau {get_license_level()}
 👥 Admins : {len(get_admin_ids())}
+🔒 Token : Depuis environnement ✅
 """)
     
     # Démarrer le bot

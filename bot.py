@@ -105,6 +105,15 @@ def get_bot_token() -> str:
     logger.error("📝 Configurez: BOT_TOKEN ou TELEGRAM_BOT_TOKEN")
     return ""
 
+def anonymize_id(user_id: int) -> str:
+    """Anonymise un ID pour les logs"""
+    if not user_id:
+        return "N/A"
+    id_str = str(user_id)
+    if len(id_str) <= 4:
+        return "***"
+    return id_str[:2] + "*" * (len(id_str) - 4) + id_str[-2:]
+
 def get_admin_id() -> Optional[int]:
     """Récupère l'admin ID depuis l'environnement"""
     admin_id_str = os.getenv('ADMIN_ID') or os.getenv('TELEGRAM_ADMIN_ID')
@@ -112,10 +121,10 @@ def get_admin_id() -> Optional[int]:
     if admin_id_str:
         try:
             admin_id = int(admin_id_str)
-            logger.info(f"✅ Admin ID récupéré depuis environnement: {admin_id}")
+            logger.info(f"✅ Admin ID récupéré depuis environnement: {anonymize_id(admin_id)}")
             return admin_id
         except ValueError:
-            logger.error(f"❌ Admin ID invalide: {admin_id_str}")
+            logger.error(f"❌ Admin ID invalide (format)")
             return None
     
     # Fallback admins.json (essayer de récupérer le premier admin actif)
@@ -124,7 +133,7 @@ def get_admin_id() -> Optional[int]:
         for uid_str, data in admins.items():
             if uid_str.isdigit() and data.get('active', True):
                 admin_id = int(uid_str)
-                logger.warning(f"⚠️ Admin ID depuis admins.json: {admin_id} (dev local)")
+                logger.warning(f"⚠️ Admin ID depuis admins.json: {anonymize_id(admin_id)} (dev local)")
                 return admin_id
     except:
         pass
@@ -538,7 +547,9 @@ def log_callback(func):
         user_id = query.from_user.id
         callback_data = query.data
         
-        logger.info(f"🔘 CALLBACK: {func.__name__} | User: {user_id} | Data: {callback_data}")
+        # Anonymiser l'ID dans les logs
+        anon_id = str(user_id)[:2] + "*" * (len(str(user_id)) - 4) + str(user_id)[-2:] if len(str(user_id)) > 4 else "***"
+        logger.info(f"🔘 CALLBACK: {func.__name__} | User: {anon_id} | Data: {callback_data}")
         
         return await func(update, context)
     
@@ -957,7 +968,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "language_code": user.language_code or "fr"
         }
         add_user(user_id, user_data)
-        logger.info(f"🆕 Nouvel utilisateur: {user_id} - {user_data['first_name']}")
+        anon_id = str(user_id)[:2] + "*" * (len(str(user_id)) - 4) + str(user_id)[-2:] if len(str(user_id)) > 4 else "***"
+        logger.info(f"🆕 Nouvel utilisateur: {anon_id} - {user_data['first_name']}")
         
         # Notifier admins
         await notify_admin_new_user(context, user_id, user_data)

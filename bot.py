@@ -1755,16 +1755,75 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 @require_level(1)
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Panel administrateur"""
-    query = update.callback_query
-    await query.answer()
+    # Gérer à la fois commande /admin et callback
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        user_id = query.from_user.id
+        chat_id = query.message.chat_id
+        message_to_edit = query.message
+    else:
+        user_id = update.effective_user.id
+        chat_id = update.effective_chat.id
+        message_to_edit = None
     
-    user_id = query.from_user.id
-    
+    # Vérifier admin
     if not is_admin(user_id):
-        await query.answer("❌ Accès refusé", show_alert=True)
+        if update.callback_query:
+            await update.callback_query.answer("❌ Accès refusé", show_alert=True)
+        else:
+            await update.message.reply_text("❌ Accès réservé aux administrateurs.")
         return
     
     log_admin_action(user_id, "ADMIN_PANEL", "Accès au panel admin")
+    
+    # Menu admin selon niveau licence
+    level = get_license_level()
+    lang = get_user_language(context)
+    
+    keyboard = []
+    
+    # Toujours disponible (Niveau 1+)
+    keyboard.append([InlineKeyboardButton("📦 Gérer Commandes", callback_data="admin_orders")])
+    keyboard.append([InlineKeyboardButton("📊 Stocks", callback_data="admin_stocks")])
+    
+    # Niveau 2+
+    if level >= 2:
+        keyboard.append([InlineKeyboardButton("📈 Statistiques", callback_data="admin_stats")])
+        keyboard.append([InlineKeyboardButton("⭐ Gestion VIP", callback_data="admin_vip")])
+        keyboard.append([InlineKeyboardButton("🎟️ Codes Promo", callback_data="admin_promo")])
+        keyboard.append([InlineKeyboardButton("👥 Gérer Admins", callback_data="admin_admins")])
+    
+    # Niveau 3
+    if level >= 3:
+        keyboard.append([InlineKeyboardButton("💰 Comptabilité", callback_data="admin_accounting")])
+        keyboard.append([InlineKeyboardButton("💵 Salaires", callback_data="admin_salaries")])
+        keyboard.append([InlineKeyboardButton("📝 Dépenses", callback_data="admin_expenses")])
+    
+    keyboard.append([InlineKeyboardButton("❌ Fermer", callback_data="admin_close")])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    text = f"""
+🎛️ **PANEL ADMINISTRATEUR**
+
+🔐 Licence : Niveau {level} {"🥉" if level == 1 else "🥈" if level == 2 else "🥇"}
+👤 Admin : {update.effective_user.first_name}
+
+Sélectionnez une action :
+"""
+    
+    if message_to_edit:
+        await message_to_edit.edit_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+    else:
+        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+
+async def admin_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ferme le panel admin"""
+    query = update.callback_query
+    await query.answer()
+    await query.message.delete()
+
 
 # ==================== RÉCUPÉRATION TOKEN SÉCURISÉE ====================
 
@@ -1822,6 +1881,7 @@ def main():
     
     # Handlers commandes
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("admin", admin_panel))
     
     # Handlers callbacks
     application.add_handler(CallbackQueryHandler(language_selected, pattern="^lang_"))
@@ -1847,6 +1907,16 @@ def main():
     
     # Admin
     application.add_handler(CallbackQueryHandler(admin_panel, pattern="^admin_panel$"))
+    application.add_handler(CallbackQueryHandler(admin_close, pattern="^admin_close$"))
+    application.add_handler(CallbackQueryHandler(admin_close, pattern="^admin_orders$"))  # Placeholder
+    application.add_handler(CallbackQueryHandler(admin_close, pattern="^admin_stocks$"))  # Placeholder
+    application.add_handler(CallbackQueryHandler(admin_close, pattern="^admin_stats$"))   # Placeholder
+    application.add_handler(CallbackQueryHandler(admin_close, pattern="^admin_vip$"))     # Placeholder
+    application.add_handler(CallbackQueryHandler(admin_close, pattern="^admin_promo$"))   # Placeholder
+    application.add_handler(CallbackQueryHandler(admin_close, pattern="^admin_admins$"))  # Placeholder
+    application.add_handler(CallbackQueryHandler(admin_close, pattern="^admin_accounting$"))  # Placeholder
+    application.add_handler(CallbackQueryHandler(admin_close, pattern="^admin_salaries$"))    # Placeholder
+    application.add_handler(CallbackQueryHandler(admin_close, pattern="^admin_expenses$"))    # Placeholder
     
     # Messages texte
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))

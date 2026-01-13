@@ -62,7 +62,7 @@ logging.getLogger('telegram').setLevel(logging.WARNING)
 
 # ==================== CONSTANTES ====================
 
-DATA_DIR = Path("/data")
+DATA_DIR = Path(".")
 BOT_VERSION = "4.0.0"
 
 # Fichiers JSON

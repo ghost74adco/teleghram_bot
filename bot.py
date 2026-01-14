@@ -152,6 +152,29 @@ EXPENSES_FILE = DATA_DIR / "expenses.json"
 VIP_CONFIG_FILE = DATA_DIR / "vip_config.json"
 STOCK_HISTORY_FILE = DATA_DIR / "stock_history.json"
 
+# Répertoire média
+MEDIA_DIR = DATA_DIR / "media"
+
+# Fonction utilitaire pour créer répertoires
+def ensure_dir(directory: Path) -> Path:
+    """Crée un répertoire s'il n'existe pas"""
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+# Créer répertoires nécessaires
+ensure_dir(DATA_DIR)
+ensure_dir(MEDIA_DIR)
+
+# ==================== CONSTANTES SUPPLÉMENTAIRES V3 ====================
+
+MAX_CART_ITEMS = 50
+MAX_QUANTITY_PER_ITEM = 1000
+MIN_ORDER_AMOUNT = 10
+
+BOT_NAME = "E-Commerce Bot Multi-Admins"
+
+logger.info(f"🤖 {BOT_NAME} v{BOT_VERSION}")
+
 # ==================== CHARGEMENT JSON ====================
 
 def load_json_file(filepath: Path, default: Any = None) -> Any:

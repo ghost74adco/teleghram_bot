@@ -550,6 +550,160 @@ if distance_client is None:
     distance_client = Nominatim(user_agent="telegram_bot_v3", timeout=10)
     logger.warning("⚠️ Fallback final sur Geopy")
 
+
+# ==================== SYSTÈME DE LICENCES ====================
+
+# Niveaux de licence
+LICENSE_LEVELS = {
+    1: {
+        'name': 'Basic',
+        'max_products': 5,
+        'max_admins': 1,
+        'features': ['basic_commerce', 'orders', 'cart'],
+        'disabled': ['vip', 'promos', 'salaries', 'commissions', 'ledger', 'multi_admin']
+    },
+    2: {
+        'name': 'Pro',
+        'max_products': 20,
+        'max_admins': 3,
+        'features': ['basic_commerce', 'orders', 'cart', 'vip', 'promos', 'stats'],
+        'disabled': ['salaries', 'commissions', 'ledger']
+    },
+    3: {
+        'name': 'Enterprise',
+        'max_products': 999,
+        'max_admins': 999,
+        'features': ['all'],
+        'disabled': []
+    }
+}
+
+def get_license_level() -> int:
+    """Récupère le niveau de licence actuel"""
+    try:
+        license_info = LICENSE_DATA.get('license', {})
+        level = license_info.get('level', 1)
+        return min(max(level, 1), 3)  # Entre 1 et 3
+    except:
+        return 1
+
+def get_license_info() -> dict:
+    """Récupère les infos complètes de licence"""
+    level = get_license_level()
+    return LICENSE_LEVELS.get(level, LICENSE_LEVELS[1])
+
+def is_feature_allowed(feature: str) -> bool:
+    """Vérifie si une fonctionnalité est autorisée"""
+    license_info = get_license_info()
+    
+    # Niveau 3 = tout autorisé
+    if 'all' in license_info['features']:
+        return True
+    
+    # Vérifier si désactivé
+    if feature in license_info['disabled']:
+        return False
+    
+    # Vérifier si dans features
+    return feature in license_info['features']
+
+def check_product_limit() -> tuple:
+    """Vérifie si on peut ajouter un produit"""
+    license_info = get_license_info()
+    max_products = license_info['max_products']
+    
+    products = PRODUCTS_DATA.get('products', {})
+    current = len(products)
+    
+    can_add = current < max_products
+    
+    return can_add, current, max_products
+
+def check_admin_limit() -> tuple:
+    """Vérifie si on peut ajouter un admin"""
+    license_info = get_license_info()
+    max_admins = license_info['max_admins']
+    
+    admins = load_admins()
+    current = len(admins)
+    
+    can_add = current < max_admins
+    
+    return can_add, current, max_admins
+
+@error_handler
+async def show_license_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche les infos de licence"""
+    query = update.callback_query if update.callback_query else None
+    
+    if query:
+        await query.answer()
+    
+    level = get_license_level()
+    license_info = get_license_info()
+    
+    products = PRODUCTS_DATA.get('products', {})
+    admins = load_admins()
+    
+    features_text = ""
+    if 'all' in license_info['features']:
+        features_text = "✅ Toutes les fonctionnalités"
+    else:
+        features_map = {
+            'basic_commerce': '🛒 Commerce de base',
+            'orders': '📦 Gestion commandes',
+            'cart': '🛍️ Panier',
+            'vip': '⭐ Système VIP',
+            'promos': '🎁 Codes promo',
+            'stats': '📊 Statistiques',
+            'salaries': '💼 Salaires',
+            'commissions': '💰 Commissions',
+            'ledger': '📒 Livre de comptes'
+        }
+        
+        for feature in license_info['features']:
+            if feature in features_map:
+                features_text += f"{features_map[feature]}\n"
+    
+    disabled_text = ""
+    if license_info['disabled']:
+        disabled_text = "\n❌ Fonctions désactivées :\n"
+        features_map = {
+            'vip': '⭐ VIP',
+            'promos': '🎁 Codes promo',
+            'salaries': '💼 Salaires',
+            'commissions': '💰 Commissions',
+            'ledger': '📒 Livre de comptes',
+            'multi_admin': '👥 Multi-admins'
+        }
+        
+        for feature in license_info['disabled']:
+            if feature in features_map:
+                disabled_text += f"{features_map[feature]}\n"
+    
+    message = f"""🔐 INFORMATIONS LICENCE
+
+Niveau : {level} - {license_info['name']}
+
+📦 Produits : {len(products)}/{license_info['max_products']}
+👥 Admins : {len(admins)}/{license_info['max_admins']}
+
+✅ Fonctionnalités actives :
+{features_text}
+{disabled_text}
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+Pour upgrader votre licence, contactez le support.
+"""
+    
+    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_settings" if query else "admin_panel")]]
+    
+    if query:
+        await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+    else:
+        await update.message.reply_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
 # ==================== GESTION DES ADMINS ====================
 
 def load_admins() -> Dict:
@@ -2554,7 +2708,8 @@ Choisissez votre pays pour commencer :
              InlineKeyboardButton("🇦🇺 Australie", callback_data="country_au")],
             [InlineKeyboardButton(f"{EMOJI_THEME['cart']} Mon Panier", callback_data="view_cart"),
              InlineKeyboardButton(f"{EMOJI_THEME['history']} Historique", callback_data="my_history")],
-            [InlineKeyboardButton(f"{EMOJI_THEME['gift']} Parrainage", callback_data="referral_info")]
+            [InlineKeyboardButton("📞 Contact Admin", callback_data="contact_admin_menu"),
+             InlineKeyboardButton(f"{EMOJI_THEME['gift']} Parrainage", callback_data="referral_info")]
         ]
         
         await update.message.reply_text(
@@ -2878,7 +3033,8 @@ Choisissez votre pays pour commencer :
          InlineKeyboardButton("🇦🇺 Australie", callback_data="country_au")],
         [InlineKeyboardButton(f"{EMOJI_THEME['cart']} Mon Panier", callback_data="view_cart"),
          InlineKeyboardButton(f"{EMOJI_THEME['history']} Historique", callback_data="my_history")],
-        [InlineKeyboardButton(f"{EMOJI_THEME['info']} Aide", callback_data="help_inline")]
+        [InlineKeyboardButton("📞 Contact Admin", callback_data="contact_admin_menu"),
+         InlineKeyboardButton(f"{EMOJI_THEME['info']} Aide", callback_data="help_inline")]
     ]
     
     await query.edit_message_text(
@@ -4418,6 +4574,7 @@ Que souhaitez-vous faire ?
 """
     
     keyboard = [
+        [InlineKeyboardButton("🔐 Informations Licence", callback_data="show_license")],
         [InlineKeyboardButton("🕐 Horaires", callback_data="admin_horaires")],
         [InlineKeyboardButton("🔧 Maintenance", callback_data="admin_maintenance")],
         [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_panel")]
@@ -5755,7 +5912,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     
     if context.user_data.get('awaiting_stock_edit'):
-        await receive_stock(update, context)
+        await receive_stock_edition(update, context)
         return
     
     if context.user_data.get('awaiting_price_edit'):
@@ -5764,6 +5921,11 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     if context.user_data.get('awaiting_config'):
         await receive_config(update, context)
+        return
+    
+    # Contact admin
+    if context.user_data.get('awaiting_contact_message'):
+        await receive_contact_message(update, context)
         return
     
     # État: En attente d'heure pour horaires (admin)
@@ -11239,15 +11401,23 @@ def setup_handlers(application):
     # Produits
     application.add_handler(CallbackQueryHandler(edit_products_menu, pattern="^edit_products_menu$"))
     application.add_handler(CallbackQueryHandler(toggle_products, pattern="^toggle_products$"))
-    application.add_handler(CallbackQueryHandler(toggle_product, pattern="^toggle_"))
+    application.add_handler(CallbackQueryHandler(toggle_product, pattern="^toggle_prod_"))
     
     # Config
     application.add_handler(CallbackQueryHandler(edit_config_menu, pattern="^edit_config_menu$"))
     application.add_handler(CallbackQueryHandler(edit_vip_threshold, pattern="^edit_vip_threshold$"))
     application.add_handler(CallbackQueryHandler(edit_vip_discount, pattern="^edit_vip_discount$"))
     
+    # Liste produits
+    application.add_handler(CallbackQueryHandler(list_products, pattern="^list_products$"))
+    
+    # Contact admin
+    application.add_handler(CallbackQueryHandler(contact_admin_menu, pattern="^contact_admin_menu$"))
+    application.add_handler(CallbackQueryHandler(contact_admin_selected, pattern="^contact_"))
+    
     # Callbacks admin - paramètres
     application.add_handler(CallbackQueryHandler(admin_settings, pattern="^admin_settings$"))
+    application.add_handler(CallbackQueryHandler(show_license_info, pattern="^show_license$"))
     application.add_handler(CallbackQueryHandler(admin_maintenance, pattern="^admin_maintenance$"))
     application.add_handler(CallbackQueryHandler(admin_maintenance_toggle, pattern="^admin_maintenance_(on|off)$"))
     
@@ -11497,7 +11667,7 @@ Exemple : 150
     context.user_data['awaiting_stock_edit'] = True
 
 @error_handler
-async def receive_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def receive_stock_edition(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Reçoit nouveau stock"""
     
     if not context.user_data.get('awaiting_stock_edit'):
@@ -11739,7 +11909,7 @@ Sélectionnez produit :
         name = product_data.get('name', {}).get('fr', product_id)
         active = product_data.get('active', True)
         emoji = "✅" if active else "❌"
-        keyboard.append([InlineKeyboardButton(f"{emoji} {name}", callback_data=f"toggle_{product_id}")])
+        keyboard.append([InlineKeyboardButton(f"{emoji} {name}", callback_data=f"toggle_prod_{product_id}")])
     
     keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="edit_products_menu")])
     
@@ -11751,7 +11921,7 @@ async def toggle_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    product_id = query.data.replace('toggle_', '')
+    product_id = query.data.replace('toggle_prod_', '')
     products = PRODUCTS_DATA.get('products', {})
     product = products.get(product_id)
     
@@ -11897,6 +12067,166 @@ Nouveau : {new_value}{unit}
         
     except:
         await update.message.reply_text("❌ Valeur invalide")
+
+
+@error_handler
+async def list_products(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Liste tous les produits"""
+    query = update.callback_query
+    await query.answer()
+    
+    products = PRODUCTS_DATA.get('products', {})
+    
+    message = """📋 LISTE PRODUITS
+
+"""
+    
+    for product_id, product_data in products.items():
+        name = product_data.get('name', {}).get('fr', product_id)
+        active = "✅" if product_data.get('active', True) else "❌"
+        stock = product_data.get('stock', 0)
+        prices_fr = product_data.get('prices', {}).get('FR', 0)
+        message += f"{active} {name}\n  Stock: {stock}g | Prix FR: {prices_fr}€\n\n"
+    
+    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="edit_products_menu")]]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+# ==================== CONTACT ADMIN ====================
+
+@error_handler
+async def contact_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu contact admin"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Charger tous les admins
+    admins = load_admins()
+    
+    message = """📞 CONTACTER UN ADMIN
+
+Choisissez l'admin à contacter :
+
+"""
+    
+    keyboard = []
+    
+    for admin_id, admin_data in admins.items():
+        if admin_data.get('active', True):
+            name = admin_data.get('name', f'Admin {admin_id}')
+            level = admin_data.get('level', 'admin')
+            
+            level_emoji = {
+                'super_admin': '👑',
+                'admin': '👤',
+                'support': '💬'
+            }.get(level, '👤')
+            
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"{level_emoji} {name}",
+                    callback_data=f"contact_{admin_id}"
+                )
+            ])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="back_to_main")])
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+@error_handler
+async def contact_admin_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin sélectionné pour contact"""
+    query = update.callback_query
+    await query.answer()
+    
+    admin_id = query.data.replace('contact_', '')
+    
+    # Récupérer infos admin
+    admins = load_admins()
+    admin_data = admins.get(admin_id, {})
+    admin_name = admin_data.get('name', 'Admin')
+    
+    message = f"""📞 CONTACTER {admin_name.upper()}
+
+Entrez votre message :
+
+L'admin recevra votre message avec votre contact.
+
+💡 Tapez /cancel pour annuler
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="contact_admin_menu")]]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+    
+    context.user_data['contact_admin_id'] = admin_id
+    context.user_data['contact_admin_name'] = admin_name
+    context.user_data['awaiting_contact_message'] = True
+
+@error_handler
+async def receive_contact_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Reçoit message de contact"""
+    
+    if not context.user_data.get('awaiting_contact_message'):
+        return
+    
+    user_id = update.effective_user.id
+    user = update.effective_user
+    user_name = user.first_name
+    if user.last_name:
+        user_name += f" {user.last_name}"
+    if user.username:
+        user_name += f" (@{user.username})"
+    
+    message_text = update.message.text.strip()
+    admin_id = context.user_data.get('contact_admin_id')
+    admin_name = context.user_data.get('contact_admin_name')
+    
+    # Envoyer au admin
+    admin_message = f"""📞 NOUVEAU CONTACT CLIENT
+
+De : {user_name}
+ID : {user_id}
+
+Message :
+{message_text}
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+Répondez directement à ce message pour répondre au client.
+"""
+    
+    try:
+        await context.bot.send_message(
+            chat_id=int(admin_id),
+            text=admin_message
+        )
+        
+        # Confirmer au client
+        confirm_message = f"""✅ MESSAGE ENVOYÉ
+
+Votre message a été envoyé à {admin_name}.
+
+Vous serez contacté rapidement.
+"""
+        
+        keyboard = [[InlineKeyboardButton("🔙 Menu principal", callback_data="back_to_main")]]
+        
+        await update.message.reply_text(
+            confirm_message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+        context.user_data['awaiting_contact_message'] = False
+        
+        logger.info(f"📞 Contact: User {user_id} → Admin {admin_id}")
+        
+    except Exception as e:
+        await update.message.reply_text(
+            f"❌ Erreur lors de l'envoi. Réessayez ou contactez un autre admin."
+        )
+        logger.error(f"Erreur contact admin: {e}")
 
 async def main():
     """Fonction principale du bot"""

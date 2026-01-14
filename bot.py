@@ -427,17 +427,12 @@ ENV_VARS = load_env_file("infos.env")
 
 # ==================== VARIABLES D'ENVIRONNEMENT ESSENTIELLES ====================
 
-# TOKEN BOT (CRITIQUE)
-if not BOT_TOKEN:
-    logger.critical("❌ BOT_TOKEN manquant dans infos.env !")
-    logger.critical("Ajoutez: BOT_TOKEN=votre_token_telegram")
-    sys.exit(1)
+# TOKEN et ADMIN_ID sont récupérés dans la fonction main()
+# via get_bot_token() et get_admin_id_from_env()
 
 # Admin principal (pour initialisation)
 # Admin ID déjà défini globalement (ligne 199)
 
-    logger.critical(f"Valeur actuelle: {ADMIN_TELEGRAM_ID}")
-    sys.exit(1)
 
 # Adresse admin pour calcul distance
 ADMIN_ADDRESS = os.getenv("ADMIN_ADDRESS", "Paris, France")

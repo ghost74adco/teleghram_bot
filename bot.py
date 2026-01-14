@@ -540,16 +540,22 @@ def error_handler(func):
     return wrapper
 
 def log_callback(func):
-    """Décorateur pour logger les callbacks"""
+    """Décorateur pour logger les callbacks ET commandes"""
     @wraps(func)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        query = update.callback_query
-        user_id = query.from_user.id
-        callback_data = query.data
-        
-        # Anonymiser l'ID dans les logs
-        anon_id = str(user_id)[:2] + "*" * (len(str(user_id)) - 4) + str(user_id)[-2:] if len(str(user_id)) > 4 else "***"
-        logger.info(f"🔘 CALLBACK: {func.__name__} | User: {anon_id} | Data: {callback_data}")
+        # Gérer à la fois callbacks et commandes
+        if update.callback_query:
+            query = update.callback_query
+            user_id = query.from_user.id
+            callback_data = query.data
+            
+            # Anonymiser l'ID dans les logs
+            anon_id = str(user_id)[:2] + "*" * (len(str(user_id)) - 4) + str(user_id)[-2:] if len(str(user_id)) > 4 else "***"
+            logger.info(f"🔘 CALLBACK: {func.__name__} | User: {anon_id} | Data: {callback_data}")
+        elif update.message:
+            user_id = update.effective_user.id
+            anon_id = str(user_id)[:2] + "*" * (len(str(user_id)) - 4) + str(user_id)[-2:] if len(str(user_id)) > 4 else "***"
+            logger.info(f"📝 COMMAND: {func.__name__} | User: {anon_id}")
         
         return await func(update, context)
     

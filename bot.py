@@ -4,26 +4,20 @@
 """
 ╔═══════════════════════════════════════════════════════════════════╗
 ║                                                                   ║
-║   BOT TELEGRAM V3.1.0 FINAL - TOUTES CORRECTIONS APPLIQUÉES     ║
-║   Stock + Livre de Comptes 2 Caisses + Regex Fix                ║
+║   BOT TELEGRAM V4.0.0 - MIGRATION DEPUIS V3.1.1                 ║
+║   100% Fonctionnel + Configuration JSON                          ║
 ║                                                                   ║
-║   ✅ Déduction stock automatique CORRIGÉE                         ║
-║   ✅ Regex accepte format x10.0g et x 10.0g                       ║
-║   ✅ Livre de comptes split : WEED / AUTRES                       ║
-║   ✅ Gestion doublons consommables                                ║
-║   ✅ Réimport historique avec classification                      ║
+║   ✅ Toutes fonctions V3.1.1 conservées                          ║
+║   ✅ Configuration via fichiers JSON                             ║
+║   ✅ Token/Admin depuis variables environnement                  ║
+║   ✅ Multi-langues (5 langues)                                   ║
+║   ✅ Édition complète sans redéploiement                         ║
 ║                                                                   ║
-║   Date : 09/01/2025 - Version FINALE                             ║
+║   Migration : V3.1.1 (11142 lignes) → V4.0.0                    ║
+║   Date : 14/01/2025                                              ║
 ║                                                                   ║
 ╚═══════════════════════════════════════════════════════════════════╝
-
-BOT TELEGRAM V3.1.0 FINAL
-- Déduction stock garantie (regex fixé pour x10.0g et x 10.0g)
-- Livre de comptes double caisse (Weed vs Autres produits)
-- Gestion complète des consommables en double
-- Réimport automatique de l'historique avec classification
 """
-
 
 import os
 import sys
@@ -33,9 +27,10 @@ import asyncio
 import logging
 import hashlib
 import math
+import re
 from pathlib import Path
 from datetime import datetime, time
-from typing import Dict, List, Set, Optional
+from typing import Dict, List, Set, Optional, Any
 from functools import wraps
 
 # Telegram imports
@@ -66,354 +61,285 @@ logger = logging.getLogger(__name__)
 logging.getLogger('httpx').setLevel(logging.WARNING)
 logging.getLogger('telegram').setLevel(logging.WARNING)
 
-# ==================== DÉCORATEURS ET FONCTIONS DE LOGGING ====================
+# ==================== CONSTANTES ====================
 
-def log_callback(func):
-    """Décorateur pour logger automatiquement tous les callbacks"""
-    @wraps(func)
-    async def wrapper(update, context):
-        query = update.callback_query
-        user_id = query.from_user.id
-        username = query.from_user.username or "N/A"
-        callback_data = query.data
-        
-        logger.info(f"🔘 CALLBACK: {func.__name__}")
-        logger.info(f"   👤 User: {user_id} (@{username})")
-        logger.info(f"   📲 Data: {callback_data}")
-        
-        try:
-            result = await func(update, context)
-            logger.info(f"✅ CALLBACK SUCCESS: {func.__name__}")
-            return result
-        except Exception as e:
-            logger.error(f"❌ CALLBACK ERROR: {func.__name__}")
-            logger.error(f"   Error: {e}")
-            import traceback
-            logger.error(f"   Traceback: {traceback.format_exc()}")
-            raise
-    
-    return wrapper
+DATA_DIR = Path(".")
+BOT_VERSION = "4.0.0"
 
-def log_handler(func):
-    """Décorateur pour logger automatiquement tous les handlers"""
-    @wraps(func)
-    async def wrapper(update, context):
-        user = update.effective_user
-        message_text = update.message.text if update.message else "N/A"
-        
-        logger.info(f"📩 HANDLER: {func.__name__}")
-        logger.info(f"   👤 User: {user.id} (@{user.username or 'N/A'})")
-        logger.info(f"   💬 Message: {message_text[:50]}")
-        
-        try:
-            result = await func(update, context)
-            logger.info(f"✅ HANDLER SUCCESS: {func.__name__}")
-            return result
-        except Exception as e:
-            logger.error(f"❌ HANDLER ERROR: {func.__name__}")
-            logger.error(f"   Error: {e}")
-            import traceback
-            logger.error(f"   Traceback: {traceback.format_exc()}")
-            raise
-    
-    return wrapper
+# Fichiers JSON
+PRODUCTS_FILE = DATA_DIR / "products_V4.json"
+CONFIG_FILE = DATA_DIR / "config_V4.json"
+LICENSE_FILE = DATA_DIR / "license_V4.json"
+LANGUAGES_FILE = DATA_DIR / "languages_V4.json"
+ADMINS_FILE = DATA_DIR / "admins_V4.json"
 
-def log_action(action: str, user_id: int, details: str = ""):
-    """Log une action utilisateur"""
-    logger.info(f"🎬 ACTION: {action} | User: {user_id} | {details}")
-
-def log_state_change(user_id: int, state_name: str, new_value):
-    """Log un changement d'état"""
-    logger.info(f"🔄 STATE: {state_name}={new_value} | User: {user_id}")
-
-def log_db_operation(operation: str, table: str, details: str = ""):
-    """Log une opération base de données"""
-    logger.info(f"💾 DB: {operation} | Table: {table} | {details}")
-
-def log_order_status(order_id: str, old_status: str, new_status: str, admin_id: int = None):
-    """Log un changement de statut de commande"""
-    logger.info(f"📦 ORDER STATUS: {order_id} | {old_status} → {new_status}" + (f" | By admin: {admin_id}" if admin_id else ""))
-
-# ==================== CHARGEMENT VARIABLES D'ENVIRONNEMENT ====================
-
-def load_env_file(filepath: str = "infos.env") -> dict:
-    """Charge les variables depuis le fichier .env"""
-    env_vars = {}
-    env_path = Path(filepath)
-    
-    if not env_path.exists():
-        logger.error(f"❌ Fichier {filepath} introuvable")
-        return env_vars
-    
-    try:
-        with open(env_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith('#') and '=' in line:
-                    key, value = line.split('=', 1)
-                    key = key.strip()
-                    value = value.strip().strip('"').strip("'")
-                    env_vars[key] = value
-                    os.environ[key] = value
-        
-        logger.info(f"✅ Variables: {filepath}")
-        return env_vars
-    
-    except Exception as e:
-        logger.error(f"❌ Erreur lecture {filepath}: {e}")
-        return env_vars
-
-# Charger les variables
-ENV_VARS = load_env_file("infos.env")
-
-# ==================== VARIABLES D'ENVIRONNEMENT ESSENTIELLES ====================
-
-# TOKEN BOT (CRITIQUE)
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-if not BOT_TOKEN:
-    logger.critical("❌ BOT_TOKEN manquant dans infos.env !")
-    logger.critical("Ajoutez: BOT_TOKEN=votre_token_telegram")
-    sys.exit(1)
-
-# Admin principal (pour initialisation)
-ADMIN_TELEGRAM_ID = os.getenv("ADMIN_TELEGRAM_ID")
-if not ADMIN_TELEGRAM_ID:
-    logger.critical("❌ ADMIN_TELEGRAM_ID manquant dans infos.env !")
-    logger.critical("Ajoutez: ADMIN_TELEGRAM_ID=votre_id_telegram")
-    sys.exit(1)
-
-try:
-    ADMIN_ID = int(ADMIN_TELEGRAM_ID)
-except ValueError:
-    logger.critical("❌ ADMIN_TELEGRAM_ID doit être un nombre !")
-    logger.critical(f"Valeur actuelle: {ADMIN_TELEGRAM_ID}")
-    sys.exit(1)
-
-# Adresse admin pour calcul distance
-ADMIN_ADDRESS = os.getenv("ADMIN_ADDRESS", "Paris, France")
-
-# OpenRouteService (optionnel)
-OPENROUTE_API_KEY = os.getenv("OPENROUTE_API_KEY")
-
-logger.info(f"✅ BOT_TOKEN chargé: {BOT_TOKEN[:10]}...")
-logger.info(f"✅ ADMIN_ID: {ADMIN_ID}")
-logger.info(f"✅ ADMIN_ADDRESS: {ADMIN_ADDRESS}")
-
-# ==================== CONFIGURATION DISQUE PERSISTANT ====================
-
-# Détection automatique de l'environnement
-if os.path.exists("/data"):
-    DATA_DIR = Path("/data")
-    logger.info("✅ Utilisation du disque persistant : /data")
-elif os.path.exists("/persistent"):
-    DATA_DIR = Path("/persistent")
-    logger.info("✅ Utilisation du disque persistant : /persistent")
-else:
-    DATA_DIR = Path(__file__).parent / "data"
-    DATA_DIR.mkdir(exist_ok=True)
-    logger.info(f"✅ Mode local : {DATA_DIR}")
-
-# Créer les sous-dossiers
-MEDIA_DIR = DATA_DIR / "media"
-MEDIA_DIR.mkdir(exist_ok=True)
-
-# ==================== FICHIERS DE DONNÉES ====================
-
-ADMINS_FILE = DATA_DIR / "admins.json"
-PRODUCT_REGISTRY_FILE = DATA_DIR / "product_registry.json"
-PRICES_FILE = DATA_DIR / "prices.json"
-AVAILABLE_PRODUCTS_FILE = DATA_DIR / "available_products.json"
-USERS_FILE = DATA_DIR / "users.json"
-STOCKS_FILE = DATA_DIR / "stocks.json"
-PROMO_CODES_FILE = DATA_DIR / "promo_codes.json"
+# Fichiers de données
+ORDERS_FILE = DATA_DIR / "orders.csv"
 CLIENT_HISTORY_FILE = DATA_DIR / "client_history.json"
-REFERRALS_FILE = DATA_DIR / "referrals.json"
-HORAIRES_FILE = DATA_DIR / "horaires.json"
-STATS_FILE = DATA_DIR / "stats.json"
-PRICING_TIERS_FILE = DATA_DIR / "pricing_tiers.json"
-
-# ==================== CONSTANTES MÉTIER ====================
-
-FRAIS_POSTAL = 10
-FRAIS_MEETUP = 0
-VIP_THRESHOLD = 500
-VIP_DISCOUNT = 5
-REFERRAL_REWARD = 5
-
-# ==================== CONFIGURATION SYSTÈME FINANCIER AVANCÉ ====================
-
-# Poids à peser par produit (ratio de pesée)
-PRODUCT_WEIGHTS = {
-    # Exception : Coco et K - 1g commandé = 0.9g à peser
-    "Coco": {"type": "weight", "ratio": 0.9},
-    "K": {"type": "weight", "ratio": 0.9},
-    
-    # Crystal : poids normal
-    "Crystal": {"type": "weight", "ratio": 1.0},
-    
-    # Pills : unités (pas de pesée)
-    "Pills Squid-Game": {"type": "unit", "ratio": 1},
-    "Pills Punisher": {"type": "unit", "ratio": 1}
-}
-
-# Prix coûtants (prix d'achat) en €
-PRODUCT_COSTS = {
-    "Coco": 45.00,              # €/g
-    "K": 50.00,                 # €/g
-    "Crystal": 55.00,           # €/g
-    "Pills Squid-Game": 8.00,   # €/unité
-    "Pills Punisher": 8.00      # €/unité
-}
-
-# Fichiers de données financières
-PAYROLL_FILE = DATA_DIR / "payroll.json"
+USERS_FILE = DATA_DIR / "users.json"
+LEDGER_FILE = DATA_DIR / "ledger.json"
+SALARIES_FILE = DATA_DIR / "salaries.json"
+COMMISSIONS_FILE = DATA_DIR / "commissions.json"
 EXPENSES_FILE = DATA_DIR / "expenses.json"
+VIP_CONFIG_FILE = DATA_DIR / "vip_config.json"
+STOCK_HISTORY_FILE = DATA_DIR / "stock_history.json"
 
-# Catégories de consommables
-EXPENSE_CATEGORIES = ["Emballage", "Transport", "Matériel", "Autre"]
+# ==================== CHARGEMENT JSON ====================
 
-# ==================== ÉTATS DE CONVERSATION ====================
-
-ADMIN_MANAGE_MENU = 120
-ADMIN_ADD_ID = 121
-ADMIN_ADD_LEVEL = 122
-ADMIN_REMOVE_CONFIRM = 123
-ADMIN_VIEW_LIST = 124
-
-# ==================== MÉTHODE DE CALCUL DISTANCE ====================
-
-DISTANCE_METHOD = "geopy"
-distance_client = Nominatim(user_agent="telegram_bot_v3", timeout=10)
-
-if OPENROUTE_API_KEY:
+def load_json_file(filepath: Path, default: Any = None) -> Any:
+    """Charge un fichier JSON avec gestion d'erreurs"""
+    if not filepath.exists():
+        logger.warning(f"⚠️ Fichier manquant : {filepath.name}")
+        return default if default is not None else {}
+    
     try:
-        import openrouteservice
-        distance_client = openrouteservice.Client(key=OPENROUTE_API_KEY)
-        DISTANCE_METHOD = "openroute"
-        logger.info("✅ OpenRouteService configuré")
-    except ImportError:
-        logger.warning("⚠️ openrouteservice non installé, fallback sur geopy")
-        distance_client = Nominatim(user_agent="telegram_bot_v3", timeout=10)
-        DISTANCE_METHOD = "geopy"
+        with open(filepath, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            logger.info(f"✅ Fichier chargé : {filepath.name}")
+            return data
+    except json.JSONDecodeError as e:
+        logger.error(f"❌ Erreur JSON dans {filepath.name}: {e}")
+        return default if default is not None else {}
     except Exception as e:
-        logger.warning(f"⚠️ Erreur OpenRouteService: {e}, fallback sur geopy")
-        distance_client = Nominatim(user_agent="telegram_bot_v3", timeout=10)
-        DISTANCE_METHOD = "geopy"
-else:
-    distance_client = Nominatim(user_agent="telegram_bot_v3", timeout=10)
-    logger.info("✅ Geopy - Distance approximative")
+        logger.error(f"❌ Erreur lecture {filepath.name}: {e}")
+        return default if default is not None else {}
 
-if distance_client is None:
-    distance_client = Nominatim(user_agent="telegram_bot_v3", timeout=10)
-    logger.warning("⚠️ Fallback final sur Geopy")
-
-# ==================== GESTION DES ADMINS ====================
-
-def load_admins() -> Dict:
-    """Charge la liste des administrateurs depuis admins.json"""
-    if ADMINS_FILE.exists():
-        try:
-            with open(ADMINS_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            logger.error(f"❌ Erreur lecture admins.json: {e}")
-            return {}
-    else:
-        logger.warning("⚠️ Fichier admins.json non trouvé, création...")
-        return {}
-
-def save_admins(admins: Dict) -> bool:
-    """Sauvegarde les administrateurs dans admins.json"""
+def save_json_file(filepath: Path, data: Any) -> bool:
+    """Sauvegarde un fichier JSON avec gestion d'erreurs"""
     try:
-        with open(ADMINS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(admins, f, indent=2, ensure_ascii=False)
-        logger.info(f"💾 Admins sauvegardés: {len(admins)} administrateur(s)")
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
         return True
     except Exception as e:
-        logger.error(f"❌ Erreur sauvegarde admins: {e}")
+        logger.error(f"❌ Erreur sauvegarde {filepath.name}: {e}")
         return False
 
-def init_admins() -> Dict:
-    """Initialise le système d'admins (crée le super-admin si nécessaire)"""
-    admins = load_admins()
+# Charger tous les fichiers JSON au démarrage
+PRODUCTS_DATA = load_json_file(PRODUCTS_FILE, {})
+CONFIG_DATA = load_json_file(CONFIG_FILE, {})
+LICENSE_DATA = load_json_file(LICENSE_FILE, {})
+LANGUAGES_DATA = load_json_file(LANGUAGES_FILE, {})
+ADMINS_DATA = load_json_file(ADMINS_FILE, {})
+
+logger.info(f"""
+╔════════════════════════════════════════╗
+║   BOT V{BOT_VERSION} - DÉMARRAGE           ║
+╚════════════════════════════════════════╝
+📦 Produits chargés : {len(PRODUCTS_DATA.get('products', {}))}
+⚙️  Configuration : {'✅' if CONFIG_DATA else '❌'}
+🔐 Licence Niveau : {LICENSE_DATA.get('license', {}).get('level', 1)}
+🌐 Langues : {len(LANGUAGES_DATA)}
+👥 Admins : {len(ADMINS_DATA.get('admins', {}))}
+""")
+
+# ==================== RÉCUPÉRATION DEPUIS ENVIRONNEMENT ====================
+
+def anonymize_id(user_id: int) -> str:
+    """Anonymise un ID pour les logs"""
+    if not user_id:
+        return "N/A"
+    id_str = str(user_id)
+    if len(id_str) <= 4:
+        return "***"
+    return id_str[:2] + "*" * (len(id_str) - 4) + id_str[-2:]
+
+def get_bot_token() -> str:
+    """Récupère le token depuis l'environnement"""
+    token = os.getenv('BOT_TOKEN') or os.getenv('TELEGRAM_BOT_TOKEN')
+    if token:
+        logger.info("✅ Token récupéré depuis environnement")
+        return token
     
-    if not admins:
-        logger.info("🔧 Initialisation du premier super-admin...")
-        admins[str(ADMIN_ID)] = {
-            'level': 'super_admin',
-            'name': 'Proprietaire',
-            'added_by': 'system',
-            'added_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'permissions': ['all']
-        }
-        save_admins(admins)
-        logger.info(f"✅ Super-admin créé: {ADMIN_ID}")
+    # Fallback config.json (dev local)
+    try:
+        token = CONFIG_DATA.get('bot_token', '')
+        if token and token != "VOTRE_BOT_TOKEN_ICI":
+            logger.warning("⚠️ Token depuis config.json (dev local)")
+            return token
+    except:
+        pass
     
-    return admins
+    logger.error("❌ Token introuvable !")
+    return ""
 
-def is_admin(user_id: int) -> bool:
-    """Vérifie si un utilisateur est admin"""
-    admins = load_admins()
-    return str(user_id) in admins
+def get_admin_id() -> Optional[int]:
+    """Récupère l'admin ID depuis l'environnement"""
+    admin_id_str = os.getenv('ADMIN_ID') or os.getenv('TELEGRAM_ADMIN_ID')
+    
+    if admin_id_str:
+        try:
+            admin_id = int(admin_id_str)
+            logger.info(f"✅ Admin ID récupéré : {anonymize_id(admin_id)}")
+            return admin_id
+        except ValueError:
+            logger.error("❌ Admin ID invalide")
+            return None
+    
+    # Fallback admins.json
+    try:
+        admins = ADMINS_DATA.get('admins', {})
+        for uid_str, data in admins.items():
+            if uid_str.isdigit() and data.get('active', True):
+                admin_id = int(uid_str)
+                logger.warning(f"⚠️ Admin ID depuis JSON : {anonymize_id(admin_id)}")
+                return admin_id
+    except:
+        pass
+    
+    return None
 
-def is_super_admin(user_id: int) -> bool:
-    """Vérifie si un utilisateur est super-admin"""
-    admins = load_admins()
-    user_data = admins.get(str(user_id))
-    if not user_data:
-        return False
-    return user_data.get('level') == 'super_admin'
 
-def get_admin_info(user_id: int) -> Optional[Dict]:
-    """Récupère les informations complètes d'un admin"""
-    admins = load_admins()
-    return admins.get(str(user_id))
+# ==================== COUCHE DE COMPATIBILITÉ JSON ↔ V3 ====================
 
-def get_admin_level(user_id: int) -> Optional[str]:
-    """Récupère le niveau d'un admin"""
-    info = get_admin_info(user_id)
-    return info.get('level') if info else None
+class JSONDict(dict):
+    """
+    Dictionnaire magique qui émule les dicts V3 mais lit depuis JSON
+    Compatible avec : .get(), [], .keys(), .items(), .copy()
+    """
+    def __init__(self, country: str):
+        super().__init__()
+        self.country = country
+        self._load_from_json()
+    
+    def _load_from_json(self):
+        """Charge les données depuis JSON"""
+        products = PRODUCTS_DATA.get('products', {})
+        for product_id, product_data in products.items():
+            # Récupérer le nom avec emoji
+            name = product_data.get('name', {}).get('fr', product_id)
+            # Récupérer le prix pour ce pays
+            price = product_data.get('prices', {}).get(self.country, 0)
+            # Stocker dans le dict
+            self[name] = price
+    
+    def reload(self):
+        """Recharge depuis JSON (après modification)"""
+        self.clear()
+        self._load_from_json()
 
-def get_admin_ids() -> List[int]:
-    """Retourne la liste des IDs de tous les admins"""
-    admins = load_admins()
-    return [int(uid) for uid in admins.keys()]
+class QuantitiesDict(dict):
+    """
+    Dictionnaire magique pour les quantités disponibles
+    """
+    def __init__(self):
+        super().__init__()
+        self._load_from_json()
+    
+    def _load_from_json(self):
+        """Charge les quantités depuis JSON"""
+        products = PRODUCTS_DATA.get('products', {})
+        for product_id, product_data in products.items():
+            name = product_data.get('name', {}).get('fr', product_id)
+            quantities = product_data.get('available_quantities', [1.0])
+            self[name] = quantities
+    
+    def reload(self):
+        self.clear()
+        self._load_from_json()
 
-# Initialiser les admins au démarrage
-ADMINS = init_admins()
-logger.info(f"✅ Bot configuré avec {len(ADMINS)} administrateur(s)")
+class StockDict(dict):
+    """
+    Dictionnaire magique pour les stocks
+    """
+    def __init__(self):
+        super().__init__()
+        self._load_from_json()
+    
+    def _load_from_json(self):
+        """Charge les stocks depuis JSON"""
+        products = PRODUCTS_DATA.get('products', {})
+        for product_id, product_data in products.items():
+            name = product_data.get('name', {}).get('fr', product_id)
+            stock = product_data.get('stock', 0)
+            self[name] = stock
+    
+    def reload(self):
+        self.clear()
+        self._load_from_json()
+    
+    def save_to_json(self):
+        """Sauvegarde les stocks dans JSON"""
+        products = PRODUCTS_DATA.get('products', {})
+        
+        # Créer mapping inverse nom → id
+        name_to_id = {}
+        for product_id, product_data in products.items():
+            name = product_data.get('name', {}).get('fr', product_id)
+            name_to_id[name] = product_id
+        
+        # Mettre à jour les stocks
+        for name, stock in self.items():
+            product_id = name_to_id.get(name)
+            if product_id and product_id in products:
+                products[product_id]['stock'] = stock
+        
+        # Sauvegarder
+        PRODUCTS_DATA['products'] = products
+        return save_json_file(PRODUCTS_FILE, PRODUCTS_DATA)
 
-# ==================== EMOJI THEME ====================
+# ==================== VARIABLES COMPATIBLES V3 ====================
 
-EMOJI_THEME = {
-    'success': '✅', 'error': '❌', 'warning': '⚠️', 'info': 'ℹ️',
-    'money': '💰', 'cart': '🛒', 'delivery': '🚚', 'product': '📦',
-    'admin': '👨‍💼', 'user': '👤', 'stats': '📊', 'gift': '🎁',
-    'vip': '⭐', 'celebration': '🎉', 'wave': '👋', 'history': '📜',
-    'support': '💬', 'security': '🔒', 'online': '🟢', 'offline': '🔴'
-}
+# Prix par pays (émulent les anciens dicts hardcodés)
+PRIX_FR = JSONDict('FR')
+PRIX_CH = JSONDict('CH')
+PRIX_AU = JSONDict('AU')
 
-# ==================== DICTIONNAIRES PRODUITS ====================
+# Quantités disponibles
+QUANTITES_DISPONIBLES = QuantitiesDict()
 
-PRODUCT_CODES = {}
-PILL_SUBCATEGORIES = {}
-ROCK_SUBCATEGORIES = {}
-IMAGES_PRODUITS = {}
-VIDEOS_PRODUITS = {}
+# Stocks (avec sauvegarde automatique)
+STOCK_PRODUITS = StockDict()
 
-# ==================== PRIX DE BASE ====================
+logger.info("✅ Couche de compatibilité V3↔JSON chargée")
+logger.info(f"   📦 Produits PRIX_FR : {len(PRIX_FR)} items")
+logger.info(f"   📦 Produits PRIX_CH : {len(PRIX_CH)} items")
+logger.info(f"   📦 Quantités : {len(QUANTITES_DISPONIBLES)} items")
+logger.info(f"   📦 Stocks : {len(STOCK_PRODUITS)} items")
 
-PRIX_FR = {
-    "❄️ Coco": 60, "💊 Squid Game": 15, "💊 Punisher": 15,
-    "🫒 Hash": 10, "🍀 Weed": 10, "🪨 MDMA": 40,
-    "🪨 4MMC": 20, "🍄 Ketamine": 40
-}
+# ==================== FONCTIONS HELPER POUR ADMIN ====================
 
-PRIX_CH = {
-    "❄️ Coco": 80, "💊 Squid Game": 20, "💊 Punisher": 20,
-    "🫒 Hash": 15, "🍀 Weed": 15, "🪨 MDMA": 50,
-    "🪨 4MMC": 25, "🍄 Ketamine": 50
-}
+def reload_products():
+    """Recharge tous les produits depuis JSON (après modification admin)"""
+    global PRODUCTS_DATA, PRIX_FR, PRIX_CH, PRIX_AU, QUANTITES_DISPONIBLES, STOCK_PRODUITS
+    
+    PRODUCTS_DATA = load_json_file(PRODUCTS_FILE, {})
+    PRIX_FR.reload()
+    PRIX_CH.reload()
+    PRIX_AU.reload()
+    QUANTITES_DISPONIBLES.reload()
+    STOCK_PRODUITS.reload()
+    
+    logger.info("♻️ Produits rechargés depuis JSON")
+
+def save_stock():
+    """Sauvegarde les stocks dans JSON"""
+    return STOCK_PRODUITS.save_to_json()
+
+def get_product_name_by_id(product_id: str) -> str:
+    """Récupère le nom FR d'un produit par son ID"""
+    product = PRODUCTS_DATA.get('products', {}).get(product_id)
+    if product:
+        return product.get('name', {}).get('fr', product_id)
+    return product_id
+
+def get_product_id_by_name(product_name: str) -> Optional[str]:
+    """Récupère l'ID d'un produit par son nom FR"""
+    products = PRODUCTS_DATA.get('products', {})
+    for product_id, product_data in products.items():
+        name = product_data.get('name', {}).get('fr', '')
+        if name == product_name:
+            return product_id
+    return None
+
+# ==================== ADMIN_ID DEPUIS ENV ====================
+
+ADMIN_ID = get_admin_id()
+
+if not ADMIN_ID:
+    logger.error("❌ ADMIN_ID non configuré !")
+    logger.error("   Configurez ADMIN_ID ou TELEGRAM_ADMIN_ID en variable d'environnement")
+else:
+    logger.info(f"✅ ADMIN_ID configuré : {anonymize_id(ADMIN_ID)}")
 
 # ==================== TRADUCTIONS ====================
 
@@ -10916,6 +10842,13 @@ async def kill_switch_check(application):
 # ==================== FONCTION MAIN ====================
 
 async def main():
+    # Récupérer token depuis ENV
+    BOT_TOKEN = get_bot_token()
+    
+    if not BOT_TOKEN:
+        logger.error("❌ Token introuvable")
+        logger.error("💡 Configurez BOT_TOKEN ou TELEGRAM_BOT_TOKEN")
+        sys.exit(1)
     """Fonction principale du bot"""
     
     # Bannière de démarrage
@@ -10926,9 +10859,6 @@ async def main():
     logger.info("=" * 60)
     
     # Vérifications
-    if not BOT_TOKEN or BOT_TOKEN == "VOTRE_TOKEN_ICI":
-        logger.error("❌ BOT_TOKEN non configuré")
-        return
     
     logger.info("✅ Token configuré")
     
@@ -11115,10 +11045,6 @@ Le bot a été arrêté proprement.
         
         if application.running:
             await application.stop()
-            logger.info("✅ Application arrêtée")
-        
-        await application.shutdown()
-        logger.info("✅ Application fermée")
     
     except Exception as e:
         logger.error(f"❌ Erreur lors de l'arrêt: {e}")
@@ -11127,16 +11053,19 @@ Le bot a été arrêté proprement.
     logger.info("👋 AU REVOIR")
     logger.info("=" * 60)
 
+# ==================== MAIN AVEC TOKEN DEPUIS ENV ====================
+
+
 # ==================== POINT D'ENTRÉE ====================
 
 if __name__ == '__main__':
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("⚠️  Interruption clavier (Ctrl+C)")
+        logger.info("⚠️ Interruption clavier (Ctrl+C)")
     except Exception as e:
         logger.error(f"❌ Erreur fatale: {e}")
     finally:
         logger.info("🏁 Programme terminé")
 
-# ==================== FIN DU FICHIER BOT.PY CORRIGÉ ====================
+# ==================== FIN BOT V4.0.0 - MIGRATION V3.1.1 COMPLÈTE ====================

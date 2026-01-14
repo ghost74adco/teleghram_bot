@@ -61,17 +61,85 @@ logger = logging.getLogger(__name__)
 logging.getLogger('httpx').setLevel(logging.WARNING)
 logging.getLogger('telegram').setLevel(logging.WARNING)
 
+# ==================== DÉCORATEURS ET FONCTIONS DE LOGGING V3 ====================
+
+def log_callback(func):
+    """Décorateur pour logger automatiquement tous les callbacks"""
+    @wraps(func)
+    async def wrapper(update, context):
+        query = update.callback_query
+        user_id = query.from_user.id
+        username = query.from_user.username or "N/A"
+        callback_data = query.data
+        
+        logger.info(f"🔘 CALLBACK: {func.__name__}")
+        logger.info(f"   👤 User: {user_id} (@{username})")
+        logger.info(f"   📲 Data: {callback_data}")
+        
+        try:
+            result = await func(update, context)
+            logger.info(f"✅ CALLBACK SUCCESS: {func.__name__}")
+            return result
+        except Exception as e:
+            logger.error(f"❌ CALLBACK ERROR: {func.__name__}")
+            logger.error(f"   Error: {e}")
+            import traceback
+            logger.error(f"   Traceback: {traceback.format_exc()}")
+            raise
+    
+    return wrapper
+
+def log_handler(func):
+    """Décorateur pour logger automatiquement tous les handlers"""
+    @wraps(func)
+    async def wrapper(update, context):
+        user = update.effective_user
+        message_text = update.message.text if update.message else "N/A"
+        
+        logger.info(f"📩 HANDLER: {func.__name__}")
+        logger.info(f"   👤 User: {user.id} (@{user.username or 'N/A'})")
+        logger.info(f"   💬 Message: {message_text[:50]}")
+        
+        try:
+            result = await func(update, context)
+            logger.info(f"✅ HANDLER SUCCESS: {func.__name__}")
+            return result
+        except Exception as e:
+            logger.error(f"❌ HANDLER ERROR: {func.__name__}")
+            logger.error(f"   Error: {e}")
+            import traceback
+            logger.error(f"   Traceback: {traceback.format_exc()}")
+            raise
+    
+    return wrapper
+
+def log_action(action: str, user_id: int, details: str = ""):
+    """Log une action utilisateur"""
+    logger.info(f"🎬 ACTION: {action} | User: {user_id} | {details}")
+
+def log_state_change(user_id: int, state_name: str, new_value):
+    """Log un changement d'état"""
+    logger.info(f"🔄 STATE: {state_name}={new_value} | User: {user_id}")
+
+def log_db_operation(operation: str, table: str, details: str = ""):
+    """Log une opération base de données"""
+    logger.info(f"💾 DB: {operation} | Table: {table} | {details}")
+
+def log_order_status(order_id: str, old_status: str, new_status: str, admin_id: int = None):
+    """Log un changement de statut de commande"""
+    logger.info(f"📦 ORDER STATUS: {order_id} | {old_status} → {new_status}" + (f" | By admin: {admin_id}" if admin_id else ""))
+
 # ==================== CONSTANTES ====================
 
 DATA_DIR = Path(".")
 BOT_VERSION = "4.0.0"
 
 # Fichiers JSON
-PRODUCTS_FILE = DATA_DIR / "products_V4.json"
-CONFIG_FILE = DATA_DIR / "config_V4.json"
-LICENSE_FILE = DATA_DIR / "license_V4.json"
-LANGUAGES_FILE = DATA_DIR / "languages_V4.json"
-ADMINS_FILE = DATA_DIR / "admins_V4.json"
+PRODUCTS_FILE = DATA_DIR / "products.json"
+CONFIG_FILE = DATA_DIR / "config.json"
+LICENSE_FILE = DATA_DIR / "license.json"
+LANGUAGES_FILE = DATA_DIR / "languages.json"
+ADMINS_FILE = DATA_DIR / "admins.json"
 
 # Fichiers de données
 ORDERS_FILE = DATA_DIR / "orders.csv"

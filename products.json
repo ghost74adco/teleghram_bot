@@ -109,9 +109,9 @@
       },
       "active": true,
       "prices": {
-        "FR": 60,
-        "CH": 80,
-        "AU": 120
+        "FR": 80,
+        "CH": 100,
+        "AU": 150
       },
       "available_quantities": [1, 2, 5, 10, 25],
       "stock": 500,
@@ -141,8 +141,8 @@
       },
       "active": true,
       "prices": {
-        "FR": 15,
-        "CH": 20,
+        "FR": 10,
+        "CH": 15,
         "AU": 30
       },
       "available_quantities": [1, 5, 10, 20, 50],
@@ -173,8 +173,8 @@
       },
       "active": true,
       "prices": {
-        "FR": 15,
-        "CH": 20,
+        "FR": 10,
+        "CH": 15,
         "AU": 30
       },
       "available_quantities": [1, 5, 10, 20, 50],
@@ -205,9 +205,9 @@
       },
       "active": true,
       "prices": {
-        "FR": 10,
-        "CH": 15,
-        "AU": 25
+        "FR": 7,
+        "CH": 8,
+        "AU": 15
       },
       "available_quantities": [1, 2, 5, 10, 25, 50],
       "stock": 800,
@@ -237,9 +237,9 @@
       },
       "active": true,
       "prices": {
-        "FR": 10,
-        "CH": 15,
-        "AU": 25
+        "FR": 7,
+        "CH": 8,
+        "AU": 15
       },
       "available_quantities": [1, 2, 5, 10, 25, 50, 100],
       "stock": 1500,
@@ -271,7 +271,7 @@
       "prices": {
         "FR": 40,
         "CH": 50,
-        "AU": 80
+        "AU": 60
       },
       "available_quantities": [1, 2, 5, 10],
       "stock": 300,
@@ -301,9 +301,9 @@
       },
       "active": true,
       "prices": {
-        "FR": 20,
-        "CH": 25,
-        "AU": 40
+        "FR": 40,
+        "CH": 50,
+        "AU": 60
       },
       "available_quantities": [1, 2, 5, 10, 25],
       "stock": 400,

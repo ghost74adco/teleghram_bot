@@ -72,6 +72,10 @@ def error_handler(func):
     return wrapper
 
 
+
+# Code Super Admin pour éditer la licence
+SUPER_ADMIN_CODE = "ADMIN2025"  # Modifiez ce code selon vos besoins
+
 # ==================== CONFIGURATION LOGGING ====================
 
 logging.basicConfig(
@@ -10422,8 +10426,12 @@ Que voulez-vous faire ?
             InlineKeyboardButton("💎 Voir AUTRES", callback_data="ledger_view_autres")
         ],
         [
-            InlineKeyboardButton("➕ Ajouter Entrée", callback_data="ledger_add_income"),
-            InlineKeyboardButton("➖ Ajouter Sortie", callback_data="ledger_add_expense")
+            InlineKeyboardButton("➕ Entrée Weed", callback_data="ledger_add_weed_income"),
+            InlineKeyboardButton("➖ Sortie Weed", callback_data="ledger_add_weed_expense")
+        ],
+        [
+            InlineKeyboardButton("➕ Entrée Autres", callback_data="ledger_add_other_income"),
+            InlineKeyboardButton("➖ Sortie Autres", callback_data="ledger_add_other_expense")
         ],
         [
             InlineKeyboardButton("🔄 Réimporter historique", callback_data="ledger_reimport_split")
@@ -11504,7 +11512,7 @@ Choisissez ce que vous voulez éditer :
         [InlineKeyboardButton("📊 Stocks", callback_data="edit_stocks_menu")],
         [InlineKeyboardButton("🚚 Frais", callback_data="edit_delivery_fees")],
         [InlineKeyboardButton("⚙️ Config", callback_data="edit_config_menu")],
-        [InlineKeyboardButton("🔙 Retour", callback_data="admin_panel")]
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_panel")]
     ]
     
     await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
@@ -12255,6 +12263,427 @@ Vous serez contacté rapidement.
             f"❌ Erreur lors de l'envoi. Réessayez ou contactez un autre admin."
         )
         logger.error(f"Erreur contact admin: {e}")
+
+
+@error_handler
+async def contact_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Permet de contacter un utilisateur en cliquant sur son ID"""
+    query = update.callback_query
+    await query.answer()
+    
+    user = update.effective_user
+    if not is_admin(user.id):
+        await query.answer("❌ Accès refusé", show_alert=True)
+        return
+    
+    # Extraire l'ID utilisateur du callback
+    target_user_id = int(query.data.replace("contact_user_", ""))
+    
+    # Récupérer les infos de l'utilisateur
+    user_info = get_user_info(target_user_id)
+    username = user_info.get('username', 'Unknown')
+    first_name = user_info.get('first_name', 'User')
+    
+    text = f"""💬 CONTACTER UTILISATEUR
+
+👤 {first_name} (@{username})
+🆔 ID: {target_user_id}
+
+Envoyez votre message:
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin")]]
+    
+    await query.edit_message_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    # Sauvegarder l'ID cible dans le contexte
+    context.user_data['contact_target'] = target_user_id
+    context.user_data['awaiting_contact_message'] = True
+
+@error_handler
+async def handle_contact_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gère l'envoi du message de contact"""
+    user = update.effective_user
+    
+    if not is_admin(user.id):
+        return
+    
+    if not context.user_data.get('awaiting_contact_message'):
+        return
+    
+    target_user_id = context.user_data.get('contact_target')
+    if not target_user_id:
+        await update.message.reply_text("❌ Session expirée")
+        return
+    
+    message_text = update.message.text
+    
+    # Envoyer le message à l'utilisateur cible
+    try:
+        admin_name = user.first_name
+        full_message = f"""📩 MESSAGE D'UN ADMIN
+
+{message_text}
+
+━━━━━━━━━━━━━━━
+De: {admin_name} (Admin)
+"""
+        
+        await context.bot.send_message(
+            chat_id=target_user_id,
+            text=full_message
+        )
+        
+        await update.message.reply_text(
+            "✅ Message envoyé avec succès !",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Retour Admin", callback_data="admin")
+            ]])
+        )
+        
+        logger.info(f"💬 Admin {user.id} a contacté user {target_user_id}")
+        
+    except Exception as e:
+        await update.message.reply_text(
+            f"❌ Erreur lors de l'envoi: {str(e)}"
+        )
+        logger.error(f"Erreur contact user: {e}")
+    
+    # Nettoyer
+    context.user_data.pop('contact_target', None)
+    context.user_data.pop('awaiting_contact_message', None)
+
+
+
+@error_handler
+async def ledger_add_weed_income(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ajouter une entrée Weed"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    context.user_data['ledger_entry_type'] = 'income'
+    context.user_data['ledger_ledger'] = 'weed'
+    
+    message = """➕ ENTRÉE WEED
+
+Catégories disponibles:
+"""
+    categories = [
+        ("💰 Vente Weed", "ledger_weed_cat_income_Vente"),
+        ("🎁 Remboursement", "ledger_weed_cat_income_Remboursement"),
+        ("💵 Apport", "ledger_weed_cat_income_Apport"),
+        ("📦 Autre", "ledger_weed_cat_income_Autre")
+    ]
+    
+    keyboard = []
+    for label, callback in categories:
+        keyboard.append([InlineKeyboardButton(label, callback_data=callback)])
+    
+    keyboard.append([InlineKeyboardButton("❌ Annuler", callback_data="admin_ledger")])
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+@error_handler
+async def ledger_add_weed_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ajouter une sortie Weed"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    context.user_data['ledger_entry_type'] = 'expense'
+    context.user_data['ledger_ledger'] = 'weed'
+    
+    message = """➖ SORTIE WEED
+
+Catégories disponibles:
+"""
+    categories = [
+        ("💸 Salaire", "ledger_weed_cat_expense_Salaire"),
+        ("🧾 Consommable", "ledger_weed_cat_expense_Consommable"),
+        ("📦 Achat stock", "ledger_weed_cat_expense_Stock"),
+        ("🚗 Frais divers", "ledger_weed_cat_expense_Divers"),
+        ("📤 Autre", "ledger_weed_cat_expense_Autre")
+    ]
+    
+    keyboard = []
+    for label, callback in categories:
+        keyboard.append([InlineKeyboardButton(label, callback_data=callback)])
+    
+    keyboard.append([InlineKeyboardButton("❌ Annuler", callback_data="admin_ledger")])
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+@error_handler
+async def ledger_add_other_income(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ajouter une entrée Autres"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    context.user_data['ledger_entry_type'] = 'income'
+    context.user_data['ledger_ledger'] = 'autres'
+    
+    message = """➕ ENTRÉE AUTRES
+
+Catégories disponibles:
+"""
+    categories = [
+        ("💰 Vente Autres", "ledger_other_cat_income_Vente"),
+        ("🎁 Remboursement", "ledger_other_cat_income_Remboursement"),
+        ("💵 Apport", "ledger_other_cat_income_Apport"),
+        ("📦 Autre", "ledger_other_cat_income_Autre")
+    ]
+    
+    keyboard = []
+    for label, callback in categories:
+        keyboard.append([InlineKeyboardButton(label, callback_data=callback)])
+    
+    keyboard.append([InlineKeyboardButton("❌ Annuler", callback_data="admin_ledger")])
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+@error_handler
+async def ledger_add_other_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ajouter une sortie Autres"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    context.user_data['ledger_entry_type'] = 'expense'
+    context.user_data['ledger_ledger'] = 'autres'
+    
+    message = """➖ SORTIE AUTRES
+
+Catégories disponibles:
+"""
+    categories = [
+        ("💸 Salaire", "ledger_other_cat_expense_Salaire"),
+        ("🧾 Consommable", "ledger_other_cat_expense_Consommable"),
+        ("📦 Achat stock", "ledger_other_cat_expense_Stock"),
+        ("🚗 Frais divers", "ledger_other_cat_expense_Divers"),
+        ("📤 Autre", "ledger_other_cat_expense_Autre")
+    ]
+    
+    keyboard = []
+    for label, callback in categories:
+        keyboard.append([InlineKeyboardButton(label, callback_data=callback)])
+    
+    keyboard.append([InlineKeyboardButton("❌ Annuler", callback_data="admin_ledger")])
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+@error_handler
+async def ledger_select_weed_other_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sélection de catégorie pour weed/autres"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Extraire ledger, type et catégorie
+    if "ledger_weed_cat_" in query.data:
+        ledger_type = 'weed'
+        parts = query.data.replace("ledger_weed_cat_", "").split("_")
+    else:
+        ledger_type = 'autres'
+        parts = query.data.replace("ledger_other_cat_", "").split("_")
+    
+    entry_type = parts[0]  # income ou expense
+    category = parts[1]  # Vente, Salaire, etc.
+    
+    context.user_data['ledger_entry_type'] = entry_type
+    context.user_data['ledger_category'] = category
+    context.user_data['ledger_ledger'] = ledger_type
+    
+    type_label = "entrée" if entry_type == "income" else "sortie"
+    ledger_label = "🍀 WEED" if ledger_type == "weed" else "💎 AUTRES"
+    
+    message = f"""📝 {category.upper()}
+
+{ledger_label}
+Type: {type_label}
+
+Entrez la description:
+Exemple: Vente commande ORD-123456
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_ledger")]]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+    
+    context.user_data['awaiting_ledger_description'] = True
+
+
+
+@error_handler
+async def admin_edit_license(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu d'édition de la licence"""
+    query = update.callback_query
+    await query.answer()
+    
+    user = update.effective_user
+    if not is_super_admin(user.id):
+        await query.answer("❌ Accès refusé - Super Admin uniquement", show_alert=True)
+        return
+    
+    license_level = get_license_level()
+    
+    text = f"""🔐 ÉDITION LICENCE
+
+Niveau actuel: {license_level}
+
+Pour modifier le niveau de licence, vous devez entrer le code Super Admin.
+
+Envoyez le code:
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin")]]
+    
+    await query.edit_message_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    context.user_data['awaiting_license_code'] = True
+
+@error_handler
+async def handle_license_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gère la saisie du code licence"""
+    user = update.effective_user
+    
+    if not is_super_admin(user.id):
+        return
+    
+    if not context.user_data.get('awaiting_license_code'):
+        return
+    
+    code = update.message.text.strip()
+    
+    if code != SUPER_ADMIN_CODE:
+        await update.message.reply_text(
+            "❌ Code incorrect!",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Retour", callback_data="admin")
+            ]])
+        )
+        context.user_data.pop('awaiting_license_code', None)
+        return
+    
+    # Code correct, demander le nouveau niveau
+    context.user_data.pop('awaiting_license_code', None)
+    context.user_data['license_code_verified'] = True
+    
+    current_level = get_license_level()
+    
+    text = f"""✅ CODE VÉRIFIÉ
+
+Niveau actuel: {current_level}
+
+Entrez le nouveau niveau de licence (1-10):
+"""
+    
+    await update.message.reply_text(
+        text,
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("❌ Annuler", callback_data="admin")
+        ]])
+    )
+    
+    context.user_data['awaiting_license_level'] = True
+
+@error_handler
+async def handle_license_level(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gère la saisie du niveau de licence"""
+    user = update.effective_user
+    
+    if not is_super_admin(user.id):
+        return
+    
+    if not context.user_data.get('awaiting_license_level'):
+        return
+    
+    if not context.user_data.get('license_code_verified'):
+        await update.message.reply_text("❌ Veuillez d'abord vérifier le code")
+        return
+    
+    try:
+        new_level = int(update.message.text.strip())
+        
+        if new_level < 1 or new_level > 10:
+            raise ValueError("Niveau doit être entre 1 et 10")
+        
+        # Mettre à jour le niveau
+        success = set_license_level(new_level)
+        
+        if success:
+            await update.message.reply_text(
+                f"✅ Niveau de licence mis à jour!
+
+Nouveau niveau: {new_level}",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔙 Retour Admin", callback_data="admin")
+                ]])
+            )
+            logger.info(f"🔐 Licence modifiée par {user.id}: niveau {new_level}")
+        else:
+            await update.message.reply_text("❌ Erreur lors de la mise à jour")
+        
+    except ValueError as e:
+        await update.message.reply_text(f"❌ Niveau invalide: {e}")
+        return
+    
+    # Nettoyer
+    context.user_data.pop('awaiting_license_level', None)
+    context.user_data.pop('license_code_verified', None)
+
+    # Handlers contact utilisateur
+    application.add_handler(CallbackQueryHandler(contact_user, pattern=r"^contact_user_\d+$"))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_contact_message))
+    
+    # Handlers livre des comptes Weed/Autres
+    application.add_handler(CallbackQueryHandler(ledger_add_weed_income, pattern="^ledger_add_weed_income$"))
+    application.add_handler(CallbackQueryHandler(ledger_add_weed_expense, pattern="^ledger_add_weed_expense$"))
+    application.add_handler(CallbackQueryHandler(ledger_add_other_income, pattern="^ledger_add_other_income$"))
+    application.add_handler(CallbackQueryHandler(ledger_add_other_expense, pattern="^ledger_add_other_expense$"))
+    application.add_handler(CallbackQueryHandler(ledger_select_weed_other_category, pattern=r"^ledger_(weed|other)_cat_"))
+    
+    # Handlers édition licence
+    application.add_handler(CallbackQueryHandler(admin_edit_license, pattern="^admin_edit_license$"))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_license_code))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_license_level))
+    
+
+def get_license_level():
+    """Retourne le niveau de licence actuel"""
+    license_data = load_json_file(LICENSE_FILE, {})
+    return license_data.get('license', {}).get('level', 1)
+
+def set_license_level(level: int) -> bool:
+    """Définit le nouveau niveau de licence"""
+    license_data = load_json_file(LICENSE_FILE, {})
+    
+    if 'license' not in license_data:
+        license_data['license'] = {}
+    
+    license_data['license']['level'] = level
+    license_data['license']['updated_at'] = datetime.now().isoformat()
+    
+    return save_json_file(LICENSE_FILE, license_data)
+
 
 async def main():
     """Fonction principale du bot"""

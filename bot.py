@@ -44,6 +44,34 @@ from telegram.ext import (
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
 
+# ==================== DÉCORATEUR ERROR_HANDLER ====================
+
+def error_handler(func):
+    """Décorateur pour gérer les erreurs de manière uniforme"""
+    @wraps(func)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        try:
+            return await func(update, context)
+        except Exception as e:
+            logger.error(f"❌ Erreur dans {func.__name__}: {e}", exc_info=True)
+            
+            error_message = (
+                "❌ Erreur technique\n\n"
+                "Une erreur s'est produite. Veuillez réessayer."
+            )
+            
+            try:
+                if update.callback_query:
+                    await update.callback_query.answer("Erreur technique", show_alert=True)
+                    await update.callback_query.message.reply_text(error_message)
+                elif update.message:
+                    await update.message.reply_text(error_message)
+            except Exception as notify_error:
+                logger.error(f"Impossible de notifier l'erreur: {notify_error}")
+    
+    return wrapper
+
+
 # ==================== CONFIGURATION LOGGING ====================
 
 logging.basicConfig(

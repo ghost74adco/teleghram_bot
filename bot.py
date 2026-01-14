@@ -475,7 +475,9 @@ PRICING_TIERS_FILE = DATA_DIR / "pricing_tiers.json"
 
 # ==================== CONSTANTES MÉTIER ====================
 
-FRAIS_POSTAL = 10
+FRAIS_POSTAL_EU = 10   # France/Suisse
+FRAIS_POSTAL_AU = 30   # Australie
+FRAIS_POSTAL = FRAIS_POSTAL_EU  # Par défaut (compatibilité)
 FRAIS_MEETUP = 0
 VIP_THRESHOLD = 500
 VIP_DISCOUNT = 5
@@ -551,11 +553,38 @@ if distance_client is None:
 # ==================== GESTION DES ADMINS ====================
 
 def load_admins() -> Dict:
-    """Charge la liste des administrateurs depuis admins.json"""
+    """Charge la liste des administrateurs depuis admins.json (compatible V3 et V4)"""
     if ADMINS_FILE.exists():
         try:
             with open(ADMINS_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                data = json.load(f)
+                
+                # Si structure V4 (avec clé "admins")
+                if 'admins' in data:
+                    admins_v4 = data['admins']
+                    # Convertir en format V3 pour compatibilité
+                    admins_v3 = {}
+                    for uid, user_data in admins_v4.items():
+                        # Ignorer les placeholders
+                        if uid == "ADMIN_ID_ICI":
+                            continue
+                        
+                        admins_v3[uid] = {
+                            'level': user_data.get('role', 'admin'),  # role → level
+                            'name': user_data.get('name', 'Admin'),
+                            'added_by': user_data.get('added_by', 'unknown'),
+                            'added_at': user_data.get('added_at', ''),
+                            'permissions': ['all'] if user_data.get('role') == 'super_admin' else [],
+                            'active': user_data.get('active', True)
+                        }
+                    
+                    logger.info(f"✅ Admins chargés (format V4): {len(admins_v3)} admin(s)")
+                    return admins_v3
+                
+                # Sinon format V3 (direct)
+                logger.info(f"✅ Admins chargés (format V3): {len(data)} admin(s)")
+                return data
+                
         except Exception as e:
             logger.error(f"❌ Erreur lecture admins.json: {e}")
             return {}
@@ -563,9 +592,12 @@ def load_admins() -> Dict:
         logger.warning("⚠️ Fichier admins.json non trouvé, création...")
         return {}
 
+
 def save_admins(admins: Dict) -> bool:
-    """Sauvegarde les administrateurs dans admins.json"""
+    """Sauvegarde les administrateurs dans admins.json (format V3 uniquement)"""
     try:
+        # Sauvegarder en format V3 (plus simple pour le code V3)
+        # Si besoin de format V4, le faire manuellement
         with open(ADMINS_FILE, 'w', encoding='utf-8') as f:
             json.dump(admins, f, indent=2, ensure_ascii=False)
         logger.info(f"💾 Admins sauvegardés: {len(admins)} administrateur(s)")
@@ -594,11 +626,21 @@ def init_admins() -> Dict:
 
 def is_admin(user_id: int) -> bool:
     """Vérifie si un utilisateur est admin"""
+    # ADMIN_ID depuis ENV est TOUJOURS admin
+    if ADMIN_ID and user_id == ADMIN_ID:
+        return True
+    
+    # Puis vérifier dans admins.json
     admins = load_admins()
     return str(user_id) in admins
 
 def is_super_admin(user_id: int) -> bool:
     """Vérifie si un utilisateur est super-admin"""
+    # ADMIN_ID depuis ENV est TOUJOURS super_admin
+    if ADMIN_ID and user_id == ADMIN_ID:
+        return True
+    
+    # Puis vérifier dans admins.json
     admins = load_admins()
     user_data = admins.get(str(user_id))
     if not user_data:
@@ -2453,7 +2495,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [
             InlineKeyboardButton("🇫🇷 France", callback_data="country_fr"),
-            InlineKeyboardButton("🇨🇭 Suisse", callback_data="country_ch")
+            InlineKeyboardButton("🇨🇭 Suisse", callback_data="country_ch"),
+            InlineKeyboardButton("🇦🇺 Australie", callback_data="country_au")
         ],
         [InlineKeyboardButton(f"{EMOJI_THEME['info']} Aide", callback_data="help")]
     ]
@@ -2507,7 +2550,8 @@ Choisissez votre pays pour commencer :
         
         keyboard = [
             [InlineKeyboardButton("🇫🇷 France", callback_data="country_fr"),
-             InlineKeyboardButton("🇨🇭 Suisse", callback_data="country_ch")],
+             InlineKeyboardButton("🇨🇭 Suisse", callback_data="country_ch"),
+             InlineKeyboardButton("🇦🇺 Australie", callback_data="country_au")],
             [InlineKeyboardButton(f"{EMOJI_THEME['cart']} Mon Panier", callback_data="view_cart"),
              InlineKeyboardButton(f"{EMOJI_THEME['history']} Historique", callback_data="my_history")],
             [InlineKeyboardButton(f"{EMOJI_THEME['gift']} Parrainage", callback_data="referral_info")]
@@ -2830,7 +2874,8 @@ Choisissez votre pays pour commencer :
     
     keyboard = [
         [InlineKeyboardButton("🇫🇷 France", callback_data="country_fr"),
-         InlineKeyboardButton("🇨🇭 Suisse", callback_data="country_ch")],
+         InlineKeyboardButton("🇨🇭 Suisse", callback_data="country_ch"),
+         InlineKeyboardButton("🇦🇺 Australie", callback_data="country_au")],
         [InlineKeyboardButton(f"{EMOJI_THEME['cart']} Mon Panier", callback_data="view_cart"),
          InlineKeyboardButton(f"{EMOJI_THEME['history']} Historique", callback_data="my_history")],
         [InlineKeyboardButton(f"{EMOJI_THEME['info']} Aide", callback_data="help_inline")]
@@ -2986,8 +3031,16 @@ async def select_country(update: Update, context: ContextTypes.DEFAULT_TYPE):
     country_code = query.data.split('_')[1]
     context.user_data['country'] = country_code.upper()
     
-    flag = "🇫🇷" if country_code == "fr" else "🇨🇭"
-    country_name = "France" if country_code == "fr" else "Suisse"
+    # Dictionnaire des pays
+    COUNTRIES = {
+        'fr': {'flag': '🇫🇷', 'name': 'France'},
+        'ch': {'flag': '🇨🇭', 'name': 'Suisse'},
+        'au': {'flag': '🇦🇺', 'name': 'Australie'}
+    }
+    
+    country_info = COUNTRIES.get(country_code, {'flag': '🇫🇷', 'name': 'France'})
+    flag = country_info['flag']
+    country_name = country_info['name']
     
     message = f"""{flag} {country_name} sélectionné
 
@@ -3466,6 +3519,9 @@ Choisissez une section :
     
     # Gestion admins (super-admin uniquement)
     if level == 'super_admin':
+        keyboard.append([
+            InlineKeyboardButton("✏️ ÉDITION COMPLÈTE", callback_data="admin_edit_menu")
+        ])
         keyboard.append([
             InlineKeyboardButton("👥 Gérer Admins", callback_data="admin_manage_admins"),
             InlineKeyboardButton("💼 Gestion Salaires", callback_data="admin_salary_config")
@@ -4852,16 +4908,32 @@ async def delivery_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
 Choisissez votre mode de livraison :
 """
     
-    keyboard = [
-        [InlineKeyboardButton("📮 Postale (10€)", callback_data="delivery_postal")],
-        [InlineKeyboardButton("⚡ Express (variable)", callback_data="delivery_express")],
-        [InlineKeyboardButton("🤝 Meetup (gratuit)", callback_data="delivery_meetup")],
-        [InlineKeyboardButton("🔙 Retour panier", callback_data="view_cart")]
-    ]
-    
-    # Info Express si sous-total < 30€
-    if subtotal < 30:
-        message += f"\n⚠️ Express nécessite 30€ minimum (actuel: {subtotal:.2f}€)"
+    # Si Australie, uniquement livraison postale
+    if country == 'AU':
+        keyboard = [
+            [InlineKeyboardButton("📮 Expédition Postale (30€)", callback_data="delivery_postal")],
+            [InlineKeyboardButton("🔙 Retour panier", callback_data="view_cart")]
+        ]
+        message += f"""\n🇦🇺 AUSTRALIE
+
+Pour l'Australie, seule l'expédition postale internationale est disponible.
+
+📮 Frais : 30€
+⏱️ Délai : 15-25 jours ouvrés
+📦 Suivi international inclus
+"""
+    else:
+        # Choix normal pour France/Suisse
+        keyboard = [
+            [InlineKeyboardButton("📮 Postale (10€)", callback_data="delivery_postal")],
+            [InlineKeyboardButton("⚡ Express (variable)", callback_data="delivery_express")],
+            [InlineKeyboardButton("🤝 Meetup (gratuit)", callback_data="delivery_meetup")],
+            [InlineKeyboardButton("🔙 Retour panier", callback_data="view_cart")]
+        ]
+        
+        # Info Express si sous-total < 30€
+        if subtotal < 30:
+            message += f"\n⚠️ Express nécessite 30€ minimum (actuel: {subtotal:.2f}€)"
     
     await query.edit_message_text(
         message,
@@ -4979,7 +5051,11 @@ async def receive_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     elif delivery_type == "postal":
         context.user_data['distance'] = 0
-        context.user_data['delivery_fee'] = FRAIS_POSTAL
+        # Frais selon pays
+        if country == 'AU':
+            context.user_data['delivery_fee'] = FRAIS_POSTAL_AU
+        else:
+            context.user_data['delivery_fee'] = FRAIS_POSTAL_EU
     
     # Passer au code promo
     await asyncio.sleep(1)
@@ -5671,6 +5747,23 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     if context.user_data.get('awaiting_admin_name'):
         logger.info(f"🔍 État détecté: awaiting_admin_name pour user {user_id}")
         await receive_admin_name(update, context)
+        return
+    
+    # ===== ÉDITION ADMIN =====
+    if context.user_data.get('awaiting_fee'):
+        await receive_fee(update, context)
+        return
+    
+    if context.user_data.get('awaiting_stock_edit'):
+        await receive_stock(update, context)
+        return
+    
+    if context.user_data.get('awaiting_price_edit'):
+        await receive_price(update, context)
+        return
+    
+    if context.user_data.get('awaiting_config'):
+        await receive_config(update, context)
         return
     
     # État: En attente d'heure pour horaires (admin)
@@ -10990,7 +11083,7 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(referral_info, pattern="^referral_info$"))
     
     # Callbacks pays
-    application.add_handler(CallbackQueryHandler(select_country, pattern="^country_(fr|ch)$"))
+    application.add_handler(CallbackQueryHandler(select_country, pattern="^country_(fr|ch|au)$"))
     
     # Callbacks shopping
     application.add_handler(CallbackQueryHandler(browse_products, pattern="^browse_(all|pills|rocks)$"))
@@ -11126,6 +11219,33 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(admin_level_selected, pattern="^admin_level_"))
     application.add_handler(CallbackQueryHandler(admin_remove_admin_start, pattern="^admin_remove_admin$"))
     
+    # ===== HANDLERS ÉDITION COMPLÈTE =====
+    application.add_handler(CallbackQueryHandler(admin_edit_menu, pattern="^admin_edit_menu$"))
+    
+    # Frais livraison
+    application.add_handler(CallbackQueryHandler(edit_delivery_fees, pattern="^edit_delivery_fees$"))
+    application.add_handler(CallbackQueryHandler(edit_fee_eu, pattern="^edit_fee_eu$"))
+    application.add_handler(CallbackQueryHandler(edit_fee_au, pattern="^edit_fee_au$"))
+    
+    # Stocks
+    application.add_handler(CallbackQueryHandler(edit_stocks_menu, pattern="^edit_stocks_menu$"))
+    application.add_handler(CallbackQueryHandler(edit_stock, pattern="^editstock_"))
+    
+    # Prix
+    application.add_handler(CallbackQueryHandler(edit_prices_simple, pattern="^edit_prices_simple$"))
+    application.add_handler(CallbackQueryHandler(edit_price_select, pattern="^editprice_(?!.*_(FR|CH|AU)$)"))
+    application.add_handler(CallbackQueryHandler(edit_price_country, pattern="^editprice_.*_(FR|CH|AU)$"))
+    
+    # Produits
+    application.add_handler(CallbackQueryHandler(edit_products_menu, pattern="^edit_products_menu$"))
+    application.add_handler(CallbackQueryHandler(toggle_products, pattern="^toggle_products$"))
+    application.add_handler(CallbackQueryHandler(toggle_product, pattern="^toggle_"))
+    
+    # Config
+    application.add_handler(CallbackQueryHandler(edit_config_menu, pattern="^edit_config_menu$"))
+    application.add_handler(CallbackQueryHandler(edit_vip_threshold, pattern="^edit_vip_threshold$"))
+    application.add_handler(CallbackQueryHandler(edit_vip_discount, pattern="^edit_vip_discount$"))
+    
     # Callbacks admin - paramètres
     application.add_handler(CallbackQueryHandler(admin_settings, pattern="^admin_settings$"))
     application.add_handler(CallbackQueryHandler(admin_maintenance, pattern="^admin_maintenance$"))
@@ -11153,6 +11273,630 @@ async def kill_switch_check(application):
     logger.info("✅ Kill switch terminé - Démarrage du bot")
 
 # ==================== FONCTION MAIN ====================
+
+
+# ==================== SYSTÈME ÉDITION ADMIN COMPLET ====================
+
+@error_handler
+async def admin_edit_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu principal édition"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("⛔ Réservé aux super admins", show_alert=True)
+        return
+    
+    message = """✏️ ÉDITION COMPLÈTE
+
+Vous pouvez tout modifier :
+
+📦 Produits (ajouter/modifier/supprimer)
+💰 Prix (tous les pays)
+📊 Stocks
+🚚 Frais de livraison
+⚙️ Configuration système
+
+Choisissez ce que vous voulez éditer :
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("📦 Produits", callback_data="edit_products_menu")],
+        [InlineKeyboardButton("💰 Prix", callback_data="edit_prices_simple")],
+        [InlineKeyboardButton("📊 Stocks", callback_data="edit_stocks_menu")],
+        [InlineKeyboardButton("🚚 Frais", callback_data="edit_delivery_fees")],
+        [InlineKeyboardButton("⚙️ Config", callback_data="edit_config_menu")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_panel")]
+    ]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+# ===== FRAIS LIVRAISON =====
+
+@error_handler
+async def edit_delivery_fees(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu frais livraison"""
+    query = update.callback_query
+    await query.answer()
+    
+    message = f"""🚚 FRAIS DE LIVRAISON
+
+Actuels :
+📮 Postal EU : {FRAIS_POSTAL_EU}€
+📮 Postal AU : {FRAIS_POSTAL_AU}€
+🤝 Meetup : {FRAIS_MEETUP}€
+
+Que modifier ?
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("📮 Postal EU", callback_data="edit_fee_eu")],
+        [InlineKeyboardButton("📮 Postal AU", callback_data="edit_fee_au")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_edit_menu")]
+    ]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+@error_handler
+async def edit_fee_eu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Éditer frais EU"""
+    query = update.callback_query
+    await query.answer()
+    
+    message = f"""📮 FRAIS POSTAL EU
+
+Actuel : {FRAIS_POSTAL_EU}€
+
+Entrez nouveau montant :
+Exemple : 12
+
+/cancel pour annuler
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="edit_delivery_fees")]]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+    
+    context.user_data['edit_fee_type'] = 'eu'
+    context.user_data['awaiting_fee'] = True
+
+@error_handler
+async def edit_fee_au(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Éditer frais AU"""
+    query = update.callback_query
+    await query.answer()
+    
+    message = f"""📮 FRAIS POSTAL AUSTRALIE
+
+Actuel : {FRAIS_POSTAL_AU}€
+
+Entrez nouveau montant :
+Exemple : 35
+
+/cancel pour annuler
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="edit_delivery_fees")]]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+    
+    context.user_data['edit_fee_type'] = 'au'
+    context.user_data['awaiting_fee'] = True
+
+@error_handler
+async def receive_fee(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Reçoit nouveau frais"""
+    global FRAIS_POSTAL_EU, FRAIS_POSTAL_AU, FRAIS_POSTAL
+    
+    if not context.user_data.get('awaiting_fee'):
+        return
+    
+    try:
+        new_fee = float(update.message.text.strip())
+        if new_fee < 0:
+            raise ValueError
+        
+        fee_type = context.user_data.get('edit_fee_type')
+        
+        if fee_type == 'eu':
+            old = FRAIS_POSTAL_EU
+            FRAIS_POSTAL_EU = new_fee
+            FRAIS_POSTAL = new_fee
+            name = "Postal EU"
+        else:
+            old = FRAIS_POSTAL_AU
+            FRAIS_POSTAL_AU = new_fee
+            name = "Postal AU"
+        
+        # Sauvegarder
+        CONFIG_DATA['delivery_fees'] = {
+            'postal_eu': FRAIS_POSTAL_EU,
+            'postal_au': FRAIS_POSTAL_AU,
+            'meetup': FRAIS_MEETUP
+        }
+        save_json_file(CONFIG_FILE, CONFIG_DATA)
+        
+        message = f"""✅ FRAIS MIS À JOUR
+
+{name}
+Ancien : {old}€
+Nouveau : {new_fee}€
+"""
+        
+        keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="edit_delivery_fees")]]
+        
+        await update.message.reply_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+        
+        context.user_data['awaiting_fee'] = False
+        logger.info(f"✏️ Frais {name} : {old}€ → {new_fee}€ par {update.effective_user.id}")
+        
+    except:
+        await update.message.reply_text("❌ Montant invalide")
+
+# ===== STOCKS =====
+
+@error_handler
+async def edit_stocks_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu stocks"""
+    query = update.callback_query
+    await query.answer()
+    
+    products = PRODUCTS_DATA.get('products', {})
+    
+    message = f"""📊 GESTION STOCKS
+
+Total : {len(products)} produits
+
+Sélectionnez produit :
+"""
+    
+    keyboard = []
+    for product_id, product_data in list(products.items())[:15]:
+        name = product_data.get('name', {}).get('fr', product_id)
+        stock = product_data.get('stock', 0)
+        emoji = "🔴" if stock < 20 else "⚠️" if stock < 50 else "✅"
+        keyboard.append([InlineKeyboardButton(f"{emoji} {name} ({stock}g)", callback_data=f"editstock_{product_id}")])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="admin_edit_menu")])
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+@error_handler
+async def edit_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Éditer stock"""
+    query = update.callback_query
+    await query.answer()
+    
+    product_id = query.data.replace('editstock_', '')
+    products = PRODUCTS_DATA.get('products', {})
+    product = products.get(product_id)
+    
+    if not product:
+        await query.answer("❌ Produit introuvable", show_alert=True)
+        return
+    
+    name = product.get('name', {}).get('fr', product_id)
+    stock = product.get('stock', 0)
+    
+    message = f"""📦 MODIFIER STOCK
+
+Produit : {name}
+Stock actuel : {stock}g
+
+Entrez nouveau stock (g) :
+Exemple : 150
+
+/cancel pour annuler
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="edit_stocks_menu")]]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+    
+    context.user_data['edit_stock_id'] = product_id
+    context.user_data['awaiting_stock_edit'] = True
+
+@error_handler
+async def receive_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Reçoit nouveau stock"""
+    
+    if not context.user_data.get('awaiting_stock_edit'):
+        return
+    
+    product_id = context.user_data.get('edit_stock_id')
+    
+    try:
+        new_stock = float(update.message.text.strip())
+        if new_stock < 0:
+            raise ValueError
+        
+        products = PRODUCTS_DATA.get('products', {})
+        product = products.get(product_id)
+        
+        if not product:
+            await update.message.reply_text("❌ Produit introuvable")
+            return
+        
+        old_stock = product.get('stock', 0)
+        product['stock'] = new_stock
+        
+        PRODUCTS_DATA['products'] = products
+        save_json_file(PRODUCTS_FILE, PRODUCTS_DATA)
+        reload_products()
+        
+        name = product.get('name', {}).get('fr', product_id)
+        
+        message = f"""✅ STOCK MODIFIÉ
+
+{name}
+Ancien : {old_stock}g
+Nouveau : {new_stock}g
+"""
+        
+        keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="edit_stocks_menu")]]
+        
+        await update.message.reply_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+        
+        context.user_data['awaiting_stock_edit'] = False
+        logger.info(f"✏️ Stock {product_id} : {old_stock}g → {new_stock}g")
+        
+    except:
+        await update.message.reply_text("❌ Valeur invalide")
+
+# ===== PRIX SIMPLE =====
+
+@error_handler
+async def edit_prices_simple(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu prix simple"""
+    query = update.callback_query
+    await query.answer()
+    
+    products = PRODUCTS_DATA.get('products', {})
+    
+    message = f"""💰 MODIFIER PRIX
+
+Total : {len(products)} produits
+
+Sélectionnez produit :
+"""
+    
+    keyboard = []
+    for product_id, product_data in list(products.items())[:15]:
+        name = product_data.get('name', {}).get('fr', product_id)
+        keyboard.append([InlineKeyboardButton(name, callback_data=f"editprice_{product_id}")])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="admin_edit_menu")])
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+@error_handler
+async def edit_price_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sélectionner pays pour prix"""
+    query = update.callback_query
+    await query.answer()
+    
+    product_id = query.data.replace('editprice_', '')
+    products = PRODUCTS_DATA.get('products', {})
+    product = products.get(product_id)
+    
+    if not product:
+        await query.answer("❌ Produit introuvable", show_alert=True)
+        return
+    
+    name = product.get('name', {}).get('fr', product_id)
+    prices = product.get('prices', {})
+    
+    message = f"""💰 MODIFIER PRIX
+
+Produit : {name}
+
+Prix actuels :
+🇫🇷 FR : {prices.get('FR', 0)}€
+🇨🇭 CH : {prices.get('CH', 0)}€
+🇦🇺 AU : {prices.get('AU', 0)}€
+
+Quel pays modifier ?
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🇫🇷 France", callback_data=f"editprice_{product_id}_FR")],
+        [InlineKeyboardButton("🇨🇭 Suisse", callback_data=f"editprice_{product_id}_CH")],
+        [InlineKeyboardButton("🇦🇺 Australie", callback_data=f"editprice_{product_id}_AU")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="edit_prices_simple")]
+    ]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+@error_handler
+async def edit_price_country(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Éditer prix pour un pays"""
+    query = update.callback_query
+    await query.answer()
+    
+    parts = query.data.replace('editprice_', '').split('_')
+    country = parts[-1]
+    product_id = '_'.join(parts[:-1])
+    
+    products = PRODUCTS_DATA.get('products', {})
+    product = products.get(product_id)
+    
+    if not product:
+        await query.answer("❌ Produit introuvable", show_alert=True)
+        return
+    
+    name = product.get('name', {}).get('fr', product_id)
+    current_price = product.get('prices', {}).get(country, 0)
+    
+    country_names = {'FR': 'France', 'CH': 'Suisse', 'AU': 'Australie'}
+    
+    message = f"""💰 MODIFIER PRIX {country_names.get(country, country)}
+
+Produit : {name}
+Prix actuel : {current_price}€
+
+Entrez nouveau prix :
+Exemple : 65
+
+/cancel pour annuler
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data=f"editprice_{product_id}")]]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+    
+    context.user_data['edit_price_id'] = product_id
+    context.user_data['edit_price_country'] = country
+    context.user_data['awaiting_price_edit'] = True
+
+@error_handler
+async def receive_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Reçoit nouveau prix"""
+    
+    if not context.user_data.get('awaiting_price_edit'):
+        return
+    
+    product_id = context.user_data.get('edit_price_id')
+    country = context.user_data.get('edit_price_country')
+    
+    try:
+        new_price = float(update.message.text.strip())
+        if new_price <= 0:
+            raise ValueError
+        
+        products = PRODUCTS_DATA.get('products', {})
+        product = products.get(product_id)
+        
+        if not product:
+            await update.message.reply_text("❌ Produit introuvable")
+            return
+        
+        old_price = product.get('prices', {}).get(country, 0)
+        product['prices'][country] = new_price
+        
+        PRODUCTS_DATA['products'] = products
+        save_json_file(PRODUCTS_FILE, PRODUCTS_DATA)
+        reload_products()
+        
+        name = product.get('name', {}).get('fr', product_id)
+        
+        message = f"""✅ PRIX MODIFIÉ
+
+{name} ({country})
+Ancien : {old_price}€
+Nouveau : {new_price}€
+"""
+        
+        keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data=f"editprice_{product_id}")]]
+        
+        await update.message.reply_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+        
+        context.user_data['awaiting_price_edit'] = False
+        logger.info(f"✏️ Prix {product_id} {country} : {old_price}€ → {new_price}€")
+        
+    except:
+        await update.message.reply_text("❌ Valeur invalide")
+
+# ===== PRODUITS =====
+
+@error_handler
+async def edit_products_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu produits"""
+    query = update.callback_query
+    await query.answer()
+    
+    products = PRODUCTS_DATA.get('products', {})
+    
+    message = f"""📦 GESTION PRODUITS
+
+Total : {len(products)} produits
+
+Actions disponibles :
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("👁️ Activer/Désactiver", callback_data="toggle_products")],
+        [InlineKeyboardButton("📋 Liste complète", callback_data="list_products")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_edit_menu")]
+    ]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+@error_handler
+async def toggle_products(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Activer/Désactiver produits"""
+    query = update.callback_query
+    await query.answer()
+    
+    products = PRODUCTS_DATA.get('products', {})
+    
+    message = """👁️ ACTIVER/DÉSACTIVER
+
+Sélectionnez produit :
+"""
+    
+    keyboard = []
+    for product_id, product_data in list(products.items())[:15]:
+        name = product_data.get('name', {}).get('fr', product_id)
+        active = product_data.get('active', True)
+        emoji = "✅" if active else "❌"
+        keyboard.append([InlineKeyboardButton(f"{emoji} {name}", callback_data=f"toggle_{product_id}")])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="edit_products_menu")])
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+@error_handler
+async def toggle_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Toggle produit"""
+    query = update.callback_query
+    await query.answer()
+    
+    product_id = query.data.replace('toggle_', '')
+    products = PRODUCTS_DATA.get('products', {})
+    product = products.get(product_id)
+    
+    if not product:
+        await query.answer("❌ Produit introuvable", show_alert=True)
+        return
+    
+    name = product.get('name', {}).get('fr', product_id)
+    active = product.get('active', True)
+    
+    # Toggle
+    product['active'] = not active
+    
+    PRODUCTS_DATA['products'] = products
+    save_json_file(PRODUCTS_FILE, PRODUCTS_DATA)
+    reload_products()
+    
+    new_state = "activé" if not active else "désactivé"
+    
+    await query.answer(f"✅ {name} {new_state}", show_alert=True)
+    
+    # Refresh menu
+    await toggle_products(update, context)
+    
+    logger.info(f"✏️ Produit {product_id} : {new_state}")
+
+# ===== CONFIG =====
+
+@error_handler
+async def edit_config_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu configuration"""
+    query = update.callback_query
+    await query.answer()
+    
+    message = f"""⚙️ CONFIGURATION
+
+Paramètres actuels :
+
+💰 Seuil VIP : {VIP_THRESHOLD}€
+🎁 Réduction VIP : {VIP_DISCOUNT}%
+🛒 Max panier : {MAX_CART_ITEMS}
+💰 Min commande : {MIN_ORDER_AMOUNT}€
+
+Que modifier ?
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("💰 Seuil VIP", callback_data="edit_vip_threshold")],
+        [InlineKeyboardButton("🎁 Réduction VIP", callback_data="edit_vip_discount")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_edit_menu")]
+    ]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+@error_handler
+async def edit_vip_threshold(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Éditer seuil VIP"""
+    query = update.callback_query
+    await query.answer()
+    
+    message = f"""💰 SEUIL VIP
+
+Actuel : {VIP_THRESHOLD}€
+
+Entrez nouveau seuil :
+Exemple : 600
+
+/cancel pour annuler
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="edit_config_menu")]]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+    
+    context.user_data['edit_config_type'] = 'vip_threshold'
+    context.user_data['awaiting_config'] = True
+
+@error_handler
+async def edit_vip_discount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Éditer réduction VIP"""
+    query = update.callback_query
+    await query.answer()
+    
+    message = f"""🎁 RÉDUCTION VIP
+
+Actuelle : {VIP_DISCOUNT}%
+
+Entrez nouvelle réduction (%) :
+Exemple : 7
+
+/cancel pour annuler
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="edit_config_menu")]]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+    
+    context.user_data['edit_config_type'] = 'vip_discount'
+    context.user_data['awaiting_config'] = True
+
+@error_handler
+async def receive_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Reçoit config"""
+    global VIP_THRESHOLD, VIP_DISCOUNT
+    
+    if not context.user_data.get('awaiting_config'):
+        return
+    
+    config_type = context.user_data.get('edit_config_type')
+    
+    try:
+        new_value = float(update.message.text.strip())
+        if new_value <= 0:
+            raise ValueError
+        
+        if config_type == 'vip_threshold':
+            old = VIP_THRESHOLD
+            VIP_THRESHOLD = new_value
+            CONFIG_DATA['vip_threshold'] = VIP_THRESHOLD
+            name = "Seuil VIP"
+            unit = "€"
+        elif config_type == 'vip_discount':
+            old = VIP_DISCOUNT
+            VIP_DISCOUNT = new_value
+            CONFIG_DATA['vip_discount'] = VIP_DISCOUNT
+            name = "Réduction VIP"
+            unit = "%"
+        
+        save_json_file(CONFIG_FILE, CONFIG_DATA)
+        
+        message = f"""✅ {name.upper()} MODIFIÉ
+
+Ancien : {old}{unit}
+Nouveau : {new_value}{unit}
+"""
+        
+        keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="edit_config_menu")]]
+        
+        await update.message.reply_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+        
+        context.user_data['awaiting_config'] = False
+        logger.info(f"✏️ Config {name} : {old} → {new_value}")
+        
+    except:
+        await update.message.reply_text("❌ Valeur invalide")
 
 async def main():
     """Fonction principale du bot"""

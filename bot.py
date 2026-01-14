@@ -440,9 +440,7 @@ ADMIN_ADDRESS = os.getenv("ADMIN_ADDRESS", "Paris, France")
 # OpenRouteService (optionnel)
 OPENROUTE_API_KEY = os.getenv("OPENROUTE_API_KEY")
 
-logger.info(f"✅ BOT_TOKEN chargé: {BOT_TOKEN[:10]}...")
-logger.info(f"✅ ADMIN_ID: {ADMIN_ID}")
-logger.info(f"✅ ADMIN_ADDRESS: {ADMIN_ADDRESS}")
+# Les logs de token/admin sont dans la fonction main()
 
 # ==================== CONFIGURATION DISQUE PERSISTANT ====================
 

@@ -11583,6 +11583,17 @@ async def ledger_add_weed_income(update: Update, context: ContextTypes.DEFAULT_T
         await query.answer("Accès refusé", show_alert=True)
         return
     
+    # Nettoyer TOUS les autres états
+    context.user_data.pop('awaiting_config', None)
+    context.user_data.pop('awaiting_stock_edit', None)
+    context.user_data.pop('awaiting_contact_message', None)
+    context.user_data.pop('editing_order_delivery', None)
+    context.user_data.pop('editing_order_total', None)
+    context.user_data.pop('awaiting_cost_update', None)
+    context.user_data.pop('awaiting_fee', None)
+    context.user_data.pop('awaiting_price_edit', None)
+    context.user_data.pop('awaiting_ledger_amount', None)
+    
     context.user_data['ledger_entry_type'] = 'income'
     context.user_data['ledger_ledger'] = 'weed'
     
@@ -11614,6 +11625,17 @@ async def ledger_add_weed_expense(update: Update, context: ContextTypes.DEFAULT_
     if not is_super_admin(query.from_user.id):
         await query.answer("Accès refusé", show_alert=True)
         return
+    
+    # Nettoyer TOUS les autres états
+    context.user_data.pop('awaiting_config', None)
+    context.user_data.pop('awaiting_stock_edit', None)
+    context.user_data.pop('awaiting_contact_message', None)
+    context.user_data.pop('editing_order_delivery', None)
+    context.user_data.pop('editing_order_total', None)
+    context.user_data.pop('awaiting_cost_update', None)
+    context.user_data.pop('awaiting_fee', None)
+    context.user_data.pop('awaiting_price_edit', None)
+    context.user_data.pop('awaiting_ledger_amount', None)
     
     context.user_data['ledger_entry_type'] = 'expense'
     context.user_data['ledger_ledger'] = 'weed'
@@ -11648,6 +11670,17 @@ async def ledger_add_other_income(update: Update, context: ContextTypes.DEFAULT_
         await query.answer("Accès refusé", show_alert=True)
         return
     
+    # Nettoyer TOUS les autres états
+    context.user_data.pop('awaiting_config', None)
+    context.user_data.pop('awaiting_stock_edit', None)
+    context.user_data.pop('awaiting_contact_message', None)
+    context.user_data.pop('editing_order_delivery', None)
+    context.user_data.pop('editing_order_total', None)
+    context.user_data.pop('awaiting_cost_update', None)
+    context.user_data.pop('awaiting_fee', None)
+    context.user_data.pop('awaiting_price_edit', None)
+    context.user_data.pop('awaiting_ledger_amount', None)
+    
     context.user_data['ledger_entry_type'] = 'income'
     context.user_data['ledger_ledger'] = 'autres'
     
@@ -11680,6 +11713,17 @@ async def ledger_add_other_expense(update: Update, context: ContextTypes.DEFAULT
         await query.answer("Accès refusé", show_alert=True)
         return
     
+    # Nettoyer TOUS les autres états
+    context.user_data.pop('awaiting_config', None)
+    context.user_data.pop('awaiting_stock_edit', None)
+    context.user_data.pop('awaiting_contact_message', None)
+    context.user_data.pop('editing_order_delivery', None)
+    context.user_data.pop('editing_order_total', None)
+    context.user_data.pop('awaiting_cost_update', None)
+    context.user_data.pop('awaiting_fee', None)
+    context.user_data.pop('awaiting_price_edit', None)
+    context.user_data.pop('awaiting_ledger_amount', None)
+    
     context.user_data['ledger_entry_type'] = 'expense'
     context.user_data['ledger_ledger'] = 'autres'
     
@@ -11708,6 +11752,17 @@ async def ledger_select_weed_other_category(update: Update, context: ContextType
     """Sélection de catégorie pour weed/autres"""
     query = update.callback_query
     await query.answer()
+    
+    # Nettoyer TOUS les autres états
+    context.user_data.pop('awaiting_config', None)
+    context.user_data.pop('awaiting_stock_edit', None)
+    context.user_data.pop('awaiting_contact_message', None)
+    context.user_data.pop('editing_order_delivery', None)
+    context.user_data.pop('editing_order_total', None)
+    context.user_data.pop('awaiting_cost_update', None)
+    context.user_data.pop('awaiting_fee', None)
+    context.user_data.pop('awaiting_price_edit', None)
+    context.user_data.pop('awaiting_ledger_amount', None)
     
     # Extraire ledger, type et catégorie
     if "ledger_weed_cat_" in query.data:

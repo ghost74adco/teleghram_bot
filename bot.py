@@ -1,22 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-"""
-╔═══════════════════════════════════════════════════════════════════╗
-║                                                                   ║
-║   BOT TELEGRAM V4.0.0 - MIGRATION V3.1.1 AVEC JSON              ║
-║   100% Fonctionnel + Configuration JSON complète                 ║
-║                                                                   ║
-║   ✅ Toutes les fonctions V3.1.1 conservées                      ║
-║   ✅ Configuration via fichiers JSON                             ║
-║   ✅ Token/Admin depuis variables environnement                  ║
-║   ✅ Édition produits sans redéploiement                         ║
-║                                                                   ║
-║   Date : 14/01/2025 - Version FINALE                             ║
-║                                                                   ║
-╚═══════════════════════════════════════════════════════════════════╝
-"""
-
 import os
 import sys
 import json
@@ -12631,9 +12612,7 @@ async def handle_license_level(update: Update, context: ContextTypes.DEFAULT_TYP
         
         if success:
             await update.message.reply_text(
-                f"✅ Niveau de licence mis à jour!
-
-Nouveau niveau: {new_level}",
+                f"✅ Niveau de licence mis à jour!\n\nNouveau niveau: {new_level}",
                 reply_markup=InlineKeyboardMarkup([[
                     InlineKeyboardButton("🔙 Retour Admin", callback_data="admin")
                 ]])

@@ -166,6 +166,20 @@ logging.getLogger('telegram').setLevel(logging.WARNING)
 DATA_DIR = Path(".")
 MEDIA_DIR = DATA_DIR / "media"
 BOT_VERSION = "4.0.0"
+
+
+# Configuration auto-suppression des messages
+AUTO_DELETE_ENABLED = True  # Active/désactive l'auto-suppression
+AUTO_DELETE_DELAY = 600  # Délai en secondes (600 = 10 minutes)
+
+# Messages à NE PAS supprimer (notifications de commande importantes)
+PERMANENT_MESSAGE_TYPES = [
+    'order_status_pending',      # Commande en attente de validation
+    'order_status_validated',    # Commande validée
+    'order_status_ready',        # Commande prête
+    'order_status_delivered',    # Commande livrée
+    'order_notification',        # Notification générale de commande
+]
 BOT_NAME = "E-Commerce Bot Multi-Admins"
 
 # Limites
@@ -11566,6 +11580,12 @@ def setup_handlers(application):
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_new_country))
     
 
+    # Handlers auto-suppression
+    application.add_handler(CallbackQueryHandler(admin_auto_delete_config, pattern="^admin_auto_delete_config$"))
+    application.add_handler(CallbackQueryHandler(admin_auto_delete_toggle, pattern="^auto_delete_(enable|disable)$"))
+    application.add_handler(CallbackQueryHandler(admin_auto_delete_set_delay, pattern="^auto_delete_delay_"))
+    
+
 async def kill_switch_check(application):
     """Kill switch: attend 30 secondes au démarrage"""
     logger.warning("⏳ KILL SWITCH ACTIVÉ - 30 secondes pour arrêter le bot avec Ctrl+C")
@@ -13220,6 +13240,302 @@ async def handle_new_country(update: Update, context: ContextTypes.DEFAULT_TYPE)
     context.user_data.pop('awaiting_new_country', None)
 
 
+
+# ==================== SYSTÈME AUTO-SUPPRESSION ====================
+
+async def schedule_message_deletion(message, delay: int = AUTO_DELETE_DELAY, message_type: str = None):
+    """
+    Programme la suppression automatique d'un message après un délai
+    
+    Args:
+        message: Le message Telegram à supprimer
+        delay: Délai en secondes avant suppression (défaut: 10 minutes)
+        message_type: Type de message (pour vérifier s'il doit être conservé)
+    """
+    # Ne pas supprimer si l'auto-suppression est désactivée
+    if not AUTO_DELETE_ENABLED:
+        return
+    
+    # Ne pas supprimer les messages importants
+    if message_type and message_type in PERMANENT_MESSAGE_TYPES:
+        logger.info(f"🔒 Message permanent conservé: {message_type}")
+        return
+    
+    # Attendre le délai
+    await asyncio.sleep(delay)
+    
+    # Supprimer le message
+    try:
+        await message.delete()
+        logger.info(f"🗑️ Message auto-supprimé après {delay}s")
+    except Exception as e:
+        logger.warning(f"⚠️ Impossible de supprimer le message: {e}")
+
+async def send_auto_delete_message(context, chat_id: int, text: str, reply_markup=None, 
+                                   delay: int = AUTO_DELETE_DELAY, message_type: str = None,
+                                   parse_mode=None):
+    """
+    Envoie un message qui sera automatiquement supprimé après un délai
+    
+    Args:
+        context: Context Telegram
+        chat_id: ID du chat destinataire
+        text: Texte du message
+        reply_markup: Clavier inline optionnel
+        delay: Délai avant suppression
+        message_type: Type de message (pour exceptions)
+        parse_mode: Mode de parsing (Markdown, HTML, etc.)
+    
+    Returns:
+        Le message envoyé
+    """
+    # Envoyer le message
+    message = await context.bot.send_message(
+        chat_id=chat_id,
+        text=text,
+        reply_markup=reply_markup,
+        parse_mode=parse_mode
+    )
+    
+    # Programmer la suppression si ce n'est pas un message permanent
+    if message_type not in PERMANENT_MESSAGE_TYPES:
+        asyncio.create_task(schedule_message_deletion(message, delay, message_type))
+    
+    return message
+
+async def reply_auto_delete(update: Update, context: ContextTypes.DEFAULT_TYPE, 
+                           text: str, reply_markup=None, 
+                           delay: int = AUTO_DELETE_DELAY, message_type: str = None,
+                           parse_mode=None):
+    """
+    Répond à un message avec auto-suppression
+    
+    Args:
+        update: Update Telegram
+        context: Context Telegram
+        text: Texte de la réponse
+        reply_markup: Clavier inline optionnel
+        delay: Délai avant suppression
+        message_type: Type de message
+        parse_mode: Mode de parsing
+    
+    Returns:
+        Le message envoyé
+    """
+    # Déterminer d'où vient la requête
+    if update.callback_query:
+        chat_id = update.callback_query.message.chat_id
+        # Supprimer aussi le message original
+        try:
+            await update.callback_query.message.delete()
+        except:
+            pass
+    elif update.message:
+        chat_id = update.message.chat_id
+        # Supprimer aussi le message de l'utilisateur
+        try:
+            await update.message.delete()
+        except:
+            pass
+    else:
+        return None
+    
+    # Envoyer la réponse avec auto-suppression
+    return await send_auto_delete_message(
+        context=context,
+        chat_id=chat_id,
+        text=text,
+        reply_markup=reply_markup,
+        delay=delay,
+        message_type=message_type,
+        parse_mode=parse_mode
+    )
+
+async def edit_message_auto_delete(query, text: str, reply_markup=None,
+                                   delay: int = AUTO_DELETE_DELAY, message_type: str = None,
+                                   parse_mode=None):
+    """
+    Édite un message avec auto-suppression programmée
+    
+    Args:
+        query: CallbackQuery
+        text: Nouveau texte
+        reply_markup: Nouveau clavier
+        delay: Délai avant suppression
+        message_type: Type de message
+        parse_mode: Mode de parsing
+    """
+    # Éditer le message
+    await query.edit_message_text(
+        text=text,
+        reply_markup=reply_markup,
+        parse_mode=parse_mode
+    )
+    
+    # Programmer la suppression
+    if message_type not in PERMANENT_MESSAGE_TYPES:
+        asyncio.create_task(schedule_message_deletion(query.message, delay, message_type))
+
+# Fonctions helper pour les notifications de commande (messages permanents)
+
+async def send_order_notification(context, user_id: int, order_id: str, status: str, details: str = ""):
+    """
+    Envoie une notification de changement de statut de commande (PERMANENT)
+    
+    Args:
+        context: Context Telegram
+        user_id: ID de l'utilisateur
+        order_id: ID de la commande
+        status: Nouveau statut
+        details: Détails supplémentaires
+    """
+    # Mapper les statuts aux types de messages permanents
+    status_map = {
+        'pending': 'order_status_pending',
+        'validated': 'order_status_validated',
+        'ready': 'order_status_ready',
+        'delivered': 'order_status_delivered'
+    }
+    
+    # Emojis pour chaque statut
+    status_emoji = {
+        'pending': '⏳',
+        'validated': '✅',
+        'ready': '📦',
+        'delivered': '🎉'
+    }
+    
+    # Messages pour chaque statut
+    status_messages = {
+        'pending': 'Votre commande est en attente de validation',
+        'validated': 'Votre commande a été validée et est en préparation',
+        'ready': 'Votre commande est prête !',
+        'delivered': 'Votre commande a été livrée !'
+    }
+    
+    emoji = status_emoji.get(status, '📬')
+    status_msg = status_messages.get(status, 'Mise à jour de votre commande')
+    message_type = status_map.get(status, 'order_notification')
+    
+    text = f"""{emoji} COMMANDE #{order_id}
+
+{status_msg}
+
+{details}
+
+━━━━━━━━━━━━━━━
+Ce message ne sera pas supprimé automatiquement.
+"""
+    
+    # Envoyer sans auto-suppression (message permanent)
+    message = await context.bot.send_message(
+        chat_id=user_id,
+        text=text
+    )
+    
+    logger.info(f"📬 Notification commande envoyée (PERMANENT): User {user_id}, Order #{order_id}, Status: {status}")
+    
+    return message
+
+
+
+@error_handler
+async def admin_auto_delete_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Configuration de l'auto-suppression des messages (Super Admin)"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("❌ Accès refusé - Super Admin uniquement", show_alert=True)
+        return
+    
+    global AUTO_DELETE_ENABLED, AUTO_DELETE_DELAY
+    
+    status = "✅ Activé" if AUTO_DELETE_ENABLED else "❌ Désactivé"
+    delay_min = AUTO_DELETE_DELAY // 60
+    
+    message = f"""🗑️ AUTO-SUPPRESSION DES MESSAGES
+
+Statut: {status}
+Délai: {delay_min} minutes
+
+Les messages sont automatiquement supprimés après {delay_min} minutes, SAUF:
+• Notifications de commande en attente
+• Notifications de commande validée
+• Notifications de commande prête
+• Notifications de commande livrée
+
+Ces messages restent visibles pour que le client puisse suivre sa commande.
+
+Que souhaitez-vous faire?
+"""
+    
+    keyboard = []
+    
+    if AUTO_DELETE_ENABLED:
+        keyboard.append([InlineKeyboardButton("❌ Désactiver", callback_data="auto_delete_disable")])
+    else:
+        keyboard.append([InlineKeyboardButton("✅ Activer", callback_data="auto_delete_enable")])
+    
+    keyboard.extend([
+        [
+            InlineKeyboardButton("⏱️ 5 min", callback_data="auto_delete_delay_300"),
+            InlineKeyboardButton("⏱️ 10 min", callback_data="auto_delete_delay_600"),
+            InlineKeyboardButton("⏱️ 30 min", callback_data="auto_delete_delay_1800")
+        ],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin")]
+    ])
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def admin_auto_delete_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Active/désactive l'auto-suppression"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("❌ Accès refusé", show_alert=True)
+        return
+    
+    global AUTO_DELETE_ENABLED
+    
+    if "enable" in query.data:
+        AUTO_DELETE_ENABLED = True
+        await query.answer("✅ Auto-suppression activée", show_alert=True)
+    else:
+        AUTO_DELETE_ENABLED = False
+        await query.answer("❌ Auto-suppression désactivée", show_alert=True)
+    
+    # Retourner au menu de config
+    await admin_auto_delete_config(update, context)
+
+@error_handler
+async def admin_auto_delete_set_delay(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Définit le délai d'auto-suppression"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("❌ Accès refusé", show_alert=True)
+        return
+    
+    global AUTO_DELETE_DELAY
+    
+    # Extraire le délai du callback
+    delay = int(query.data.replace("auto_delete_delay_", ""))
+    AUTO_DELETE_DELAY = delay
+    
+    delay_min = delay // 60
+    await query.answer(f"✅ Délai défini: {delay_min} minutes", show_alert=True)
+    
+    # Retourner au menu de config
+    await admin_auto_delete_config(update, context)
+
+
 async def main():
     """Fonction principale du bot"""
     
@@ -13435,6 +13751,53 @@ Le bot a été arrêté proprement.
     logger.info("=" * 60)
 
 # ==================== POINT D'ENTRÉE ====================
+
+
+# ==================== EXEMPLES DE CONVERSION AUTO-SUPPRESSION ====================
+
+"""
+ANCIEN CODE (sera supprimé automatiquement):
+    await update.message.reply_text("Bonjour!")
+
+NOUVEAU CODE (auto-suppression après 10 min):
+    await reply_auto_delete(update, context, "Bonjour!")
+
+ANCIEN CODE:
+    await query.edit_message_text(
+        "Menu principal",
+        reply_markup=keyboard
+    )
+
+NOUVEAU CODE:
+    await edit_message_auto_delete(
+        query,
+        "Menu principal",
+        reply_markup=keyboard
+    )
+
+MESSAGES PERMANENTS (notifications de commande):
+    await send_order_notification(
+        context=context,
+        user_id=user_id,
+        order_id="12345",
+        status='validated',
+        details="Votre commande sera prête dans 2h"
+    )
+
+PERSONNALISER LE DÉLAI:
+    await reply_auto_delete(
+        update, context,
+        "Message rapide",
+        delay=60  # Supprimé après 1 minute
+    )
+
+DÉSACTIVER L'AUTO-SUPPRESSION:
+    await reply_auto_delete(
+        update, context,
+        "Message permanent",
+        message_type='order_status_validated'  # Ne sera pas supprimé
+    )
+"""
 
 if __name__ == '__main__':
     try:

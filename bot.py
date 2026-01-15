@@ -11571,6 +11571,177 @@ Aucune transaction ce mois.
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
+# ==================== LIVRE DES COMPTES WEED/AUTRES ====================
+
+@error_handler
+async def ledger_add_weed_income(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ajouter une entrée Weed"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    context.user_data['ledger_entry_type'] = 'income'
+    context.user_data['ledger_ledger'] = 'weed'
+    
+    message = """➕ ENTRÉE WEED
+
+Catégories disponibles:
+"""
+    categories = [
+        ("💰 Vente Weed", "ledger_weed_cat_income_Vente"),
+        ("🎁 Remboursement", "ledger_weed_cat_income_Remboursement"),
+        ("💵 Apport", "ledger_weed_cat_income_Apport"),
+        ("📦 Autre", "ledger_weed_cat_income_Autre")
+    ]
+    
+    keyboard = []
+    for label, callback in categories:
+        keyboard.append([InlineKeyboardButton(label, callback_data=callback)])
+    
+    keyboard.append([InlineKeyboardButton("❌ Annuler", callback_data="admin_ledger")])
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+@error_handler
+async def ledger_add_weed_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ajouter une sortie Weed"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    context.user_data['ledger_entry_type'] = 'expense'
+    context.user_data['ledger_ledger'] = 'weed'
+    
+    message = """➖ SORTIE WEED
+
+Catégories disponibles:
+"""
+    categories = [
+        ("💸 Salaire", "ledger_weed_cat_expense_Salaire"),
+        ("🧾 Consommable", "ledger_weed_cat_expense_Consommable"),
+        ("📦 Achat stock", "ledger_weed_cat_expense_Stock"),
+        ("🚗 Frais divers", "ledger_weed_cat_expense_Divers"),
+        ("📤 Autre", "ledger_weed_cat_expense_Autre")
+    ]
+    
+    keyboard = []
+    for label, callback in categories:
+        keyboard.append([InlineKeyboardButton(label, callback_data=callback)])
+    
+    keyboard.append([InlineKeyboardButton("❌ Annuler", callback_data="admin_ledger")])
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+@error_handler
+async def ledger_add_other_income(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ajouter une entrée Autres"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    context.user_data['ledger_entry_type'] = 'income'
+    context.user_data['ledger_ledger'] = 'autres'
+    
+    message = """➕ ENTRÉE AUTRES
+
+Catégories disponibles:
+"""
+    categories = [
+        ("💰 Vente Autres", "ledger_other_cat_income_Vente"),
+        ("🎁 Remboursement", "ledger_other_cat_income_Remboursement"),
+        ("💵 Apport", "ledger_other_cat_income_Apport"),
+        ("📦 Autre", "ledger_other_cat_income_Autre")
+    ]
+    
+    keyboard = []
+    for label, callback in categories:
+        keyboard.append([InlineKeyboardButton(label, callback_data=callback)])
+    
+    keyboard.append([InlineKeyboardButton("❌ Annuler", callback_data="admin_ledger")])
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+@error_handler
+async def ledger_add_other_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ajouter une sortie Autres"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    context.user_data['ledger_entry_type'] = 'expense'
+    context.user_data['ledger_ledger'] = 'autres'
+    
+    message = """➖ SORTIE AUTRES
+
+Catégories disponibles:
+"""
+    categories = [
+        ("💸 Salaire", "ledger_other_cat_expense_Salaire"),
+        ("🧾 Consommable", "ledger_other_cat_expense_Consommable"),
+        ("📦 Achat stock", "ledger_other_cat_expense_Stock"),
+        ("🚗 Frais divers", "ledger_other_cat_expense_Divers"),
+        ("📤 Autre", "ledger_other_cat_expense_Autre")
+    ]
+    
+    keyboard = []
+    for label, callback in categories:
+        keyboard.append([InlineKeyboardButton(label, callback_data=callback)])
+    
+    keyboard.append([InlineKeyboardButton("❌ Annuler", callback_data="admin_ledger")])
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+@error_handler
+async def ledger_select_weed_other_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sélection de catégorie pour weed/autres"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Extraire ledger, type et catégorie
+    if "ledger_weed_cat_" in query.data:
+        ledger_type = 'weed'
+        parts = query.data.replace("ledger_weed_cat_", "").split("_")
+    else:
+        ledger_type = 'autres'
+        parts = query.data.replace("ledger_other_cat_", "").split("_")
+    
+    entry_type = parts[0]  # income ou expense
+    category = parts[1]  # Vente, Salaire, etc.
+    
+    context.user_data['ledger_entry_type'] = entry_type
+    context.user_data['ledger_category'] = category
+    context.user_data['ledger_ledger'] = ledger_type
+    
+    type_label = "entrée" if entry_type == "income" else "sortie"
+    ledger_label = "🍀 WEED" if ledger_type == "weed" else "💎 AUTRES"
+    
+    message = f"""📝 {category.upper()}
+
+{ledger_label}
+Type: {type_label}
+
+Entrez la description:
+Exemple: Vente commande ORD-123456
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_ledger")]]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+    
+    context.user_data['awaiting_ledger_description'] = True
+
 # ==================== CONFIGURATION DES HANDLERS ====================
 
 def setup_handlers(application):
@@ -11774,13 +11945,6 @@ def setup_handlers(application):
     # Handler contact client par ID
     application.add_handler(CallbackQueryHandler(contact_user_by_id, pattern=r"^contact_user_\d+$"))
     
-    # Message handlers (doit être en dernier)
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
-    
-    logger.info("✅ Tous les handlers configurés")
-
-# ==================== KILL SWITCH ====================
-
     # Handlers prix dégressifs
     application.add_handler(CallbackQueryHandler(tiered_country_menu, pattern=r"^tiered_country_"))
     application.add_handler(CallbackQueryHandler(tiered_product_menu, pattern=r"^tiered_product_"))
@@ -11789,15 +11953,28 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(tiered_delete_execute, pattern=r"^tiered_delete_confirm_"))
     application.add_handler(CallbackQueryHandler(tiered_add_product, pattern=r"^tiered_add_product_"))
     application.add_handler(CallbackQueryHandler(tiered_add_country, pattern=r"^tiered_add_country$"))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_tiered_info))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_new_country))
     
-
     # Handlers auto-suppression
     application.add_handler(CallbackQueryHandler(admin_auto_delete_config, pattern="^admin_auto_delete_config$"))
     application.add_handler(CallbackQueryHandler(admin_auto_delete_toggle, pattern="^auto_delete_(enable|disable)$"))
     application.add_handler(CallbackQueryHandler(admin_auto_delete_set_delay, pattern="^auto_delete_delay_"))
     
+    # Handlers ledger weed/autres
+    application.add_handler(CallbackQueryHandler(ledger_add_weed_income, pattern="^ledger_add_weed_income$"))
+    application.add_handler(CallbackQueryHandler(ledger_add_weed_expense, pattern="^ledger_add_weed_expense$"))
+    application.add_handler(CallbackQueryHandler(ledger_add_other_income, pattern="^ledger_add_other_income$"))
+    application.add_handler(CallbackQueryHandler(ledger_add_other_expense, pattern="^ledger_add_other_expense$"))
+    application.add_handler(CallbackQueryHandler(ledger_select_weed_other_category, pattern=r"^ledger_(weed|other)_cat_"))
+    
+    # Handlers édition licence
+    application.add_handler(CallbackQueryHandler(admin_edit_license, pattern="^admin_edit_license$"))
+    
+    # Message handlers (doit être en dernier)
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
+    
+    logger.info("✅ Tous les handlers configurés")
+
+# ==================== KILL SWITCH ====================
 
 async def kill_switch_check(application):
     """Kill switch: attend 30 secondes au démarrage"""
@@ -12690,177 +12867,6 @@ De: {admin_name} (Admin)
 
 
 @error_handler
-async def ledger_add_weed_income(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Ajouter une entrée Weed"""
-    query = update.callback_query
-    await query.answer()
-    
-    if not is_super_admin(query.from_user.id):
-        await query.answer("Accès refusé", show_alert=True)
-        return
-    
-    context.user_data['ledger_entry_type'] = 'income'
-    context.user_data['ledger_ledger'] = 'weed'
-    
-    message = """➕ ENTRÉE WEED
-
-Catégories disponibles:
-"""
-    categories = [
-        ("💰 Vente Weed", "ledger_weed_cat_income_Vente"),
-        ("🎁 Remboursement", "ledger_weed_cat_income_Remboursement"),
-        ("💵 Apport", "ledger_weed_cat_income_Apport"),
-        ("📦 Autre", "ledger_weed_cat_income_Autre")
-    ]
-    
-    keyboard = []
-    for label, callback in categories:
-        keyboard.append([InlineKeyboardButton(label, callback_data=callback)])
-    
-    keyboard.append([InlineKeyboardButton("❌ Annuler", callback_data="admin_ledger")])
-    
-    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
-
-@error_handler
-async def ledger_add_weed_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Ajouter une sortie Weed"""
-    query = update.callback_query
-    await query.answer()
-    
-    if not is_super_admin(query.from_user.id):
-        await query.answer("Accès refusé", show_alert=True)
-        return
-    
-    context.user_data['ledger_entry_type'] = 'expense'
-    context.user_data['ledger_ledger'] = 'weed'
-    
-    message = """➖ SORTIE WEED
-
-Catégories disponibles:
-"""
-    categories = [
-        ("💸 Salaire", "ledger_weed_cat_expense_Salaire"),
-        ("🧾 Consommable", "ledger_weed_cat_expense_Consommable"),
-        ("📦 Achat stock", "ledger_weed_cat_expense_Stock"),
-        ("🚗 Frais divers", "ledger_weed_cat_expense_Divers"),
-        ("📤 Autre", "ledger_weed_cat_expense_Autre")
-    ]
-    
-    keyboard = []
-    for label, callback in categories:
-        keyboard.append([InlineKeyboardButton(label, callback_data=callback)])
-    
-    keyboard.append([InlineKeyboardButton("❌ Annuler", callback_data="admin_ledger")])
-    
-    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
-
-@error_handler
-async def ledger_add_other_income(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Ajouter une entrée Autres"""
-    query = update.callback_query
-    await query.answer()
-    
-    if not is_super_admin(query.from_user.id):
-        await query.answer("Accès refusé", show_alert=True)
-        return
-    
-    context.user_data['ledger_entry_type'] = 'income'
-    context.user_data['ledger_ledger'] = 'autres'
-    
-    message = """➕ ENTRÉE AUTRES
-
-Catégories disponibles:
-"""
-    categories = [
-        ("💰 Vente Autres", "ledger_other_cat_income_Vente"),
-        ("🎁 Remboursement", "ledger_other_cat_income_Remboursement"),
-        ("💵 Apport", "ledger_other_cat_income_Apport"),
-        ("📦 Autre", "ledger_other_cat_income_Autre")
-    ]
-    
-    keyboard = []
-    for label, callback in categories:
-        keyboard.append([InlineKeyboardButton(label, callback_data=callback)])
-    
-    keyboard.append([InlineKeyboardButton("❌ Annuler", callback_data="admin_ledger")])
-    
-    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
-
-@error_handler
-async def ledger_add_other_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Ajouter une sortie Autres"""
-    query = update.callback_query
-    await query.answer()
-    
-    if not is_super_admin(query.from_user.id):
-        await query.answer("Accès refusé", show_alert=True)
-        return
-    
-    context.user_data['ledger_entry_type'] = 'expense'
-    context.user_data['ledger_ledger'] = 'autres'
-    
-    message = """➖ SORTIE AUTRES
-
-Catégories disponibles:
-"""
-    categories = [
-        ("💸 Salaire", "ledger_other_cat_expense_Salaire"),
-        ("🧾 Consommable", "ledger_other_cat_expense_Consommable"),
-        ("📦 Achat stock", "ledger_other_cat_expense_Stock"),
-        ("🚗 Frais divers", "ledger_other_cat_expense_Divers"),
-        ("📤 Autre", "ledger_other_cat_expense_Autre")
-    ]
-    
-    keyboard = []
-    for label, callback in categories:
-        keyboard.append([InlineKeyboardButton(label, callback_data=callback)])
-    
-    keyboard.append([InlineKeyboardButton("❌ Annuler", callback_data="admin_ledger")])
-    
-    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
-
-@error_handler
-async def ledger_select_weed_other_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Sélection de catégorie pour weed/autres"""
-    query = update.callback_query
-    await query.answer()
-    
-    # Extraire ledger, type et catégorie
-    if "ledger_weed_cat_" in query.data:
-        ledger_type = 'weed'
-        parts = query.data.replace("ledger_weed_cat_", "").split("_")
-    else:
-        ledger_type = 'autres'
-        parts = query.data.replace("ledger_other_cat_", "").split("_")
-    
-    entry_type = parts[0]  # income ou expense
-    category = parts[1]  # Vente, Salaire, etc.
-    
-    context.user_data['ledger_entry_type'] = entry_type
-    context.user_data['ledger_category'] = category
-    context.user_data['ledger_ledger'] = ledger_type
-    
-    type_label = "entrée" if entry_type == "income" else "sortie"
-    ledger_label = "🍀 WEED" if ledger_type == "weed" else "💎 AUTRES"
-    
-    message = f"""📝 {category.upper()}
-
-{ledger_label}
-Type: {type_label}
-
-Entrez la description:
-Exemple: Vente commande ORD-123456
-"""
-    
-    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_ledger")]]
-    
-    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
-    
-    context.user_data['awaiting_ledger_description'] = True
-
-
-
-@error_handler
 async def admin_edit_license(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Menu d'édition de la licence"""
     query = update.callback_query
@@ -12979,22 +12985,6 @@ async def handle_license_level(update: Update, context: ContextTypes.DEFAULT_TYP
     context.user_data.pop('awaiting_license_level', None)
     context.user_data.pop('license_code_verified', None)
 
-    # Handlers contact utilisateur
-    application.add_handler(CallbackQueryHandler(contact_user, pattern=r"^contact_user_\d+$"))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_contact_message))
-    
-    # Handlers livre des comptes Weed/Autres
-    application.add_handler(CallbackQueryHandler(ledger_add_weed_income, pattern="^ledger_add_weed_income$"))
-    application.add_handler(CallbackQueryHandler(ledger_add_weed_expense, pattern="^ledger_add_weed_expense$"))
-    application.add_handler(CallbackQueryHandler(ledger_add_other_income, pattern="^ledger_add_other_income$"))
-    application.add_handler(CallbackQueryHandler(ledger_add_other_expense, pattern="^ledger_add_other_expense$"))
-    application.add_handler(CallbackQueryHandler(ledger_select_weed_other_category, pattern=r"^ledger_(weed|other)_cat_"))
-    
-    # Handlers édition licence
-    application.add_handler(CallbackQueryHandler(admin_edit_license, pattern="^admin_edit_license$"))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_license_code))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_license_level))
-    
 
 def get_license_level():
     """Retourne le niveau de licence actuel"""

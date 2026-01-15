@@ -7438,13 +7438,15 @@ Actualisé à {datetime.now().strftime('%H:%M:%S')}
             for order in orders:
                 # Parser les produits de chaque commande
                 products_str = order.get('products', '')
+                logger.info(f"🔍 Produits dans commande: '{products_str}'")
                 
-                # Format attendu : "Coco (10.0g) × 1, K (5.0g) × 2"
+                # Format attendu : "Coco x10g, K x5g" OU "Coco (10.0g) × 1, K (5.0g) × 2"
                 if products_str:
                     import re
                     # Extraire chaque produit
                     for product_entry in products_str.split(','):
                         product_entry = product_entry.strip()
+                        logger.info(f"🔍 Analyse: '{product_entry}'")
                         matched = False
                         
                         # Chercher correspondance avec nos produits (insensible à la casse)
@@ -7452,37 +7454,54 @@ Actualisé à {datetime.now().strftime('%H:%M:%S')}
                             # Comparaison insensible à la casse pour éviter les erreurs de correspondance
                             if product_name.lower() in product_entry.lower():
                                 matched = True
-                                # Extraire quantité
-                                # Format: "Coco (10.0g) × 1" ou "Pills Squid-Game (5 unités) × 2"
-                                match_weight = re.search(r'\((\d+(?:\.\d+)?)\s*g\)', product_entry)
-                                match_units = re.search(r'\((\d+)\s*unités?\)', product_entry)
-                                match_multiplier = re.search(r'×\s*(\d+)', product_entry)
+                                logger.info(f"✅ Match trouvé: {product_name}")
+                                
+                                # Extraire quantité - supporter DEUX formats:
+                                # Format 1: "Coco x10g" ou "Coco x10.5g"
+                                # Format 2: "Coco (10.0g) × 1" ou "Pills (5 unités) × 2"
                                 
                                 quantity = 0
-                                multiplier = int(match_multiplier.group(1)) if match_multiplier else 1
                                 
-                                if match_weight:
-                                    quantity = float(match_weight.group(1)) * multiplier
-                                elif match_units:
-                                    quantity = int(match_units.group(1)) * multiplier
+                                # Essayer format simple "x10g" ou "x10.5g"
+                                match_simple = re.search(r'x\s*(\d+(?:\.\d+)?)\s*g', product_entry, re.IGNORECASE)
+                                if match_simple:
+                                    quantity = float(match_simple.group(1))
+                                    logger.info(f"🔍 Quantité (format simple): {quantity}g")
+                                else:
+                                    # Essayer format avec parenthèses "(10.0g) × 1"
+                                    match_weight = re.search(r'\((\d+(?:\.\d+)?)\s*g\)', product_entry)
+                                    match_units = re.search(r'\((\d+)\s*unités?\)', product_entry)
+                                    match_multiplier = re.search(r'×\s*(\d+)', product_entry)
+                                    
+                                    multiplier = int(match_multiplier.group(1)) if match_multiplier else 1
+                                    
+                                    if match_weight:
+                                        quantity = float(match_weight.group(1)) * multiplier
+                                        logger.info(f"🔍 Quantité (format parenthèses): {quantity}g (base: {match_weight.group(1)}, mult: {multiplier})")
+                                    elif match_units:
+                                        quantity = int(match_units.group(1)) * multiplier
+                                        logger.info(f"🔍 Quantité (format unités): {quantity} unités")
                                 
                                 if quantity > 0:
-                                    cost = PRODUCT_COSTS.get(product_name, 0) * quantity
+                                    unit_cost = PRODUCT_COSTS.get(product_name, 0)
+                                    cost = unit_cost * quantity
                                     total_costs += cost
                                     products_matched += 1
-                                    logger.info(f"💰 {product_name}: {quantity}g/u × {PRODUCT_COSTS.get(product_name, 0)}€ = {cost:.2f}€")
+                                    logger.info(f"💰 {product_name}: {quantity}g/u × {unit_cost}€ = {cost:.2f}€")
+                                else:
+                                    logger.warning(f"⚠️ Quantité = 0 pour {product_name} dans '{product_entry}'")
                                     
                                 break
                         
                         if not matched and product_entry:
                             products_unmatched.append(product_entry)
-                            logger.warning(f"⚠️ Produit non trouvé dans PRODUCT_COSTS: {product_entry}")
+                            logger.warning(f"⚠️ Produit non trouvé dans PRODUCT_COSTS: '{product_entry}'")
             
             if products_unmatched:
                 logger.warning(f"⚠️ {len(products_unmatched)} produits non matchés (coûts = 0)")
                 logger.warning(f"⚠️ Produits non matchés: {products_unmatched[:5]}...")  # Afficher les 5 premiers
             
-            logger.info(f"💰 Total: {products_matched} produits matchés, coûts = {total_costs:.2f}€")
+            logger.info(f"💰 RÉSULTAT: {products_matched} produits matchés, coûts totaux = {total_costs:.2f}€")
             
             gross_margin = product_revenue - total_costs
             margin_rate = (gross_margin / product_revenue * 100) if product_revenue > 0 else 0
@@ -8379,18 +8398,28 @@ Aucune donnée disponible.
                     # Chercher correspondance avec nos produits (insensible à la casse)
                     for product_name in PRODUCT_COSTS.keys():
                         if product_name.lower() in product_entry.lower():
-                            # Extraire quantité
-                            match_weight = re.search(r'\((\d+(?:\.\d+)?)\s*g\)', product_entry)
-                            match_units = re.search(r'\((\d+)\s*unités?\)', product_entry)
-                            match_multiplier = re.search(r'×\s*(\d+)', product_entry)
+                            # Extraire quantité - supporter DEUX formats:
+                            # Format 1: "Coco x10g" ou "Coco x10.5g"
+                            # Format 2: "Coco (10.0g) × 1" ou "Pills (5 unités) × 2"
                             
                             quantity = 0
-                            multiplier = int(match_multiplier.group(1)) if match_multiplier else 1
                             
-                            if match_weight:
-                                quantity = float(match_weight.group(1)) * multiplier
-                            elif match_units:
-                                quantity = int(match_units.group(1)) * multiplier
+                            # Essayer format simple "x10g" ou "x10.5g"
+                            match_simple = re.search(r'x\s*(\d+(?:\.\d+)?)\s*g', product_entry, re.IGNORECASE)
+                            if match_simple:
+                                quantity = float(match_simple.group(1))
+                            else:
+                                # Essayer format avec parenthèses
+                                match_weight = re.search(r'\((\d+(?:\.\d+)?)\s*g\)', product_entry)
+                                match_units = re.search(r'\((\d+)\s*unités?\)', product_entry)
+                                match_multiplier = re.search(r'×\s*(\d+)', product_entry)
+                                
+                                multiplier = int(match_multiplier.group(1)) if match_multiplier else 1
+                                
+                                if match_weight:
+                                    quantity = float(match_weight.group(1)) * multiplier
+                                elif match_units:
+                                    quantity = int(match_units.group(1)) * multiplier
                             
                             if quantity > 0:
                                 cost = PRODUCT_COSTS.get(product_name, 0) * quantity

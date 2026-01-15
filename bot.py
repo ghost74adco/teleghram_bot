@@ -1,3 +1,22 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+╔═══════════════════════════════════════════════════════════════════╗
+║                                                                   ║
+║   BOT TELEGRAM V4.0.0 - MIGRATION V3.1.1 AVEC JSON              ║
+║   100% Fonctionnel + Configuration JSON complète                 ║
+║                                                                   ║
+║   ✅ Toutes les fonctions V3.1.1 conservées                      ║
+║   ✅ Configuration via fichiers JSON                             ║
+║   ✅ Token/Admin depuis variables environnement                  ║
+║   ✅ Édition produits sans redéploiement                         ║
+║                                                                   ║
+║   Date : 14/01/2025 - Version FINALE                             ║
+║                                                                   ║
+╚═══════════════════════════════════════════════════════════════════╝
+"""
+
 import os
 import sys
 import json
@@ -57,6 +76,26 @@ def error_handler(func):
 # Code Super Admin pour éditer la licence
 SUPER_ADMIN_CODE = "ADMIN2025"  # Modifiez ce code selon vos besoins
 
+
+# ==================== CONFIGURATION LOGGING ====================
+
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO,
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('bot.log', encoding='utf-8')
+    ]
+)
+logger = logging.getLogger(__name__)
+
+logging.getLogger('httpx').setLevel(logging.WARNING)
+logging.getLogger('telegram').setLevel(logging.WARNING)
+
+# ==================== CONSTANTES ====================
+
+DATA_DIR = Path(".")
+MEDIA_DIR = DATA_DIR / "media"
 
 # ==================== SYSTÈME PRIX DÉGRESSIFS ====================
 
@@ -146,25 +185,7 @@ def remove_tiered_price(country, product_id, tier_index):
     return False
 
 
-# ==================== CONFIGURATION LOGGING ====================
 
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO,
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler('bot.log', encoding='utf-8')
-    ]
-)
-logger = logging.getLogger(__name__)
-
-logging.getLogger('httpx').setLevel(logging.WARNING)
-logging.getLogger('telegram').setLevel(logging.WARNING)
-
-# ==================== CONSTANTES ====================
-
-DATA_DIR = Path(".")
-MEDIA_DIR = DATA_DIR / "media"
 BOT_VERSION = "4.0.0"
 
 
@@ -13751,53 +13772,6 @@ Le bot a été arrêté proprement.
     logger.info("=" * 60)
 
 # ==================== POINT D'ENTRÉE ====================
-
-
-# ==================== EXEMPLES DE CONVERSION AUTO-SUPPRESSION ====================
-
-"""
-ANCIEN CODE (sera supprimé automatiquement):
-    await update.message.reply_text("Bonjour!")
-
-NOUVEAU CODE (auto-suppression après 10 min):
-    await reply_auto_delete(update, context, "Bonjour!")
-
-ANCIEN CODE:
-    await query.edit_message_text(
-        "Menu principal",
-        reply_markup=keyboard
-    )
-
-NOUVEAU CODE:
-    await edit_message_auto_delete(
-        query,
-        "Menu principal",
-        reply_markup=keyboard
-    )
-
-MESSAGES PERMANENTS (notifications de commande):
-    await send_order_notification(
-        context=context,
-        user_id=user_id,
-        order_id="12345",
-        status='validated',
-        details="Votre commande sera prête dans 2h"
-    )
-
-PERSONNALISER LE DÉLAI:
-    await reply_auto_delete(
-        update, context,
-        "Message rapide",
-        delay=60  # Supprimé après 1 minute
-    )
-
-DÉSACTIVER L'AUTO-SUPPRESSION:
-    await reply_auto_delete(
-        update, context,
-        "Message permanent",
-        message_type='order_status_validated'  # Ne sera pas supprimé
-    )
-"""
 
 if __name__ == '__main__':
     try:

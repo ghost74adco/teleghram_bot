@@ -57,6 +57,95 @@ def error_handler(func):
 # Code Super Admin pour éditer la licence
 SUPER_ADMIN_CODE = "ADMIN2025"  # Modifiez ce code selon vos besoins
 
+
+# ==================== SYSTÈME PRIX DÉGRESSIFS ====================
+
+# Structure des prix dégressifs par pays
+# Format: {country: {product_id: [{min_qty: X, max_qty: Y, price: Z}, ...]}}
+TIERED_PRICING_FILE = DATA_DIR / "tiered_pricing.json"
+
+def load_tiered_pricing():
+    """Charge les prix dégressifs depuis le fichier JSON"""
+    return load_json_file(TIERED_PRICING_FILE, {})
+
+def save_tiered_pricing(data):
+    """Sauvegarde les prix dégressifs"""
+    return save_json_file(TIERED_PRICING_FILE, data)
+
+def get_tiered_price(country, product_id, quantity):
+    """Retourne le prix unitaire en fonction de la quantité"""
+    tiered = load_tiered_pricing()
+    
+    if country not in tiered:
+        return None
+    
+    if product_id not in tiered[country]:
+        return None
+    
+    tiers = tiered[country][product_id]
+    
+    # Trier les tiers par quantité minimum
+    sorted_tiers = sorted(tiers, key=lambda x: x.get('min_qty', 0))
+    
+    # Trouver le tier approprié
+    for tier in sorted_tiers:
+        min_qty = tier.get('min_qty', 0)
+        max_qty = tier.get('max_qty', 999999)
+        
+        if min_qty <= quantity <= max_qty:
+            return tier.get('price', 0)
+    
+    return None
+
+def add_tiered_price(country, product_id, min_qty, max_qty, price):
+    """Ajoute un palier de prix dégressif"""
+    tiered = load_tiered_pricing()
+    
+    if country not in tiered:
+        tiered[country] = {}
+    
+    if product_id not in tiered[country]:
+        tiered[country][product_id] = []
+    
+    # Vérifier si un tier avec ces quantités existe déjà
+    for i, tier in enumerate(tiered[country][product_id]):
+        if tier.get('min_qty') == min_qty and tier.get('max_qty') == max_qty:
+            # Mettre à jour le prix
+            tiered[country][product_id][i]['price'] = price
+            return save_tiered_pricing(tiered)
+    
+    # Ajouter nouveau tier
+    tiered[country][product_id].append({
+        'min_qty': min_qty,
+        'max_qty': max_qty,
+        'price': price
+    })
+    
+    return save_tiered_pricing(tiered)
+
+def remove_tiered_price(country, product_id, tier_index):
+    """Supprime un palier de prix dégressif"""
+    tiered = load_tiered_pricing()
+    
+    if country not in tiered or product_id not in tiered[country]:
+        return False
+    
+    if 0 <= tier_index < len(tiered[country][product_id]):
+        tiered[country][product_id].pop(tier_index)
+        
+        # Si plus de tiers, supprimer le produit
+        if not tiered[country][product_id]:
+            del tiered[country][product_id]
+        
+        # Si plus de produits, supprimer le pays
+        if not tiered[country]:
+            del tiered[country]
+        
+        return save_tiered_pricing(tiered)
+    
+    return False
+
+
 # ==================== CONFIGURATION LOGGING ====================
 
 logging.basicConfig(
@@ -4005,24 +4094,40 @@ Que souhaitez-vous faire ?
 
 @error_handler
 async def admin_pricing_tiers(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Prix dégressifs - Fonctionnalité à venir"""
+    """Menu de gestion des prix dégressifs"""
     query = update.callback_query
     await query.answer()
     
-    message = """📊 PRIX DÉGRESSIFS
+    if not is_super_admin(query.from_user.id):
+        await query.answer("❌ Accès refusé - Super Admin uniquement", show_alert=True)
+        return
+    
+    tiered = load_tiered_pricing()
+    
+    # Compter les configurations
+    total_configs = 0
+    countries_with_tiers = []
+    for country, products in tiered.items():
+        if products:
+            countries_with_tiers.append(country)
+            for product_id, tiers in products.items():
+                total_configs += len(tiers)
+    
+    message = f"""📊 PRIX DÉGRESSIFS
 
-Cette fonctionnalité est en cours de développement.
+Configurations: {total_configs}
+Pays configurés: {len(countries_with_tiers)}
 
-Elle permettra de configurer des prix dégressifs par quantité :
-• 1-10g : Prix normal
-• 11-50g : -5%
-• 51-100g : -10%
-• etc.
+Les prix dégressifs permettent d'offrir des réductions automatiques selon la quantité commandée.
 
-Pour l'instant, utilisez la gestion des prix par pays.
+Choisissez un pays:
 """
     
     keyboard = [
+        [InlineKeyboardButton("🇫🇷 France", callback_data="tiered_country_FR")],
+        [InlineKeyboardButton("🇨🇭 Suisse", callback_data="tiered_country_CH")],
+        [InlineKeyboardButton("🇦🇺 Australie", callback_data="tiered_country_AU")],
+        [InlineKeyboardButton("➕ Ajouter pays", callback_data="tiered_add_country")],
         [InlineKeyboardButton("🔙 Retour", callback_data="admin_manage_prices")]
     ]
     
@@ -7851,7 +7956,7 @@ async def receive_expense_edit(update: Update, context: ContextTypes.DEFAULT_TYP
         save_ledger(ledger)
         
         await update.message.reply_text(
-            f"""✅ CONSOMMABLE MODIFIÉ
+            f"""✅ CONSOMMABLE MODIFIÉ\n"
 
 📋 ID : {expense_id}
 💰 Ancien montant : {old_amount:.2f}€
@@ -7919,7 +8024,7 @@ async def delete_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
         save_ledger(ledger)
     
     await query.edit_message_text(
-        f"""✅ CONSOMMABLE SUPPRIMÉ
+        f"""✅ CONSOMMABLE SUPPRIMÉ\n"
 
 📋 ID : {expense_id}
 💰 Montant : {expense['amount']:.2f}€
@@ -11449,6 +11554,18 @@ def setup_handlers(application):
 
 # ==================== KILL SWITCH ====================
 
+    # Handlers prix dégressifs
+    application.add_handler(CallbackQueryHandler(tiered_country_menu, pattern=r"^tiered_country_"))
+    application.add_handler(CallbackQueryHandler(tiered_product_menu, pattern=r"^tiered_product_"))
+    application.add_handler(CallbackQueryHandler(tiered_add_tier, pattern=r"^tiered_add_[A-Z]{2}_"))
+    application.add_handler(CallbackQueryHandler(tiered_delete_confirm, pattern=r"^tiered_delete_[A-Z]{2}_"))
+    application.add_handler(CallbackQueryHandler(tiered_delete_execute, pattern=r"^tiered_delete_confirm_"))
+    application.add_handler(CallbackQueryHandler(tiered_add_product, pattern=r"^tiered_add_product_"))
+    application.add_handler(CallbackQueryHandler(tiered_add_country, pattern=r"^tiered_add_country$"))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_tiered_info))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_new_country))
+    
+
 async def kill_switch_check(application):
     """Kill switch: attend 30 secondes au démarrage"""
     logger.warning("⏳ KILL SWITCH ACTIVÉ - 30 secondes pour arrêter le bot avec Ctrl+C")
@@ -12662,6 +12779,445 @@ def set_license_level(level: int) -> bool:
     license_data['license']['updated_at'] = datetime.now().isoformat()
     
     return save_json_file(LICENSE_FILE, license_data)
+
+
+
+@error_handler
+async def tiered_country_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu des prix dégressifs pour un pays"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("❌ Accès refusé", show_alert=True)
+        return
+    
+    country = query.data.replace("tiered_country_", "")
+    context.user_data['tiered_country'] = country
+    
+    country_flags = {'FR': '🇫🇷', 'CH': '🇨🇭', 'AU': '🇦🇺'}
+    flag = country_flags.get(country, '🌍')
+    
+    tiered = load_tiered_pricing()
+    country_tiers = tiered.get(country, {})
+    
+    products = PRODUCTS_DATA.get('products', {})
+    
+    message = f"""📊 PRIX DÉGRESSIFS {flag} {country}
+
+Produits configurés: {len(country_tiers)}
+
+Sélectionnez un produit:
+"""
+    
+    keyboard = []
+    
+    # Liste des produits configurés
+    for product_id, tiers in country_tiers.items():
+        product_name = products.get(product_id, {}).get('name', {}).get('fr', product_id)
+        tier_count = len(tiers)
+        keyboard.append([
+            InlineKeyboardButton(
+                f"📦 {product_name} ({tier_count} paliers)",
+                callback_data=f"tiered_product_{country}_{product_id}"
+            )
+        ])
+    
+    # Bouton pour ajouter un produit
+    keyboard.append([
+        InlineKeyboardButton("➕ Ajouter produit", callback_data=f"tiered_add_product_{country}")
+    ])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="admin_pricing_tiers")])
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def tiered_product_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu de gestion des paliers pour un produit"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("❌ Accès refusé", show_alert=True)
+        return
+    
+    parts = query.data.replace("tiered_product_", "").split("_", 1)
+    country = parts[0]
+    product_id = parts[1]
+    
+    context.user_data['tiered_country'] = country
+    context.user_data['tiered_product'] = product_id
+    
+    products = PRODUCTS_DATA.get('products', {})
+    product_name = products.get(product_id, {}).get('name', {}).get('fr', product_id)
+    
+    tiered = load_tiered_pricing()
+    tiers = tiered.get(country, {}).get(product_id, [])
+    
+    # Trier les paliers par quantité minimum
+    sorted_tiers = sorted(tiers, key=lambda x: x.get('min_qty', 0))
+    
+    country_flags = {'FR': '🇫🇷', 'CH': '🇨🇭', 'AU': '🇦🇺'}
+    flag = country_flags.get(country, '🌍')
+    
+    message = f"""📊 PRIX DÉGRESSIFS
+{flag} {country} - {product_name}
+
+Paliers configurés:
+
+"""
+    
+    if sorted_tiers:
+        for i, tier in enumerate(sorted_tiers):
+            min_qty = tier.get('min_qty', 0)
+            max_qty = tier.get('max_qty', 999999)
+            price = tier.get('price', 0)
+            
+            max_display = f"{max_qty}g" if max_qty < 999999 else "∞"
+            message += f"{i+1}. {min_qty}g - {max_display}: {price}€/g\n"
+    else:
+        message += "Aucun palier configuré.\n"
+    
+    message += "\nChoisissez une action:"
+    
+    keyboard = []
+    
+    # Boutons pour éditer/supprimer les paliers existants
+    for i, tier in enumerate(sorted_tiers):
+        min_qty = tier.get('min_qty', 0)
+        max_qty = tier.get('max_qty', 999999)
+        price = tier.get('price', 0)
+        max_display = f"{max_qty}g" if max_qty < 999999 else "∞"
+        
+        keyboard.append([
+            InlineKeyboardButton(
+                f"✏️ {min_qty}-{max_display}: {price}€",
+                callback_data=f"tiered_edit_{country}_{product_id}_{i}"
+            ),
+            InlineKeyboardButton(
+                "🗑️",
+                callback_data=f"tiered_delete_{country}_{product_id}_{i}"
+            )
+        ])
+    
+    keyboard.append([
+        InlineKeyboardButton("➕ Ajouter palier", callback_data=f"tiered_add_{country}_{product_id}")
+    ])
+    
+    keyboard.append([
+        InlineKeyboardButton("🔙 Retour", callback_data=f"tiered_country_{country}")
+    ])
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def tiered_add_tier(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Demande les infos pour ajouter un palier"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("❌ Accès refusé", show_alert=True)
+        return
+    
+    parts = query.data.replace("tiered_add_", "").split("_", 1)
+    country = parts[0]
+    product_id = parts[1]
+    
+    context.user_data['tiered_country'] = country
+    context.user_data['tiered_product'] = product_id
+    context.user_data['tiered_action'] = 'add'
+    
+    products = PRODUCTS_DATA.get('products', {})
+    product_name = products.get(product_id, {}).get('name', {}).get('fr', product_id)
+    
+    message = f"""➕ AJOUTER PALIER
+
+Produit: {product_name}
+Pays: {country}
+
+Envoyez les informations du palier au format:
+`min_qty max_qty price`
+
+Exemples:
+• `1 10 50` = 1-10g à 50€/g
+• `11 50 45` = 11-50g à 45€/g
+• `51 999999 40` = 51g et + à 40€/g
+
+Format: quantité_min quantité_max prix
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data=f"tiered_product_{country}_{product_id}")]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    context.user_data['awaiting_tiered_info'] = True
+
+@error_handler
+async def handle_tiered_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gère l'ajout d'un palier de prix"""
+    user = update.effective_user
+    
+    if not is_super_admin(user.id):
+        return
+    
+    if not context.user_data.get('awaiting_tiered_info'):
+        return
+    
+    country = context.user_data.get('tiered_country')
+    product_id = context.user_data.get('tiered_product')
+    
+    if not country or not product_id:
+        await update.message.reply_text("❌ Session expirée")
+        return
+    
+    try:
+        # Parser l'entrée: min_qty max_qty price
+        parts = update.message.text.strip().split()
+        
+        if len(parts) != 3:
+            raise ValueError("Format incorrect. Utilisez: min_qty max_qty price")
+        
+        min_qty = int(parts[0])
+        max_qty = int(parts[1])
+        price = float(parts[2])
+        
+        if min_qty < 0 or max_qty < min_qty or price < 0:
+            raise ValueError("Valeurs invalides")
+        
+        # Ajouter le palier
+        success = add_tiered_price(country, product_id, min_qty, max_qty, price)
+        
+        if success:
+            products = PRODUCTS_DATA.get('products', {})
+            product_name = products.get(product_id, {}).get('name', {}).get('fr', product_id)
+            
+            max_display = f"{max_qty}g" if max_qty < 999999 else "∞"
+            
+            await update.message.reply_text(
+                f"✅ Palier ajouté!\n\n"
+                f"📦 {product_name}\n"
+                f"🌍 {country}\n"
+                f"📊 {min_qty}g - {max_display}: {price}€/g",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔙 Retour", callback_data=f"tiered_product_{country}_{product_id}")
+                ]])
+            )
+        else:
+            await update.message.reply_text("❌ Erreur lors de l'ajout")
+        
+    except ValueError as e:
+        await update.message.reply_text(
+            f"❌ Erreur: {e}\n\n"
+            f"Format attendu: min_qty max_qty price\n"
+            f"Exemple: 1 10 50"
+        )
+        return
+    
+    # Nettoyer
+    context.user_data.pop('awaiting_tiered_info', None)
+
+@error_handler
+async def tiered_delete_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Confirmation de suppression d'un palier"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("❌ Accès refusé", show_alert=True)
+        return
+    
+    parts = query.data.replace("tiered_delete_", "").split("_")
+    country = parts[0]
+    product_id = "_".join(parts[1:-1])
+    tier_index = int(parts[-1])
+    
+    products = PRODUCTS_DATA.get('products', {})
+    product_name = products.get(product_id, {}).get('name', {}).get('fr', product_id)
+    
+    tiered = load_tiered_pricing()
+    tier = tiered.get(country, {}).get(product_id, [])[tier_index]
+    
+    min_qty = tier.get('min_qty', 0)
+    max_qty = tier.get('max_qty', 999999)
+    price = tier.get('price', 0)
+    max_display = f"{max_qty}g" if max_qty < 999999 else "∞"
+    
+    message = f"""🗑️ SUPPRIMER PALIER
+
+Produit: {product_name}
+Pays: {country}
+
+Palier: {min_qty}g - {max_display}: {price}€/g
+
+⚠️ Confirmer la suppression?
+"""
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Confirmer", callback_data=f"tiered_delete_confirm_{country}_{product_id}_{tier_index}"),
+            InlineKeyboardButton("❌ Annuler", callback_data=f"tiered_product_{country}_{product_id}")
+        ]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def tiered_delete_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Exécute la suppression d'un palier"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("❌ Accès refusé", show_alert=True)
+        return
+    
+    parts = query.data.replace("tiered_delete_confirm_", "").split("_")
+    country = parts[0]
+    product_id = "_".join(parts[1:-1])
+    tier_index = int(parts[-1])
+    
+    success = remove_tiered_price(country, product_id, tier_index)
+    
+    if success:
+        await query.answer("✅ Palier supprimé", show_alert=True)
+    else:
+        await query.answer("❌ Erreur suppression", show_alert=True)
+    
+    # Retourner au menu du produit
+    await tiered_product_menu(update, context)
+
+@error_handler
+async def tiered_add_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sélection d'un produit pour ajouter des prix dégressifs"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("❌ Accès refusé", show_alert=True)
+        return
+    
+    country = query.data.replace("tiered_add_product_", "")
+    context.user_data['tiered_country'] = country
+    
+    products = PRODUCTS_DATA.get('products', {})
+    tiered = load_tiered_pricing()
+    country_tiers = tiered.get(country, {})
+    
+    message = f"""➕ AJOUTER PRODUIT
+
+Pays: {country}
+
+Sélectionnez un produit:
+"""
+    
+    keyboard = []
+    
+    # Lister les produits pas encore configurés
+    for product_id, product_data in products.items():
+        if product_id not in country_tiers:
+            product_name = product_data.get('name', {}).get('fr', product_id)
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"📦 {product_name}",
+                    callback_data=f"tiered_add_{country}_{product_id}"
+                )
+            ])
+    
+    if not keyboard:
+        message += "\n✅ Tous les produits sont déjà configurés!"
+    
+    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data=f"tiered_country_{country}")])
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def tiered_add_country(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ajouter un nouveau pays pour les prix dégressifs"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("❌ Accès refusé", show_alert=True)
+        return
+    
+    message = """➕ AJOUTER PAYS
+
+Envoyez le code pays (2 lettres):
+Exemples: BE, NL, DE, IT, ES
+
+/cancel pour annuler
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_pricing_tiers")]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    context.user_data['awaiting_new_country'] = True
+
+@error_handler
+async def handle_new_country(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gère l'ajout d'un nouveau pays"""
+    user = update.effective_user
+    
+    if not is_super_admin(user.id):
+        return
+    
+    if not context.user_data.get('awaiting_new_country'):
+        return
+    
+    country_code = update.message.text.strip().upper()
+    
+    # Valider le code pays
+    if len(country_code) != 2 or not country_code.isalpha():
+        await update.message.reply_text(
+            "❌ Code pays invalide. Utilisez 2 lettres.\n"
+            "Exemples: BE, NL, DE"
+        )
+        return
+    
+    # Ajouter le pays dans les prix dégressifs
+    tiered = load_tiered_pricing()
+    
+    if country_code in tiered:
+        await update.message.reply_text(
+            f"⚠️ Le pays {country_code} existe déjà!",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Retour", callback_data="admin_pricing_tiers")
+            ]])
+        )
+    else:
+        tiered[country_code] = {}
+        save_tiered_pricing(tiered)
+        
+        await update.message.reply_text(
+            f"✅ Pays {country_code} ajouté!",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("📊 Configurer", callback_data=f"tiered_country_{country_code}"),
+                InlineKeyboardButton("🔙 Retour", callback_data="admin_pricing_tiers")
+            ]])
+        )
+    
+    context.user_data.pop('awaiting_new_country', None)
 
 
 async def main():

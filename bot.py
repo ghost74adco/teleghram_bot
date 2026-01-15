@@ -8569,8 +8569,21 @@ Exemple : 42.50
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
     
+    # Nettoyer TOUS les autres états pour éviter les conflits
+    context.user_data.pop('awaiting_config', None)
+    context.user_data.pop('awaiting_stock_edit', None)
+    context.user_data.pop('awaiting_price_edit', None)
+    context.user_data.pop('awaiting_fee', None)
+    context.user_data.pop('editing_expense', None)
+    context.user_data.pop('awaiting_expense_amount', None)
+    context.user_data.pop('awaiting_expense_description', None)
+    context.user_data.pop('editing_order_total', None)
+    context.user_data.pop('editing_order_delivery', None)
+    
     # Sauvegarder le produit en cours d'édition
     context.user_data['awaiting_cost_update'] = product_name
+    logger.info(f"🔍 État défini: awaiting_cost_update = {product_name}")
+    logger.info(f"🔍 États actifs: {[k for k, v in context.user_data.items() if k.startswith('awaiting') or k.startswith('editing')]}")
 
 @error_handler
 async def receive_cost_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -8614,18 +8627,37 @@ async def receive_cost_update(update: Update, context: ContextTypes.DEFAULT_TYPE
         if costs_file.exists():
             with open(costs_file, 'r', encoding='utf-8') as f:
                 saved_costs = json.load(f)
+            logger.info(f"📂 Fichier product_costs.json trouvé - {len(saved_costs)} prix existants")
         else:
             saved_costs = dict(PRODUCT_COSTS)
+            logger.info(f"📂 Création nouveau fichier product_costs.json")
         
         old_cost = saved_costs.get(product_name, PRODUCT_COSTS.get(product_name, 0))
         saved_costs[product_name] = new_cost
         
         # Sauvegarder
+        logger.info(f"💾 Sauvegarde de {product_name}: {new_cost}€ dans {costs_file}")
         with open(costs_file, 'w', encoding='utf-8') as f:
             json.dump(saved_costs, f, indent=2, ensure_ascii=False)
         
+        # Vérifier que la sauvegarde a réussi
+        if costs_file.exists():
+            file_size = costs_file.stat().st_size
+            logger.info(f"✅ Fichier sauvegardé avec succès ({file_size} bytes)")
+            
+            # Re-lire pour vérifier
+            with open(costs_file, 'r', encoding='utf-8') as f:
+                verify_costs = json.load(f)
+            if product_name in verify_costs and verify_costs[product_name] == new_cost:
+                logger.info(f"✅ Vérification OK: {product_name} = {new_cost}€")
+            else:
+                logger.error(f"❌ ERREUR: Le prix n'a pas été sauvegardé correctement!")
+        else:
+            logger.error(f"❌ ERREUR: Le fichier n'existe pas après sauvegarde!")
+        
         # Mettre à jour PRODUCT_COSTS en mémoire
         PRODUCT_COSTS[product_name] = new_cost
+        logger.info(f"💾 PRODUCT_COSTS mis à jour en mémoire")
         
         context.user_data.pop('awaiting_cost_update', None)
         
@@ -8676,6 +8708,8 @@ Les marges seront calculées avec ce nouveau prix à partir de maintenant.
 
 def load_product_costs():
     """Charge les prix de revient depuis le fichier JSON"""
+    global PRODUCT_COSTS
+    
     costs_file = DATA_DIR / "product_costs.json"
     
     if costs_file.exists():
@@ -8683,16 +8717,19 @@ def load_product_costs():
             with open(costs_file, 'r', encoding='utf-8') as f:
                 saved_costs = json.load(f)
             
-            # Mettre à jour PRODUCT_COSTS
+            # Mettre à jour PRODUCT_COSTS avec TOUS les prix sauvegardés
+            # Pas seulement ceux qui existent déjà dans PRODUCT_COSTS
             for product_name, cost in saved_costs.items():
-                if product_name in PRODUCT_COSTS:
-                    PRODUCT_COSTS[product_name] = cost
+                PRODUCT_COSTS[product_name] = cost
             
             logger.info(f"💵 Prix de revient chargés: {len(saved_costs)} produits")
+            logger.info(f"📦 Produits avec prix: {list(saved_costs.keys())}")
             return True
         except Exception as e:
             logger.error(f"Erreur chargement prix: {e}")
             return False
+    else:
+        logger.info("ℹ️ Aucun fichier product_costs.json trouvé - utilisation des prix par défaut")
     return False
 
 # ==================== ADMIN: GESTION SALAIRES ====================

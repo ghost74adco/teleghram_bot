@@ -1004,10 +1004,60 @@ TRANSLATIONS = {
     }
 }
 
-def tr(user_data: dict, key: str, default_lang: str = 'fr') -> str:
-    """Traduction simple"""
-    lang = user_data.get('language_code', default_lang)
-    return TRANSLATIONS.get(lang, TRANSLATIONS['fr']).get(key, key)
+def load_translations():
+    """Charge les traductions depuis languages.json"""
+    try:
+        lang_file = DATA_DIR / "languages.json"
+        if lang_file.exists():
+            with open(lang_file, 'r', encoding='utf-8') as f:
+                import json
+                data = json.load(f)
+                return data.get('translations', {}), data.get('languages', {})
+        return {}, {}
+    except Exception as e:
+        logger.error(f"Erreur chargement languages.json: {e}")
+        return {}, {}
+
+# Charger les traductions au démarrage
+LANG_TRANSLATIONS, LANG_CONFIG = load_translations()
+
+def tr(context_or_user_data, key: str, default_lang: str = 'fr', **kwargs) -> str:
+    """
+    Traduction intelligente avec support de variables
+    
+    Args:
+        context_or_user_data: context.user_data (dict) ou context (ContextTypes)
+        key: Clé de traduction
+        default_lang: Langue par défaut
+        **kwargs: Variables à remplacer dans la traduction (ex: name="John")
+    
+    Returns:
+        Texte traduit avec variables remplacées
+    """
+    # Déterminer si c'est user_data ou context
+    if isinstance(context_or_user_data, dict):
+        user_data = context_or_user_data
+    else:
+        user_data = getattr(context_or_user_data, 'user_data', {})
+    
+    # Récupérer la langue
+    lang = user_data.get('language', default_lang)
+    
+    # Si la langue n'existe pas, fallback sur fr
+    if lang not in LANG_CONFIG or not LANG_CONFIG[lang].get('active', False):
+        lang = 'fr'
+    
+    # Récupérer la traduction
+    translation = LANG_TRANSLATIONS.get(key, {}).get(lang, key)
+    
+    # Remplacer les variables {name}, {percent}, etc.
+    if kwargs:
+        try:
+            translation = translation.format(**kwargs)
+        except KeyError:
+            pass  # Garder la traduction même si une variable manque
+    
+    return translation
 
 # ==================== GÉNÉRATEURS ====================
 
@@ -2769,6 +2819,135 @@ async def notify_admin_vip_client(context, user_id, user_info, total_spent):
 # ==================== COMMANDE /START ====================
 
 @error_handler
+async def language_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche le menu de sélection de langue"""
+    query = update.callback_query
+    if query:
+        await query.answer()
+    
+    message = """🌐 CHOISISSEZ VOTRE LANGUE
+CHOOSE YOUR LANGUAGE
+WÄHLEN SIE IHRE SPRACHE
+ELIGE TU IDIOMA
+SCEGLI LA TUA LINGUA
+
+Sélectionnez votre langue préférée :"""
+    
+    keyboard = []
+    
+    # Construire le menu depuis languages.json
+    for lang_code, lang_data in LANG_CONFIG.items():
+        if lang_data.get('active', False):
+            flag = lang_data.get('flag', '')
+            name = lang_data.get('name', lang_code.upper())
+            keyboard.append([InlineKeyboardButton(f"{flag} {name}", callback_data=f"lang_{lang_code}")])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Retour / Back", callback_data="start_menu")])
+    
+    if query:
+        await query.edit_message_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    else:
+        await update.message.reply_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+@error_handler
+async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Définit la langue de l'utilisateur"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Extraire le code langue
+    lang_code = query.data.replace("lang_", "")
+    
+    if lang_code not in LANG_CONFIG or not LANG_CONFIG[lang_code].get('active', False):
+        await query.answer("❌ Langue non supportée", show_alert=True)
+        return
+    
+    # Sauvegarder dans user_data
+    context.user_data['language'] = lang_code
+    
+    # Sauvegarder dans users.json
+    user_id = query.from_user.id
+    users = load_users()
+    if str(user_id) in users:
+        users[str(user_id)]['language'] = lang_code
+        save_users(users)
+    
+    # Messages de confirmation par langue
+    confirmations = {
+        'fr': "✅ Langue changée en Français",
+        'en': "✅ Language changed to English",
+        'es': "✅ Idioma cambiado a Español",
+        'de': "✅ Sprache geändert auf Deutsch",
+        'it': "✅ Lingua cambiata in Italiano"
+    }
+    
+    await query.answer(confirmations.get(lang_code, "✅ OK"), show_alert=True)
+    
+    # Retourner au menu principal avec start_menu
+    await start_menu(update, context)
+
+@error_handler
+async def start_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche le menu principal après sélection langue"""
+    query = update.callback_query
+    user = query.from_user if query else update.effective_user
+    user_id = user.id
+    
+    if query:
+        await query.answer()
+    
+    # Charger les données utilisateur
+    users = load_users()
+    user_data = users.get(str(user_id), {})
+    
+    # Récupérer la langue
+    lang = context.user_data.get('language', user_data.get('language', 'fr'))
+    context.user_data['language'] = lang
+    
+    stats = get_client_stats(user_id)
+    
+    vip_message = ""
+    if stats and stats.get("vip_status"):
+        vip_message = f"{EMOJI_THEME['vip']} Statut VIP actif - {VIP_DISCOUNT}% de réduction automatique\n"
+    
+    first_name = user.first_name or "Utilisateur"
+    
+    message = f"""{tr(context, 'welcome', name=first_name)}
+
+{vip_message}{tr(context, 'choose_country')} :
+
+🕐 Horaires : {get_horaires_text()}
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🇫🇷 France", callback_data="country_fr"),
+         InlineKeyboardButton("🇨🇭 Suisse", callback_data="country_ch"),
+         InlineKeyboardButton("🇦🇺 Australie", callback_data="country_au")],
+        [InlineKeyboardButton(tr(context, 'cart'), callback_data="view_cart"),
+         InlineKeyboardButton(f"{EMOJI_THEME['history']} Historique", callback_data="my_history")],
+        [InlineKeyboardButton("📞 Contact Admin", callback_data="contact_admin_menu"),
+         InlineKeyboardButton(f"{EMOJI_THEME['gift']} Parrainage", callback_data="referral_info")],
+        [InlineKeyboardButton(tr(context, 'choose_language'), callback_data="language_menu")]
+    ]
+    
+    if query:
+        await query.edit_message_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    else:
+        await update.message.reply_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+@error_handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler pour la commande /start"""
     user = update.effective_user
@@ -2782,83 +2961,49 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    user_data = {
+    user_data_dict = {
         "username": user.username or "N/A",
         "first_name": user.first_name or "Utilisateur",
         "last_name": user.last_name or "",
-        "language_code": user.language_code or "fr"
+        "language_code": user.language_code or "fr",
+        "language": user.language_code or "fr"  # Initialiser avec la langue Telegram
     }
 
-    keyboard = [
-        [
-            InlineKeyboardButton("🇫🇷 France", callback_data="country_fr"),
-            InlineKeyboardButton("🇨🇭 Suisse", callback_data="country_ch"),
-            InlineKeyboardButton("🇦🇺 Australie", callback_data="country_au")
-        ],
-        [InlineKeyboardButton(f"{EMOJI_THEME['info']} Aide", callback_data="help")]
-    ]
-
     if is_new_user(user_id):
-        add_user(user_id, user_data)
-        logger.info(f"🆕 Nouvel utilisateur: {user_id} - {user_data['first_name']}")
-        await notify_admin_new_user(context, user_id, user_data)
-
-        welcome_message = f"""{EMOJI_THEME['celebration']} BIENVENUE {user_data['first_name']} !
-
-Merci de nous rejoindre sur notre plateforme.
-
-{EMOJI_THEME['gift']} OFFRE DE BIENVENUE
-Utilisez le code WELCOME10 pour bénéficier de 10% de réduction sur votre première commande !
-
-{EMOJI_THEME['info']} COMMENT COMMANDER ?
-1️⃣ Choisissez votre pays 🇫🇷 🇨🇭
-2️⃣ Parcourez nos produits
-3️⃣ Ajoutez au panier
-4️⃣ Validez votre commande
-
-{EMOJI_THEME['delivery']} MODES DE LIVRAISON
-- Postale (48-72h) - 10€
-- Express (30min+) - Variable selon distance
-- Meetup - Gratuit
-
-{EMOJI_THEME['support']} BESOIN D'AIDE ?
-Notre équipe est disponible {get_horaires_text()}
-"""
-
+        # Nouvel utilisateur
+        add_user(user_id, user_data_dict)
+        logger.info(f"🆕 Nouvel utilisateur: {user_id} - {user_data_dict['first_name']}")
+        await notify_admin_new_user(context, user_id, user_data_dict)
+        
+        # Initialiser la langue dans context
+        context.user_data['language'] = user_data_dict.get('language', 'fr')
+        
+        # Message de bienvenue avec traduction
+        welcome_message = tr(context, 'welcome_new_user', name=user_data_dict['first_name'])
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("🇫🇷 France", callback_data="country_fr"),
+                InlineKeyboardButton("🇨🇭 Suisse", callback_data="country_ch"),
+                InlineKeyboardButton("🇦🇺 Australie", callback_data="country_au")
+            ],
+            [InlineKeyboardButton(tr(context, 'choose_language'), callback_data="language_menu")],
+            [InlineKeyboardButton(f"{EMOJI_THEME['info']} {tr(context, 'help')}", callback_data="help")]
+        ]
+        
         await update.message.reply_text(
             welcome_message,
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
     else:
-        update_user_visit(user_id)
-        stats = get_client_stats(user_id)
-
-        vip_message = ""
-        if stats and stats.get("vip_status"):
-            vip_message = f"{EMOJI_THEME['vip']} Statut VIP actif - {VIP_DISCOUNT}% de réduction automatique\n"
-
-        returning_message = f"""{EMOJI_THEME['wave']} Bon retour {user_data['first_name']} !
-
-{vip_message}
-Choisissez votre pays pour commencer :
-
-🕐 Horaires : {get_horaires_text()}
-"""
+        # Utilisateur existant - charger sa langue
+        users = load_users()
+        saved_user_data = users.get(str(user_id), {})
+        lang = saved_user_data.get('language', user.language_code or 'fr')
+        context.user_data['language'] = lang
         
-        keyboard = [
-            [InlineKeyboardButton("🇫🇷 France", callback_data="country_fr"),
-             InlineKeyboardButton("🇨🇭 Suisse", callback_data="country_ch"),
-             InlineKeyboardButton("🇦🇺 Australie", callback_data="country_au")],
-            [InlineKeyboardButton(f"{EMOJI_THEME['cart']} Mon Panier", callback_data="view_cart"),
-             InlineKeyboardButton(f"{EMOJI_THEME['history']} Historique", callback_data="my_history")],
-            [InlineKeyboardButton("📞 Contact Admin", callback_data="contact_admin_menu"),
-             InlineKeyboardButton(f"{EMOJI_THEME['gift']} Parrainage", callback_data="referral_info")]
-        ]
-        
-        await update.message.reply_text(
-            returning_message,
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        # Rediriger vers start_menu
+        await start_menu(update, context)
     
     logger.info(f"✅ /start traité: {user_id}")
 
@@ -11999,6 +12144,11 @@ def setup_handlers(application):
     
     # Handler contact client par ID
     application.add_handler(CallbackQueryHandler(contact_user_by_id, pattern=r"^contact_user_\d+$"))
+    
+    # Handlers langue
+    application.add_handler(CallbackQueryHandler(language_menu, pattern="^language_menu$"))
+    application.add_handler(CallbackQueryHandler(set_language, pattern=r"^lang_[a-z]{2}$"))
+    application.add_handler(CallbackQueryHandler(start_menu, pattern="^start_menu$"))
     
     # Handlers prix dégressifs
     application.add_handler(CallbackQueryHandler(tiered_country_menu, pattern=r"^tiered_country_"))

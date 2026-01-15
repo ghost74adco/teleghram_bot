@@ -8575,16 +8575,25 @@ Exemple : 42.50
 @error_handler
 async def receive_cost_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Réceptionne le nouveau prix de revient"""
+    logger.info(f"🔍 DEBUG receive_cost_update appelé")
+    
     if not is_admin(update.effective_user.id):
+        logger.info(f"🔍 DEBUG User {update.effective_user.id} n'est pas admin")
         return
     
     product_name = context.user_data.get('awaiting_cost_update')
+    logger.info(f"🔍 DEBUG product_name = {product_name}")
     
     if not product_name:
+        logger.info(f"🔍 DEBUG product_name est None ou vide")
         return
     
+    input_text = update.message.text.strip()
+    logger.info(f"🔍 DEBUG input_text = '{input_text}'")
+    
     try:
-        new_cost = float(update.message.text.strip())
+        new_cost = float(input_text)
+        logger.info(f"🔍 DEBUG new_cost converti = {new_cost}")
         
         if new_cost < 0:
             await update.message.reply_text(
@@ -8652,10 +8661,17 @@ Les marges seront calculées avec ce nouveau prix à partir de maintenant.
         
         logger.info(f"💵 Prix de revient modifié: {product_name} - {old_cost:.2f}€ → {new_cost:.2f}€")
     
-    except ValueError:
+    except ValueError as e:
+        logger.error(f"🔍 DEBUG ValueError: {e}")
+        logger.error(f"🔍 DEBUG input_text qui a causé l'erreur: '{input_text}'")
         await update.message.reply_text(
             f"{EMOJI_THEME['error']} Prix invalide. Utilisez un nombre.\n"
             "Exemple : 42.50"
+        )
+    except Exception as e:
+        logger.error(f"🔍 DEBUG Exception inattendue: {type(e).__name__}: {e}")
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} Erreur: {str(e)}"
         )
 
 def load_product_costs():

@@ -2677,6 +2677,12 @@ async def notify_admin_new_order(context, order_data, user_info):
         ],
         [
             InlineKeyboardButton(
+                "💬 Contacter client",
+                callback_data=f"contact_user_{order_data['user_id']}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
                 f"{EMOJI_THEME['success']} Valider commande",
                 callback_data=f"admin_confirm_order_{order_data['order_id']}_{order_data['user_id']}"
             )
@@ -9589,10 +9595,19 @@ Exemple : 550.00
         
         logger.info(f"✅ Callback answer envoyé")
         
-        # Nettoyer les autres états d'édition
+        # Nettoyer TOUS les autres états d'édition pour éviter les conflits
         context.user_data.pop('editing_order_delivery', None)
+        context.user_data.pop('awaiting_config', None)
+        context.user_data.pop('awaiting_stock_edit', None)
+        context.user_data.pop('awaiting_price_edit', None)
+        context.user_data.pop('awaiting_fee', None)
+        context.user_data.pop('awaiting_cost_update', None)
+        context.user_data.pop('editing_expense', None)
+        
+        # Définir le nouvel état
         context.user_data['editing_order_total'] = order_id
-        logger.info(f"📝 État défini: editing_order_total={order_id}, user_data={context.user_data}")
+        logger.info(f"📝 État défini: editing_order_total={order_id}")
+        logger.info(f"📝 États actifs: {[k for k, v in context.user_data.items() if k.startswith('awaiting') or k.startswith('editing')]}")
     
     except Exception as e:
         import traceback
@@ -9674,10 +9689,19 @@ Exemple : 15.00
         
         logger.info(f"✅ Callback answer envoyé")
         
-        # Nettoyer les autres états d'édition
+        # Nettoyer TOUS les autres états d'édition pour éviter les conflits
         context.user_data.pop('editing_order_total', None)
+        context.user_data.pop('awaiting_config', None)
+        context.user_data.pop('awaiting_stock_edit', None)
+        context.user_data.pop('awaiting_price_edit', None)
+        context.user_data.pop('awaiting_fee', None)
+        context.user_data.pop('awaiting_cost_update', None)
+        context.user_data.pop('editing_expense', None)
+        
+        # Définir le nouvel état
         context.user_data['editing_order_delivery'] = order_id
-        logger.info(f"📝 État défini: editing_order_delivery={order_id}, user_data={context.user_data}")
+        logger.info(f"📝 État défini: editing_order_delivery={order_id}")
+        logger.info(f"📝 États actifs: {[k for k, v in context.user_data.items() if k.startswith('awaiting') or k.startswith('editing')]}")
     
     except Exception as e:
         import traceback
@@ -11684,6 +11708,9 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(admin_stats, pattern="^admin_stats$"))
     application.add_handler(CallbackQueryHandler(admin_detailed_stats, pattern="^admin_detailed_stats$"))
     
+    # Handler contact client par ID
+    application.add_handler(CallbackQueryHandler(contact_user_by_id, pattern=r"^contact_user_\d+$"))
+    
     # Message handlers (doit être en dernier)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
     
@@ -13658,6 +13685,120 @@ async def admin_auto_delete_set_delay(update: Update, context: ContextTypes.DEFA
     # Retourner au menu de config
     await admin_auto_delete_config(update, context)
 
+
+# ==================== CONTACT CLIENT PAR ID ====================
+
+@error_handler
+async def contact_user_by_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Permet de contacter un utilisateur en cliquant sur son ID"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_admin(query.from_user.id):
+        await query.answer("❌ Accès refusé", show_alert=True)
+        return
+    
+    # Extraire l'user_id du callback
+    user_id_str = query.data.replace("contact_user_", "")
+    
+    try:
+        target_user_id = int(user_id_str)
+    except ValueError:
+        await query.answer("❌ ID invalide", show_alert=True)
+        return
+    
+    # Charger les infos utilisateur
+    users = load_users()
+    user_info = users.get(str(target_user_id), {})
+    username = user_info.get('username', 'Utilisateur')
+    
+    message = f"""💬 CONTACTER L'UTILISATEUR
+
+👤 ID: {target_user_id}
+📝 Nom: {username}
+
+Écrivez votre message ci-dessous et il sera envoyé à cet utilisateur.
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin")]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    # Nettoyer les autres états
+    context.user_data.pop('editing_order_total', None)
+    context.user_data.pop('editing_order_delivery', None)
+    context.user_data.pop('awaiting_config', None)
+    context.user_data.pop('awaiting_stock_edit', None)
+    
+    # Sauvegarder l'user_id à contacter
+    context.user_data['awaiting_contact_message'] = target_user_id
+    logger.info(f"💬 Admin {query.from_user.id} va contacter user {target_user_id}")
+
+@error_handler
+async def receive_contact_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Réceptionne et envoie le message à l'utilisateur"""
+    target_user_id = context.user_data.get('awaiting_contact_message')
+    
+    if not target_user_id:
+        return
+    
+    if not is_admin(update.effective_user.id):
+        return
+    
+    message_text = update.message.text.strip()
+    
+    if not message_text:
+        await update.message.reply_text("❌ Message vide")
+        return
+    
+    # Envoyer le message à l'utilisateur
+    try:
+        admin_name = get_admin_name(update.effective_user.id)
+        
+        full_message = f"""📬 MESSAGE DE L'ADMINISTRATION
+
+De: {admin_name}
+
+{message_text}
+
+━━━━━━━━━━━━━━━
+Pour répondre, utilisez /support
+"""
+        
+        await context.bot.send_message(
+            chat_id=target_user_id,
+            text=full_message
+        )
+        
+        context.user_data.pop('awaiting_contact_message', None)
+        
+        keyboard = [[InlineKeyboardButton("🏠 Panel Admin", callback_data="admin")]]
+        
+        await update.message.reply_text(
+            f"✅ Message envoyé à l'utilisateur {target_user_id}",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+        logger.info(f"💬 Admin {update.effective_user.id} a contacté user {target_user_id}")
+    
+    except Exception as e:
+        logger.error(f"❌ Erreur envoi message: {e}")
+        await update.message.reply_text(
+            f"❌ Erreur lors de l'envoi du message.\n"
+            f"L'utilisateur {target_user_id} a peut-être bloqué le bot."
+        )
+        context.user_data.pop('awaiting_contact_message', None)
+
+def get_admin_name(admin_id):
+    """Retourne le nom d'un admin"""
+    if str(admin_id) in ADMINS:
+        return ADMINS[str(admin_id)].get('name', 'Admin')
+    return 'Admin'
+
+# ==================== MAIN ====================
 
 async def main():
     """Fonction principale du bot"""

@@ -7429,6 +7429,11 @@ Actualisé à {datetime.now().strftime('%H:%M:%S')}
             
             # CALCUL RÉEL DES COÛTS avec prix de revient
             total_costs = 0
+            products_matched = 0
+            products_unmatched = []
+            
+            logger.info(f"💰 Calcul des marges - {len(orders)} commandes")
+            logger.info(f"💰 Prix de revient disponibles: {list(PRODUCT_COSTS.keys())}")
             
             for order in orders:
                 # Parser les produits de chaque commande
@@ -7440,10 +7445,13 @@ Actualisé à {datetime.now().strftime('%H:%M:%S')}
                     # Extraire chaque produit
                     for product_entry in products_str.split(','):
                         product_entry = product_entry.strip()
+                        matched = False
                         
-                        # Chercher correspondance avec nos produits
+                        # Chercher correspondance avec nos produits (insensible à la casse)
                         for product_name in PRODUCT_COSTS.keys():
-                            if product_name in product_entry:
+                            # Comparaison insensible à la casse pour éviter les erreurs de correspondance
+                            if product_name.lower() in product_entry.lower():
+                                matched = True
                                 # Extraire quantité
                                 # Format: "Coco (10.0g) × 1" ou "Pills Squid-Game (5 unités) × 2"
                                 match_weight = re.search(r'\((\d+(?:\.\d+)?)\s*g\)', product_entry)
@@ -7461,8 +7469,20 @@ Actualisé à {datetime.now().strftime('%H:%M:%S')}
                                 if quantity > 0:
                                     cost = PRODUCT_COSTS.get(product_name, 0) * quantity
                                     total_costs += cost
+                                    products_matched += 1
+                                    logger.info(f"💰 {product_name}: {quantity}g/u × {PRODUCT_COSTS.get(product_name, 0)}€ = {cost:.2f}€")
                                     
                                 break
+                        
+                        if not matched and product_entry:
+                            products_unmatched.append(product_entry)
+                            logger.warning(f"⚠️ Produit non trouvé dans PRODUCT_COSTS: {product_entry}")
+            
+            if products_unmatched:
+                logger.warning(f"⚠️ {len(products_unmatched)} produits non matchés (coûts = 0)")
+                logger.warning(f"⚠️ Produits non matchés: {products_unmatched[:5]}...")  # Afficher les 5 premiers
+            
+            logger.info(f"💰 Total: {products_matched} produits matchés, coûts = {total_costs:.2f}€")
             
             gross_margin = product_revenue - total_costs
             margin_rate = (gross_margin / product_revenue * 100) if product_revenue > 0 else 0
@@ -8356,9 +8376,9 @@ Aucune donnée disponible.
                 for product_entry in products_str.split(','):
                     product_entry = product_entry.strip()
                     
-                    # Chercher correspondance avec nos produits
+                    # Chercher correspondance avec nos produits (insensible à la casse)
                     for product_name in PRODUCT_COSTS.keys():
-                        if product_name in product_entry:
+                        if product_name.lower() in product_entry.lower():
                             # Extraire quantité
                             match_weight = re.search(r'\((\d+(?:\.\d+)?)\s*g\)', product_entry)
                             match_units = re.search(r'\((\d+)\s*unités?\)', product_entry)

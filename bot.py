@@ -5975,14 +5975,51 @@ async def admin_validate_order(update: Update, context: ContextTypes.DEFAULT_TYP
     else:
         logger.warning(f"⚠️ Commande {order_id} introuvable dans CSV - vente non enregistrée")
     
-    # Notifier le client
+    # Notifier le client avec résumé complet
     try:
-        await context.bot.send_message(
-            chat_id=customer_id,
-            text=f"{EMOJI_THEME['success']} COMMANDE LIVRÉE\n\n"
-                 f"Votre commande #{order_id} a été livrée !\n\n"
-                 f"Merci d'avoir commandé chez nous ! 🙏"
-        )
+        if order_data:
+            products_detail = order_data.get('products_display', order_data.get('products', 'N/A'))
+            
+            delivery_message = f"""{EMOJI_THEME['success']} COMMANDE LIVRÉE
+
+📋 Commande : #{order_id}
+
+Votre commande a été livrée avec succès !
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+🛍️ PRODUITS LIVRÉS :
+{products_detail}
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+💰 RÉCAPITULATIF :
+• Sous-total : {order_data.get('subtotal', 'N/A')}€
+• Livraison : {order_data.get('delivery_fee', '0')}€
+• TOTAL : {order_data.get('total')}€
+
+💳 Paiement : {order_data.get('payment_method', 'N/A')}
+📍 Adresse : {order_data.get('address', 'N/A')}
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+✨ Merci d'avoir commandé chez nous ! 🙏
+
+Nous espérons vous revoir très bientôt.
+N'hésitez pas à nous contacter avec /support si besoin.
+"""
+            await context.bot.send_message(
+                chat_id=customer_id,
+                text=delivery_message
+            )
+        else:
+            # Fallback si pas de order_data
+            await context.bot.send_message(
+                chat_id=customer_id,
+                text=f"{EMOJI_THEME['success']} COMMANDE LIVRÉE\n\n"
+                     f"Votre commande #{order_id} a été livrée !\n\n"
+                     f"Merci d'avoir commandé chez nous ! 🙏"
+            )
     except Exception as e:
         logger.error(f"Erreur notification client: {e}")
     
@@ -10102,17 +10139,30 @@ async def admin_confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     # NOTIFICATION AU CLIENT
     try:
+        # Récupérer les détails depuis products_display s'il existe, sinon depuis products
+        products_detail = order.get('products_display', order.get('products', 'N/A'))
+        
         client_message = f"""✅ COMMANDE VALIDÉE !
 
 📋 Commande : {order_id}
 
 Votre commande a été validée par notre équipe.
 
-🛍️ Produits :
-{order.get('products_display', order.get('products', 'N/A'))}
+━━━━━━━━━━━━━━━━━━━━━━
 
-💰 Total : {order.get('total')}€
+🛍️ PRODUITS :
+{products_detail}
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+💰 RÉCAPITULATIF :
+• Sous-total : {order.get('subtotal', 'N/A')}€
+• Livraison : {order.get('delivery_fee', '0')}€
+• TOTAL : {order.get('total')}€
+
 💳 Paiement : {order.get('payment_method', 'N/A')}
+
+━━━━━━━━━━━━━━━━━━━━━━
 
 📦 Nous préparons actuellement votre commande.
 Vous recevrez une notification dès qu'elle sera prête !
@@ -10190,18 +10240,31 @@ async def mark_order_ready(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_orders_csv(csv_path, orders)
     
     # NOTIFICATION AU CLIENT
+    products_detail = order.get('products_display', order.get('products', 'N/A'))
+    
     client_notification = f"""✅ VOTRE COMMANDE EST PRÊTE !
 
 📋 Commande : {order_id}
 
 Votre commande a été préparée et est prête à être livrée.
 
-🛍️ Produits :
-{order.get('products_display', order.get('products', 'N/A'))}
+━━━━━━━━━━━━━━━━━━━━━━
 
-💰 Total : {order.get('total')}€
+🛍️ PRODUITS :
+{products_detail}
 
-📍 Livraison : {order.get('delivery_type')}
+━━━━━━━━━━━━━━━━━━━━━━
+
+💰 RÉCAPITULATIF :
+• Sous-total : {order.get('subtotal', 'N/A')}€
+• Livraison : {order.get('delivery_fee', '0')}€
+• TOTAL : {order.get('total')}€
+
+💳 Paiement : {order.get('payment_method', 'N/A')}
+📍 Livraison : {order.get('delivery_type', 'N/A')}
+📍 Adresse : {order.get('address', 'N/A')}
+
+━━━━━━━━━━━━━━━━━━━━━━
 
 Nous vous contacterons très prochainement pour organiser la livraison.
 

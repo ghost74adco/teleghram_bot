@@ -2842,7 +2842,10 @@ Sélectionnez votre langue préférée :"""
             name = lang_data.get('name', lang_code.upper())
             keyboard.append([InlineKeyboardButton(f"{flag} {name}", callback_data=f"lang_{lang_code}")])
     
-    keyboard.append([InlineKeyboardButton("🔙 Retour / Back", callback_data="start_menu")])
+    # Ajouter le bouton retour SEULEMENT si appelé depuis le menu (query existe)
+    # Pas de retour au premier /start
+    if query:
+        keyboard.append([InlineKeyboardButton("🔙 Retour / Back", callback_data="start_menu")])
     
     if query:
         await query.edit_message_text(
@@ -2949,7 +2952,7 @@ async def start_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @error_handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler pour la commande /start"""
+    """Handler pour la commande /start - AFFICHE TOUJOURS LE MENU DE LANGUE"""
     user = update.effective_user
     user_id = user.id
 
@@ -2961,34 +2964,37 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    user_data_dict = {
-        "username": user.username or "N/A",
-        "first_name": user.first_name or "Utilisateur",
-        "last_name": user.last_name or "",
-        "language_code": user.language_code or "fr",
-        "language": "fr"  # Par défaut FR, l'utilisateur choisira
-    }
-
+    # Vérifier si nouveau ou existant
     if is_new_user(user_id):
-        # Nouvel utilisateur
+        # Nouvel utilisateur - créer le compte
+        user_data_dict = {
+            "username": user.username or "N/A",
+            "first_name": user.first_name or "Utilisateur",
+            "last_name": user.last_name or "",
+            "language_code": user.language_code or "fr",
+            "language": "fr"  # Par défaut FR, l'utilisateur choisira
+        }
+        
         add_user(user_id, user_data_dict)
         logger.info(f"🆕 Nouvel utilisateur: {user_id} - {user_data_dict['first_name']}")
-        await notify_admin_new_user(context, user_id, user_data_dict)
+        
+        # Notification admin en arrière-plan (non-bloquant)
+        try:
+            await notify_admin_new_user(context, user_id, user_data_dict)
+        except:
+            pass  # Ne pas bloquer si la notification échoue
         
         # Initialiser la langue par défaut dans context
         context.user_data['language'] = 'fr'
-        
-        # AFFICHER LE MENU DE LANGUE EN PREMIER
-        await language_menu(update, context)
     else:
-        # Utilisateur existant - charger sa langue
+        # Utilisateur existant - charger sa langue sauvegardée
         users = load_users()
         saved_user_data = users.get(str(user_id), {})
-        lang = saved_user_data.get('language', user.language_code or 'fr')
+        lang = saved_user_data.get('language', 'fr')
         context.user_data['language'] = lang
-        
-        # Rediriger vers start_menu
-        await start_menu(update, context)
+    
+    # AFFICHER LE MENU DE LANGUE POUR TOUS (nouveau ET existant)
+    await language_menu(update, context)
     
     logger.info(f"✅ /start traité: {user_id}")
 

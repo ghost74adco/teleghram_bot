@@ -7163,6 +7163,118 @@ async def send_weekly_report(context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Erreur envoi rapport hebdo: {e}")
 
+async def check_salary_notifications(context: ContextTypes.DEFAULT_TYPE):
+    """Vérifie si aujourd'hui est un jour de paie et envoie les notifications"""
+    try:
+        config = load_salary_config()
+        now = datetime.now()
+        today = now.day  # Jour du mois (1-31)
+        weekday = now.isoweekday()  # Jour de la semaine (1=Lundi, 7=Dimanche)
+        
+        logger.info(f"🔔 Vérification notifications salaire - Jour: {today}, Semaine: {weekday}")
+        
+        if 'admins' not in config:
+            logger.info("⚠️ Aucun admin configuré pour les salaires")
+            return
+        
+        for admin_id, admin_config in config['admins'].items():
+            if not admin_config.get('active', False):
+                logger.info(f"⏭️ Admin {admin_id} inactif, skip")
+                continue
+            
+            salary_type = admin_config.get('salary_type', 'monthly')
+            payment_day = admin_config.get('payment_day', 1)
+            fixed_salary = admin_config.get('fixed_salary', 0)
+            admin_name = admin_config.get('name', 'Admin')
+            
+            should_notify = False
+            period_label = ""
+            
+            if salary_type == 'monthly':
+                # Vérifier si c'est le jour du mois
+                if today == payment_day:
+                    should_notify = True
+                    period_label = f"du mois de {now.strftime('%B %Y')}"
+                    logger.info(f"✅ Jour de paie mensuel pour {admin_name} (jour {payment_day})")
+            
+            elif salary_type == 'weekly':
+                # Vérifier si c'est le jour de la semaine
+                if weekday == payment_day:
+                    should_notify = True
+                    period_label = f"de la semaine du {now.strftime('%d/%m/%Y')}"
+                    logger.info(f"✅ Jour de paie hebdomadaire pour {admin_name} (jour {payment_day})")
+            
+            if should_notify:
+                # Charger commissions et dépenses
+                commissions_data = load_commissions()
+                expenses = load_expenses()
+                
+                # Calculer commissions
+                commissions = 0
+                if str(admin_id) in commissions_data:
+                    admin_commissions = commissions_data[str(admin_id)]
+                    if isinstance(admin_commissions, dict):
+                        commissions = sum(admin_commissions.values())
+                    elif isinstance(admin_commissions, (int, float)):
+                        commissions = admin_commissions
+                
+                # Calculer remboursements non payés
+                unreimbursed = 0
+                if str(admin_id) in expenses:
+                    for expense in expenses[str(admin_id)]:
+                        if not expense.get('reimbursed', False):
+                            unreimbursed += expense.get('amount', 0)
+                
+                total = fixed_salary + commissions + unreimbursed
+                
+                # Construire le message
+                message = f"""💼 NOTIFICATION SALAIRE
+
+👤 {admin_name}
+
+📅 Période: {period_label}
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+💰 DÉTAILS:
+• Salaire fixe : {fixed_salary:.2f}€
+• Commissions : {commissions:.2f}€
+• Remboursements : {unreimbursed:.2f}€
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+💵 TOTAL À PAYER : {total:.2f}€
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+📝 Pour enregistrer le paiement:
+/admin → 💼 Gestion Salaires → Payer {admin_name}
+"""
+                
+                try:
+                    await context.bot.send_message(
+                        chat_id=int(admin_id),
+                        text=message
+                    )
+                    logger.info(f"✅ Notification salaire envoyée à {admin_name} (ID: {admin_id})")
+                    
+                    # Notifier aussi les super-admins
+                    for super_admin_id in get_super_admin_ids():
+                        if str(super_admin_id) != admin_id:
+                            try:
+                                await context.bot.send_message(
+                                    chat_id=super_admin_id,
+                                    text=f"🔔 Notification salaire envoyée à {admin_name}\nMontant: {total:.2f}€"
+                                )
+                            except:
+                                pass
+                
+                except Exception as e:
+                    logger.error(f"❌ Erreur envoi notification salaire à {admin_id}: {e}")
+    
+    except Exception as e:
+        logger.error(f"❌ Erreur check_salary_notifications: {e}")
+
 async def schedule_reports(context: ContextTypes.DEFAULT_TYPE):
     """Planifie les rapports automatiques"""
     now = datetime.now()
@@ -14192,6 +14304,9 @@ async def main():
     
     job_queue.run_daily(check_stocks_job, time=time(9, 0))
     logger.info("✅ Job: Vérification stocks (9h)")
+    
+    job_queue.run_daily(check_salary_notifications, time=time(8, 0))
+    logger.info("✅ Job: Notifications salaires (8h)")
     
     job_queue.run_daily(schedule_reports, time=time(23, 59))
     logger.info("✅ Job: Rapport hebdomadaire (tous les jours 23h59, filtrage interne)")

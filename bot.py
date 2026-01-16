@@ -1012,11 +1012,66 @@ def load_translations():
             with open(lang_file, 'r', encoding='utf-8') as f:
                 import json
                 data = json.load(f)
-                return data.get('translations', {}), data.get('languages', {})
-        return {}, {}
+                translations = data.get('translations', {})
+                languages = data.get('languages', {})
+                
+                # Si les données sont chargées correctement
+                if translations and languages:
+                    return translations, languages
+        
+        # Fallback: retourner les données en dur si le fichier n'existe pas ou est vide
+        print("⚠️ languages.json non trouvé ou vide - utilisation du fallback")
     except Exception as e:
-        logger.error(f"Erreur chargement languages.json: {e}")
-        return {}, {}
+        print(f"❌ Erreur chargement languages.json: {e}")
+    
+    # FALLBACK: Configuration en dur
+    fallback_languages = {
+        'fr': {'name': 'Français', 'flag': '🇫🇷', 'active': True},
+        'en': {'name': 'English', 'flag': '🇬🇧', 'active': True},
+        'de': {'name': 'Deutsch', 'flag': '🇩🇪', 'active': True},
+        'es': {'name': 'Español', 'flag': '🇪🇸', 'active': True},
+        'it': {'name': 'Italiano', 'flag': '🇮🇹', 'active': True}
+    }
+    
+    fallback_translations = {
+        'welcome': {
+            'fr': 'Bienvenue {name} !',
+            'en': 'Welcome {name}!',
+            'de': 'Willkommen {name}!',
+            'es': '¡Bienvenido {name}!',
+            'it': 'Benvenuto {name}!'
+        },
+        'choose_language': {
+            'fr': '🌍 Choisir la langue',
+            'en': '🌍 Choose language',
+            'de': '🌍 Sprache wählen',
+            'es': '🌍 Elegir idioma',
+            'it': '🌍 Scegli lingua'
+        },
+        'choose_country': {
+            'fr': 'Choisissez votre pays',
+            'en': 'Choose your country',
+            'de': 'Wählen Sie Ihr Land',
+            'es': 'Elija su país',
+            'it': 'Scegli il tuo paese'
+        },
+        'cart': {
+            'fr': '🛒 Panier',
+            'en': '🛒 Cart',
+            'de': '🛒 Warenkorb',
+            'es': '🛒 Carrito',
+            'it': '🛒 Carrello'
+        },
+        'help': {
+            'fr': 'Aide',
+            'en': 'Help',
+            'de': 'Hilfe',
+            'es': 'Ayuda',
+            'it': 'Aiuto'
+        }
+    }
+    
+    return fallback_translations, fallback_languages
 
 # Charger les traductions au démarrage
 LANG_TRANSLATIONS, LANG_CONFIG = load_translations()
@@ -2825,6 +2880,10 @@ async def language_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query:
         await query.answer()
     
+    # DEBUG: Vérifier si LANG_CONFIG est chargé
+    logger.info(f"🌐 LANG_CONFIG disponible: {len(LANG_CONFIG)} langues")
+    logger.info(f"🌐 Langues: {list(LANG_CONFIG.keys())}")
+    
     message = """🌐 CHOISISSEZ VOTRE LANGUE
 CHOOSE YOUR LANGUAGE
 WÄHLEN SIE IHRE SPRACHE
@@ -2835,12 +2894,16 @@ Sélectionnez votre langue préférée :"""
     
     keyboard = []
     
-    # Construire le menu depuis languages.json
+    # Construire le menu depuis LANG_CONFIG
     for lang_code, lang_data in LANG_CONFIG.items():
+        logger.info(f"  → {lang_code}: {lang_data}")
         if lang_data.get('active', False):
             flag = lang_data.get('flag', '')
             name = lang_data.get('name', lang_code.upper())
             keyboard.append([InlineKeyboardButton(f"{flag} {name}", callback_data=f"lang_{lang_code}")])
+            logger.info(f"    ✅ Ajouté: {flag} {name}")
+    
+    logger.info(f"🌐 Keyboard final: {len(keyboard)} boutons")
     
     # Ajouter le bouton retour SEULEMENT si appelé depuis le menu (query existe)
     # Pas de retour au premier /start

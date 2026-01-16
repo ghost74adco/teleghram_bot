@@ -7508,8 +7508,8 @@ ID : {payment['id']}
 """
         
         keyboard = [
-            [InlineKeyboardButton("✅ Approuver", callback_data=f"approve_pay_{payment['id']}")],
-            [InlineKeyboardButton("❌ Refuser", callback_data=f"reject_pay_{payment['id']}")]
+            [InlineKeyboardButton("✅ Approuver", callback_data=f"approve_payment_{payment['id']}")],
+            [InlineKeyboardButton("❌ Refuser", callback_data=f"reject_payment_{payment['id']}")]
         ]
         
         try:

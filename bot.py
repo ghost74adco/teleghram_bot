@@ -2966,7 +2966,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "first_name": user.first_name or "Utilisateur",
         "last_name": user.last_name or "",
         "language_code": user.language_code or "fr",
-        "language": user.language_code or "fr"  # Initialiser avec la langue Telegram
+        "language": "fr"  # Par défaut FR, l'utilisateur choisira
     }
 
     if is_new_user(user_id):
@@ -2975,26 +2975,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"🆕 Nouvel utilisateur: {user_id} - {user_data_dict['first_name']}")
         await notify_admin_new_user(context, user_id, user_data_dict)
         
-        # Initialiser la langue dans context
-        context.user_data['language'] = user_data_dict.get('language', 'fr')
+        # Initialiser la langue par défaut dans context
+        context.user_data['language'] = 'fr'
         
-        # Message de bienvenue avec traduction
-        welcome_message = tr(context, 'welcome_new_user', name=user_data_dict['first_name'])
-        
-        keyboard = [
-            [
-                InlineKeyboardButton("🇫🇷 France", callback_data="country_fr"),
-                InlineKeyboardButton("🇨🇭 Suisse", callback_data="country_ch"),
-                InlineKeyboardButton("🇦🇺 Australie", callback_data="country_au")
-            ],
-            [InlineKeyboardButton(tr(context, 'choose_language'), callback_data="language_menu")],
-            [InlineKeyboardButton(f"{EMOJI_THEME['info']} {tr(context, 'help')}", callback_data="help")]
-        ]
-        
-        await update.message.reply_text(
-            welcome_message,
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        # AFFICHER LE MENU DE LANGUE EN PREMIER
+        await language_menu(update, context)
     else:
         # Utilisateur existant - charger sa langue
         users = load_users()

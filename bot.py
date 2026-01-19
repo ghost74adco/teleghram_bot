@@ -11865,11 +11865,12 @@ async def ledger_add_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     entry_type = "income" if "income" in query.data else "expense"
     
-    if entry_type == "income":
+   if entry_type == "income":
         message = """➕ AJOUTER ENTRÉE D'ARGENT
 
 Sélectionnez la catégorie :
-"""categories = [
+"""
+        categories = [
             ("💰 Vente", "ledger_cat_income_Vente"),
             ("🎁 Remboursement", "ledger_cat_income_Remboursement"),
             ("💵 Apport", "ledger_cat_income_Apport"),
@@ -11887,7 +11888,6 @@ Sélectionnez la catégorie :
             ("🚗 Frais divers", "ledger_cat_expense_Divers"),
             ("📤 Autre sortie", "ledger_cat_expense_Autre")
         ]
-    
     keyboard = []
     for label, callback in categories:
         keyboard.append([InlineKeyboardButton(label, callback_data=callback)])

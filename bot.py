@@ -2966,9 +2966,7 @@ async def start_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = user.id
     
     if query:
-        await query.answer()
-    
-    # Charger les données utilisateur
+        await query.answer()# Charger les données utilisateur
     users = load_users()
     user_data = users.get(str(user_id), {})
     
@@ -4084,6 +4082,66 @@ Que souhaitez-vous faire ?
     )
 
 @error_handler
+
+@error_handler
+async def admin_add_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ajouter un nouveau produit - Guide"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    message = """➕ AJOUTER UN PRODUIT
+
+⚠️ Les produits sont gérés via fichier JSON.
+
+📝 Pour ajouter un produit:
+
+1️⃣ Modifier le fichier:
+   data/product_registry.json
+
+2️⃣ Ajouter votre produit:
+```json
+{
+  "nom_produit": {
+    "name": "Nom affiché",
+    "code": "nom_produit",
+    "emoji": "🎯",
+    "category": "pill",
+    "image": "image.jpg",
+    "created_at": "2025-01-19T12:00:00"
+  }
+}
+```
+
+3️⃣ Redémarrer le bot
+
+4️⃣ Définir le prix:
+   /admin → Tarifs
+
+5️⃣ Définir le stock:
+   /admin → Stocks
+
+6️⃣ Activer le produit:
+   /admin → Produits → Activer/Désactiver
+
+📂 Catégories disponibles:
+• pill - Pills (prix unitaire)
+• rock - Crystal (prix/gramme)
+• powder - Weed (prix/gramme)
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_products")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
 async def admin_list_products(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Liste tous les produits"""
     query = update.callback_query
@@ -5875,8 +5933,7 @@ async def confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"❌ Échec sauvegarde commande {order_id} dans CSV")
     
     # Mettre à jour l'historique client
-    update_client_history(user_id, {
-        'order_id': order_id,
+    update_client_history(user_id, {'order_id': order_id,
         'total': total_info['total'],
         'products': cart
     })
@@ -6082,7 +6139,7 @@ async def admin_validate_order(update: Update, context: ContextTypes.DEFAULT_TYP
                     
                     # Supprimer les emojis et nettoyer
                     # Regex: "Nom x Quantité g/unités" (avec ou SANS espaces autour du x)
-                    match = re.match(r'[^\w\s]*(.+?)\s*x\s*([\d.]+)\s*(g|unités?)', line, re.UNICODE)
+                    match = re.match(r'[^\w\s]*\s*(.+?)\s*[xX×]\s*([\d.]+)\s*(g|grammes?|unités?|u|pcs?)', line, re.UNICODE | re.IGNORECASE)
                     
                     if match:
                         product_raw = match.group(1).strip()
@@ -6367,6 +6424,16 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     if context.user_data.get('setting_fixed_salary'):
         await receive_fixed_salary(update, context)
         return
+
+    # État: En attente ID pour donner VIP
+    if context.user_data.get('awaiting_vip_grant'):
+        await receive_vip_grant(update, context)
+        return
+
+    # État: En attente ID pour révoquer VIP
+    if context.user_data.get('awaiting_vip_revoke'):
+        await receive_vip_revoke(update, context)
+        return
     
     # État: En attente valeur commission (super-admin)
     if context.user_data.get('setting_commission'):
@@ -6417,6 +6484,8 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop('editing_order_total', None)
     context.user_data.pop('editing_order_delivery', None)
     context.user_data.pop('setting_fixed_salary', None)
+    context.user_data.pop('awaiting_vip_grant', None)
+    context.user_data.pop('awaiting_vip_revoke', None)
     context.user_data.pop('setting_commission', None)
     context.user_data.pop('awaiting_ledger_description', None)
     context.user_data.pop('awaiting_ledger_amount', None)
@@ -8832,8 +8901,7 @@ Contactez le super-admin pour plus d'informations.
     except Exception as e:
         logger.error(f"Erreur notification rejet: {e}")
     
-    # Retour à la liste
-    await admin_finances_all_expenses(update, context)
+    # Retour à la listeawait admin_finances_all_expenses(update, context)
     
     logger.info(f"❌ Consommable rejeté: {expense_id} - {expense_found['amount']}€")
 
@@ -11801,8 +11869,7 @@ async def ledger_add_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message = """➕ AJOUTER ENTRÉE D'ARGENT
 
 Sélectionnez la catégorie :
-"""
-        categories = [
+"""categories = [
             ("💰 Vente", "ledger_cat_income_Vente"),
             ("🎁 Remboursement", "ledger_cat_income_Remboursement"),
             ("💵 Apport", "ledger_cat_income_Apport"),
@@ -12482,6 +12549,7 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(admin_list_products, pattern="^admin_list_products$"))
     application.add_handler(CallbackQueryHandler(admin_toggle_products, pattern="^admin_toggle_products$"))
     application.add_handler(CallbackQueryHandler(admin_toggle_product_execute, pattern="^admin_toggle_"))
+    application.add_handler(CallbackQueryHandler(admin_add_product, pattern="^admin_add_product$"))
     
     # Callbacks admin - stocks
     application.add_handler(CallbackQueryHandler(admin_stocks, pattern="^admin_stocks$"))
@@ -12536,6 +12604,13 @@ def setup_handlers(application):
     
     # Callbacks admin - gestion salaires
     application.add_handler(CallbackQueryHandler(admin_salary_config, pattern="^admin_salary_config$"))
+
+    # Gestion VIP
+    application.add_handler(CallbackQueryHandler(admin_vip_management, pattern="^admin_vip_management$"))
+    application.add_handler(CallbackQueryHandler(vip_list_clients, pattern="^vip_list_clients$"))
+    application.add_handler(CallbackQueryHandler(vip_grant_status, pattern="^vip_grant_status$"))
+    application.add_handler(CallbackQueryHandler(vip_revoke_status, pattern="^vip_revoke_status$"))
+    application.add_handler(CommandHandler("test_stock", test_stock_deduction))
     application.add_handler(CallbackQueryHandler(salary_admin_detail, pattern="^salary_admin_"))
     application.add_handler(CallbackQueryHandler(set_fixed_salary, pattern="^set_fixed_"))
     application.add_handler(CallbackQueryHandler(set_commission_type, pattern="^set_commission_"))

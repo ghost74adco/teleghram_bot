@@ -7285,6 +7285,318 @@ async def schedule_reports(context: ContextTypes.DEFAULT_TYPE):
         if not last_weekly or (now - datetime.fromisoformat(last_weekly)).days >= 7:
             await send_weekly_report(context)
 
+# ==================== ADMIN: GESTION VIP ====================
+
+@error_handler
+async def admin_vip_management(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu principal gestion VIP"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    message = f"""💎 GESTION VIP
+
+📊 Configuration actuelle:
+• Seuil VIP : {VIP_THRESHOLD}€
+• Réduction VIP : {VIP_DISCOUNT}%
+
+👥 Gestion des clients VIP:
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("💰 Modifier seuil VIP", callback_data="edit_vip_threshold")],
+        [InlineKeyboardButton("💸 Modifier réduction VIP", callback_data="edit_vip_discount")],
+        [InlineKeyboardButton("👥 Voir clients VIP", callback_data="vip_list_clients")],
+        [InlineKeyboardButton("🎁 Donner statut VIP", callback_data="vip_grant_status")],
+        [InlineKeyboardButton("❌ Révoquer statut VIP", callback_data="vip_revoke_status")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_panel")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def vip_list_clients(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Liste tous les clients VIP"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    history = load_client_history()
+    
+    vip_clients = []
+    for user_id, data in history.items():
+        if data.get('vip_status', False):
+            vip_clients.append({
+                'user_id': user_id,
+                'name': data.get('first_name', 'Inconnu'),
+                'total_spent': data.get('total_spent', 0),
+                'orders': data.get('orders_count', 0)
+            })
+    
+    # Trier par dépenses
+    vip_clients.sort(key=lambda x: x['total_spent'], reverse=True)
+    
+    if not vip_clients:
+        message = """💎 CLIENTS VIP
+
+Aucun client VIP pour le moment.
+"""
+    else:
+        message = f"""💎 CLIENTS VIP ({len(vip_clients)})
+
+"""
+        for i, client in enumerate(vip_clients[:20], 1):
+            message += f"""{i}. {client['name']} (ID: {client['user_id']})
+   💰 {client['total_spent']:.2f}€ • 📦 {client['orders']} commandes
+
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_vip_management")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+@error_handler
+async def vip_grant_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Donner manuellement le statut VIP"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    message = """🎁 DONNER STATUT VIP
+
+Entrez l'ID Telegram du client:
+
+Example: 123456789
+
+Pour trouver l'ID d'un client:
+1. /admin → 👥 Clients
+2. Chercher le client
+3. Copier son ID
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_vip_management")]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    context.user_data['awaiting_vip_grant'] = True
+
+@error_handler
+async def receive_vip_grant(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Réceptionne l'ID pour donner le statut VIP"""
+    if not is_super_admin(update.effective_user.id):
+        return
+    
+    try:
+        user_id_to_grant = int(update.message.text.strip())
+        
+        history = load_client_history()
+        
+        if str(user_id_to_grant) not in history:
+            await update.message.reply_text(
+                f"{EMOJI_THEME['error']} Client introuvable (ID: {user_id_to_grant})\n\n"
+                "Vérifiez que ce client a déjà passé au moins une commande."
+            )
+            context.user_data.pop('awaiting_vip_grant', None)
+            return
+        
+        # Donner le statut VIP
+        history[str(user_id_to_grant)]['vip_status'] = True
+        history[str(user_id_to_grant)]['vip_granted_manually'] = True
+        history[str(user_id_to_grant)]['vip_granted_date'] = datetime.now().isoformat()
+        history[str(user_id_to_grant)]['vip_granted_by'] = update.effective_user.id
+        
+        save_client_history(history)
+        
+        client_name = history[str(user_id_to_grant)].get('first_name', 'Client')
+        total_spent = history[str(user_id_to_grant)].get('total_spent', 0)
+        
+        # Notifier le client
+        try:
+            await context.bot.send_message(
+                chat_id=user_id_to_grant,
+                text=f"""🎉 FÉLICITATIONS !
+
+Vous avez reçu le statut VIP ! 💎
+
+Vous bénéficiez maintenant de {VIP_DISCOUNT}% de réduction sur toutes vos commandes.
+
+Merci de votre fidélité ! 🙏
+"""
+            )
+        except Exception as e:
+            logger.error(f"Erreur notification VIP granted: {e}")
+        
+        await update.message.reply_text(
+            f"""{EMOJI_THEME['success']} STATUT VIP ACCORDÉ
+
+👤 Client : {client_name}
+🆔 ID : {user_id_to_grant}
+💰 Total dépensé : {total_spent:.2f}€
+
+✅ Le client bénéficie maintenant de {VIP_DISCOUNT}% de réduction.
+""",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("💎 Gestion VIP", callback_data="admin_vip_management")
+            ]])
+        )
+        
+        context.user_data.pop('awaiting_vip_grant', None)
+        
+        logger.info(f"💎 Statut VIP accordé manuellement à {user_id_to_grant} par {update.effective_user.id}")
+    
+    except ValueError:
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} ID invalide. Utilisez un nombre.\n"
+            "Exemple : 123456789"
+        )
+
+@error_handler
+async def vip_revoke_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Révoquer le statut VIP"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.answer("Accès refusé", show_alert=True)
+        return
+    
+    message = """❌ RÉVOQUER STATUT VIP
+
+Entrez l'ID Telegram du client:
+
+Example: 123456789
+
+⚠️ Le client perdra sa réduction VIP sur ses prochaines commandes.
+"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="admin_vip_management")]]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    context.user_data['awaiting_vip_revoke'] = True
+
+@error_handler
+async def receive_vip_revoke(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Réceptionne l'ID pour révoquer le statut VIP"""
+    if not is_super_admin(update.effective_user.id):
+        return
+    
+    try:
+        user_id_to_revoke = int(update.message.text.strip())
+        
+        history = load_client_history()
+        
+        if str(user_id_to_revoke) not in history:
+            await update.message.reply_text(
+                f"{EMOJI_THEME['error']} Client introuvable (ID: {user_id_to_revoke})"
+            )
+            context.user_data.pop('awaiting_vip_revoke', None)
+            return
+        
+        if not history[str(user_id_to_revoke)].get('vip_status', False):
+            await update.message.reply_text(
+                f"{EMOJI_THEME['warning']} Ce client n'est pas VIP."
+            )
+            context.user_data.pop('awaiting_vip_revoke', None)
+            return
+        
+        # Révoquer le statut VIP
+        history[str(user_id_to_revoke)]['vip_status'] = False
+        history[str(user_id_to_revoke)]['vip_revoked_date'] = datetime.now().isoformat()
+        history[str(user_id_to_revoke)]['vip_revoked_by'] = update.effective_user.id
+        
+        save_client_history(history)
+        
+        client_name = history[str(user_id_to_revoke)].get('first_name', 'Client')
+        total_spent = history[str(user_id_to_revoke)].get('total_spent', 0)
+        
+        # Notifier le client
+        try:
+            await context.bot.send_message(
+                chat_id=user_id_to_revoke,
+                text=f"""💎 STATUT VIP RÉVOQUÉ
+
+Votre statut VIP a été révoqué.
+
+Vous pouvez le récupérer en atteignant {VIP_THRESHOLD}€ de dépenses.
+
+Merci de votre compréhension.
+"""
+            )
+        except Exception as e:
+            logger.error(f"Erreur notification VIP revoked: {e}")
+        
+        await update.message.reply_text(
+            f"""{EMOJI_THEME['success']} STATUT VIP RÉVOQUÉ
+
+👤 Client : {client_name}
+🆔 ID : {user_id_to_revoke}
+💰 Total dépensé : {total_spent:.2f}€
+
+✅ Le client ne bénéficie plus de la réduction VIP.
+""",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("💎 Gestion VIP", callback_data="admin_vip_management")
+            ]])
+        )
+        
+        context.user_data.pop('awaiting_vip_revoke', None)
+        
+        logger.info(f"💎 Statut VIP révoqué pour {user_id_to_revoke} par {update.effective_user.id}")
+    
+    except ValueError:
+        await update.message.reply_text(
+            f"{EMOJI_THEME['error']} ID invalide. Utilisez un nombre.\n"
+            "Exemple : 123456789"
+        )
+
+@error_handler
+async def test_stock_deduction(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Test de déduction de stock (commande /test_stock)"""
+    if not is_super_admin(update.effective_user.id):
+        await update.message.reply_text("❌ Accès refusé")
+        return
+    
+    product = "Crystal"
+    quantity = 1
+    
+    stock_before = get_stock(product)
+    update_stock(product, -quantity)
+    stock_after = get_stock(product)
+    
+    await update.message.reply_text(
+        f"📦 TEST DÉDUCTION STOCK\n\n"
+        f"Produit: {product}\n"
+        f"Quantité: -{quantity}\n\n"
+        f"Stock AVANT: {stock_before}\n"
+        f"Stock APRÈS: {stock_after}\n\n"
+        f"{'✅ OK' if stock_after < stock_before else '❌ ÉCHEC'}"
+    )
+
+
 async def heartbeat_maintenance(context: ContextTypes.DEFAULT_TYPE):
     """Met à jour régulièrement le timestamp pour éviter les faux positifs"""
     update_last_online()

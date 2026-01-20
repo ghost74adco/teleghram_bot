@@ -357,7 +357,8 @@ class JSONDict(dict):
         self._load_from_json()
     
     def _load_from_json(self):
-        """Charge les prix depuis JSON"""
+        """Charge les prix depuis JSON + fallback hardcodés"""
+        # 1. Charger depuis products.json
         products = PRODUCTS_DATA.get('products', {})
         for product_id, product_data in products.items():
             # Nom du produit en français
@@ -365,7 +366,36 @@ class JSONDict(dict):
             # Prix pour ce pays (CORRECTION: 'price' et non 'prices')
             price = product_data.get('price', {}).get(self.country, 0)
             # Stocker dans le dict
-            self[name] = price
+            if price > 0:  # Seulement si le prix est défini
+                self[name] = price
+        
+        # 2. FALLBACK : Prix hardcodés pour compatibilité avec anciens produits
+        hardcoded_prices_fr = {
+            "❄️ Coco": 60, "💊 Squid Game": 15, "💊 Punisher": 15,
+            "🫒 Hash": 10, "🍀 Weed": 10, "🪨 MDMA": 40,
+            "🪨 4MMC": 20, "🍄 Ketamine": 40
+        }
+        
+        hardcoded_prices_ch = {
+            "❄️ Coco": 80, "💊 Squid Game": 20, "💊 Punisher": 20,
+            "🫒 Hash": 15, "🍀 Weed": 15, "🪨 MDMA": 50,
+            "🪨 4MMC": 25, "🍄 Ketamine": 50
+        }
+        
+        # Ajouter les prix hardcodés seulement s'ils ne sont pas déjà dans le dict
+        if self.country == 'FR':
+            for name, price in hardcoded_prices_fr.items():
+                if name not in self:
+                    self[name] = price
+        elif self.country == 'CH':
+            for name, price in hardcoded_prices_ch.items():
+                if name not in self:
+                    self[name] = price
+        elif self.country == 'AU':
+            # Prix AU = Prix FR + 10€ par défaut pour les produits hardcodés
+            for name, price in hardcoded_prices_fr.items():
+                if name not in self:
+                    self[name] = price + 10
     
     def reload(self):
         """Recharge depuis JSON après modification"""
@@ -1630,17 +1660,26 @@ def init_product_codes():
 
 def load_available_products():
     """Charge la liste des produits disponibles (actifs uniquement)"""
-    # Charger depuis products.json directement
-    products = PRODUCTS_DATA.get('products', {})
     available = set()
     
+    # 1. Charger depuis products.json
+    products = PRODUCTS_DATA.get('products', {})
     for product_id, product_data in products.items():
         # Ne prendre que les produits actifs
         if product_data.get('active', True):
             name = product_data.get('name', {}).get('fr', product_id)
             available.add(name)
     
-    # Si aucun produit, fallback sur PRIX_FR
+    # 2. Ajouter les produits hardcodés (fallback pour compatibilité)
+    hardcoded_products = [
+        "❄️ Coco", "💊 Squid Game", "💊 Punisher",
+        "🫒 Hash", "🍀 Weed", "🪨 MDMA",
+        "🪨 4MMC", "🍄 Ketamine"
+    ]
+    for name in hardcoded_products:
+        available.add(name)
+    
+    # 3. Si vraiment aucun produit, fallback sur PRIX_FR
     if not available:
         available = set(PRIX_FR.keys())
     
@@ -13235,6 +13274,13 @@ def add_product_to_json(product_data: dict) -> bool:
         # 4. Recharger tout
         reload_products()
         init_product_codes()
+        
+        # 5. Vérifier que le produit est bien accessible
+        logger.info(f"🔍 Vérification après ajout:")
+        logger.info(f"   • Produit dans PRIX_FR? {product_name_fr in PRIX_FR}")
+        logger.info(f"   • Prix FR: {PRIX_FR.get(product_name_fr, 'NON TROUVÉ')}")
+        logger.info(f"   • Produit dans available? {product_name_fr in load_available_products()}")
+        logger.info(f"   • Total produits disponibles: {len(load_available_products())}")
         
         logger.info(f"✅ Produit {product_id} ajouté avec succès")
         return True

@@ -11869,7 +11869,7 @@ async def ledger_add_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     entry_type = "income" if "income" in query.data else "expense"
     
-   if entry_type == "income":
+    if entry_type == "income":
         message = """➕ AJOUTER ENTRÉE D'ARGENT
 
 Sélectionnez la catégorie :

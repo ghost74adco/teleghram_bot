@@ -362,8 +362,8 @@ class JSONDict(dict):
         for product_id, product_data in products.items():
             # Nom du produit en français
             name = product_data.get('name', {}).get('fr', product_id)
-            # Prix pour ce pays
-            price = product_data.get('prices', {}).get(self.country, 0)
+            # Prix pour ce pays (CORRECTION: 'price' et non 'prices')
+            price = product_data.get('price', {}).get(self.country, 0)
             # Stocker dans le dict
             self[name] = price
     
@@ -401,7 +401,8 @@ class StockDict(dict):
         products = PRODUCTS_DATA.get('products', {})
         for product_id, product_data in products.items():
             name = product_data.get('name', {}).get('fr', product_id)
-            stock = product_data.get('stock', 0)
+            # CORRECTION: 'quantity' et non 'stock'
+            stock = product_data.get('quantity', 0)
             self[name] = stock
     
     def reload(self):
@@ -418,11 +419,11 @@ class StockDict(dict):
             name = product_data.get('name', {}).get('fr', product_id)
             name_to_id[name] = product_id
         
-        # Mettre à jour les stocks
+        # Mettre à jour les stocks (CORRECTION: 'quantity' et non 'stock')
         for name, stock in self.items():
             product_id = name_to_id.get(name)
             if product_id and product_id in products:
-                products[product_id]['stock'] = stock
+                products[product_id]['quantity'] = stock
         
         # Sauvegarder
         PRODUCTS_DATA['products'] = products
@@ -1628,15 +1629,22 @@ def init_product_codes():
 # ==================== GESTION PRODUITS DISPONIBLES ====================
 
 def load_available_products():
-    """Charge la liste des produits disponibles"""
-    if AVAILABLE_PRODUCTS_FILE.exists():
-        try:
-            with open(AVAILABLE_PRODUCTS_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                return set(data.get("available", list(PRIX_FR.keys())))
-        except:
-            pass
-    return set(PRIX_FR.keys())
+    """Charge la liste des produits disponibles (actifs uniquement)"""
+    # Charger depuis products.json directement
+    products = PRODUCTS_DATA.get('products', {})
+    available = set()
+    
+    for product_id, product_data in products.items():
+        # Ne prendre que les produits actifs
+        if product_data.get('active', True):
+            name = product_data.get('name', {}).get('fr', product_id)
+            available.add(name)
+    
+    # Si aucun produit, fallback sur PRIX_FR
+    if not available:
+        available = set(PRIX_FR.keys())
+    
+    return available
 
 def save_available_products(products):
     """Sauvegarde la liste des produits disponibles"""

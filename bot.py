@@ -12926,7 +12926,7 @@ Sélectionnez produit :
     keyboard = []
     for product_id, product_data in list(products.items())[:15]:
         name = product_data.get('name', {}).get('fr', product_id)
-        stock = product_data.get('stock', 0)
+        stock = product_data.get('quantity', 0)  # CORRECTION: 'quantity' au lieu de 'stock'
         emoji = "🔴" if stock < 20 else "⚠️" if stock < 50 else "✅"
         keyboard.append([InlineKeyboardButton(f"{emoji} {name} ({stock}g)", callback_data=f"editstock_{product_id}")])
     
@@ -12949,7 +12949,7 @@ async def edit_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     name = product.get('name', {}).get('fr', product_id)
-    stock = product.get('stock', 0)
+    stock = product.get('quantity', 0)  # CORRECTION: 'quantity' au lieu de 'stock'
     
     message = f"""📦 MODIFIER STOCK
 
@@ -12990,8 +12990,8 @@ async def receive_stock_edition(update: Update, context: ContextTypes.DEFAULT_TY
             await update.message.reply_text("❌ Produit introuvable")
             return
         
-        old_stock = product.get('stock', 0)
-        product['stock'] = new_stock
+        old_stock = product.get('quantity', 0)  # CORRECTION
+        product['quantity'] = new_stock  # CORRECTION
         
         PRODUCTS_DATA['products'] = products
         save_json_file(PRODUCTS_FILE, PRODUCTS_DATA)
@@ -13057,7 +13057,7 @@ async def edit_price_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     name = product.get('name', {}).get('fr', product_id)
-    prices = product.get('prices', {})
+    prices = product.get('price', {})  # CORRECTION: 'price' au lieu de 'prices'
     
     message = f"""💰 MODIFIER PRIX
 
@@ -13098,7 +13098,7 @@ async def edit_price_country(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
     
     name = product.get('name', {}).get('fr', product_id)
-    current_price = product.get('prices', {}).get(country, 0)
+    current_price = product.get('price', {}).get(country, 0)  # CORRECTION
     
     country_names = {'FR': 'France', 'CH': 'Suisse', 'AU': 'Australie'}
     
@@ -13143,8 +13143,8 @@ async def receive_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Produit introuvable")
             return
         
-        old_price = product.get('prices', {}).get(country, 0)
-        product['prices'][country] = new_price
+        old_price = product.get('price', {}).get(country, 0)  # CORRECTION
+        product['price'][country] = new_price  # CORRECTION
         
         PRODUCTS_DATA['products'] = products
         save_json_file(PRODUCTS_FILE, PRODUCTS_DATA)
@@ -13507,6 +13507,7 @@ async def product_category_received(update: Update, context: ContextTypes.DEFAUL
             "AU": product_data['price_au']
         },
         "quantity": product_data['quantity'],
+        "available_quantities": [1.0, 2.0, 3.0, 5.0, 10.0, 25.0, 50.0, 100.0],  # Quantités standard
         "category": category,
         "active": True,
         "created_at": datetime.now().isoformat(),
@@ -13835,8 +13836,8 @@ async def list_products(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for product_id, product_data in products.items():
         name = product_data.get('name', {}).get('fr', product_id)
         active = "✅" if product_data.get('active', True) else "❌"
-        stock = product_data.get('stock', 0)
-        prices_fr = product_data.get('prices', {}).get('FR', 0)
+        stock = product_data.get('quantity', 0)  # CORRECTION
+        prices_fr = product_data.get('price', {}).get('FR', 0)  # CORRECTION: 'price' au lieu de 'prices'
         message += f"{active} {name}\n  Stock: {stock}g | Prix FR: {prices_fr}€\n\n"
     
     keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="edit_products_menu")]]

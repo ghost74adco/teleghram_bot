@@ -1670,18 +1670,10 @@ def load_available_products():
             name = product_data.get('name', {}).get('fr', product_id)
             available.add(name)
     
-    # 2. Ajouter les produits hardcodés (fallback pour compatibilité)
-    hardcoded_products = [
-        "❄️ Coco", "💊 Squid Game", "💊 Punisher",
-        "🫒 Hash", "🍀 Weed", "🪨 MDMA",
-        "🪨 4MMC", "🍄 Ketamine"
-    ]
-    for name in hardcoded_products:
-        available.add(name)
-    
-    # 3. Si vraiment aucun produit, fallback sur PRIX_FR
-    if not available:
-        available = set(PRIX_FR.keys())
+    # 2. Ajouter UNIQUEMENT depuis PRIX_FR (qui contient déjà les produits hardcodés ET ceux du JSON)
+    # Ceci évite les doublons car PRIX_FR est la source de vérité après reload()
+    for product_name in PRIX_FR.keys():
+        available.add(product_name)
     
     return available
 

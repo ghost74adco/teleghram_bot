@@ -13202,23 +13202,38 @@ def generate_product_id():
     return f"P{next_id:03d}"
 
 def add_product_to_json(product_data: dict) -> bool:
-    """Ajoute un produit au fichier products.json"""
+    """Ajoute un produit au fichier products.json et au product_registry.json"""
     try:
+        # Récupérer et retirer l'ID du dictionnaire
+        product_id = product_data.pop('id')
+        product_name_fr = product_data['name']['fr']
+        product_category = product_data.get('category', 'powder')
+        
+        # 1. Ajouter au products.json
         products = PRODUCTS_DATA.get('products', {})
-        product_id = product_data['id']
-        
-        # Ajouter le nouveau produit
         products[product_id] = product_data
-        
-        # Sauvegarder
         PRODUCTS_DATA['products'] = products
         success = save_json_file(PRODUCTS_FILE, PRODUCTS_DATA)
         
-        if success:
-            reload_products()
-            logger.info(f"✅ Produit {product_id} ajouté avec succès")
-            return True
-        return False
+        if not success:
+            return False
+        
+        # 2. Ajouter au product_registry.json
+        registry = load_product_registry()
+        registry[product_id] = {
+            "name": product_name_fr,
+            "category": product_category,
+            "hash": hashlib.sha256(product_name_fr.encode()).hexdigest()[:8]
+        }
+        save_product_registry(registry)
+        
+        # 3. Recharger tout
+        reload_products()
+        init_product_codes()
+        
+        logger.info(f"✅ Produit {product_id} ajouté avec succès")
+        return True
+        
     except Exception as e:
         logger.error(f"❌ Erreur ajout produit: {e}")
         return False

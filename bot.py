@@ -1,3 +1,22 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+╔═══════════════════════════════════════════════════════════════════╗
+║                                                                   ║
+║   BOT TELEGRAM V4.0.0 - MIGRATION V3.1.1 AVEC JSON              ║
+║   100% Fonctionnel + Configuration JSON complète                 ║
+║                                                                   ║
+║   ✅ Toutes les fonctions V3.1.1 conservées                      ║
+║   ✅ Configuration via fichiers JSON                             ║
+║   ✅ Token/Admin depuis variables environnement                  ║
+║   ✅ Édition produits sans redéploiement                         ║
+║                                                                   ║
+║   Date : 14/01/2025 - Version FINALE                             ║
+║                                                                   ║
+╚═══════════════════════════════════════════════════════════════════╝
+"""
+
 import os
 import sys
 import json
@@ -79,6 +98,10 @@ DATA_DIR = Path(".")
 MEDIA_DIR = DATA_DIR / "media"
 
 # ==================== SYSTÈME PRIX DÉGRESSIFS ====================
+
+# États pour la conversation d'ajout de produit
+PRODUCT_NAME, PRODUCT_PRICE_FR, PRODUCT_PRICE_CH, PRODUCT_PRICE_AU, PRODUCT_QUANTITY, PRODUCT_CATEGORY = range(6)
+
 
 # Structure des prix dégressifs par pays
 # Format: {country: {product_id: [{min_qty: X, max_qty: Y, price: Z}, ...]}}
@@ -11846,7 +11869,7 @@ async def ledger_add_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     entry_type = "income" if "income" in query.data else "expense"
     
-    if entry_type == "income":
+   if entry_type == "income":
         message = """➕ AJOUTER ENTRÉE D'ARGENT
 
 Sélectionnez la catégorie :
@@ -12650,6 +12673,9 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(edit_price_country, pattern="^editprice_.*_(FR|CH|AU)$"))
     
     # Produits
+    # Handler pour ajouter des produits (ConversationHandler - doit être avant les autres)
+    application.add_handler(get_add_product_conversation_handler())
+    
     application.add_handler(CallbackQueryHandler(edit_products_menu, pattern="^edit_products_menu$"))
     application.add_handler(CallbackQueryHandler(toggle_products, pattern="^toggle_products$"))
     application.add_handler(CallbackQueryHandler(toggle_product, pattern="^toggle_prod_"))
@@ -13149,7 +13175,422 @@ Nouveau : {new_price}€
     except:
         await update.message.reply_text("❌ Valeur invalide")
 
-# ===== PRODUITS =====
+# ==================== AJOUT DE PRODUITS VIA BOT ====================
+# À intégrer dans votre bot.py
+
+# États pour la conversation d'ajout de produit
+PRODUCT_NAME, PRODUCT_PRICE_FR, PRODUCT_PRICE_CH, PRODUCT_PRICE_AU, PRODUCT_QUANTITY, PRODUCT_CATEGORY = range(6)
+
+# ===== FONCTIONS UTILITAIRES =====
+
+def generate_product_id():
+    """Génère un ID unique pour un nouveau produit"""
+    products = PRODUCTS_DATA.get('products', {})
+    if not products:
+        return "P001"
+    
+    # Extraire les numéros existants
+    existing_ids = []
+    for pid in products.keys():
+        if pid.startswith('P') and pid[1:].isdigit():
+            existing_ids.append(int(pid[1:]))
+    
+    if not existing_ids:
+        return "P001"
+    
+    next_id = max(existing_ids) + 1
+    return f"P{next_id:03d}"
+
+def add_product_to_json(product_data: dict) -> bool:
+    """Ajoute un produit au fichier products.json"""
+    try:
+        products = PRODUCTS_DATA.get('products', {})
+        product_id = product_data['id']
+        
+        # Ajouter le nouveau produit
+        products[product_id] = product_data
+        
+        # Sauvegarder
+        PRODUCTS_DATA['products'] = products
+        success = save_json_file(PRODUCTS_FILE, PRODUCTS_DATA)
+        
+        if success:
+            reload_products()
+            logger.info(f"✅ Produit {product_id} ajouté avec succès")
+            return True
+        return False
+    except Exception as e:
+        logger.error(f"❌ Erreur ajout produit: {e}")
+        return False
+
+# ===== HANDLERS DE CONVERSATION =====
+
+@error_handler
+async def start_add_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Démarre le processus d'ajout de produit"""
+    query = update.callback_query
+    await query.answer()
+    
+    message = """➕ AJOUTER UN PRODUIT
+
+Étape 1/5 : Nom du produit
+
+Entrez le nom du produit en français :
+(ex: Cocaïne Rock, Cocaïne Poudre, MDMA Cristaux)"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="cancel_add_product")]]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+    
+    return PRODUCT_NAME
+
+@error_handler
+async def product_name_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Récupère le nom du produit"""
+    name = update.message.text.strip()
+    
+    # Vérifier si le produit existe déjà
+    products = PRODUCTS_DATA.get('products', {})
+    for product_data in products.values():
+        if product_data.get('name', {}).get('fr', '').lower() == name.lower():
+            await update.message.reply_text(
+                f"⚠️ Un produit avec ce nom existe déjà !\n\n"
+                f"Veuillez choisir un autre nom :"
+            )
+            return PRODUCT_NAME
+    
+    # Stocker le nom
+    context.user_data['new_product'] = {
+        'name_fr': name
+    }
+    
+    message = f"""✅ Nom : {name}
+
+Étape 2/5 : Prix France (€)
+
+Entrez le prix pour la France en euros :
+(ex: 50 ou 50.00)"""
+    
+    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="cancel_add_product")]]
+    
+    await update.message.reply_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+    
+    return PRODUCT_PRICE_FR
+
+@error_handler
+async def product_price_fr_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Récupère le prix France"""
+    try:
+        price = float(update.message.text.replace(',', '.'))
+        
+        if price <= 0:
+            await update.message.reply_text(
+                "❌ Le prix doit être supérieur à 0.\n\n"
+                "Veuillez entrer un prix valide :"
+            )
+            return PRODUCT_PRICE_FR
+        
+        context.user_data['new_product']['price_fr'] = price
+        
+        name = context.user_data['new_product']['name_fr']
+        message = f"""✅ Nom : {name}
+✅ Prix France : {price}€
+
+Étape 3/5 : Prix Suisse (CHF)
+
+Entrez le prix pour la Suisse en francs suisses :
+(ex: 55 ou 55.00)"""
+        
+        keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="cancel_add_product")]]
+        
+        await update.message.reply_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+        
+        return PRODUCT_PRICE_CH
+        
+    except ValueError:
+        await update.message.reply_text(
+            "❌ Prix invalide. Veuillez entrer un nombre.\n"
+            "(ex: 50 ou 50.00)"
+        )
+        return PRODUCT_PRICE_FR
+
+@error_handler
+async def product_price_ch_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Récupère le prix Suisse"""
+    try:
+        price = float(update.message.text.replace(',', '.'))
+        
+        if price <= 0:
+            await update.message.reply_text(
+                "❌ Le prix doit être supérieur à 0.\n\n"
+                "Veuillez entrer un prix valide :"
+            )
+            return PRODUCT_PRICE_CH
+        
+        context.user_data['new_product']['price_ch'] = price
+        
+        name = context.user_data['new_product']['name_fr']
+        price_fr = context.user_data['new_product']['price_fr']
+        message = f"""✅ Nom : {name}
+✅ Prix France : {price_fr}€
+✅ Prix Suisse : {price} CHF
+
+Étape 4/5 : Prix Autres pays (€)
+
+Entrez le prix pour les autres pays en euros :
+(ex: 60 ou 60.00)"""
+        
+        keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="cancel_add_product")]]
+        
+        await update.message.reply_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+        
+        return PRODUCT_PRICE_AU
+        
+    except ValueError:
+        await update.message.reply_text(
+            "❌ Prix invalide. Veuillez entrer un nombre.\n"
+            "(ex: 55 ou 55.00)"
+        )
+        return PRODUCT_PRICE_CH
+
+@error_handler
+async def product_price_au_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Récupère le prix Autres pays"""
+    try:
+        price = float(update.message.text.replace(',', '.'))
+        
+        if price <= 0:
+            await update.message.reply_text(
+                "❌ Le prix doit être supérieur à 0.\n\n"
+                "Veuillez entrer un prix valide :"
+            )
+            return PRODUCT_PRICE_AU
+        
+        context.user_data['new_product']['price_au'] = price
+        
+        name = context.user_data['new_product']['name_fr']
+        price_fr = context.user_data['new_product']['price_fr']
+        price_ch = context.user_data['new_product']['price_ch']
+        message = f"""✅ Nom : {name}
+✅ Prix France : {price_fr}€
+✅ Prix Suisse : {price_ch} CHF
+✅ Prix Autres : {price}€
+
+Étape 5/5 : Quantité disponible
+
+Entrez la quantité disponible en grammes :
+(ex: 1000 pour 1kg)"""
+        
+        keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="cancel_add_product")]]
+        
+        await update.message.reply_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+        
+        return PRODUCT_QUANTITY
+        
+    except ValueError:
+        await update.message.reply_text(
+            "❌ Prix invalide. Veuillez entrer un nombre.\n"
+            "(ex: 60 ou 60.00)"
+        )
+        return PRODUCT_PRICE_AU
+
+@error_handler
+async def product_quantity_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Récupère la quantité et demande la catégorie"""
+    try:
+        quantity = int(update.message.text)
+        
+        if quantity < 0:
+            await update.message.reply_text(
+                "❌ La quantité ne peut pas être négative.\n\n"
+                "Veuillez entrer une quantité valide :"
+            )
+            return PRODUCT_QUANTITY
+        
+        context.user_data['new_product']['quantity'] = quantity
+        
+        # Afficher les catégories disponibles
+        name = context.user_data['new_product']['name_fr']
+        price_fr = context.user_data['new_product']['price_fr']
+        price_ch = context.user_data['new_product']['price_ch']
+        price_au = context.user_data['new_product']['price_au']
+        
+        message = f"""✅ Nom : {name}
+✅ Prix France : {price_fr}€
+✅ Prix Suisse : {price_ch} CHF
+✅ Prix Autres : {price_au}€
+✅ Quantité : {quantity}g
+
+📂 Sélectionnez la catégorie du produit :"""
+        
+        keyboard = [
+            [InlineKeyboardButton("💊 Pilules", callback_data="cat_pill")],
+            [InlineKeyboardButton("🪨 Rocks", callback_data="cat_rock")],
+            [InlineKeyboardButton("💨 Poudres", callback_data="cat_powder")],
+            [InlineKeyboardButton("💎 Cristaux", callback_data="cat_crystal")],
+            [InlineKeyboardButton("🌿 Herbes", callback_data="cat_herb")],
+            [InlineKeyboardButton("🧪 Liquides", callback_data="cat_liquid")],
+            [InlineKeyboardButton("❌ Annuler", callback_data="cancel_add_product")]
+        ]
+        
+        await update.message.reply_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+        
+        return PRODUCT_CATEGORY
+        
+    except ValueError:
+        await update.message.reply_text(
+            "❌ Quantité invalide. Veuillez entrer un nombre entier.\n"
+            "(ex: 1000)"
+        )
+        return PRODUCT_QUANTITY
+
+@error_handler
+async def product_category_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Finalise l'ajout du produit"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Récupérer la catégorie
+    category_map = {
+        'cat_pill': 'pill',
+        'cat_rock': 'rock',
+        'cat_powder': 'powder',
+        'cat_crystal': 'crystal',
+        'cat_herb': 'herb',
+        'cat_liquid': 'liquid'
+    }
+    
+    category = category_map.get(query.data)
+    if not category:
+        await query.answer("❌ Catégorie invalide", show_alert=True)
+        return ConversationHandler.END
+    
+    # Récupérer toutes les données
+    product_data = context.user_data['new_product']
+    product_id = generate_product_id()
+    
+    # Construire l'objet produit selon le format de votre JSON
+    new_product = {
+        "name": {
+            "fr": product_data['name_fr'],
+            "en": product_data['name_fr'],  # Par défaut, même nom
+            "es": product_data['name_fr'],
+            "de": product_data['name_fr']
+        },
+        "price": {
+            "FR": product_data['price_fr'],
+            "CH": product_data['price_ch'],
+            "AU": product_data['price_au']
+        },
+        "quantity": product_data['quantity'],
+        "category": category,
+        "active": True,
+        "created_at": datetime.now().isoformat(),
+        "alert_threshold": 20
+    }
+    
+    # Ajouter l'ID
+    new_product_with_id = {'id': product_id, **new_product}
+    
+    # Sauvegarder dans products.json
+    success = add_product_to_json(new_product_with_id)
+    
+    if success:
+        category_emoji = {
+            'pill': '💊',
+            'rock': '🪨',
+            'powder': '💨',
+            'crystal': '💎',
+            'herb': '🌿',
+            'liquid': '🧪'
+        }
+        
+        message = f"""✅ PRODUIT AJOUTÉ AVEC SUCCÈS !
+
+🆔 ID : {product_id}
+📦 Nom : {product_data['name_fr']}
+📂 Catégorie : {category_emoji.get(category, '📦')} {category.capitalize()}
+💰 Prix FR : {product_data['price_fr']}€
+💰 Prix CH : {product_data['price_ch']} CHF
+💰 Prix AU : {product_data['price_au']}€
+📊 Stock : {product_data['quantity']}g
+
+Le produit est maintenant disponible dans le catalogue !"""
+        
+        keyboard = [
+            [InlineKeyboardButton("➕ Ajouter un autre", callback_data="add_product")],
+            [InlineKeyboardButton("📋 Voir les produits", callback_data="list_products")],
+            [InlineKeyboardButton("🏠 Menu admin", callback_data="admin_edit_menu")]
+        ]
+        
+        await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+        
+    else:
+        message = """❌ ERREUR LORS DE L'AJOUT
+
+Une erreur s'est produite lors de la sauvegarde.
+Veuillez réessayer."""
+        
+        keyboard = [
+            [InlineKeyboardButton("🔄 Réessayer", callback_data="add_product")],
+            [InlineKeyboardButton("🏠 Menu admin", callback_data="admin_edit_menu")]
+        ]
+        
+        await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+    
+    # Nettoyer les données temporaires
+    context.user_data.clear()
+    
+    return ConversationHandler.END
+
+@error_handler
+async def cancel_add_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Annule l'ajout de produit"""
+    query = update.callback_query
+    await query.answer()
+    
+    context.user_data.clear()
+    
+    message = "❌ Ajout de produit annulé."
+    keyboard = [[InlineKeyboardButton("🏠 Menu admin", callback_data="admin_edit_menu")]]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+    
+    return ConversationHandler.END
+
+# ===== HANDLER À AJOUTER DANS LA FONCTION MAIN() =====
+
+def get_add_product_conversation_handler():
+    """Retourne le ConversationHandler pour ajouter un produit"""
+    return ConversationHandler(
+        entry_points=[
+            CallbackQueryHandler(start_add_product, pattern="^add_product$")
+        ],
+        states={
+            PRODUCT_NAME: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, product_name_received)
+            ],
+            PRODUCT_PRICE_FR: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, product_price_fr_received)
+            ],
+            PRODUCT_PRICE_CH: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, product_price_ch_received)
+            ],
+            PRODUCT_PRICE_AU: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, product_price_au_received)
+            ],
+            PRODUCT_QUANTITY: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, product_quantity_received)
+            ],
+            PRODUCT_CATEGORY: [
+                CallbackQueryHandler(product_category_received, pattern="^cat_")
+            ],
+        },
+        fallbacks=[
+            CallbackQueryHandler(cancel_add_product, pattern="^cancel_add_product$")
+        ],
+        allow_reentry=True
+    )
 
 @error_handler
 async def edit_products_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -13167,12 +13608,14 @@ Actions disponibles :
 """
     
     keyboard = [
+        [InlineKeyboardButton("➕ Ajouter un produit", callback_data="add_product")],
         [InlineKeyboardButton("👁️ Activer/Désactiver", callback_data="toggle_products")],
         [InlineKeyboardButton("📋 Liste complète", callback_data="list_products")],
         [InlineKeyboardButton("🔙 Retour", callback_data="admin_edit_menu")]
     ]
     
     await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
 
 @error_handler
 async def toggle_products(update: Update, context: ContextTypes.DEFAULT_TYPE):

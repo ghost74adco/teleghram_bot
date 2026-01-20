@@ -979,20 +979,6 @@ ROCK_SUBCATEGORIES = {}
 IMAGES_PRODUITS = {}
 VIDEOS_PRODUITS = {}
 
-# ==================== PRIX DE BASE ====================
-
-PRIX_FR = {
-    "❄️ Coco": 60, "💊 Squid Game": 15, "💊 Punisher": 15,
-    "🫒 Hash": 10, "🍀 Weed": 10, "🪨 MDMA": 40,
-    "🪨 4MMC": 20, "🍄 Ketamine": 40
-}
-
-PRIX_CH = {
-    "❄️ Coco": 80, "💊 Squid Game": 20, "💊 Punisher": 20,
-    "🫒 Hash": 15, "🍀 Weed": 15, "🪨 MDMA": 50,
-    "🪨 4MMC": 25, "🍄 Ketamine": 50
-}
-
 # ==================== TRADUCTIONS ====================
 
 TRANSLATIONS = {
@@ -13209,6 +13195,8 @@ def add_product_to_json(product_data: dict) -> bool:
         product_name_fr = product_data['name']['fr']
         product_category = product_data.get('category', 'powder')
         
+        logger.info(f"📝 Ajout produit {product_id}: {product_name_fr}")
+        
         # 1. Ajouter au products.json
         products = PRODUCTS_DATA.get('products', {})
         products[product_id] = product_data
@@ -13216,7 +13204,10 @@ def add_product_to_json(product_data: dict) -> bool:
         success = save_json_file(PRODUCTS_FILE, PRODUCTS_DATA)
         
         if not success:
+            logger.error("❌ Échec sauvegarde products.json")
             return False
+        
+        logger.info("✅ Sauvegarde products.json OK")
         
         # 2. Ajouter au product_registry.json
         registry = load_product_registry()
@@ -13226,8 +13217,14 @@ def add_product_to_json(product_data: dict) -> bool:
             "hash": hashlib.sha256(product_name_fr.encode()).hexdigest()[:8]
         }
         save_product_registry(registry)
+        logger.info("✅ Sauvegarde product_registry.json OK")
         
-        # 3. Recharger tout
+        # 3. Vérifier les types avant reload
+        logger.info(f"🔍 Type de PRIX_FR avant reload: {type(PRIX_FR)}")
+        logger.info(f"🔍 Type de PRIX_CH avant reload: {type(PRIX_CH)}")
+        logger.info(f"🔍 A reload? {hasattr(PRIX_FR, 'reload')}")
+        
+        # 4. Recharger tout
         reload_products()
         init_product_codes()
         
@@ -13236,6 +13233,8 @@ def add_product_to_json(product_data: dict) -> bool:
         
     except Exception as e:
         logger.error(f"❌ Erreur ajout produit: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return False
 
 # ===== HANDLERS DE CONVERSATION =====
@@ -13444,6 +13443,7 @@ async def product_quantity_received(update: Update, context: ContextTypes.DEFAUL
             [InlineKeyboardButton("💨 Poudres", callback_data="cat_powder")],
             [InlineKeyboardButton("💎 Cristaux", callback_data="cat_crystal")],
             [InlineKeyboardButton("🌿 Herbes", callback_data="cat_herb")],
+            [InlineKeyboardButton("🫒 Hash", callback_data="cat_hash")],
             [InlineKeyboardButton("🧪 Liquides", callback_data="cat_liquid")],
             [InlineKeyboardButton("❌ Annuler", callback_data="cancel_add_product")]
         ]
@@ -13472,6 +13472,7 @@ async def product_category_received(update: Update, context: ContextTypes.DEFAUL
         'cat_powder': 'powder',
         'cat_crystal': 'crystal',
         'cat_herb': 'herb',
+        'cat_hash': 'hash',
         'cat_liquid': 'liquid'
     }
     
@@ -13517,6 +13518,7 @@ async def product_category_received(update: Update, context: ContextTypes.DEFAUL
             'powder': '💨',
             'crystal': '💎',
             'herb': '🌿',
+            'hash': '🫒',
             'liquid': '🧪'
         }
         

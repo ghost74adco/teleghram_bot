@@ -3053,9 +3053,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Notification admin en arrière-plan (non-bloquant)
         try:
-            await notify_admin_new_user(context, user_id, user_data_dict)
-        except:
-            pass  # Ne pas bloquer si la notification échoue
+            admin_ids = get_admin_ids()
+            if not admin_ids:
+                logger.warning("⚠️ Aucun admin configuré - notification nouvelle connexion non envoyée")
+            else:
+                logger.info(f"📨 Envoi notification nouvelle connexion à {len(admin_ids)} admin(s)")
+                await notify_admin_new_user(context, user_id, user_data_dict)
+        except Exception as e:
+            logger.error(f"❌ Erreur notification admin nouvelle connexion: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
         
         # Initialiser la langue par défaut dans context
         context.user_data['language'] = 'fr'
@@ -7648,6 +7655,108 @@ async def migrate_hardcoded_products(update: Update, context: ContextTypes.DEFAU
             f"❌ Erreur lors de la migration\n\n"
             f"Détails: {str(e)}\n\n"
             f"Vérifiez les logs du bot pour plus d'infos"
+        )
+
+@error_handler
+async def test_notif(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Test des notifications admin - Commande /test_notif"""
+    user_id = update.effective_user.id
+    
+    # Vérifier si admin
+    if not is_admin(user_id):
+        await update.message.reply_text("❌ Accès refusé - Commande admin uniquement")
+        return
+    
+    await update.message.reply_text("🔍 Test des notifications...\n")
+    
+    try:
+        # Test 1 : Vérifier les admins
+        admin_ids = get_admin_ids()
+        super_admin_ids = get_super_admin_ids()
+        
+        message = f"""📊 DIAGNOSTIC NOTIFICATIONS
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+👥 ADMINS CONFIGURÉS
+
+Total admins: {len(admin_ids)}
+Super-admins: {len(super_admin_ids)}
+
+Liste des IDs:
+"""
+        
+        for aid in admin_ids:
+            is_super = aid in super_admin_ids
+            marker = "⭐" if is_super else "👤"
+            message += f"{marker} {aid}\n"
+        
+        if not admin_ids:
+            message += "\n❌ PROBLÈME: Aucun admin configuré !\n"
+            message += "\nSolution: Ajoutez des admins dans admins.json\n"
+        
+        message += "\n━━━━━━━━━━━━━━━━━━━━━━\n"
+        
+        # Test 2 : Tester l'envoi
+        if admin_ids:
+            message += "\n🧪 TEST D'ENVOI\n\n"
+            
+            test_message = f"""🧪 MESSAGE DE TEST
+
+Ceci est un test des notifications admin.
+
+✅ Si vous recevez ce message, les notifications fonctionnent !
+
+📅 {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+"""
+            
+            success_count = 0
+            fail_count = 0
+            
+            for admin_id in admin_ids:
+                try:
+                    await context.bot.send_message(
+                        chat_id=admin_id,
+                        text=test_message
+                    )
+                    success_count += 1
+                    logger.info(f"✅ Test notification envoyée à {admin_id}")
+                except Exception as e:
+                    fail_count += 1
+                    logger.error(f"❌ Erreur envoi à {admin_id}: {e}")
+            
+            message += f"✅ Envoyés: {success_count}/{len(admin_ids)}\n"
+            if fail_count > 0:
+                message += f"❌ Échecs: {fail_count}\n"
+                message += "\nVérifiez les logs pour plus de détails\n"
+        
+        message += "\n━━━━━━━━━━━━━━━━━━━━━━\n"
+        message += "\n📝 CONFIGURATION\n\n"
+        
+        # Vérifier admins.json
+        try:
+            admins_data = load_admins()
+            message += f"✅ admins.json: {len(admins_data)} entrée(s)\n"
+        except:
+            message += "❌ admins.json: Erreur de lecture\n"
+        
+        message += "\n━━━━━━━━━━━━━━━━━━━━━━\n"
+        message += "\n💡 TYPES DE NOTIFICATIONS\n\n"
+        message += "• Nouvelle connexion utilisateur\n"
+        message += "• Nouvelle commande\n"
+        message += "• Stock faible\n"
+        message += "• Rupture de stock\n"
+        message += "• Nouveau client VIP\n"
+        
+        await update.message.reply_text(message)
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur test_notif: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        await update.message.reply_text(
+            f"❌ Erreur lors du test\n\n"
+            f"Détails: {str(e)}"
         )
 
 async def schedule_reports(context: ContextTypes.DEFAULT_TYPE):
@@ -12807,6 +12916,7 @@ def setup_handlers(application):
     application.add_handler(CommandHandler("cancel", cancel_command))
     application.add_handler(CommandHandler("diag_salaires", diag_salaires))
     application.add_handler(CommandHandler("migrate", migrate_hardcoded_products))
+    application.add_handler(CommandHandler("test_notif", test_notif))
     
     # Callbacks généraux
     application.add_handler(CallbackQueryHandler(back_to_main, pattern="^back_to_main$"))

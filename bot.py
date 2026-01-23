@@ -7370,6 +7370,145 @@ async def check_salary_notifications(context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"❌ Erreur check_salary_notifications: {e}")
 
+@error_handler
+async def diag_salaires(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Diagnostic des notifications de salaires - Commande /diag_salaires"""
+    user_id = update.effective_user.id
+    
+    # Vérifier si admin
+    if not is_admin(user_id):
+        await update.message.reply_text("❌ Accès refusé - Commande admin uniquement")
+        return
+    
+    try:
+        config = load_salary_config()
+        now = datetime.now()
+        today = now.day
+        weekday = now.isoweekday()
+        
+        days_fr = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
+        
+        message = f"""🔍 DIAGNOSTIC NOTIFICATIONS SALAIRES
+
+📅 Date actuelle: {now.strftime('%d/%m/%Y %H:%M')}
+   • Jour du mois: {today}
+   • Jour de la semaine: {days_fr[weekday-1]} ({weekday})
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+"""
+        
+        if 'admins' not in config or not config['admins']:
+            message += """❌ PROBLÈME: Aucun admin configuré
+
+📝 Solution:
+/admin → 💼 Gestion Salaires → Configurer
+"""
+            await update.message.reply_text(message)
+            return
+        
+        admins = config['admins']
+        message += f"👥 Admins configurés: {len(admins)}\n\n"
+        
+        active_count = 0
+        payday_today = False
+        
+        for admin_id, admin_config in admins.items():
+            name = admin_config.get('name', f'Admin {admin_id}')
+            active = admin_config.get('active', False)
+            salary_type = admin_config.get('salary_type', 'N/A')
+            payment_day = admin_config.get('payment_day', 'N/A')
+            fixed_salary = admin_config.get('fixed_salary', 0)
+            
+            if active:
+                active_count += 1
+            
+            status_emoji = "✅" if active else "❌"
+            message += f"{status_emoji} {name}\n"
+            message += f"   Type: {salary_type}\n"
+            message += f"   Jour: {payment_day}\n"
+            message += f"   Salaire: {fixed_salary}€\n"
+            
+            # Vérifier si aujourd'hui est jour de paie
+            is_payday = False
+            next_pay = ""
+            
+            if active:
+                if salary_type == 'monthly':
+                    if payment_day == today:
+                        is_payday = True
+                        payday_today = True
+                        message += f"   🎉 AUJOURD'HUI = JOUR DE PAIE !\n"
+                    else:
+                        if payment_day > today:
+                            next_pay = f"le {payment_day}/{now.month}"
+                        else:
+                            next_month = now.month + 1 if now.month < 12 else 1
+                            next_pay = f"le {payment_day}/{next_month}"
+                        message += f"   📅 Prochain: {next_pay}\n"
+                
+                elif salary_type == 'weekly':
+                    if payment_day == weekday:
+                        is_payday = True
+                        payday_today = True
+                        message += f"   🎉 AUJOURD'HUI = JOUR DE PAIE !\n"
+                    else:
+                        message += f"   📅 Prochain: chaque {days_fr[payment_day-1]}\n"
+            else:
+                message += f"   ⚠️  INACTIF - Pas de notification\n"
+            
+            message += "\n"
+        
+        message += "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        
+        # Résumé
+        if active_count == 0:
+            message += """❌ PROBLÈME: Tous les admins sont inactifs
+
+📝 Solution:
+/admin → Gestion Salaires → Configurer → Activer
+"""
+        else:
+            message += f"✅ Admins actifs: {active_count}/{len(admins)}\n\n"
+        
+        # Info sur les notifications
+        message += """⏰ HEURE DE NOTIFICATION
+
+Les notifications sont envoyées à 8h00 UTC:
+• France hiver: 9h00
+• France été: 10h00
+• Suisse: 9h00 (hiver) / 10h00 (été)
+
+"""
+        
+        if payday_today:
+            message += """🔔 NOTIFICATION AUJOURD'HUI
+
+Une notification devrait être envoyée à 8h00 UTC.
+
+Vérifiez les logs du bot pour confirmer:
+"✅ Notification salaire envoyée à..."
+
+"""
+        else:
+            message += "⏸️  Aucune notification prévue aujourd'hui\n\n"
+        
+        # Vérifications
+        message += "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        message += "✅ CHECKLIST:\n"
+        message += f"{'✅' if config.get('admins') else '❌'} salaries.json configuré\n"
+        message += f"{'✅' if active_count > 0 else '❌'} Au moins 1 admin actif\n"
+        message += f"{'✅' if payday_today else '⏸️ '} Jour de paie aujourd'hui\n"
+        
+        await update.message.reply_text(message)
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur diag_salaires: {e}")
+        await update.message.reply_text(
+            f"❌ Erreur lors du diagnostic\n\n"
+            f"Détails: {str(e)}"
+        )
+
 async def schedule_reports(context: ContextTypes.DEFAULT_TYPE):
     """Planifie les rapports automatiques"""
     now = datetime.now()
@@ -12525,6 +12664,7 @@ def setup_handlers(application):
     application.add_handler(CommandHandler("fix_csv", fix_csv_command))
     application.add_handler(CommandHandler("myid", get_my_id))
     application.add_handler(CommandHandler("cancel", cancel_command))
+    application.add_handler(CommandHandler("diag_salaires", diag_salaires))
     
     # Callbacks généraux
     application.add_handler(CallbackQueryHandler(back_to_main, pattern="^back_to_main$"))

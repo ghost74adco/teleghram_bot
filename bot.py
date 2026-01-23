@@ -357,8 +357,8 @@ class JSONDict(dict):
         self._load_from_json()
     
     def _load_from_json(self):
-        """Charge les prix depuis JSON + fallback hardcodés"""
-        # 1. Charger depuis products.json (SEULEMENT les produits actifs)
+        """Charge les prix depuis JSON (UNIQUEMENT depuis products.json)"""
+        # Charger UNIQUEMENT depuis products.json (SEULEMENT les produits actifs)
         products = PRODUCTS_DATA.get('products', {})
         for product_id, product_data in products.items():
             # Vérifier si le produit est actif
@@ -372,34 +372,6 @@ class JSONDict(dict):
             # Stocker dans le dict SEULEMENT si prix > 0
             if price > 0:
                 self[name] = price
-        
-        # 2. FALLBACK : Prix hardcodés pour compatibilité avec anciens produits
-        hardcoded_prices_fr = {
-            "❄️ Coco": 60, "💊 Squid Game": 15, "💊 Punisher": 15,
-            "🫒 Hash": 10, "🍀 Weed": 10, "🪨 MDMA": 40,
-            "🪨 4MMC": 20, "🍄 Ketamine": 40
-        }
-        
-        hardcoded_prices_ch = {
-            "❄️ Coco": 80, "💊 Squid Game": 20, "💊 Punisher": 20,
-            "🫒 Hash": 15, "🍀 Weed": 15, "🪨 MDMA": 50,
-            "🪨 4MMC": 25, "🍄 Ketamine": 50
-        }
-        
-        # Ajouter les prix hardcodés seulement s'ils ne sont pas déjà dans le dict
-        if self.country == 'FR':
-            for name, price in hardcoded_prices_fr.items():
-                if name not in self:
-                    self[name] = price
-        elif self.country == 'CH':
-            for name, price in hardcoded_prices_ch.items():
-                if name not in self:
-                    self[name] = price
-        elif self.country == 'AU':
-            # Prix AU = Prix FR + 10€ par défaut pour les produits hardcodés
-            for name, price in hardcoded_prices_fr.items():
-                if name not in self:
-                    self[name] = price + 10
     
     def reload(self):
         """Recharge depuis JSON après modification"""
@@ -4199,21 +4171,20 @@ async def admin_toggle_products(update: Update, context: ContextTypes.DEFAULT_TY
     query = update.callback_query
     await query.answer()
     
-    registry = load_product_registry()
-    available = get_available_products()
+    products = PRODUCTS_DATA.get('products', {})
     
     message = "✅ ACTIVER/DÉSACTIVER PRODUITS\n\nCliquez pour changer le statut :\n"
     
     keyboard = []
-    for code, product in sorted(registry.items()):
-        name = product['name']
-        is_available = name in available
-        icon = "✅" if is_available else "❌"
+    for product_id, product_data in sorted(products.items()):
+        name = product_data.get('name', {}).get('fr', product_id)
+        is_active = product_data.get('active', True)
+        icon = "✅" if is_active else "❌"
         
         keyboard.append([
             InlineKeyboardButton(
                 f"{icon} {name}",
-                callback_data=f"admin_toggle_{code}"
+                callback_data=f"admin_toggle_{product_id}"
             )
         ])
     
@@ -4230,31 +4201,36 @@ async def admin_toggle_product_execute(update: Update, context: ContextTypes.DEF
     query = update.callback_query
     await query.answer()
     
-    code = query.data.replace("admin_toggle_", "")
-    registry = load_product_registry()
+    product_id = query.data.replace("admin_toggle_", "")
+    products = PRODUCTS_DATA.get('products', {})
     
-    if code not in registry:
+    if product_id not in products:
         await query.answer("Produit introuvable", show_alert=True)
         return
     
-    product_name = registry[code]['name']
-    available = get_available_products()
+    product = products[product_id]
+    product_name = product.get('name', {}).get('fr', product_id)
+    current_state = product.get('active', True)
     
-    if product_name in available:
-        available.remove(product_name)
-        action = "désactivé"
-    else:
-        available.add(product_name)
-        action = "activé"
+    # Toggle l'état
+    product['active'] = not current_state
     
-    save_available_products(available)
+    # Sauvegarder
+    PRODUCTS_DATA['products'] = products
+    save_json_file(PRODUCTS_FILE, PRODUCTS_DATA)
+    
+    # Recharger tout
+    reload_products()
+    init_product_codes()
+    
+    action = "activé" if not current_state else "désactivé"
     
     await query.answer(f"{product_name} {action}", show_alert=True)
     
     # Rafraîchir la liste
     await admin_toggle_products(update, context)
     
-    logger.info(f"🔄 Produit {action}: {product_name}")
+    logger.info(f"🔄 Produit {action}: {product_name} (ID: {product_id})")
 
 # ==================== GESTION STOCKS ====================
 
@@ -7507,6 +7483,157 @@ Vérifiez les logs du bot pour confirmer:
         await update.message.reply_text(
             f"❌ Erreur lors du diagnostic\n\n"
             f"Détails: {str(e)}"
+        )
+
+@error_handler
+async def migrate_hardcoded_products(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Migration des produits hardcodés vers products.json - Commande /migrate"""
+    user_id = update.effective_user.id
+    
+    # Vérifier si super admin
+    if not is_super_admin(user_id):
+        await update.message.reply_text("❌ Accès refusé - Commande super-admin uniquement")
+        return
+    
+    await update.message.reply_text("🔄 Migration en cours...\n\nCela peut prendre quelques secondes.")
+    
+    try:
+        # Définition de TOUS les produits hardcodés
+        HARDCODED_PRODUCTS = [
+            {
+                "id": "COKE_POWDER",
+                "name": {"fr": "❄️ Coco", "en": "❄️ Coke", "es": "❄️ Coca", "de": "❄️ Koks"},
+                "price": {"FR": 60.0, "CH": 80.0, "AU": 70.0},
+                "quantity": 1000,
+                "category": "powder"
+            },
+            {
+                "id": "SQUID_GAME_PILL",
+                "name": {"fr": "💊 Squid Game", "en": "💊 Squid Game", "es": "💊 Squid Game", "de": "💊 Squid Game"},
+                "price": {"FR": 15.0, "CH": 20.0, "AU": 18.0},
+                "quantity": 500,
+                "category": "pill"
+            },
+            {
+                "id": "PUNISHER_PILL",
+                "name": {"fr": "💊 Punisher", "en": "💊 Punisher", "es": "💊 Punisher", "de": "💊 Punisher"},
+                "price": {"FR": 15.0, "CH": 20.0, "AU": 18.0},
+                "quantity": 500,
+                "category": "pill"
+            },
+            {
+                "id": "HASH",
+                "name": {"fr": "🫒 Hash", "en": "🫒 Hash", "es": "🫒 Hash", "de": "🫒 Hash"},
+                "price": {"FR": 10.0, "CH": 15.0, "AU": 12.0},
+                "quantity": 2000,
+                "category": "hash"
+            },
+            {
+                "id": "WEED",
+                "name": {"fr": "🍀 Weed", "en": "🍀 Weed", "es": "🍀 Hierba", "de": "🍀 Gras"},
+                "price": {"FR": 10.0, "CH": 15.0, "AU": 12.0},
+                "quantity": 2000,
+                "category": "herb"
+            },
+            {
+                "id": "MDMA_ROCK",
+                "name": {"fr": "🪨 MDMA", "en": "🪨 MDMA", "es": "🪨 MDMA", "de": "🪨 MDMA"},
+                "price": {"FR": 40.0, "CH": 50.0, "AU": 45.0},
+                "quantity": 500,
+                "category": "rock"
+            },
+            {
+                "id": "4MMC_ROCK",
+                "name": {"fr": "🪨 4MMC", "en": "🪨 4MMC", "es": "🪨 4MMC", "de": "🪨 4MMC"},
+                "price": {"FR": 20.0, "CH": 25.0, "AU": 23.0},
+                "quantity": 500,
+                "category": "rock"
+            },
+            {
+                "id": "KETAMINE",
+                "name": {"fr": "🍄 Ketamine", "en": "🍄 Ketamine", "es": "🍄 Ketamina", "de": "🍄 Ketamin"},
+                "price": {"FR": 40.0, "CH": 50.0, "AU": 45.0},
+                "quantity": 500,
+                "category": "powder"
+            }
+        ]
+        
+        products = PRODUCTS_DATA.get('products', {})
+        
+        added = 0
+        skipped = 0
+        message_lines = ["📦 MIGRATION DES PRODUITS HARDCODÉS\n"]
+        
+        # Migrer chaque produit
+        for product in HARDCODED_PRODUCTS:
+            product_id = product['id']
+            product_name = product['name']['fr']
+            
+            if product_id in products:
+                message_lines.append(f"⏭️  {product_name} - Déjà existant")
+                skipped += 1
+                continue
+            
+            # Ajouter le produit
+            products[product_id] = {
+                "name": product['name'],
+                "price": product['price'],
+                "quantity": product['quantity'],
+                "available_quantities": [1.0, 2.0, 3.0, 5.0, 10.0, 25.0, 50.0, 100.0],
+                "category": product['category'],
+                "active": True,
+                "created_at": datetime.now().isoformat(),
+                "alert_threshold": 50 if product['quantity'] <= 500 else 100
+            }
+            
+            message_lines.append(f"✅ {product_name} - Ajouté")
+            added += 1
+        
+        # Sauvegarder
+        PRODUCTS_DATA['products'] = products
+        save_json_file(PRODUCTS_FILE, PRODUCTS_DATA)
+        
+        # Mettre à jour le registry
+        registry = load_product_registry()
+        for product in HARDCODED_PRODUCTS:
+            product_id = product['id']
+            if product_id not in registry:
+                registry[product_id] = {
+                    "name": product['name']['fr'],
+                    "category": product['category'],
+                    "hash": hashlib.sha256(product['name']['fr'].encode()).hexdigest()[:8]
+                }
+        save_product_registry(registry)
+        
+        # Recharger
+        reload_products()
+        init_product_codes()
+        
+        # Résumé
+        message_lines.append("\n━━━━━━━━━━━━━━━━━━━━━━")
+        message_lines.append("\n📊 RÉSUMÉ:")
+        message_lines.append(f"✅ Ajoutés: {added}")
+        message_lines.append(f"⏭️  Déjà existants: {skipped}")
+        message_lines.append(f"📦 Total: {len(products)} produits")
+        
+        if added > 0:
+            message_lines.append("\n✅ Migration réussie !")
+            message_lines.append("\nVous pouvez maintenant gérer ces produits via /admin")
+        else:
+            message_lines.append("\nℹ️  Tous les produits étaient déjà migrés")
+        
+        await update.message.reply_text("\n".join(message_lines))
+        
+        logger.info(f"✅ Migration produits: {added} ajoutés, {skipped} skippés")
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur migration: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        await update.message.reply_text(
+            f"❌ Erreur lors de la migration\n\n"
+            f"Détails: {str(e)}\n\n"
+            f"Vérifiez les logs du bot pour plus d'infos"
         )
 
 async def schedule_reports(context: ContextTypes.DEFAULT_TYPE):
@@ -12665,6 +12792,7 @@ def setup_handlers(application):
     application.add_handler(CommandHandler("myid", get_my_id))
     application.add_handler(CommandHandler("cancel", cancel_command))
     application.add_handler(CommandHandler("diag_salaires", diag_salaires))
+    application.add_handler(CommandHandler("migrate", migrate_hardcoded_products))
     
     # Callbacks généraux
     application.add_handler(CallbackQueryHandler(back_to_main, pattern="^back_to_main$"))

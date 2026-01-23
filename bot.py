@@ -358,15 +358,19 @@ class JSONDict(dict):
     
     def _load_from_json(self):
         """Charge les prix depuis JSON + fallback hardcodés"""
-        # 1. Charger depuis products.json
+        # 1. Charger depuis products.json (SEULEMENT les produits actifs)
         products = PRODUCTS_DATA.get('products', {})
         for product_id, product_data in products.items():
+            # Vérifier si le produit est actif
+            if not product_data.get('active', True):
+                continue  # Ignorer les produits inactifs
+            
             # Nom du produit en français
             name = product_data.get('name', {}).get('fr', product_id)
-            # Prix pour ce pays (CORRECTION: 'price' et non 'prices')
+            # Prix pour ce pays
             price = product_data.get('price', {}).get(self.country, 0)
-            # Stocker dans le dict
-            if price > 0:  # Seulement si le prix est défini
+            # Stocker dans le dict SEULEMENT si prix > 0
+            if price > 0:
                 self[name] = price
         
         # 2. FALLBACK : Prix hardcodés pour compatibilité avec anciens produits
@@ -409,9 +413,12 @@ class QuantitiesDict(dict):
         self._load_from_json()
     
     def _load_from_json(self):
-        """Charge les quantités depuis JSON"""
+        """Charge les quantités depuis JSON (seulement produits actifs)"""
         products = PRODUCTS_DATA.get('products', {})
         for product_id, product_data in products.items():
+            # Ignorer les produits inactifs
+            if not product_data.get('active', True):
+                continue
             name = product_data.get('name', {}).get('fr', product_id)
             quantities = product_data.get('available_quantities', [1.0])
             self[name] = quantities
@@ -427,9 +434,12 @@ class StockDict(dict):
         self._load_from_json()
     
     def _load_from_json(self):
-        """Charge les stocks depuis JSON"""
+        """Charge les stocks depuis JSON (seulement produits actifs)"""
         products = PRODUCTS_DATA.get('products', {})
         for product_id, product_data in products.items():
+            # Ignorer les produits inactifs
+            if not product_data.get('active', True):
+                continue
             name = product_data.get('name', {}).get('fr', product_id)
             # CORRECTION: 'quantity' et non 'stock'
             stock = product_data.get('quantity', 0)
@@ -1660,22 +1670,9 @@ def init_product_codes():
 
 def load_available_products():
     """Charge la liste des produits disponibles (actifs uniquement)"""
-    available = set()
-    
-    # 1. Charger depuis products.json
-    products = PRODUCTS_DATA.get('products', {})
-    for product_id, product_data in products.items():
-        # Ne prendre que les produits actifs
-        if product_data.get('active', True):
-            name = product_data.get('name', {}).get('fr', product_id)
-            available.add(name)
-    
-    # 2. Ajouter UNIQUEMENT depuis PRIX_FR (qui contient déjà les produits hardcodés ET ceux du JSON)
-    # Ceci évite les doublons car PRIX_FR est la source de vérité après reload()
-    for product_name in PRIX_FR.keys():
-        available.add(product_name)
-    
-    return available
+    # PRIX_FR est LA source de vérité unique
+    # Il contient déjà tous les produits (JSON + hardcodés) après reload()
+    return set(PRIX_FR.keys())
 
 def save_available_products(products):
     """Sauvegarde la liste des produits disponibles"""

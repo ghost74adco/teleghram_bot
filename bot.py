@@ -1714,54 +1714,68 @@ def save_orders_csv(csv_path, orders):
 
 
 def get_stock(product_name):
-    """Récupère le stock d'un produit"""
-    stocks = load_stocks()
-    if product_name not in stocks:
+    """Récupère le stock d'un produit depuis products.json via STOCK_PRODUITS"""
+    # Utiliser STOCK_PRODUITS qui lit depuis products.json
+    if product_name not in STOCK_PRODUITS:
         return None
-    return stocks[product_name].get("quantity", 0)
+    return STOCK_PRODUITS.get(product_name, 0)
 
 def set_stock(product_name, quantity, alert_threshold=20):
-    """Définit le stock d'un produit"""
-    stocks = load_stocks()
-    if product_name not in stocks:
-        stocks[product_name] = {}
+    """Définit le stock d'un produit dans products.json"""
+    # Trouver le product_id correspondant au nom
+    products = PRODUCTS_DATA.get('products', {})
+    product_id = None
     
-    old_quantity = stocks[product_name].get("quantity", 0)
-    stocks[product_name]["quantity"] = quantity
-    stocks[product_name]["alert_threshold"] = alert_threshold
-    stocks[product_name]["last_updated"] = datetime.now().isoformat()
+    for pid, pdata in products.items():
+        if pdata.get('name', {}).get('fr') == product_name:
+            product_id = pid
+            break
     
-    # GESTION AUTOMATIQUE RUPTURE DE STOCK
-    available_products = load_available_products()
+    if not product_id:
+        logger.error(f"❌ Produit introuvable: {product_name}")
+        return False
     
-    if quantity == 0 and old_quantity > 0:
-        # Rupture de stock : désactiver automatiquement
-        if product_name in available_products:
-            available_products.remove(product_name)
-            save_available_products(available_products)
+    old_quantity = products[product_id].get('quantity', 0)
+    
+    # Mettre à jour dans products.json
+    products[product_id]['quantity'] = quantity
+    products[product_id]['alert_threshold'] = alert_threshold
+    
+    PRODUCTS_DATA['products'] = products
+    success = save_json_file(PRODUCTS_FILE, PRODUCTS_DATA)
+    
+    if success:
+        # Recharger STOCK_PRODUITS
+        STOCK_PRODUITS.reload()
+        
+        # GESTION AUTOMATIQUE RUPTURE DE STOCK
+        if quantity == 0 and old_quantity > 0:
+            # Rupture de stock : désactiver automatiquement
+            products[product_id]['active'] = False
+            PRODUCTS_DATA['products'] = products
+            save_json_file(PRODUCTS_FILE, PRODUCTS_DATA)
+            reload_products()
             logger.warning(f"📦 Rupture de stock : {product_name} désactivé automatiquement")
-    
-    elif quantity > 0 and old_quantity == 0:
-        # Réapprovisionnement : réactiver automatiquement
-        if product_name not in available_products:
-            available_products.add(product_name)  # set.add() au lieu de list.append()
-            save_available_products(available_products)
+        
+        elif quantity > 0 and old_quantity == 0:
+            # Réapprovisionnement : réactiver automatiquement
+            products[product_id]['active'] = True
+            PRODUCTS_DATA['products'] = products
+            save_json_file(PRODUCTS_FILE, PRODUCTS_DATA)
+            reload_products()
             logger.info(f"✅ Réappro : {product_name} réactivé automatiquement (stock: {quantity})")
     
-    return save_stocks(stocks)
+    return success
 
 def update_stock(product_name, quantity_change):
-    """Met à jour le stock (+ pour ajout, - pour retrait)"""
-    stocks = load_stocks()
-    if product_name not in stocks:
-        return True
+    """Met à jour le stock (+ pour ajout, - pour retrait) dans products.json"""
+    current = get_stock(product_name)
+    if current is None:
+        logger.error(f"❌ Produit introuvable: {product_name}")
+        return False
     
-    current = stocks[product_name].get("quantity", 0)
     new_quantity = max(0, current + quantity_change)
-    stocks[product_name]["quantity"] = new_quantity
-    stocks[product_name]["last_updated"] = datetime.now().isoformat()
-    
-    return save_stocks(stocks)
+    return set_stock(product_name, new_quantity)
 
 def is_in_stock(product_name, requested_quantity):
     """Vérifie si la quantité demandée est disponible"""
@@ -1771,16 +1785,21 @@ def is_in_stock(product_name, requested_quantity):
     return stock >= requested_quantity
 
 def get_low_stock_products():
-    """Récupère les produits avec stock faible"""
-    stocks = load_stocks()
+    """Récupère les produits avec stock faible depuis products.json"""
+    products = PRODUCTS_DATA.get('products', {})
     low_stock = []
     
-    for product_name, data in stocks.items():
-        quantity = data.get("quantity", 0)
-        threshold = data.get("alert_threshold", 20)
+    for product_id, product_data in products.items():
+        if not product_data.get('active', True):
+            continue  # Ignorer les produits inactifs
+        
+        quantity = product_data.get('quantity', 0)
+        threshold = product_data.get('alert_threshold', 20)
+        name = product_data.get('name', {}).get('fr', product_id)
+        
         if quantity <= threshold and quantity > 0:
             low_stock.append({
-                "product": product_name,
+                "product": name,
                 "quantity": quantity,
                 "threshold": threshold
             })
@@ -1788,13 +1807,17 @@ def get_low_stock_products():
     return low_stock
 
 def get_out_of_stock_products():
-    """Récupère les produits en rupture de stock"""
-    stocks = load_stocks()
+    """Récupère les produits en rupture de stock depuis products.json"""
+    products = PRODUCTS_DATA.get('products', {})
     out_of_stock = []
     
-    for product_name, data in stocks.items():
-        if data.get("quantity", 0) == 0:
-            out_of_stock.append(product_name)
+    for product_id, product_data in products.items():
+        if not product_data.get('active', True):
+            continue  # Ignorer les produits inactifs
+        
+        name = product_data.get('name', {}).get('fr', product_id)
+        if product_data.get('quantity', 0) == 0:
+            out_of_stock.append(name)
     
     return out_of_stock
 

@@ -637,6 +637,9 @@ VIP_THRESHOLD = 500
 VIP_DISCOUNT = 5
 REFERRAL_REWARD = 5
 
+# Fichier pour les horaires de livraison
+DELIVERY_HOURS_FILE = DATA_DIR / "delivery_hours.json"
+
 # ==================== CONFIGURATION SYSTÈME FINANCIER AVANCÉ ====================
 
 # Poids à peser par produit (ratio de pesée)
@@ -1398,6 +1401,135 @@ def load_promo_codes():
         except:
             return {}
     return {}
+
+def load_delivery_hours():
+    """Charge les horaires de livraison"""
+    if DELIVERY_HOURS_FILE.exists():
+        try:
+            with open(DELIVERY_HOURS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            return get_default_delivery_hours()
+    return get_default_delivery_hours()
+
+def get_default_delivery_hours():
+    """Retourne les horaires de livraison par défaut"""
+    return {
+        "ordering_hours": {
+            "enabled": True,
+            "info": "Commandes 24h/24, 7j/7"
+        },
+        "express": {
+            "enabled": True,
+            "delivery_days": "0-1",  # Livraison en 0 à 1 jour
+            "info": "Livraison sous 30min à 2h selon disponibilités",
+            "days": {
+                "lundi": {"enabled": True, "start": "09:00", "end": "22:00"},
+                "mardi": {"enabled": True, "start": "09:00", "end": "22:00"},
+                "mercredi": {"enabled": True, "start": "09:00", "end": "22:00"},
+                "jeudi": {"enabled": True, "start": "09:00", "end": "22:00"},
+                "vendredi": {"enabled": True, "start": "09:00", "end": "22:00"},
+                "samedi": {"enabled": True, "start": "10:00", "end": "23:00"},
+                "dimanche": {"enabled": True, "start": "10:00", "end": "23:00"}
+            }
+        },
+        "meetup": {
+            "enabled": True,
+            "delivery_days": "0-2",  # Rendez-vous dans 0 à 2 jours
+            "info": "Rendez-vous à convenir selon disponibilités",
+            "days": {
+                "lundi": {"enabled": True, "start": "09:00", "end": "22:00"},
+                "mardi": {"enabled": True, "start": "09:00", "end": "22:00"},
+                "mercredi": {"enabled": True, "start": "09:00", "end": "22:00"},
+                "jeudi": {"enabled": True, "start": "09:00", "end": "22:00"},
+                "vendredi": {"enabled": True, "start": "09:00", "end": "22:00"},
+                "samedi": {"enabled": True, "start": "10:00", "end": "23:00"},
+                "dimanche": {"enabled": True, "start": "10:00", "end": "23:00"}
+            }
+        },
+        "postal": {
+            "enabled": True,
+            "delivery_days": "2-3",  # Livraison en 2 à 3 jours
+            "info": "Livraison postale sécurisée - Toujours disponible"
+        }
+    }
+
+def save_delivery_hours(hours):
+    """Sauvegarde les horaires de livraison"""
+    try:
+        with open(DELIVERY_HOURS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(hours, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        logger.error(f"❌ Erreur sauvegarde horaires: {e}")
+        return False
+
+def is_delivery_available_now(delivery_type):
+    """Vérifie si la livraison est disponible maintenant"""
+    hours = load_delivery_hours()
+    
+    if delivery_type == "postal":
+        return True  # Postal toujours disponible
+    
+    if delivery_type not in hours or not hours[delivery_type].get("enabled", True):
+        return False
+    
+    now = datetime.now()
+    day_name = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"][now.weekday()]
+    
+    day_hours = hours[delivery_type]["days"].get(day_name, {})
+    
+    if not day_hours.get("enabled", False):
+        return False
+    
+    try:
+        start_time = datetime.strptime(day_hours["start"], "%H:%M").time()
+        end_time = datetime.strptime(day_hours["end"], "%H:%M").time()
+        current_time = now.time()
+        
+        return start_time <= current_time <= end_time
+    except:
+        return True  # En cas d'erreur, on considère que c'est disponible
+
+def get_delivery_hours_text(delivery_type):
+    """Retourne le texte des horaires pour un type de livraison"""
+    hours = load_delivery_hours()
+    
+    if delivery_type == "postal":
+        postal_info = hours.get("postal", {})
+        delivery_days = postal_info.get("delivery_days", "2-3")
+        info = postal_info.get("info", "Livraison postale sécurisée")
+        return f"⏱️ Délai: {delivery_days} jours\n{info}"
+    
+    if delivery_type not in hours:
+        return "Horaires non configurés"
+    
+    if not hours[delivery_type].get("enabled", True):
+        return "❌ Service temporairement indisponible"
+    
+    # Délai de livraison
+    delivery_days = hours[delivery_type].get("delivery_days", "0-1")
+    info = hours[delivery_type].get("info", "")
+    
+    text = f"⏱️ Délai: {delivery_days} jour(s)\n"
+    if info:
+        text += f"💡 {info}\n\n"
+    else:
+        text += "\n"
+    
+    text += "📅 Horaires de disponibilité :\n\n"
+    
+    days_fr = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+    days_display = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+    
+    for i, day in enumerate(days_fr):
+        day_hours = hours[delivery_type]["days"].get(day, {})
+        if day_hours.get("enabled", False):
+            text += f"• {days_display[i]}: {day_hours['start']} - {day_hours['end']}\n"
+        else:
+            text += f"• {days_display[i]}: ❌ Fermé\n"
+    
+    return text
 
 def load_referrals():
     """Charge les données de parrainage"""
@@ -3233,6 +3365,13 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
+🕐 DISPONIBILITÉ
+
+{load_delivery_hours().get('ordering_hours', {}).get('info', 'Commandes 24h/24, 7j/7')}
+Livraisons selon horaires ci-dessous
+
+━━━━━━━━━━━━━━━━━━━━━━
+
 {EMOJI_THEME['cart']} COMMENT COMMANDER ?
 
 1️⃣ Sélectionnez votre pays (🇫🇷 ou 🇨🇭)
@@ -3246,20 +3385,23 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 {EMOJI_THEME['delivery']} MODES DE LIVRAISON
 
-📮 Postale (48-72h)
+📮 Postale
 - Frais fixes : 10€
 - Livraison sécurisée
 - Suivi de colis
+{get_delivery_hours_text('postal')}
 
-⚡ Express (30min - 2h)
+⚡ Express
 - Calcul selon distance
 - Min 30€ de commande
 - Tarif : 10€/10km (max 70€)
+{get_delivery_hours_text('express')}
 
 🤝 Meetup
 - Gratuit
 - Rendez-vous à convenir
 - Discrétion assurée
+{get_delivery_hours_text('meetup')}
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
@@ -9698,13 +9840,13 @@ async def admin_costs(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("Accès refusé", show_alert=True)
         return
     
-    # Récupérer TOUS les produits (du registre)
-    all_products = load_product_registry()
+    # Récupérer TOUS les produits depuis products.json
+    products = PRODUCTS_DATA.get('products', {})
     
-    if not all_products:
+    if not products:
         await query.edit_message_text(
-            "❌ Aucun produit trouvé dans le registre.\n\n"
-            "Activez d'abord des produits depuis le menu Admin.",
+            "❌ Aucun produit trouvé.\n\n"
+            "Utilisez /migrate pour créer les produits de base.",
             reply_markup=InlineKeyboardMarkup([[
                 InlineKeyboardButton("🔙 Retour", callback_data="admin_back_panel")
             ]])
@@ -9717,8 +9859,15 @@ Prix d'achat actuels :
 
 """
     
-    # Afficher les prix pour tous les produits
-    for product_name in all_products.keys():
+    # Afficher les prix pour tous les produits actifs
+    product_list = []
+    for product_id, product_data in products.items():
+        if not product_data.get('active', True):
+            continue  # Ignorer les produits inactifs
+        
+        product_name = product_data.get('name', {}).get('fr', product_id)
+        product_list.append(product_name)
+        
         cost = PRODUCT_COSTS.get(product_name, 0)
         
         # Déterminer l'unité
@@ -9743,8 +9892,8 @@ Sélectionnez un produit à modifier :
     
     keyboard = []
     
-    # Un bouton par produit (TOUS les produits)
-    for product_name in all_products.keys():
+    # Un bouton par produit (produits actifs uniquement)
+    for product_name in sorted(product_list):
         cost = PRODUCT_COSTS.get(product_name, 0)
         if cost > 0:
             label = f"✏️ {product_name} ({cost:.2f}€)"
@@ -13138,6 +13287,13 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(edit_config_menu, pattern="^edit_config_menu$"))
     application.add_handler(CallbackQueryHandler(edit_vip_threshold, pattern="^edit_vip_threshold$"))
     application.add_handler(CallbackQueryHandler(edit_vip_discount, pattern="^edit_vip_discount$"))
+    application.add_handler(CallbackQueryHandler(edit_delivery_hours, pattern="^edit_delivery_hours$"))
+    application.add_handler(CallbackQueryHandler(edit_ordering_info, pattern="^edit_ordering_info$"))
+    application.add_handler(CallbackQueryHandler(edit_postal_days, pattern="^edit_postal_days$"))
+    application.add_handler(CallbackQueryHandler(hours_express, pattern="^hours_express$"))
+    application.add_handler(CallbackQueryHandler(hours_meetup, pattern="^hours_meetup$"))
+    application.add_handler(CallbackQueryHandler(toggle_day_hours, pattern="^hour_(exp|meet)_"))
+    application.add_handler(CallbackQueryHandler(toggle_service, pattern="^toggle_service_"))
     
     # Liste produits
     application.add_handler(CallbackQueryHandler(list_products, pattern="^list_products$"))
@@ -14192,6 +14348,7 @@ Que modifier ?
     keyboard = [
         [InlineKeyboardButton("💰 Seuil VIP", callback_data="edit_vip_threshold")],
         [InlineKeyboardButton("🎁 Réduction VIP", callback_data="edit_vip_discount")],
+        [InlineKeyboardButton("🕐 Horaires de livraison", callback_data="edit_delivery_hours")],
         [InlineKeyboardButton("🔙 Retour", callback_data="admin_edit_menu")]
     ]
     
@@ -14244,9 +14401,267 @@ Exemple : 7
     context.user_data['awaiting_config'] = True
 
 @error_handler
+async def edit_delivery_hours(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu principal des horaires de livraison"""
+    query = update.callback_query
+    await query.answer()
+    
+    hours = load_delivery_hours()
+    
+    message = """🕐 HORAIRES & DÉLAIS DE LIVRAISON
+
+Gérez les horaires et délais pour chaque mode :
+
+"""
+    
+    # Info commandes
+    ordering_info = hours.get("ordering_hours", {}).get("info", "Commandes 24h/24")
+    message += f"🛒 Commandes : {ordering_info}\n\n"
+    
+    # Status et délais Express
+    express_status = "✅ Actif" if hours["express"].get("enabled", True) else "❌ Désactivé"
+    express_days = hours["express"].get("delivery_days", "0-1")
+    message += f"⚡ Express : {express_status} (⏱️ {express_days}j)\n"
+    
+    # Status et délais Meetup
+    meetup_status = "✅ Actif" if hours["meetup"].get("enabled", True) else "❌ Désactivé"
+    meetup_days = hours["meetup"].get("delivery_days", "0-2")
+    message += f"🤝 Meetup : {meetup_status} (⏱️ {meetup_days}j)\n"
+    
+    # Status et délais Postal
+    postal_days = hours.get("postal", {}).get("delivery_days", "2-3")
+    message += f"📮 Postal : Toujours disponible (⏱️ {postal_days}j)\n"
+    
+    keyboard = [
+        [InlineKeyboardButton("🛒 Info commandes", callback_data="edit_ordering_info")],
+        [InlineKeyboardButton("⚡ Horaires Express", callback_data="hours_express")],
+        [InlineKeyboardButton("🤝 Horaires Meetup", callback_data="hours_meetup")],
+        [InlineKeyboardButton("📮 Délais Postal", callback_data="edit_postal_days")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="edit_config_menu")]
+    ]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+@error_handler
+async def hours_express(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gérer les horaires Express"""
+    query = update.callback_query
+    await query.answer()
+    
+    hours = load_delivery_hours()
+    express_hours = hours["express"]
+    
+    message = "⚡ HORAIRES LIVRAISON EXPRESS\n\n"
+    message += get_delivery_hours_text("express")
+    message += "\n\nQue voulez-vous modifier ?"
+    
+    keyboard = []
+    
+    days_fr = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+    days_display = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+    
+    for i, day in enumerate(days_fr):
+        day_data = express_hours["days"].get(day, {})
+        status = "✅" if day_data.get("enabled", False) else "❌"
+        keyboard.append([InlineKeyboardButton(
+            f"{status} {days_display[i]}",
+            callback_data=f"hour_exp_{day}"
+        )])
+    
+    # Bouton pour activer/désactiver tout le service
+    service_status = "✅ Service actif" if express_hours.get("enabled", True) else "❌ Service désactivé"
+    keyboard.append([InlineKeyboardButton(
+        f"🔄 {service_status}",
+        callback_data="toggle_service_express"
+    )])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="edit_delivery_hours")])
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+@error_handler
+async def hours_meetup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gérer les horaires Meetup"""
+    query = update.callback_query
+    await query.answer()
+    
+    hours = load_delivery_hours()
+    meetup_hours = hours["meetup"]
+    
+    message = "🤝 HORAIRES MEETUP\n\n"
+    message += get_delivery_hours_text("meetup")
+    message += "\n\nQue voulez-vous modifier ?"
+    
+    keyboard = []
+    
+    days_fr = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+    days_display = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+    
+    for i, day in enumerate(days_fr):
+        day_data = meetup_hours["days"].get(day, {})
+        status = "✅" if day_data.get("enabled", False) else "❌"
+        keyboard.append([InlineKeyboardButton(
+            f"{status} {days_display[i]}",
+            callback_data=f"hour_meet_{day}"
+        )])
+    
+    # Bouton pour activer/désactiver tout le service
+    service_status = "✅ Service actif" if meetup_hours.get("enabled", True) else "❌ Service désactivé"
+    keyboard.append([InlineKeyboardButton(
+        f"🔄 {service_status}",
+        callback_data="toggle_service_meetup"
+    )])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="edit_delivery_hours")])
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+@error_handler
+async def toggle_day_hours(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Toggle un jour spécifique"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Format: hour_exp_lundi ou hour_meet_mardi
+    parts = query.data.split('_')
+    service_type = "express" if parts[1] == "exp" else "meetup"
+    day = parts[2]
+    
+    hours = load_delivery_hours()
+    day_data = hours[service_type]["days"].get(day, {})
+    
+    # Toggle enabled
+    day_data["enabled"] = not day_data.get("enabled", False)
+    hours[service_type]["days"][day] = day_data
+    
+    save_delivery_hours(hours)
+    
+    # Retourner au menu approprié
+    if service_type == "express":
+        await hours_express(update, context)
+    else:
+        await hours_meetup(update, context)
+
+@error_handler
+async def toggle_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Toggle un service complet"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Format: toggle_service_express ou toggle_service_meetup
+    service_type = query.data.replace("toggle_service_", "")
+    
+    hours = load_delivery_hours()
+    hours[service_type]["enabled"] = not hours[service_type].get("enabled", True)
+    
+    save_delivery_hours(hours)
+    
+    status = "activé" if hours[service_type]["enabled"] else "désactivé"
+    await query.answer(f"✅ Service {service_type} {status}", show_alert=True)
+    
+    # Retourner au menu approprié
+    if service_type == "express":
+        await hours_express(update, context)
+    else:
+        await hours_meetup(update, context)
+
+@error_handler
+async def edit_ordering_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Éditer l'info sur les horaires de commande"""
+    query = update.callback_query
+    await query.answer()
+    
+    hours = load_delivery_hours()
+    current_info = hours.get("ordering_hours", {}).get("info", "Commandes 24h/24, 7j/7")
+    
+    message = f"""🛒 INFORMATION COMMANDES
+
+Texte actuel :
+"{current_info}"
+
+Entrez le nouveau texte :
+(Ex: "Commandes 24h/24, 7j/7")
+
+/cancel pour annuler
+"""
+    
+    await query.edit_message_text(message)
+    context.user_data['awaiting_ordering_info'] = True
+
+@error_handler
+async def edit_postal_days(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Éditer les délais postal"""
+    query = update.callback_query
+    await query.answer()
+    
+    hours = load_delivery_hours()
+    current_days = hours.get("postal", {}).get("delivery_days", "2-3")
+    
+    message = f"""📮 DÉLAIS POSTAL
+
+Délai actuel : {current_days} jours
+
+Entrez le nouveau délai :
+Format: "2-3" ou "3-5"
+
+Exemples :
+• 2-3 (2 à 3 jours)
+• 3-5 (3 à 5 jours)
+• 1-2 (1 à 2 jours)
+
+/cancel pour annuler
+"""
+    
+    await query.edit_message_text(message)
+    context.user_data['awaiting_postal_days'] = True
+
+@error_handler
 async def receive_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Reçoit config"""
     global VIP_THRESHOLD, VIP_DISCOUNT
+    
+    # Gérer l'info de commande
+    if context.user_data.get('awaiting_ordering_info'):
+        context.user_data['awaiting_ordering_info'] = False
+        new_info = update.message.text.strip()
+        
+        hours = load_delivery_hours()
+        if "ordering_hours" not in hours:
+            hours["ordering_hours"] = {}
+        hours["ordering_hours"]["info"] = new_info
+        save_delivery_hours(hours)
+        
+        await update.message.reply_text(
+            f"✅ INFORMATION COMMANDES MODIFIÉE\n\n"
+            f"Nouveau texte :\n\"{new_info}\""
+        )
+        return
+    
+    # Gérer les délais postal
+    if context.user_data.get('awaiting_postal_days'):
+        context.user_data['awaiting_postal_days'] = False
+        new_days = update.message.text.strip()
+        
+        # Vérifier le format
+        if not new_days.replace('-', '').isdigit() or '-' not in new_days:
+            await update.message.reply_text(
+                "❌ Format invalide\n\n"
+                "Utilisez le format: X-Y\n"
+                "Exemple: 2-3"
+            )
+            return
+        
+        hours = load_delivery_hours()
+        if "postal" not in hours:
+            hours["postal"] = {}
+        hours["postal"]["delivery_days"] = new_days
+        save_delivery_hours(hours)
+        
+        await update.message.reply_text(
+            f"✅ DÉLAIS POSTAL MODIFIÉS\n\n"
+            f"Nouveau délai : {new_days} jours"
+        )
+        return
     
     if not context.user_data.get('awaiting_config'):
         return

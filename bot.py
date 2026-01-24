@@ -1586,17 +1586,35 @@ def create_initial_registry():
     return {}
 
 def init_product_codes():
-    """Initialise tous les dictionnaires produits depuis le registre"""
+    """Initialise tous les dictionnaires produits depuis le registre ET products.json"""
     global PRODUCT_CODES, PILL_SUBCATEGORIES, ROCK_SUBCATEGORIES, IMAGES_PRODUITS, VIDEOS_PRODUITS
     
     logger.info("🔄 Initialisation des produits depuis le registre...")
     
     registry = load_product_registry()
     
+    # Si le registre est vide, le créer depuis products.json
     if not registry:
-        logger.info("📦 Création du registre initial...")
-        registry = create_initial_registry()
-        save_product_registry(registry)
+        logger.info("📦 Création du registre depuis products.json...")
+        registry = {}
+        products = PRODUCTS_DATA.get('products', {})
+        
+        for product_id, product_data in products.items():
+            if product_data.get('active', True):
+                name = product_data.get('name', {}).get('fr', product_id)
+                category = product_data.get('category', 'powder')
+                
+                registry[product_id] = {
+                    "name": name,
+                    "category": category,
+                    "hash": hashlib.sha256(name.encode()).hexdigest()[:8]
+                }
+        
+        if registry:
+            save_product_registry(registry)
+            logger.info(f"✅ Registre créé avec {len(registry)} produit(s)")
+        else:
+            logger.warning("⚠️ Aucun produit trouvé - utilisez /migrate pour ajouter les produits de base")
     
     PRODUCT_CODES.clear()
     PILL_SUBCATEGORIES.clear()

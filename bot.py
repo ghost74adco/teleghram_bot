@@ -1,3 +1,22 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+╔═══════════════════════════════════════════════════════════════════╗
+║                                                                   ║
+║   BOT TELEGRAM V4.0.0 - MIGRATION V3.1.1 AVEC JSON              ║
+║   100% Fonctionnel + Configuration JSON complète                 ║
+║                                                                   ║
+║   ✅ Toutes les fonctions V3.1.1 conservées                      ║
+║   ✅ Configuration via fichiers JSON                             ║
+║   ✅ Token/Admin depuis variables environnement                  ║
+║   ✅ Édition produits sans redéploiement                         ║
+║                                                                   ║
+║   Date : 14/01/2025 - Version FINALE                             ║
+║                                                                   ║
+╚═══════════════════════════════════════════════════════════════════╝
+"""
+
 import os
 import sys
 import json
@@ -3992,17 +4011,6 @@ Choisissez une section :
     
     keyboard = []
     
-    # Gestion des produits (tous les admins)
-    if level in ['super_admin', 'admin']:
-        keyboard.append([
-            InlineKeyboardButton("📦 Produits", callback_data="admin_products"),
-            InlineKeyboardButton("📊 Stocks", callback_data="admin_stocks")
-        ])
-        keyboard.append([
-            InlineKeyboardButton("💰 Prix", callback_data="admin_prices"),
-            InlineKeyboardButton("🎁 Promos", callback_data="admin_promos")
-        ])
-    
     # Commandes (tous niveaux)
     keyboard.append([InlineKeyboardButton("🛒 Commandes", callback_data="admin_orders")])
     
@@ -4013,7 +4021,7 @@ Choisissez une section :
     if level in ['super_admin', 'admin']:
         keyboard.append([InlineKeyboardButton("💵 Prix de revient", callback_data="admin_costs")])
     
-    # Gestion admins (super-admin uniquement)
+    # ÉDITION COMPLÈTE - Menu centralisé pour tout éditer (super-admin uniquement)
     if level == 'super_admin':
         keyboard.append([
             InlineKeyboardButton("✏️ ÉDITION COMPLÈTE", callback_data="admin_edit_menu")
@@ -13163,11 +13171,12 @@ async def admin_edit_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     message = """✏️ ÉDITION COMPLÈTE
 
-Vous pouvez tout modifier :
+Vous pouvez tout modifier ici :
 
-📦 Produits (ajouter/modifier/supprimer)
+📦 Produits (ajouter/modifier/activer/désactiver)
 💰 Prix (tous les pays)
-📊 Stocks
+📊 Stocks (quantités et seuils)
+🎁 Codes promo
 🚚 Frais de livraison
 ⚙️ Configuration système
 
@@ -13178,6 +13187,7 @@ Choisissez ce que vous voulez éditer :
         [InlineKeyboardButton("📦 Produits", callback_data="edit_products_menu")],
         [InlineKeyboardButton("💰 Prix", callback_data="edit_prices_simple")],
         [InlineKeyboardButton("📊 Stocks", callback_data="edit_stocks_menu")],
+        [InlineKeyboardButton("🎁 Promos", callback_data="admin_promos")],
         [InlineKeyboardButton("🚚 Frais", callback_data="edit_delivery_fees")],
         [InlineKeyboardButton("⚙️ Config", callback_data="edit_config_menu")],
         [InlineKeyboardButton("🔙 Retour", callback_data="admin_back_panel")]

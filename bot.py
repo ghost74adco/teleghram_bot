@@ -2683,35 +2683,49 @@ async def send_product_media(context, chat_id, product_name, caption):
 # ==================== NOTIFICATIONS ADMIN ====================
 
 async def notify_admin_new_user(context, user_id, user_data):
-    """Notifie l'admin d'un nouvel utilisateur"""
+    """Notifie l'admin d'un nouvel utilisateur avec lien cliquable"""
     username = user_data.get("username", "N/A")
     first_name = user_data.get("first_name", "N/A")
     last_name = user_data.get("last_name", "")
     full_name = f"{first_name} {last_name}".strip()
     
-    # Anonymiser l'ID
-    anonymous_id = anonymize_id(user_id)
+    # Créer un lien cliquable vers la conversation Telegram
+    # Format: tg://user?id=USER_ID
+    user_link = f"tg://user?id={user_id}"
     
     notification = f"""{EMOJI_THEME['celebration']} NOUVELLE CONNEXION
 
 👤 Utilisateur :
 - Nom : {full_name}
 - Username : @{username if username != 'N/A' else 'Non défini'}
-- ID : {anonymous_id}
+- ID : {user_id}
 
 📅 Date : {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
 
 💬 L'utilisateur vient de démarrer le bot
+
+🔗 Cliquez ici pour ouvrir la conversation :
+{user_link}
 """
+    
+    # Créer aussi un bouton inline pour ouvrir la conversation
+    keyboard = [
+        [InlineKeyboardButton("💬 Ouvrir conversation", url=user_link)]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
     try:
         for admin_id in get_admin_ids():
             await context.bot.send_message(
                 chat_id=admin_id,
-                text=notification
+                text=notification,
+                reply_markup=reply_markup
             )
         logger.info(f"✅ Admins notifiés - Nouveau user: {user_id}")
     except Exception as e:
         logger.error(f"❌ Erreur notification admin: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
 
 async def notify_admin_new_order(context, order_data, user_info):
     """Notifie l'admin d'une nouvelle commande avec détails de préparation"""
@@ -7754,6 +7768,25 @@ Ceci est un test des notifications admin.
         message += "• Stock faible\n"
         message += "• Rupture de stock\n"
         message += "• Nouveau client VIP\n"
+        
+        message += "\n━━━━━━━━━━━━━━━━━━━━━━\n"
+        message += "\n🧪 TEST NOTIFICATION CONNEXION\n\n"
+        
+        if admin_ids:
+            # Envoyer une notification de test de nouvelle connexion
+            test_user_data = {
+                "username": update.effective_user.username or "TestUser",
+                "first_name": update.effective_user.first_name or "Test",
+                "last_name": update.effective_user.last_name or "User"
+            }
+            
+            try:
+                await notify_admin_new_user(context, user_id, test_user_data)
+                message += "✅ Notification de connexion envoyée !\n"
+                message += "\nVous devriez recevoir une notification\n"
+                message += "avec un bouton pour ouvrir la conversation.\n"
+            except Exception as e:
+                message += f"❌ Erreur envoi notification: {e}\n"
         
         await update.message.reply_text(message)
         

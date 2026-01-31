@@ -25,7 +25,7 @@
         "AU": 150
       },
       "available_quantities": [1, 2, 3, 4, 5, 10, 25],
-      "quantity": 500,
+      "quantity": 309,
       "created_at": "2026-01-31T20:00:00",
       "alert_threshold": 50
     },
@@ -54,9 +54,9 @@
         "AU": 30
       },
       "available_quantities": [1, 2, 3, 4, 5, 10, 20, 50],
-      "quantity": 1000,
+      "quantity": 50,
       "created_at": "2026-01-31T20:00:00",
-      "alert_threshold": 100
+      "alert_threshold": 10
     },
     "punisher_001": {
       "id": "punisher_001",
@@ -83,9 +83,9 @@
         "AU": 30
       },
       "available_quantities": [1, 2, 3, 4, 5, 10, 20, 50],
-      "quantity": 1000,
+      "quantity": 50,
       "created_at": "2026-01-31T20:00:00",
-      "alert_threshold": 100
+      "alert_threshold": 10
     },
     "hash_001": {
       "id": "hash_001",
@@ -112,9 +112,9 @@
         "AU": 15
       },
       "available_quantities": [1, 2, 3, 4, 5, 10, 25, 50],
-      "quantity": 800,
+      "quantity": 0,
       "created_at": "2026-01-31T20:00:00",
-      "alert_threshold": 100
+      "alert_threshold": 10
     },
     "weed_001": {
       "id": "weed_001",
@@ -141,9 +141,9 @@
         "AU": 15
       },
       "available_quantities": [1, 2, 3, 4, 5, 10, 25, 50, 100],
-      "quantity": 1500,
+      "quantity": 0,
       "created_at": "2026-01-31T20:00:00",
-      "alert_threshold": 150
+      "alert_threshold": 20
     },
     "mdma_001": {
       "id": "mdma_001",
@@ -170,9 +170,9 @@
         "AU": 60
       },
       "available_quantities": [1, 2, 3, 4, 5, 10],
-      "quantity": 300,
+      "quantity": 0,
       "created_at": "2026-01-31T20:00:00",
-      "alert_threshold": 50
+      "alert_threshold": 10
     },
     "4mmc_001": {
       "id": "4mmc_001",
@@ -199,9 +199,9 @@
         "AU": 60
       },
       "available_quantities": [1, 2, 3, 4, 5, 10, 25],
-      "quantity": 400,
+      "quantity": 0,
       "created_at": "2026-01-31T20:00:00",
-      "alert_threshold": 50
+      "alert_threshold": 10
     },
     "ketamine_001": {
       "id": "ketamine_001",
@@ -228,9 +228,9 @@
         "AU": 80
       },
       "available_quantities": [1, 2, 3, 4, 5, 10],
-      "quantity": 250,
+      "quantity": 30,
       "created_at": "2026-01-31T20:00:00",
-      "alert_threshold": 50
+      "alert_threshold": 10
     }
   }
 }

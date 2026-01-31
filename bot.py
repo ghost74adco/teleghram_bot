@@ -1417,7 +1417,16 @@ def get_default_delivery_hours():
     return {
         "ordering_hours": {
             "enabled": True,
-            "info": "Commandes 24h/24, 7j/7"
+            "info": "Commandes 24h/24, 7j/7",
+            "days": {
+                "lundi": {"enabled": True, "start": "00:00", "end": "23:59"},
+                "mardi": {"enabled": True, "start": "00:00", "end": "23:59"},
+                "mercredi": {"enabled": True, "start": "00:00", "end": "23:59"},
+                "jeudi": {"enabled": True, "start": "00:00", "end": "23:59"},
+                "vendredi": {"enabled": True, "start": "00:00", "end": "23:59"},
+                "samedi": {"enabled": True, "start": "00:00", "end": "23:59"},
+                "dimanche": {"enabled": True, "start": "00:00", "end": "23:59"}
+            }
         },
         "express": {
             "enabled": True,
@@ -1526,6 +1535,42 @@ def get_delivery_hours_text(delivery_type):
         day_hours = hours[delivery_type]["days"].get(day, {})
         if day_hours.get("enabled", False):
             text += f"• {days_display[i]}: {day_hours['start']} - {day_hours['end']}\n"
+        else:
+            text += f"• {days_display[i]}: ❌ Fermé\n"
+    
+    return text
+
+def get_ordering_hours_text():
+    """Retourne le texte des horaires de commande"""
+    hours = load_delivery_hours()
+    ordering_hours = hours.get("ordering_hours", {})
+    
+    if not ordering_hours.get("enabled", True):
+        return "❌ Commandes temporairement fermées"
+    
+    # Vérifier si c'est 24/24
+    days_data = ordering_hours.get("days", {})
+    if not days_data:
+        # Ancien format - juste l'info
+        return ordering_hours.get("info", "Commandes 24h/24, 7j/7")
+    
+    # Nouveau format avec horaires par jour
+    days_fr = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+    days_display = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+    
+    text = "🕐 Horaires de commande :\n\n"
+    
+    for i, day in enumerate(days_fr):
+        day_hours = days_data.get(day, {})
+        if day_hours.get("enabled", True):
+            start = day_hours.get("start", "00:00")
+            end = day_hours.get("end", "23:59")
+            
+            # Si 24h/24
+            if start == "00:00" and end == "23:59":
+                text += f"• {days_display[i]}: 24h/24\n"
+            else:
+                text += f"• {days_display[i]}: {start} - {end}\n"
         else:
             text += f"• {days_display[i]}: ❌ Fermé\n"
     
@@ -2356,11 +2401,44 @@ def is_within_delivery_hours(user_id=None):
     return start <= now <= end
 
 def get_horaires_text():
-    """Retourne le texte des horaires"""
-    horaires = load_horaires()
-    if not horaires.get("enabled", True):
-        return "24h/24 (toujours ouvert)"
-    return f"{horaires['start_hour']:02d}:{horaires['start_minute']:02d} - {horaires['end_hour']:02d}:{horaires['end_minute']:02d}"
+    """Retourne le texte des horaires de commande et livraison pour l'accueil"""
+    hours = load_delivery_hours()
+    
+    # Horaires de commande
+    ordering_text = get_ordering_hours_text()
+    
+    # Résumé horaires de livraison
+    delivery_text = "\n\n📦 Livraisons :\n"
+    
+    # Express
+    if hours.get("express", {}).get("enabled", True):
+        delivery_text += "• Express : "
+        express_days = hours.get("express", {}).get("days", {})
+        # Vérifier si tous les jours sont actifs
+        all_days_active = all(day.get("enabled", False) for day in express_days.values())
+        if all_days_active:
+            delivery_text += "Lun-Dim\n"
+        else:
+            active_days = [day.capitalize()[:3] for day, data in express_days.items() if data.get("enabled", False)]
+            delivery_text += f"{', '.join(active_days)}\n" if active_days else "Fermé\n"
+    
+    # Meetup
+    if hours.get("meetup", {}).get("enabled", True):
+        delivery_text += "• Meetup : "
+        meetup_days = hours.get("meetup", {}).get("days", {})
+        all_days_active = all(day.get("enabled", False) for day in meetup_days.values())
+        if all_days_active:
+            delivery_text += "Lun-Dim\n"
+        else:
+            active_days = [day.capitalize()[:3] for day, data in meetup_days.items() if data.get("enabled", False)]
+            delivery_text += f"{', '.join(active_days)}\n" if active_days else "Fermé\n"
+    
+    # Postal
+    if hours.get("postal", {}).get("enabled", True):
+        postal_days = hours.get("postal", {}).get("delivery_days", "2-3")
+        delivery_text += f"• Postal : {postal_days}j\n"
+    
+    return ordering_text + delivery_text
 
 # ==================== GESTION STATISTIQUES ====================
 
@@ -13290,9 +13368,10 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(edit_delivery_hours, pattern="^edit_delivery_hours$"))
     application.add_handler(CallbackQueryHandler(edit_ordering_info, pattern="^edit_ordering_info$"))
     application.add_handler(CallbackQueryHandler(edit_postal_days, pattern="^edit_postal_days$"))
+    application.add_handler(CallbackQueryHandler(hours_ordering, pattern="^hours_ordering$"))
     application.add_handler(CallbackQueryHandler(hours_express, pattern="^hours_express$"))
     application.add_handler(CallbackQueryHandler(hours_meetup, pattern="^hours_meetup$"))
-    application.add_handler(CallbackQueryHandler(toggle_day_hours, pattern="^hour_(exp|meet)_"))
+    application.add_handler(CallbackQueryHandler(toggle_day_hours, pattern="^hour_(exp|meet|ord)_"))
     application.add_handler(CallbackQueryHandler(toggle_service, pattern="^toggle_service_"))
     
     # Liste produits
@@ -14433,12 +14512,60 @@ Gérez les horaires et délais pour chaque mode :
     message += f"📮 Postal : Toujours disponible (⏱️ {postal_days}j)\n"
     
     keyboard = [
-        [InlineKeyboardButton("🛒 Info commandes", callback_data="edit_ordering_info")],
+        [InlineKeyboardButton("🛒 Horaires commande", callback_data="hours_ordering")],
         [InlineKeyboardButton("⚡ Horaires Express", callback_data="hours_express")],
         [InlineKeyboardButton("🤝 Horaires Meetup", callback_data="hours_meetup")],
         [InlineKeyboardButton("📮 Délais Postal", callback_data="edit_postal_days")],
         [InlineKeyboardButton("🔙 Retour", callback_data="edit_config_menu")]
     ]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+@error_handler
+async def hours_ordering(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gérer les horaires de commande"""
+    query = update.callback_query
+    await query.answer()
+    
+    hours = load_delivery_hours()
+    ordering_hours = hours.get("ordering_hours", {})
+    
+    message = "🛒 HORAIRES DE COMMANDE\n\n"
+    message += get_ordering_hours_text()
+    message += "\n\nQue voulez-vous modifier ?"
+    
+    keyboard = []
+    
+    days_fr = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+    days_display = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+    
+    ordering_days = ordering_hours.get("days", {})
+    
+    for i, day in enumerate(days_fr):
+        day_data = ordering_days.get(day, {})
+        status = "✅" if day_data.get("enabled", True) else "❌"
+        
+        # Afficher les horaires
+        start = day_data.get("start", "00:00")
+        end = day_data.get("end", "23:59")
+        if start == "00:00" and end == "23:59":
+            hours_text = "24h/24"
+        else:
+            hours_text = f"{start}-{end}"
+        
+        keyboard.append([InlineKeyboardButton(
+            f"{status} {days_display[i]} ({hours_text})",
+            callback_data=f"hour_ord_{day}"
+        )])
+    
+    # Bouton pour activer/désactiver tout le service
+    service_status = "✅ Actif" if ordering_hours.get("enabled", True) else "❌ Désactivé"
+    keyboard.append([InlineKeyboardButton(
+        f"🔄 Commandes {service_status}",
+        callback_data="toggle_service_ordering"
+    )])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="edit_delivery_hours")])
     
     await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -14522,16 +14649,34 @@ async def toggle_day_hours(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    # Format: hour_exp_lundi ou hour_meet_mardi
+    # Format: hour_exp_lundi, hour_meet_mardi, ou hour_ord_mercredi
     parts = query.data.split('_')
-    service_type = "express" if parts[1] == "exp" else "meetup"
+    service_map = {"exp": "express", "meet": "meetup", "ord": "ordering_hours"}
+    service_type = service_map.get(parts[1])
     day = parts[2]
     
+    if not service_type:
+        await query.answer("❌ Type de service invalide", show_alert=True)
+        return
+    
     hours = load_delivery_hours()
+    
+    # Initialiser days si n'existe pas (pour ordering_hours)
+    if "days" not in hours[service_type]:
+        hours[service_type]["days"] = {}
+    
     day_data = hours[service_type]["days"].get(day, {})
     
     # Toggle enabled
-    day_data["enabled"] = not day_data.get("enabled", False)
+    day_data["enabled"] = not day_data.get("enabled", False if service_type != "ordering_hours" else True)
+    
+    # Pour ordering_hours, garder les horaires 24h par défaut
+    if service_type == "ordering_hours":
+        if "start" not in day_data:
+            day_data["start"] = "00:00"
+        if "end" not in day_data:
+            day_data["end"] = "23:59"
+    
     hours[service_type]["days"][day] = day_data
     
     save_delivery_hours(hours)
@@ -14539,8 +14684,10 @@ async def toggle_day_hours(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Retourner au menu approprié
     if service_type == "express":
         await hours_express(update, context)
-    else:
+    elif service_type == "meetup":
         await hours_meetup(update, context)
+    else:
+        await hours_ordering(update, context)
 
 @error_handler
 async def toggle_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -14562,8 +14709,12 @@ async def toggle_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Retourner au menu approprié
     if service_type == "express":
         await hours_express(update, context)
-    else:
+    elif service_type == "meetup":
         await hours_meetup(update, context)
+    elif service_type == "ordering" or service_type == "ordering_hours":
+        await hours_ordering(update, context)
+    else:
+        await edit_delivery_hours(update, context)
 
 @error_handler
 async def edit_ordering_info(update: Update, context: ContextTypes.DEFAULT_TYPE):

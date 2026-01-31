@@ -7766,7 +7766,11 @@ Vérifiez les logs du bot pour confirmer:
 
 @error_handler
 async def migrate_hardcoded_products(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Migration des produits hardcodés vers products.json - Commande /migrate"""
+    """Migration des produits hardcodés vers products.json - Commande /migrate
+    
+    ⚠️ ATTENTION : Cette commande est pour l'initialisation UNIQUEMENT
+    Ne JAMAIS utiliser sur un bot en production avec des données !
+    """
     user_id = update.effective_user.id
     
     # Vérifier si super admin
@@ -7774,7 +7778,34 @@ async def migrate_hardcoded_products(update: Update, context: ContextTypes.DEFAU
         await update.message.reply_text("❌ Accès refusé - Commande super-admin uniquement")
         return
     
-    await update.message.reply_text("🔄 Migration en cours...\n\nCela peut prendre quelques secondes.")
+    # VÉRIFICATION DE SÉCURITÉ : Demander confirmation
+    products = PRODUCTS_DATA.get('products', {})
+    is_force = update.message.text.strip() == "/migrate_force"
+    
+    if len(products) > 0 and not is_force:
+        # Il y a déjà des produits ET ce n'est pas force!
+        await update.message.reply_text(
+            f"⚠️ ATTENTION - CONFIRMATION REQUISE\n\n"
+            f"Vous avez déjà {len(products)} produit(s) configuré(s).\n\n"
+            f"❌ /migrate est pour l'initialisation UNIQUEMENT\n"
+            f"❌ NE PAS utiliser sur un bot en production\n\n"
+            f"✅ Pour ajouter un produit :\n"
+            f"   /admin → Édition → Ajouter produit\n\n"
+            f"⚠️ Si vous êtes SÛR de vouloir continuer :\n"
+            f"   Tapez : /migrate_force\n\n"
+            f"💡 Sinon, annulez et utilisez /admin"
+        )
+        return
+    
+    if is_force:
+        await update.message.reply_text(
+            "⚠️ MIGRATION FORCÉE\n\n"
+            "Les produits existants seront préservés.\n"
+            "Seuls les produits manquants seront ajoutés.\n\n"
+            "🔄 Migration en cours..."
+        )
+    else:
+        await update.message.reply_text("🔄 Migration en cours...\n\nCela peut prendre quelques secondes.")
     
     try:
         # Définition de TOUS les produits hardcodés
@@ -13204,6 +13235,8 @@ def setup_handlers(application):
     application.add_handler(CommandHandler("cancel", cancel_command))
     application.add_handler(CommandHandler("diag_salaires", diag_salaires))
     application.add_handler(CommandHandler("migrate", migrate_hardcoded_products))
+    application.add_handler(CommandHandler("migrate_force", migrate_hardcoded_products))  # Force sans vérification
+
     application.add_handler(CommandHandler("test_notif", test_notif))
     
     # Callbacks généraux

@@ -1,93 +1,4 @@
 {
-  "shop_info": {
-    "name": "Commerce Anonyme",
-    "description": "Plateforme de commerce sécurisée",
-    "currency": "EUR",
-    "logo_emoji": "🏪",
-    "version": "4.0.0"
-  },
-  
-  "categories": {
-    "cocaine": {
-      "id": "cocaine",
-      "name": {
-        "fr": "Cocaïne",
-        "en": "Cocaine",
-        "de": "Kokain",
-        "es": "Cocaína",
-        "it": "Cocaina"
-      },
-      "emoji": "❄️",
-      "order": 1,
-      "active": true
-    },
-    "pills": {
-      "id": "pills",
-      "name": {
-        "fr": "Pilules",
-        "en": "Pills",
-        "de": "Pillen",
-        "es": "Píldoras",
-        "it": "Pillole"
-      },
-      "emoji": "💊",
-      "order": 2,
-      "active": true
-    },
-    "hash": {
-      "id": "hash",
-      "name": {
-        "fr": "Hash",
-        "en": "Hash",
-        "de": "Hash",
-        "es": "Hash",
-        "it": "Hash"
-      },
-      "emoji": "🫒",
-      "order": 3,
-      "active": true
-    },
-    "weed": {
-      "id": "weed",
-      "name": {
-        "fr": "Weed",
-        "en": "Weed",
-        "de": "Gras",
-        "es": "Hierba",
-        "it": "Erba"
-      },
-      "emoji": "🍀",
-      "order": 4,
-      "active": true
-    },
-    "mdma": {
-      "id": "mdma",
-      "name": {
-        "fr": "MDMA / Cristaux",
-        "en": "MDMA / Crystals",
-        "de": "MDMA / Kristalle",
-        "es": "MDMA / Cristales",
-        "it": "MDMA / Cristalli"
-      },
-      "emoji": "🪨",
-      "order": 5,
-      "active": true
-    },
-    "ketamine": {
-      "id": "ketamine",
-      "name": {
-        "fr": "Ketamine",
-        "en": "Ketamine",
-        "de": "Ketamin",
-        "es": "Ketamina",
-        "it": "Ketamina"
-      },
-      "emoji": "🐎",
-      "order": 6,
-      "active": true
-    }
-  },
-  
   "products": {
     "coco_001": {
       "id": "coco_001",
@@ -108,19 +19,16 @@
         "it": "Qualità superiore"
       },
       "active": true,
-      "prices": {
+      "price": {
         "FR": 80,
         "CH": 100,
         "AU": 150
       },
       "available_quantities": [1, 2, 3, 4, 5, 10, 25],
-      "stock": 500,
-      "unit": "g",
-      "min_order": 1,
-      "max_order": 100,
-      "ledger_type": "weed"
+      "quantity": 500,
+      "created_at": "2026-01-31T20:00:00",
+      "alert_threshold": 50
     },
-    
     "squid_game_001": {
       "id": "squid_game_001",
       "name": {
@@ -140,19 +48,16 @@
         "it": "Pillole premium"
       },
       "active": true,
-      "prices": {
+      "price": {
         "FR": 10,
         "CH": 15,
         "AU": 30
       },
       "available_quantities": [1, 2, 3, 4, 5, 10, 20, 50],
-      "stock": 1000,
-      "unit": "unité",
-      "min_order": 1,
-      "max_order": 200,
-      "ledger_type": "autres"
+      "quantity": 1000,
+      "created_at": "2026-01-31T20:00:00",
+      "alert_threshold": 100
     },
-    
     "punisher_001": {
       "id": "punisher_001",
       "name": {
@@ -172,19 +77,16 @@
         "it": "Alta concentrazione"
       },
       "active": true,
-      "prices": {
+      "price": {
         "FR": 10,
         "CH": 15,
         "AU": 30
       },
       "available_quantities": [1, 2, 3, 4, 5, 10, 20, 50],
-      "stock": 1000,
-      "unit": "unité",
-      "min_order": 1,
-      "max_order": 200,
-      "ledger_type": "autres"
+      "quantity": 1000,
+      "created_at": "2026-01-31T20:00:00",
+      "alert_threshold": 100
     },
-    
     "hash_001": {
       "id": "hash_001",
       "name": {
@@ -204,19 +106,16 @@
         "it": "Hash di qualità"
       },
       "active": true,
-      "prices": {
+      "price": {
         "FR": 7,
         "CH": 8,
         "AU": 15
       },
       "available_quantities": [1, 2, 3, 4, 5, 10, 25, 50],
-      "stock": 800,
-      "unit": "g",
-      "min_order": 1,
-      "max_order": 200,
-      "ledger_type": "weed"
+      "quantity": 800,
+      "created_at": "2026-01-31T20:00:00",
+      "alert_threshold": 100
     },
-    
     "weed_001": {
       "id": "weed_001",
       "name": {
@@ -236,19 +135,16 @@
         "it": "Erba premium"
       },
       "active": true,
-      "prices": {
+      "price": {
         "FR": 7,
         "CH": 8,
         "AU": 15
       },
       "available_quantities": [1, 2, 3, 4, 5, 10, 25, 50, 100],
-      "stock": 1500,
-      "unit": "g",
-      "min_order": 1,
-      "max_order": 500,
-      "ledger_type": "weed"
+      "quantity": 1500,
+      "created_at": "2026-01-31T20:00:00",
+      "alert_threshold": 150
     },
-    
     "mdma_001": {
       "id": "mdma_001",
       "name": {
@@ -268,19 +164,16 @@
         "it": "Cristalli puri"
       },
       "active": true,
-      "prices": {
+      "price": {
         "FR": 40,
         "CH": 50,
         "AU": 60
       },
       "available_quantities": [1, 2, 3, 4, 5, 10],
-      "stock": 300,
-      "unit": "g",
-      "min_order": 1,
-      "max_order": 50,
-      "ledger_type": "autres"
+      "quantity": 300,
+      "created_at": "2026-01-31T20:00:00",
+      "alert_threshold": 50
     },
-    
     "4mmc_001": {
       "id": "4mmc_001",
       "name": {
@@ -300,19 +193,16 @@
         "it": "Cristalli 4MMC"
       },
       "active": true,
-      "prices": {
+      "price": {
         "FR": 40,
         "CH": 50,
         "AU": 60
       },
       "available_quantities": [1, 2, 3, 4, 5, 10, 25],
-      "stock": 400,
-      "unit": "g",
-      "min_order": 1,
-      "max_order": 100,
-      "ledger_type": "autres"
+      "quantity": 400,
+      "created_at": "2026-01-31T20:00:00",
+      "alert_threshold": 50
     },
-    
     "ketamine_001": {
       "id": "ketamine_001",
       "name": {
@@ -332,17 +222,15 @@
         "it": "Ketamina pura"
       },
       "active": true,
-      "prices": {
+      "price": {
         "FR": 40,
         "CH": 50,
         "AU": 80
       },
       "available_quantities": [1, 2, 3, 4, 5, 10],
-      "stock": 250,
-      "unit": "g",
-      "min_order": 1,
-      "max_order": 50,
-      "ledger_type": "autres"
+      "quantity": 250,
+      "created_at": "2026-01-31T20:00:00",
+      "alert_threshold": 50
     }
   }
 }

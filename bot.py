@@ -13371,6 +13371,10 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(hours_ordering, pattern="^hours_ordering$"))
     application.add_handler(CallbackQueryHandler(hours_express, pattern="^hours_express$"))
     application.add_handler(CallbackQueryHandler(hours_meetup, pattern="^hours_meetup$"))
+    application.add_handler(CallbackQueryHandler(edit_day_hours, pattern="^edit_hour_(exp|meet|ord)_"))
+    application.add_handler(CallbackQueryHandler(set_hour_start, pattern="^set_start_(exp|meet|ord)_"))
+    application.add_handler(CallbackQueryHandler(set_hour_end, pattern="^set_end_(exp|meet|ord)_"))
+    application.add_handler(CallbackQueryHandler(toggle_specific_day, pattern="^toggle_day_(exp|meet|ord)_"))
     application.add_handler(CallbackQueryHandler(toggle_day_hours, pattern="^hour_(exp|meet|ord)_"))
     application.add_handler(CallbackQueryHandler(toggle_service, pattern="^toggle_service_"))
     
@@ -14532,7 +14536,7 @@ async def hours_ordering(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     message = "🛒 HORAIRES DE COMMANDE\n\n"
     message += get_ordering_hours_text()
-    message += "\n\nQue voulez-vous modifier ?"
+    message += "\n\nCliquez sur un jour pour éditer ses horaires :"
     
     keyboard = []
     
@@ -14555,7 +14559,7 @@ async def hours_ordering(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         keyboard.append([InlineKeyboardButton(
             f"{status} {days_display[i]} ({hours_text})",
-            callback_data=f"hour_ord_{day}"
+            callback_data=f"edit_hour_ord_{day}"
         )])
     
     # Bouton pour activer/désactiver tout le service
@@ -14580,7 +14584,7 @@ async def hours_express(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     message = "⚡ HORAIRES LIVRAISON EXPRESS\n\n"
     message += get_delivery_hours_text("express")
-    message += "\n\nQue voulez-vous modifier ?"
+    message += "\n\nCliquez sur un jour pour éditer ses horaires :"
     
     keyboard = []
     
@@ -14590,9 +14594,12 @@ async def hours_express(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for i, day in enumerate(days_fr):
         day_data = express_hours["days"].get(day, {})
         status = "✅" if day_data.get("enabled", False) else "❌"
+        start = day_data.get("start", "09:00")
+        end = day_data.get("end", "22:00")
+        
         keyboard.append([InlineKeyboardButton(
-            f"{status} {days_display[i]}",
-            callback_data=f"hour_exp_{day}"
+            f"{status} {days_display[i]} ({start}-{end})",
+            callback_data=f"edit_hour_exp_{day}"
         )])
     
     # Bouton pour activer/désactiver tout le service
@@ -14617,7 +14624,7 @@ async def hours_meetup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     message = "🤝 HORAIRES MEETUP\n\n"
     message += get_delivery_hours_text("meetup")
-    message += "\n\nQue voulez-vous modifier ?"
+    message += "\n\nCliquez sur un jour pour éditer ses horaires :"
     
     keyboard = []
     
@@ -14627,9 +14634,12 @@ async def hours_meetup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for i, day in enumerate(days_fr):
         day_data = meetup_hours["days"].get(day, {})
         status = "✅" if day_data.get("enabled", False) else "❌"
+        start = day_data.get("start", "09:00")
+        end = day_data.get("end", "22:00")
+        
         keyboard.append([InlineKeyboardButton(
-            f"{status} {days_display[i]}",
-            callback_data=f"hour_meet_{day}"
+            f"{status} {days_display[i]} ({start}-{end})",
+            callback_data=f"edit_hour_meet_{day}"
         )])
     
     # Bouton pour activer/désactiver tout le service
@@ -14717,6 +14727,179 @@ async def toggle_service(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await edit_delivery_hours(update, context)
 
 @error_handler
+async def edit_day_hours(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Éditer les horaires d'un jour spécifique"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Format: edit_hour_exp_lundi, edit_hour_meet_mardi, edit_hour_ord_mercredi
+    callback_data = context.user_data.get('callback_data', query.data)
+    parts = callback_data.split('_')
+    
+    # edit_hour_exp_lundi → parts[0]='edit', parts[1]='hour', parts[2]='exp', parts[3]='lundi'
+    service_map = {"exp": ("express", "⚡ Express"), "meet": ("meetup", "🤝 Meetup"), "ord": ("ordering_hours", "🛒 Commande")}
+    service_type, service_name = service_map.get(parts[2], (None, None))
+    day = parts[3]
+    
+    if not service_type:
+        await query.answer("❌ Type de service invalide", show_alert=True)
+        return
+    
+    days_display = {
+        "lundi": "Lundi", "mardi": "Mardi", "mercredi": "Mercredi",
+        "jeudi": "Jeudi", "vendredi": "Vendredi", "samedi": "Samedi", "dimanche": "Dimanche"
+    }
+    
+    hours = load_delivery_hours()
+    
+    # Initialiser days si n'existe pas
+    if "days" not in hours[service_type]:
+        hours[service_type]["days"] = {}
+    
+    day_data = hours[service_type]["days"].get(day, {})
+    current_start = day_data.get("start", "09:00" if service_type != "ordering_hours" else "00:00")
+    current_end = day_data.get("end", "22:00" if service_type != "ordering_hours" else "23:59")
+    is_enabled = day_data.get("enabled", False if service_type != "ordering_hours" else True)
+    
+    message = f"""⏰ ÉDITER {service_name} - {days_display.get(day, day).upper()}
+
+Horaires actuels : {current_start} - {current_end}
+Statut : {'✅ Actif' if is_enabled else '❌ Fermé'}
+
+Que voulez-vous modifier ?"""
+    
+    keyboard = [
+        [InlineKeyboardButton(
+            "🔄 Activer/Désactiver",
+            callback_data=f"toggle_day_{parts[2]}_{day}"
+        )],
+        [InlineKeyboardButton(
+            "⏰ Changer heure début",
+            callback_data=f"set_start_{parts[2]}_{day}"
+        )],
+        [InlineKeyboardButton(
+            "⏰ Changer heure fin",
+            callback_data=f"set_end_{parts[2]}_{day}"
+        )],
+        [InlineKeyboardButton("🔙 Retour", callback_data=f"hours_{parts[2]}")]
+    ]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+    
+    # Nettoyer le callback_data temporaire
+    if 'callback_data' in context.user_data:
+        del context.user_data['callback_data']
+
+@error_handler
+async def set_hour_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Demander la nouvelle heure de début"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Format: set_start_exp_lundi
+    parts = query.data.split('_')
+    service_code = parts[2]
+    day = parts[3]
+    
+    service_map = {"exp": "express", "meet": "meetup", "ord": "ordering_hours"}
+    service_type = service_map.get(service_code)
+    
+    days_display = {
+        "lundi": "Lundi", "mardi": "Mardi", "mercredi": "Mercredi",
+        "jeudi": "Jeudi", "vendredi": "Vendredi", "samedi": "Samedi", "dimanche": "Dimanche"
+    }
+    
+    message = f"""⏰ HEURE DE DÉBUT - {days_display.get(day, day)}
+
+Entrez la nouvelle heure de début au format HH:MM
+
+Exemples :
+• 09:00
+• 10:30
+• 14:15
+
+/cancel pour annuler"""
+    
+    await query.edit_message_text(message)
+    
+    context.user_data['awaiting_hour_start'] = True
+    context.user_data['hour_service'] = service_type
+    context.user_data['hour_service_code'] = service_code
+    context.user_data['hour_day'] = day
+
+@error_handler
+async def set_hour_end(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Demander la nouvelle heure de fin"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Format: set_end_exp_lundi
+    parts = query.data.split('_')
+    service_code = parts[2]
+    day = parts[3]
+    
+    service_map = {"exp": "express", "meet": "meetup", "ord": "ordering_hours"}
+    service_type = service_map.get(service_code)
+    
+    days_display = {
+        "lundi": "Lundi", "mardi": "Mardi", "mercredi": "Mercredi",
+        "jeudi": "Jeudi", "vendredi": "Vendredi", "samedi": "Samedi", "dimanche": "Dimanche"
+    }
+    
+    message = f"""⏰ HEURE DE FIN - {days_display.get(day, day)}
+
+Entrez la nouvelle heure de fin au format HH:MM
+
+Exemples :
+• 22:00
+• 23:30
+• 20:00
+
+/cancel pour annuler"""
+    
+    await query.edit_message_text(message)
+    
+    context.user_data['awaiting_hour_end'] = True
+    context.user_data['hour_service'] = service_type
+    context.user_data['hour_service_code'] = service_code
+    context.user_data['hour_day'] = day
+
+@error_handler
+async def toggle_specific_day(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Toggle un jour spécifique (version avec édition)"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Format: toggle_day_exp_lundi
+    parts = query.data.split('_')
+    service_code = parts[2]
+    day = parts[3]
+    
+    service_map = {"exp": "express", "meet": "meetup", "ord": "ordering_hours"}
+    service_type = service_map.get(service_code)
+    
+    hours = load_delivery_hours()
+    
+    if "days" not in hours[service_type]:
+        hours[service_type]["days"] = {}
+    
+    day_data = hours[service_type]["days"].get(day, {})
+    day_data["enabled"] = not day_data.get("enabled", False if service_type != "ordering_hours" else True)
+    
+    # Garder les horaires par défaut si non définis
+    if "start" not in day_data:
+        day_data["start"] = "09:00" if service_type != "ordering_hours" else "00:00"
+    if "end" not in day_data:
+        day_data["end"] = "22:00" if service_type != "ordering_hours" else "23:59"
+    
+    hours[service_type]["days"][day] = day_data
+    save_delivery_hours(hours)
+    
+    # Retourner au menu d'édition du jour
+    context.user_data['callback_data'] = f"edit_hour_{service_code}_{day}"
+    await edit_day_hours(update, context)
+
+@error_handler
 async def edit_ordering_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Éditer l'info sur les horaires de commande"""
     query = update.callback_query
@@ -14770,6 +14953,86 @@ Exemples :
 async def receive_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Reçoit config"""
     global VIP_THRESHOLD, VIP_DISCOUNT
+    
+    # Gérer l'heure de début
+    if context.user_data.get('awaiting_hour_start'):
+        context.user_data['awaiting_hour_start'] = False
+        hour_text = update.message.text.strip()
+        
+        # Valider le format HH:MM
+        import re
+        if not re.match(r'^([01]?[0-9]|2[0-3]):[0-5][0-9]$', hour_text):
+            await update.message.reply_text(
+                "❌ Format invalide\n\n"
+                "Utilisez le format HH:MM\n"
+                "Exemples: 09:00, 14:30, 23:00"
+            )
+            return
+        
+        service_type = context.user_data.get('hour_service')
+        service_code = context.user_data.get('hour_service_code')
+        day = context.user_data.get('hour_day')
+        
+        hours = load_delivery_hours()
+        if "days" not in hours[service_type]:
+            hours[service_type]["days"] = {}
+        
+        if day not in hours[service_type]["days"]:
+            hours[service_type]["days"][day] = {}
+        
+        hours[service_type]["days"][day]["start"] = hour_text
+        save_delivery_hours(hours)
+        
+        await update.message.reply_text(
+            f"✅ HEURE DE DÉBUT MODIFIÉE\n\n"
+            f"Nouvelle heure : {hour_text}"
+        )
+        
+        # Nettoyer
+        context.user_data.pop('hour_service', None)
+        context.user_data.pop('hour_service_code', None)
+        context.user_data.pop('hour_day', None)
+        return
+    
+    # Gérer l'heure de fin
+    if context.user_data.get('awaiting_hour_end'):
+        context.user_data['awaiting_hour_end'] = False
+        hour_text = update.message.text.strip()
+        
+        # Valider le format HH:MM
+        import re
+        if not re.match(r'^([01]?[0-9]|2[0-3]):[0-5][0-9]$', hour_text):
+            await update.message.reply_text(
+                "❌ Format invalide\n\n"
+                "Utilisez le format HH:MM\n"
+                "Exemples: 22:00, 23:30, 20:00"
+            )
+            return
+        
+        service_type = context.user_data.get('hour_service')
+        service_code = context.user_data.get('hour_service_code')
+        day = context.user_data.get('hour_day')
+        
+        hours = load_delivery_hours()
+        if "days" not in hours[service_type]:
+            hours[service_type]["days"] = {}
+        
+        if day not in hours[service_type]["days"]:
+            hours[service_type]["days"][day] = {}
+        
+        hours[service_type]["days"][day]["end"] = hour_text
+        save_delivery_hours(hours)
+        
+        await update.message.reply_text(
+            f"✅ HEURE DE FIN MODIFIÉE\n\n"
+            f"Nouvelle heure : {hour_text}"
+        )
+        
+        # Nettoyer
+        context.user_data.pop('hour_service', None)
+        context.user_data.pop('hour_service_code', None)
+        context.user_data.pop('hour_day', None)
+        return
     
     # Gérer l'info de commande
     if context.user_data.get('awaiting_ordering_info'):

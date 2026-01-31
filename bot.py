@@ -6644,6 +6644,21 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await receive_contact_message(update, context)
         return
     
+    # État: En attente nouveau prix de revient (admin) - PRIORITAIRE
+    if context.user_data.get('awaiting_cost_update'):
+        await receive_cost_update(update, context)
+        return
+    
+    # État: En attente description consommable (admin) - PRIORITAIRE
+    if context.user_data.get('awaiting_expense_description'):
+        await receive_expense_description(update, context)
+        return
+    
+    # État: En attente montant consommable (admin) - PRIORITAIRE
+    if context.user_data.get('awaiting_expense_amount'):
+        await receive_expense_amount(update, context)
+        return
+    
     # État: En attente d'heure pour horaires de livraison (admin)
     if context.user_data.get('awaiting_hour_start') or context.user_data.get('awaiting_hour_end'):
         await receive_config(update, context)
@@ -6659,24 +6674,9 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await receive_pay_amount(update, context)
         return
     
-    # État: En attente description consommable (admin)
-    if context.user_data.get('awaiting_expense_description'):
-        await receive_expense_description(update, context)
-        return
-    
-    # État: En attente montant consommable (admin)
-    if context.user_data.get('awaiting_expense_amount'):
-        await receive_expense_amount(update, context)
-        return
-    
     # État: En attente édition consommable (super-admin)
     if context.user_data.get('editing_expense'):
         await receive_expense_edit(update, context)
-        return
-    
-    # État: En attente nouveau prix de revient (admin)
-    if context.user_data.get('awaiting_cost_update'):
-        await receive_cost_update(update, context)
         return
     
     # État: En attente nouveau prix commande (admin)
@@ -13812,7 +13812,7 @@ async def edit_price_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     name = product.get('name', {}).get('fr', product_id)
-    prices = product.get('price', {})  # CORRECTION: 'price' au lieu de 'prices'
+    prices = product.get('price', {})
     
     message = f"""💰 MODIFIER PRIX
 

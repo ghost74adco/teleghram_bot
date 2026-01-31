@@ -14750,8 +14750,7 @@ async def edit_day_hours(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     # Format: edit_hour_exp_lundi, edit_hour_meet_mardi, edit_hour_ord_mercredi
-    callback_data = context.user_data.get('callback_data', query.data)
-    parts = callback_data.split('_')
+    parts = query.data.split('_')
     
     # edit_hour_exp_lundi → parts[0]='edit', parts[1]='hour', parts[2]='exp', parts[3]='lundi'
     service_map = {"exp": ("express", "⚡ Express"), "meet": ("meetup", "🤝 Meetup"), "ord": ("ordering_hours", "🛒 Commande")}
@@ -14802,10 +14801,6 @@ Que voulez-vous modifier ?"""
     ]
     
     await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
-    
-    # Nettoyer le callback_data temporaire
-    if 'callback_data' in context.user_data:
-        del context.user_data['callback_data']
 
 @error_handler
 async def set_hour_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -14912,8 +14907,10 @@ async def toggle_specific_day(update: Update, context: ContextTypes.DEFAULT_TYPE
     hours[service_type]["days"][day] = day_data
     save_delivery_hours(hours)
     
+    # Modifier query.data pour qu'edit_day_hours puisse le lire
+    query.data = f"edit_hour_{service_code}_{day}"
+    
     # Retourner au menu d'édition du jour
-    context.user_data['callback_data'] = f"edit_hour_{service_code}_{day}"
     await edit_day_hours(update, context)
 
 @error_handler

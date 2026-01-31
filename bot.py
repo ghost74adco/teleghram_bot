@@ -6816,10 +6816,16 @@ async def receive_new_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             flag = "🇫🇷" if country == "FR" else "🇨🇭"
             
+            keyboard = [[
+                InlineKeyboardButton("🔙 Menu prix", callback_data="edit_prices"),
+                InlineKeyboardButton("🏠 Menu admin", callback_data="admin_panel")
+            ]]
+            
             await update.message.reply_text(
                 f"{EMOJI_THEME['success']} PRIX MIS À JOUR\n\n"
                 f"{flag} {product_name}\n"
-                f"Nouveau prix: {new_price}€/g"
+                f"Nouveau prix: {new_price}€/g",
+                reply_markup=InlineKeyboardMarkup(keyboard)
             )
             
             logger.info(f"💰 Prix modifié: {product_name} ({country}) = {new_price}€")
@@ -7076,10 +7082,16 @@ async def receive_new_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 status_msg = "\n⚠️ Produit en rupture"
             
+            keyboard = [[
+                InlineKeyboardButton("🔙 Menu stocks", callback_data="edit_stocks"),
+                InlineKeyboardButton("🏠 Menu admin", callback_data="admin_panel")
+            ]]
+            
             await update.message.reply_text(
                 f"{EMOJI_THEME['success']} STOCK MIS À JOUR\n\n"
                 f"{product_name}\n"
-                f"Nouveau stock: {new_stock}g{status_msg}"
+                f"Nouveau stock: {new_stock}g{status_msg}",
+                reply_markup=InlineKeyboardMarkup(keyboard)
             )
             
             logger.info(f"📦 Stock modifié: {product_name} = {new_stock}g")
@@ -14988,9 +15000,16 @@ async def receive_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
         hours[service_type]["days"][day]["start"] = hour_text
         save_delivery_hours(hours)
         
+        # Message avec bouton retour
+        keyboard = [[
+            InlineKeyboardButton("🔙 Retour édition jour", callback_data=f"edit_hour_{service_code}_{day}"),
+            InlineKeyboardButton("🏠 Menu horaires", callback_data=f"hours_{service_code}")
+        ]]
+        
         await update.message.reply_text(
             f"✅ HEURE DE DÉBUT MODIFIÉE\n\n"
-            f"Nouvelle heure : {hour_text}"
+            f"Nouvelle heure : {hour_text}",
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
         
         # Nettoyer
@@ -15028,9 +15047,16 @@ async def receive_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
         hours[service_type]["days"][day]["end"] = hour_text
         save_delivery_hours(hours)
         
+        # Message avec bouton retour
+        keyboard = [[
+            InlineKeyboardButton("🔙 Retour édition jour", callback_data=f"edit_hour_{service_code}_{day}"),
+            InlineKeyboardButton("🏠 Menu horaires", callback_data=f"hours_{service_code}")
+        ]]
+        
         await update.message.reply_text(
             f"✅ HEURE DE FIN MODIFIÉE\n\n"
-            f"Nouvelle heure : {hour_text}"
+            f"Nouvelle heure : {hour_text}",
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
         
         # Nettoyer
@@ -15050,9 +15076,14 @@ async def receive_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
         hours["ordering_hours"]["info"] = new_info
         save_delivery_hours(hours)
         
+        keyboard = [[
+            InlineKeyboardButton("🔙 Menu horaires", callback_data="edit_delivery_hours")
+        ]]
+        
         await update.message.reply_text(
             f"✅ INFORMATION COMMANDES MODIFIÉE\n\n"
-            f"Nouveau texte :\n\"{new_info}\""
+            f"Nouveau texte :\n\"{new_info}\"",
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return
     
@@ -15076,9 +15107,14 @@ async def receive_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
         hours["postal"]["delivery_days"] = new_days
         save_delivery_hours(hours)
         
+        keyboard = [[
+            InlineKeyboardButton("🔙 Menu horaires", callback_data="edit_delivery_hours")
+        ]]
+        
         await update.message.reply_text(
             f"✅ DÉLAIS POSTAL MODIFIÉS\n\n"
-            f"Nouveau délai : {new_days} jours"
+            f"Nouveau délai : {new_days} jours",
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return
     

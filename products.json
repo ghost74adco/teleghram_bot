@@ -113,7 +113,7 @@
         "CH": 100,
         "AU": 150
       },
-      "available_quantities": [1, 2, 5, 10, 25],
+      "available_quantities": [1, 2, 3, 4, 5, 10, 25],
       "stock": 500,
       "unit": "g",
       "min_order": 1,
@@ -145,7 +145,7 @@
         "CH": 15,
         "AU": 30
       },
-      "available_quantities": [1, 5, 10, 20, 50],
+      "available_quantities": [1, 2, 3, 4, 5, 10, 20, 50],
       "stock": 1000,
       "unit": "unité",
       "min_order": 1,
@@ -177,7 +177,7 @@
         "CH": 15,
         "AU": 30
       },
-      "available_quantities": [1, 5, 10, 20, 50],
+      "available_quantities": [1, 2, 3, 4, 5, 10, 20, 50],
       "stock": 1000,
       "unit": "unité",
       "min_order": 1,
@@ -209,7 +209,7 @@
         "CH": 8,
         "AU": 15
       },
-      "available_quantities": [1, 2, 5, 10, 25, 50],
+      "available_quantities": [1, 2, 3, 4, 5, 10, 25, 50],
       "stock": 800,
       "unit": "g",
       "min_order": 1,
@@ -241,7 +241,7 @@
         "CH": 8,
         "AU": 15
       },
-      "available_quantities": [1, 2, 5, 10, 25, 50, 100],
+      "available_quantities": [1, 2, 3, 4, 5, 10, 25, 50, 100],
       "stock": 1500,
       "unit": "g",
       "min_order": 1,
@@ -273,7 +273,7 @@
         "CH": 50,
         "AU": 60
       },
-      "available_quantities": [1, 2, 5, 10],
+      "available_quantities": [1, 2, 3, 4, 5, 10],
       "stock": 300,
       "unit": "g",
       "min_order": 1,
@@ -305,7 +305,7 @@
         "CH": 50,
         "AU": 60
       },
-      "available_quantities": [1, 2, 5, 10, 25],
+      "available_quantities": [1, 2, 3, 4, 5, 10, 25],
       "stock": 400,
       "unit": "g",
       "min_order": 1,
@@ -337,7 +337,7 @@
         "CH": 50,
         "AU": 80
       },
-      "available_quantities": [1, 2, 5, 10],
+      "available_quantities": [1, 2, 3, 4, 5, 10],
       "stock": 250,
       "unit": "g",
       "min_order": 1,

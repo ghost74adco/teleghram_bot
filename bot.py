@@ -6644,6 +6644,11 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await receive_contact_message(update, context)
         return
     
+    # État: En attente d'heure pour horaires de livraison (admin)
+    if context.user_data.get('awaiting_hour_start') or context.user_data.get('awaiting_hour_end'):
+        await receive_config(update, context)
+        return
+    
     # État: En attente d'heure pour horaires (admin)
     if context.user_data.get('awaiting_horaire_start') or context.user_data.get('awaiting_horaire_end'):
         await receive_horaire_time(update, context)

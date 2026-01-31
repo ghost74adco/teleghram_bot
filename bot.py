@@ -7849,23 +7849,23 @@ async def migrate_hardcoded_products(update: Update, context: ContextTypes.DEFAU
             product_name = product['name']['fr']
             
             if product_id in products:
-                message_lines.append(f"⏭️  {product_name} - Déjà existant")
+                message_lines.append(f"⏭️  {product_name} - Déjà existant (PRÉSERVÉ)")
                 skipped += 1
                 continue
             
-            # Ajouter le produit
+            # Ajouter le produit SANS écraser les produits existants
             products[product_id] = {
                 "name": product['name'],
-                "price": product['price'],
-                "quantity": product['quantity'],
+                "price": product['price'],  # Prix par défaut SEULEMENT pour nouveaux produits
+                "quantity": 0,  # Stock à 0 par défaut - À DÉFINIR MANUELLEMENT
                 "available_quantities": [1.0, 2.0, 3.0, 5.0, 10.0, 25.0, 50.0, 100.0],
                 "category": product['category'],
                 "active": True,
                 "created_at": datetime.now().isoformat(),
-                "alert_threshold": 50 if product['quantity'] <= 500 else 100
+                "alert_threshold": 50
             }
             
-            message_lines.append(f"✅ {product_name} - Ajouté")
+            message_lines.append(f"✅ {product_name} - Ajouté (stock: 0g)")
             added += 1
         
         # Sauvegarder
@@ -7897,6 +7897,10 @@ async def migrate_hardcoded_products(update: Update, context: ContextTypes.DEFAU
         
         if added > 0:
             message_lines.append("\n✅ Migration réussie !")
+            message_lines.append("\n⚠️  IMPORTANT:")
+            message_lines.append("• Les produits EXISTANTS sont PRÉSERVÉS")
+            message_lines.append("• Les NOUVEAUX produits ont un stock de 0g")
+            message_lines.append("• Définissez les stocks: /admin → Stocks")
             message_lines.append("\nVous pouvez maintenant gérer ces produits via /admin")
         else:
             message_lines.append("\nℹ️  Tous les produits étaient déjà migrés")

@@ -1911,9 +1911,22 @@ def save_orders_csv(csv_path, orders):
 def get_stock(product_name):
     """Récupère le stock d'un produit depuis products.json via STOCK_PRODUITS"""
     # Utiliser STOCK_PRODUITS qui lit depuis products.json
-    if product_name not in STOCK_PRODUITS:
-        return None
-    return STOCK_PRODUITS.get(product_name, 0)
+    stock = STOCK_PRODUITS.get(product_name, None)
+    
+    # Si None, essayer de lire DIRECTEMENT depuis products.json
+    if stock is None:
+        try:
+            products = PRODUCTS_DATA.get('products', {})
+            for product_id, product_data in products.items():
+                name = product_data.get('name', {}).get('fr', '')
+                if name == product_name:
+                    stock = product_data.get('quantity', 0)
+                    logger.debug(f"📦 Stock lu directement depuis products.json: {product_name} = {stock}g")
+                    break
+        except Exception as e:
+            logger.error(f"Erreur lecture stock depuis products.json: {e}")
+    
+    return stock
 
 def set_stock(product_name, quantity, alert_threshold=20):
     """Définit le stock d'un produit dans products.json"""
@@ -2031,7 +2044,22 @@ def save_prices(prices):
 def get_price(product_name, country):
     """Récupère le prix d'un produit"""
     prices = load_prices()
-    return prices.get(country, {}).get(product_name, 0)
+    price = prices.get(country, {}).get(product_name, 0)
+    
+    # Si prix = 0, essayer de lire DIRECTEMENT depuis products.json
+    if price == 0:
+        try:
+            products = PRODUCTS_DATA.get('products', {})
+            for product_id, product_data in products.items():
+                name = product_data.get('name', {}).get('fr', '')
+                if name == product_name:
+                    price = product_data.get('price', {}).get(country, 0)
+                    logger.debug(f"💰 Prix lu directement depuis products.json: {product_name} {country} = {price}€")
+                    break
+        except Exception as e:
+            logger.error(f"Erreur lecture prix depuis products.json: {e}")
+    
+    return price
 
 def set_price(product_name, country, new_price):
     """Définit le prix d'un produit"""
@@ -2722,14 +2750,8 @@ def format_product_card(product_name, country, stock=None):
     card += f"┣━━━━━━━━━━━━━━━━━━━━━┫\n"
     card += f"┃ {EMOJI_THEME['money']} Prix: {price}€/g {flag}\n"
     
-    if stock is None:
-        card += f"┃ {EMOJI_THEME['online']} En stock (illimité)\n"
-    elif stock > 50:
-        card += f"┃ {EMOJI_THEME['online']} En stock ({stock}g)\n"
-    elif stock > 0:
-        card += f"┃ {EMOJI_THEME['warning']} Stock limité ({stock}g)\n"
-    else:
-        card += f"┃ {EMOJI_THEME['offline']} Rupture de stock\n"
+    # Ne PAS afficher le stock (demande utilisateur)
+    # La ligne de stock est supprimée
     
     card += f"┃ {EMOJI_THEME['delivery']} Livraison: 24-48h\n"
     card += f"┗━━━━━━━━━━━━━━━━━━━━━┛"
@@ -3867,17 +3889,22 @@ async def browse_products(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = []
         for product_name in sorted(products_to_show):
             stock = get_stock(product_name)
+            # Ne PAS afficher les produits en rupture de stock
             if stock is not None and stock == 0:
-                button_text = f"{EMOJI_THEME['offline']} {product_name} (Rupture)"
-                callback = "out_of_stock"
-            else:
-                button_text = product_name
-                callback = f"product_{product_name}"
+                continue  # Sauter ce produit
             
+            # Afficher uniquement les produits en stock
+            button_text = product_name
+            callback = f"product_{product_name}"
             keyboard.append([InlineKeyboardButton(button_text, callback_data=callback)])
         
-        keyboard.append([InlineKeyboardButton(f"{EMOJI_THEME['cart']} Mon Panier", callback_data="view_cart")])
-        keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data=f"country_{country.lower()}")])
+        # Si tous les produits sont en rupture
+        if not keyboard:
+            message = f"{EMOJI_THEME['error']} Aucun produit disponible dans cette catégorie."
+            keyboard = [[InlineKeyboardButton("🏠 Retour", callback_data="back_to_main")]]
+        else:
+            keyboard.append([InlineKeyboardButton(f"{EMOJI_THEME['cart']} Mon Panier", callback_data="view_cart")])
+            keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data=f"country_{country.lower()}")])
     
     await query.edit_message_text(
         message,
@@ -3910,8 +3937,8 @@ async def product_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # Créer la carte produit
-    card = format_product_card(product_name, country, stock)
+    # Créer la carte produit SANS afficher le stock
+    card = format_product_card(product_name, country, stock=None)
     
     # Prix dégressifs
     tiers_display = get_pricing_tiers_display(product_name, country)

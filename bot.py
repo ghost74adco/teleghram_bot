@@ -6593,6 +6593,22 @@ N'hésitez pas à nous contacter avec /support si besoin.
 @error_handler
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler principal pour tous les messages texte"""
+    
+    # ===== LOG GROUPE - Afficher l'ID du groupe =====
+    if update.message and update.message.chat.type in ['group', 'supergroup']:
+        group_id = update.message.chat.id
+        group_name = update.message.chat.title
+        logger.info("=" * 60)
+        logger.info(f"🆔 GROUPE DÉTECTÉ - ID: {group_id}, Nom: {group_name}")
+        logger.info("=" * 60)
+        logger.info(f"✅ COPIEZ CET ID POUR CONFIGURER: {group_id}")
+        logger.info("=" * 60)
+    
+    # Vérifier que l'utilisateur existe (messages système n'ont pas d'user)
+    if not update.effective_user:
+        logger.warning("⚠️ Message sans utilisateur (message système ou bot)")
+        return
+    
     user_id = update.effective_user.id
     text = update.message.text.strip()
     

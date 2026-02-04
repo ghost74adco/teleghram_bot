@@ -6598,6 +6598,23 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     logger.info(f"📩 Message texte: user={user_id}, text={text}, user_data={context.user_data}")
     
+    # ===== CHECKS NOUVELLES FONCTIONNALITÉS =====
+    
+    # Recherche client (admin)
+    if context.user_data.get('awaiting_client_search'):
+        await receive_client_search(update, context)
+        return
+    
+    # Message promo personnalisé (admin)
+    if context.user_data.get('awaiting_custom_promo'):
+        await receive_custom_promo(update, context)
+        return
+    
+    # Message au groupe (admin)
+    if context.user_data.get('awaiting_group_message'):
+        await receive_group_message(update, context)
+        return
+    
     # Vérifier maintenance
     if is_maintenance_mode(user_id):
         await update.message.reply_text(
@@ -13508,6 +13525,36 @@ def setup_handlers(application):
     # Handlers édition licence
     application.add_handler(CallbackQueryHandler(admin_edit_license, pattern="^admin_edit_license$"))
     
+    # ===== ANNUAIRE CLIENTS =====
+    application.add_handler(CallbackQueryHandler(admin_client_directory, pattern="^admin_client_directory$"))
+    application.add_handler(CallbackQueryHandler(admin_clients_list, pattern="^clients_list"))
+    application.add_handler(CallbackQueryHandler(admin_clients_vip, pattern="^clients_vip$"))
+    application.add_handler(CallbackQueryHandler(admin_clients_inactive, pattern="^clients_inactive$"))
+    application.add_handler(CallbackQueryHandler(admin_clients_search, pattern="^clients_search$"))
+    
+    # ===== MESSAGES PROMO PRIVÉS =====
+    application.add_handler(CallbackQueryHandler(admin_send_promo, pattern="^admin_send_promo$"))
+    application.add_handler(CallbackQueryHandler(admin_promo_all, pattern="^promo_all$"))
+    application.add_handler(CallbackQueryHandler(admin_promo_vip, pattern="^promo_vip$"))
+    application.add_handler(CallbackQueryHandler(admin_promo_inactive, pattern="^promo_inactive$"))
+    application.add_handler(CallbackQueryHandler(admin_promo_custom, pattern="^promo_custom$"))
+    application.add_handler(CallbackQueryHandler(send_custom_promo, pattern="^send_custom_(all|vip)$"))
+    
+    # ===== MESSAGES GROUPE =====
+    application.add_handler(CallbackQueryHandler(admin_group_messages, pattern="^admin_group_messages$"))
+    application.add_handler(CallbackQueryHandler(admin_group_msg_custom, pattern="^group_msg_custom$"))
+    application.add_handler(CallbackQueryHandler(admin_trigger_daily_promo, pattern="^group_msg_daily$"))
+    application.add_handler(CallbackQueryHandler(admin_trigger_stock_update, pattern="^group_msg_stock$"))
+    application.add_handler(CallbackQueryHandler(admin_trigger_weekend_promo, pattern="^group_msg_weekend$"))
+    application.add_handler(CallbackQueryHandler(admin_trigger_flash_sale, pattern="^group_msg_flash$"))
+    
+    # ===== COMMANDES =====
+    application.add_handler(CommandHandler("optoutpromos", cmd_optout_promos))
+    application.add_handler(CommandHandler("optinpromos", cmd_optout_promos))
+    
+    # ===== LOGGER ID GROUPE =====
+    application.add_handler(MessageHandler(filters.ChatType.GROUPS, log_group_id))
+    
     # Message handlers (doit être en dernier)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
     
@@ -16461,6 +16508,1222 @@ def get_admin_name(admin_id):
 
 # ==================== MAIN ====================
 
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+CODE COMPLET À AJOUTER AU BOT
+Fonctionnalités : Annuaire clients + Messages promo + Messages groupe automatiques
+
+INSTRUCTIONS :
+1. Copier TOUT ce code à la fin de bot_modified.py (AVANT la fonction main())
+2. Modifier la fonction setup_handlers() pour ajouter les nouveaux handlers
+3. Modifier handle_text_message() pour ajouter les checks
+4. Modifier main() pour lancer le scheduler
+"""
+
+import asyncio
+import random
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+
+# ==================== CONFIGURATION GROUPE TELEGRAM ====================
+
+# ID du groupe Telegram (à configurer après création du groupe)
+# Pour obtenir l'ID : Ajoutez le bot au groupe et envoyez un message
+TELEGRAM_GROUP_ID = None  # À REMPLACER par l'ID de votre groupe (ex: -1001234567890)
+
+# Configuration des messages automatiques
+AUTO_MESSAGES_CONFIG = {
+    'daily_promo': True,           # Promo quotidienne 10h
+    'stock_update': True,          # Stocks 18h
+    'new_product': True,           # Nouveaux produits (manuel)
+    'weekend_special': True,       # Week-end vendredi 17h
+    'flash_sale': True,            # Flash mardi/jeudi 14h
+}
+
+# ==================== TEMPLATES MESSAGES GROUPE ====================
+
+DAILY_PROMO_TEMPLATES = [
+    """🎉 <b>PROMO DU JOUR</b>
+
+💰 {product} : -15% aujourd'hui
+Prix spécial : {price:.2f}€/g
+
+Code : <code>DAY15</code>
+
+⏰ Valide jusqu'à minuit !
+👉 /start pour commander""",
+    
+    """🔥 <b>OFFRE QUOTIDIENNE</b>
+
+⚡ {product} en promotion
+💎 {price:.2f}€/g (au lieu de {old_price:.2f}€/g)
+
+Économisez {saving:.2f}€ !
+Code : <code>TODAY{discount}</code>
+
+🚀 Commandez maintenant : /start""",
+]
+
+STOCK_UPDATE_TEMPLATE = """📦 <b>MISE À JOUR STOCKS</b>
+
+✅ Produits disponibles :
+{stock_list}
+
+🚚 Livraison rapide
+👉 /start pour commander"""
+
+WEEKEND_PROMO_TEMPLATES = [
+    """🎊 <b>PROMO WEEK-END !</b>
+
+🎉 -20% sur TOUT le catalogue
+⏰ Samedi et dimanche uniquement
+
+Code : <code>WEEKEND20</code>
+
+Profitez-en ! 🚀
+👉 /start""",
+]
+
+FLASH_SALE_TEMPLATE = """⚡ <b>VENTE FLASH !</b>
+
+🔥 {product} : -30% pendant 2h !
+💰 Prix flash : {price:.2f}€/g
+
+Code : <code>FLASH30</code>
+
+⏰ Se termine à {end_time}
+Dépêchez-vous ! 🏃"""
+
+NEW_PRODUCT_TEMPLATE = """🆕 <b>NOUVEAU PRODUIT !</b>
+
+✨ {product} maintenant disponible
+💎 Qualité premium
+
+💰 Prix de lancement : {price:.2f}€/g
+🎁 -15% avec <code>NOUVEAU15</code>
+
+👉 /start pour découvrir"""
+
+# ==================== FONCTIONS ANNUAIRE CLIENTS ====================
+
+def get_client_info(user_id):
+    """Récupère les infos complètes d'un client"""
+    users = load_users()
+    user = users.get(str(user_id), {})
+    
+    orders = load_orders()
+    user_orders = [o for o in orders.values() if str(o.get('user_id')) == str(user_id)]
+    
+    return {
+        'user_id': user_id,
+        'username': user.get('username', 'N/A'),
+        'first_name': user.get('first_name', 'N/A'),
+        'phone': user.get('phone', 'Non renseigné'),
+        'country': user.get('country', 'FR'),
+        'is_vip': user.get('is_vip', False),
+        'total_orders': len(user_orders),
+        'total_spent': sum(o.get('total', 0) for o in user_orders),
+        'last_order': max([o.get('created_at', '') for o in user_orders], default='Jamais'),
+        'registration_date': user.get('registration_date', 'Inconnue'),
+        'promo_enabled': not user.get('promo_optout', False),
+    }
+
+def get_all_clients_summary():
+    """Résumé de tous les clients"""
+    users = load_users()
+    orders = load_orders()
+    
+    total_clients = len(users)
+    vip_clients = sum(1 for u in users.values() if u.get('is_vip', False))
+    
+    client_orders = {}
+    for order in orders.values():
+        uid = str(order.get('user_id'))
+        if uid not in client_orders:
+            client_orders[uid] = {'count': 0, 'total': 0}
+        client_orders[uid]['count'] += 1
+        client_orders[uid]['total'] += order.get('total', 0)
+    
+    active_clients = len(client_orders)
+    total_revenue = sum(o.get('total', 0) for o in orders.values())
+    
+    return {
+        'total': total_clients,
+        'vip': vip_clients,
+        'active': active_clients,
+        'inactive': total_clients - active_clients,
+        'total_revenue': total_revenue,
+        'avg_order_value': total_revenue / len(orders) if orders else 0
+    }
+
+def search_clients(query):
+    """Recherche des clients par nom/username"""
+    users = load_users()
+    results = []
+    
+    query_lower = query.lower()
+    
+    for user_id, user_data in users.items():
+        username = user_data.get('username', '').lower()
+        first_name = user_data.get('first_name', '').lower()
+        
+        if query_lower in username or query_lower in first_name:
+            results.append({
+                'user_id': user_id,
+                'username': user_data.get('username', 'N/A'),
+                'first_name': user_data.get('first_name', 'N/A'),
+                'is_vip': user_data.get('is_vip', False)
+            })
+    
+    return results
+
+def toggle_promo_optout(user_id):
+    """Active/désactive les promos pour un client"""
+    users = load_users()
+    if str(user_id) not in users:
+        users[str(user_id)] = {}
+    
+    current = users[str(user_id)].get('promo_optout', False)
+    users[str(user_id)]['promo_optout'] = not current
+    save_users(users)
+    
+    return not current
+
+# ==================== FONCTIONS MESSAGES PROMO PRIVÉS ====================
+
+async def send_promo_message(context, user_id, message, image_path=None):
+    """Envoie un message promo à un utilisateur"""
+    try:
+        users = load_users()
+        user = users.get(str(user_id), {})
+        if user.get('promo_optout', False):
+            logger.info(f"⏭️ User {user_id} a désactivé les promos")
+            return False
+        
+        if image_path and Path(image_path).exists():
+            with open(image_path, 'rb') as photo:
+                await context.bot.send_photo(
+                    chat_id=user_id,
+                    photo=photo,
+                    caption=message,
+                    parse_mode='HTML'
+                )
+        else:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=message,
+                parse_mode='HTML'
+            )
+        
+        logger.info(f"📢 Message promo envoyé à {user_id}")
+        return True
+        
+    except telegram.error.Forbidden:
+        logger.warning(f"🚫 User {user_id} a bloqué le bot")
+        return False
+    except Exception as e:
+        logger.error(f"❌ Erreur envoi promo à {user_id}: {e}")
+        return False
+
+async def send_bulk_promo(context, user_ids, message, image_path=None, delay=1):
+    """Envoie un message promo à plusieurs utilisateurs"""
+    sent = 0
+    failed = 0
+    blocked = 0
+    optout = 0
+    
+    for user_id in user_ids:
+        try:
+            users = load_users()
+            user = users.get(str(user_id), {})
+            if user.get('promo_optout', False):
+                optout += 1
+                continue
+            
+            success = await send_promo_message(context, user_id, message, image_path)
+            if success:
+                sent += 1
+            else:
+                failed += 1
+            
+            await asyncio.sleep(delay)
+            
+        except telegram.error.Forbidden:
+            blocked += 1
+        except Exception as e:
+            failed += 1
+            logger.error(f"❌ Erreur envoi à {user_id}: {e}")
+    
+    return {
+        "sent": sent,
+        "failed": failed,
+        "blocked": blocked,
+        "optout": optout,
+        "total": len(user_ids)
+    }
+
+# ==================== FONCTIONS MESSAGES GROUPE ====================
+
+async def send_to_group(context, message, image_path=None, parse_mode='HTML'):
+    """Envoie un message au groupe Telegram"""
+    global TELEGRAM_GROUP_ID
+    
+    if not TELEGRAM_GROUP_ID:
+        logger.error("❌ TELEGRAM_GROUP_ID non configuré !")
+        return False
+    
+    try:
+        if image_path and Path(image_path).exists():
+            with open(image_path, 'rb') as photo:
+                await context.bot.send_photo(
+                    chat_id=TELEGRAM_GROUP_ID,
+                    photo=photo,
+                    caption=message,
+                    parse_mode=parse_mode
+                )
+        else:
+            await context.bot.send_message(
+                chat_id=TELEGRAM_GROUP_ID,
+                text=message,
+                parse_mode=parse_mode
+            )
+        
+        logger.info(f"📢 Message envoyé au groupe {TELEGRAM_GROUP_ID}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Erreur envoi au groupe: {e}")
+        return False
+
+async def send_daily_promo(context):
+    """Envoie la promo quotidienne au groupe"""
+    if not AUTO_MESSAGES_CONFIG.get('daily_promo', False):
+        return
+    
+    products = PRODUCTS_DATA.get('products', {})
+    available_products = []
+    
+    for product_id, product_data in products.items():
+        if product_data.get('active', True) and product_data.get('quantity', 0) > 0:
+            name = product_data.get('name', {}).get('fr', product_id)
+            price = product_data.get('price', {}).get('FR', 0)
+            available_products.append({
+                'name': name,
+                'price': price,
+            })
+    
+    if not available_products:
+        logger.warning("⚠️ Aucun produit disponible pour promo quotidienne")
+        return
+    
+    product = random.choice(available_products)
+    discount = random.choice([10, 15, 20])
+    old_price = product['price']
+    new_price = old_price * (1 - discount/100)
+    saving = old_price - new_price
+    
+    template = random.choice(DAILY_PROMO_TEMPLATES)
+    message = template.format(
+        product=product['name'],
+        price=new_price,
+        old_price=old_price,
+        discount=discount,
+        saving=saving
+    )
+    
+    await send_to_group(context, message)
+    logger.info(f"✅ Promo quotidienne envoyée: {product['name']}")
+
+async def send_stock_update(context):
+    """Envoie une mise à jour des stocks au groupe"""
+    if not AUTO_MESSAGES_CONFIG.get('stock_update', False):
+        return
+    
+    products = PRODUCTS_DATA.get('products', {})
+    stock_list = []
+    
+    for product_id, product_data in products.items():
+        if product_data.get('active', True):
+            name = product_data.get('name', {}).get('fr', product_id)
+            quantity = product_data.get('quantity', 0)
+            price = product_data.get('price', {}).get('FR', 0)
+            
+            if quantity > 0:
+                emoji = "✅" if quantity > 50 else "⚠️"
+                stock_list.append(f"{emoji} {name} : {price}€/g")
+    
+    if not stock_list:
+        return
+    
+    message = STOCK_UPDATE_TEMPLATE.format(
+        stock_list='\n'.join(stock_list)
+    )
+    
+    await send_to_group(context, message)
+    logger.info("✅ Mise à jour stocks envoyée")
+
+async def send_weekend_promo(context):
+    """Envoie la promo week-end"""
+    if not AUTO_MESSAGES_CONFIG.get('weekend_special', False):
+        return
+    
+    template = random.choice(WEEKEND_PROMO_TEMPLATES)
+    await send_to_group(context, template)
+    logger.info("✅ Promo week-end envoyée")
+
+async def send_flash_sale(context):
+    """Envoie une vente flash"""
+    if not AUTO_MESSAGES_CONFIG.get('flash_sale', False):
+        return
+    
+    products = PRODUCTS_DATA.get('products', {})
+    available_products = []
+    
+    for product_id, product_data in products.items():
+        if product_data.get('active', True) and product_data.get('quantity', 0) > 0:
+            name = product_data.get('name', {}).get('fr', product_id)
+            price = product_data.get('price', {}).get('FR', 0)
+            available_products.append({'name': name, 'price': price})
+    
+    if not available_products:
+        return
+    
+    product = random.choice(available_products)
+    new_price = product['price'] * 0.7
+    end_time = (datetime.now() + timedelta(hours=2)).strftime('%H:%M')
+    
+    message = FLASH_SALE_TEMPLATE.format(
+        product=product['name'],
+        price=new_price,
+        end_time=end_time
+    )
+    
+    await send_to_group(context, message)
+    logger.info(f"✅ Flash sale envoyée: {product['name']}")
+
+async def send_new_product_announcement(context, product_name=None):
+    """Annonce un nouveau produit"""
+    if not AUTO_MESSAGES_CONFIG.get('new_product', False):
+        return
+    
+    products = PRODUCTS_DATA.get('products', {})
+    
+    if product_name:
+        for product_id, product_data in products.items():
+            name = product_data.get('name', {}).get('fr', '')
+            if name == product_name:
+                price = product_data.get('price', {}).get('FR', 0)
+                break
+        else:
+            logger.warning(f"⚠️ Produit {product_name} non trouvé")
+            return
+    else:
+        latest_product = None
+        latest_date = None
+        
+        for product_id, product_data in products.items():
+            created_at = product_data.get('created_at', '2020-01-01')
+            if latest_date is None or created_at > latest_date:
+                latest_date = created_at
+                latest_product = product_data
+        
+        if not latest_product:
+            return
+        
+        product_name = latest_product.get('name', {}).get('fr', 'Nouveau produit')
+        price = latest_product.get('price', {}).get('FR', 0)
+    
+    message = NEW_PRODUCT_TEMPLATE.format(
+        product=product_name,
+        price=price
+    )
+    
+    await send_to_group(context, message)
+    logger.info(f"✅ Annonce nouveau produit: {product_name}")
+
+# ==================== CALLBACKS ANNUAIRE ====================
+
+@error_handler
+async def admin_client_directory(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu principal de l'annuaire clients"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_admin(update.effective_user.id):
+        await query.answer("❌ Accès admin requis", show_alert=True)
+        return
+    
+    summary = get_all_clients_summary()
+    
+    message = f"""📇 <b>ANNUAIRE CLIENTS</b>
+
+👥 Total clients: {summary['total']}
+👑 Clients VIP: {summary['vip']}
+✅ Actifs (≥1 commande): {summary['active']}
+😴 Inactifs: {summary['inactive']}
+
+💰 CA total: {summary['total_revenue']:.2f}€
+📊 Panier moyen: {summary['avg_order_value']:.2f}€
+
+Que voulez-vous faire ?"""
+    
+    keyboard = [
+        [InlineKeyboardButton("📋 Liste complète", callback_data="clients_list_0")],
+        [InlineKeyboardButton("🔍 Rechercher client", callback_data="clients_search")],
+        [InlineKeyboardButton("👑 Clients VIP", callback_data="clients_vip")],
+        [InlineKeyboardButton("😴 Clients inactifs", callback_data="clients_inactive")],
+        [InlineKeyboardButton("📢 Envoyer message promo", callback_data="admin_send_promo")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_panel")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='HTML'
+    )
+
+@error_handler
+async def admin_clients_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche la liste paginée des clients"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_admin(update.effective_user.id):
+        return
+    
+    users = load_users()
+    page = int(query.data.split('_')[-1]) if '_' in query.data else 0
+    per_page = 10
+    
+    user_list = list(users.items())
+    total_pages = (len(user_list) + per_page - 1) // per_page
+    
+    start = page * per_page
+    end = start + per_page
+    page_users = user_list[start:end]
+    
+    message = f"📋 <b>LISTE CLIENTS</b> (Page {page + 1}/{total_pages})\n\n"
+    
+    for user_id, user_data in page_users:
+        username = user_data.get('username', 'N/A')
+        first_name = user_data.get('first_name', 'N/A')
+        vip_icon = "👑" if user_data.get('is_vip', False) else ""
+        
+        message += f"{vip_icon} {first_name} (@{username})\n"
+        message += f"   ID: <code>{user_id}</code>\n\n"
+    
+    keyboard = []
+    nav_row = []
+    
+    if page > 0:
+        nav_row.append(InlineKeyboardButton("◀️ Précédent", callback_data=f"clients_list_{page-1}"))
+    
+    if page < total_pages - 1:
+        nav_row.append(InlineKeyboardButton("Suivant ▶️", callback_data=f"clients_list_{page+1}"))
+    
+    if nav_row:
+        keyboard.append(nav_row)
+    
+    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="admin_client_directory")])
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='HTML'
+    )
+
+@error_handler
+async def admin_clients_vip(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Liste des clients VIP"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_admin(update.effective_user.id):
+        return
+    
+    users = load_users()
+    vip_users = {uid: data for uid, data in users.items() if data.get('is_vip', False)}
+    
+    if not vip_users:
+        message = "👑 <b>CLIENTS VIP</b>\n\nAucun client VIP pour le moment."
+        keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_client_directory")]]
+    else:
+        message = f"👑 <b>CLIENTS VIP</b> ({len(vip_users)} clients)\n\n"
+        
+        for user_id, user_data in list(vip_users.items())[:20]:
+            username = user_data.get('username', 'N/A')
+            first_name = user_data.get('first_name', 'N/A')
+            
+            message += f"👑 {first_name} (@{username})\n"
+            message += f"   ID: <code>{user_id}</code>\n\n"
+        
+        keyboard = [
+            [InlineKeyboardButton("📢 Message aux VIP", callback_data="promo_vip")],
+            [InlineKeyboardButton("🔙 Retour", callback_data="admin_client_directory")]
+        ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='HTML'
+    )
+
+@error_handler
+async def admin_clients_inactive(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Liste des clients inactifs"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_admin(update.effective_user.id):
+        return
+    
+    users = load_users()
+    orders = load_orders()
+    
+    inactive_users = []
+    cutoff_date = datetime.now() - timedelta(days=30)
+    
+    for user_id, user_data in users.items():
+        user_orders = [o for o in orders.values() if str(o.get('user_id')) == user_id]
+        
+        if not user_orders:
+            inactive_users.append((user_id, user_data, "Jamais commandé"))
+        else:
+            last_order_date = max([datetime.fromisoformat(o.get('created_at', '2020-01-01')) 
+                                   for o in user_orders])
+            
+            if last_order_date < cutoff_date:
+                days_ago = (datetime.now() - last_order_date).days
+                inactive_users.append((user_id, user_data, f"Inactif {days_ago}j"))
+    
+    if not inactive_users:
+        message = "😴 <b>CLIENTS INACTIFS</b>\n\nTous les clients sont actifs !"
+        keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_client_directory")]]
+    else:
+        message = f"😴 <b>CLIENTS INACTIFS</b> ({len(inactive_users)} clients)\n\n"
+        
+        for user_id, user_data, status in inactive_users[:10]:
+            username = user_data.get('username', 'N/A')
+            first_name = user_data.get('first_name', 'N/A')
+            
+            message += f"{first_name} (@{username})\n"
+            message += f"   {status}\n\n"
+        
+        if len(inactive_users) > 10:
+            message += f"\n... et {len(inactive_users) - 10} autres"
+        
+        keyboard = [
+            [InlineKeyboardButton("📢 Message de réactivation", callback_data="promo_inactive")],
+            [InlineKeyboardButton("🔙 Retour", callback_data="admin_client_directory")]
+        ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='HTML'
+    )
+
+@error_handler
+async def admin_clients_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Demande de recherche client"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_admin(update.effective_user.id):
+        return
+    
+    message = """🔍 <b>RECHERCHER UN CLIENT</b>
+
+Envoyez le nom ou username du client à rechercher.
+
+Exemples:
+• john
+• @john_doe
+• Marie
+
+Tapez /cancel pour annuler"""
+    
+    context.user_data['awaiting_client_search'] = True
+    
+    await query.edit_message_text(message, parse_mode='HTML')
+
+@error_handler
+async def receive_client_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Reçoit la recherche et affiche les résultats"""
+    if not is_admin(update.effective_user.id):
+        return
+    
+    if not context.user_data.get('awaiting_client_search'):
+        return
+    
+    context.user_data['awaiting_client_search'] = False
+    query_text = update.message.text.strip()
+    
+    results = search_clients(query_text)
+    
+    if not results:
+        message = f"🔍 Aucun client trouvé pour: {query_text}"
+        keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_client_directory")]]
+    else:
+        message = f"🔍 <b>RÉSULTATS</b> ({len(results)} trouvé(s))\n\n"
+        
+        for r in results:
+            vip_icon = "👑" if r['is_vip'] else ""
+            message += f"{vip_icon} {r['first_name']} (@{r['username']})\n"
+            message += f"   ID: <code>{r['user_id']}</code>\n\n"
+        
+        keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_client_directory")]]
+    
+    await update.message.reply_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='HTML'
+    )
+
+# ==================== CALLBACKS MESSAGES PROMO ====================
+
+@error_handler
+async def admin_send_promo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu admin pour envoyer des promos"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(update.effective_user.id):
+        await query.answer("❌ Accès super-admin uniquement", show_alert=True)
+        return
+    
+    users = load_users()
+    total_users = len(users)
+    vip_users = sum(1 for u in users.values() if u.get('is_vip', False))
+    promo_enabled = sum(1 for u in users.values() if not u.get('promo_optout', False))
+    
+    message = f"""📢 <b>ENVOI MESSAGES PROMOTIONNELS</b>
+
+👥 Total utilisateurs: {total_users}
+👑 Utilisateurs VIP: {vip_users}
+✅ Promos activées: {promo_enabled}
+🚫 Promos désactivées: {total_users - promo_enabled}
+
+Choisissez le type d'envoi :"""
+    
+    keyboard = [
+        [InlineKeyboardButton("📣 Promo à TOUS", callback_data="promo_all")],
+        [InlineKeyboardButton("👑 Promo VIP uniquement", callback_data="promo_vip")],
+        [InlineKeyboardButton("😴 Utilisateurs inactifs", callback_data="promo_inactive")],
+        [InlineKeyboardButton("✏️ Message personnalisé", callback_data="promo_custom")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_client_directory")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='HTML'
+    )
+
+@error_handler
+async def admin_promo_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Envoie promo à tous"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(update.effective_user.id):
+        return
+    
+    await query.edit_message_text("📤 Envoi en cours...\n\nCela peut prendre quelques minutes.")
+    
+    users = load_users()
+    user_ids = [int(uid) for uid in users.keys()]
+    
+    message = """🎉 <b>PROMOTION SPÉCIALE !</b>
+
+💰 -20% sur TOUS les produits
+⏰ Valide jusqu'au 15 février
+
+Utilisez le code: <code>PROMO20</code>
+
+👉 /start pour commander !"""
+    
+    results = await send_bulk_promo(context, user_ids, message)
+    
+    admin_id = update.effective_user.id
+    await context.bot.send_message(
+        chat_id=admin_id,
+        text=f"""📊 <b>RAPPORT ENVOI PROMO</b>
+
+✅ Envoyés: {results['sent']}
+❌ Échoués: {results['failed']}
+🚫 Bloqués: {results['blocked']}
+⏭️ Opt-out: {results['optout']}
+📊 Total: {results['total']}""",
+        parse_mode='HTML',
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 Retour", callback_data="admin_send_promo")
+        ]])
+    )
+
+@error_handler
+async def admin_promo_vip(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Envoie promo aux VIP"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(update.effective_user.id):
+        return
+    
+    await query.edit_message_text("📤 Envoi en cours aux VIP...")
+    
+    users = load_users()
+    vip_ids = [int(uid) for uid, data in users.items() if data.get('is_vip', False)]
+    
+    message = """👑 <b>OFFRE VIP EXCLUSIVE !</b>
+
+💎 -30% sur votre prochaine commande
+🎁 Livraison gratuite
+⏰ Valide 48h
+
+Code VIP: <code>VIP30</code>
+
+Merci de votre fidélité ! 💝"""
+    
+    results = await send_bulk_promo(context, vip_ids, message)
+    
+    admin_id = update.effective_user.id
+    await context.bot.send_message(
+        chat_id=admin_id,
+        text=f"""📊 <b>RAPPORT PROMO VIP</b>
+
+✅ Envoyés: {results['sent']}
+❌ Échoués: {results['failed']}
+🚫 Bloqués: {results['blocked']}
+📊 Total VIP: {results['total']}""",
+        parse_mode='HTML',
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 Retour", callback_data="admin_send_promo")
+        ]])
+    )
+
+@error_handler
+async def admin_promo_inactive(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Envoie promo aux inactifs"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(update.effective_user.id):
+        return
+    
+    await query.edit_message_text("📤 Envoi en cours aux utilisateurs inactifs...")
+    
+    users = load_users()
+    orders = load_orders()
+    
+    inactive_ids = []
+    cutoff_date = datetime.now() - timedelta(days=30)
+    
+    for user_id, user_data in users.items():
+        user_orders = [o for o in orders.values() if str(o.get('user_id')) == user_id]
+        
+        if not user_orders:
+            inactive_ids.append(int(user_id))
+        else:
+            last_order_date = max([datetime.fromisoformat(o.get('created_at', '2020-01-01')) 
+                                   for o in user_orders])
+            if last_order_date < cutoff_date:
+                inactive_ids.append(int(user_id))
+    
+    message = """😢 <b>On vous a manqué !</b>
+
+🎁 Cadeau de bienvenue : -25%
+💝 Utilisez le code: <code>COMEBACK25</code>
+
+Nous avons de nouveaux produits !
+👉 /start pour découvrir"""
+    
+    results = await send_bulk_promo(context, inactive_ids, message)
+    
+    admin_id = update.effective_user.id
+    await context.bot.send_message(
+        chat_id=admin_id,
+        text=f"""📊 <b>RAPPORT RÉACTIVATION</b>
+
+✅ Envoyés: {results['sent']}
+❌ Échoués: {results['failed']}
+🚫 Bloqués: {results['blocked']}
+📊 Total inactifs: {results['total']}""",
+        parse_mode='HTML',
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 Retour", callback_data="admin_send_promo")
+        ]])
+    )
+
+@error_handler
+async def admin_promo_custom(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Demande un message personnalisé"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(update.effective_user.id):
+        return
+    
+    message = """✏️ <b>MESSAGE PERSONNALISÉ</b>
+
+Envoyez le message que vous voulez diffuser.
+
+💡 Conseils:
+• Utilisez <b>gras</b> pour l'emphase
+• Utilisez <code>code</code> pour les codes promo
+• Ajoutez des emojis 🎉
+• Restez court et impactant
+
+Envoyez /cancel pour annuler"""
+    
+    context.user_data['awaiting_custom_promo'] = True
+    
+    await query.edit_message_text(message, parse_mode='HTML')
+
+@error_handler
+async def receive_custom_promo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Reçoit le message personnalisé"""
+    if not is_super_admin(update.effective_user.id):
+        return
+    
+    if not context.user_data.get('awaiting_custom_promo'):
+        return
+    
+    context.user_data['awaiting_custom_promo'] = False
+    custom_message = update.message.text
+    
+    keyboard = [
+        [InlineKeyboardButton("✅ Envoyer à TOUS", callback_data="send_custom_all")],
+        [InlineKeyboardButton("👑 Envoyer aux VIP", callback_data="send_custom_vip")],
+        [InlineKeyboardButton("❌ Annuler", callback_data="admin_send_promo")]
+    ]
+    
+    context.user_data['custom_promo_message'] = custom_message
+    
+    await update.message.reply_text(
+        f"📋 <b>APERÇU DU MESSAGE</b>\n\n{custom_message}\n\n"
+        f"Choisissez les destinataires :",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='HTML'
+    )
+
+@error_handler
+async def send_custom_promo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Envoie le message personnalisé"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(update.effective_user.id):
+        return
+    
+    custom_message = context.user_data.get('custom_promo_message')
+    if not custom_message:
+        await query.answer("❌ Message non trouvé", show_alert=True)
+        return
+    
+    target = query.data.split('_')[-1]
+    
+    await query.edit_message_text("📤 Envoi en cours...")
+    
+    users = load_users()
+    if target == "all":
+        user_ids = [int(uid) for uid in users.keys()]
+    else:
+        user_ids = [int(uid) for uid, data in users.items() if data.get('is_vip', False)]
+    
+    results = await send_bulk_promo(context, user_ids, custom_message)
+    
+    admin_id = update.effective_user.id
+    await context.bot.send_message(
+        chat_id=admin_id,
+        text=f"""✅ <b>MESSAGE ENVOYÉ !</b>
+
+📊 Résultats:
+• Envoyés: {results['sent']}
+• Échoués: {results['failed']}
+• Bloqués: {results['blocked']}
+• Opt-out: {results['optout']}
+• Total: {results['total']}""",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 Retour", callback_data="admin_send_promo")
+        ]]),
+        parse_mode='HTML'
+    )
+    
+    context.user_data.pop('custom_promo_message', None)
+
+# ==================== CALLBACKS MESSAGES GROUPE ====================
+
+@error_handler
+async def admin_group_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu admin pour gérer les messages au groupe"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(update.effective_user.id):
+        await query.answer("❌ Accès super-admin uniquement", show_alert=True)
+        return
+    
+    global TELEGRAM_GROUP_ID
+    
+    status = "✅ Configuré" if TELEGRAM_GROUP_ID else "❌ Non configuré"
+    
+    message = f"""📢 <b>MESSAGES AU GROUPE</b>
+
+🆔 Groupe : {status}
+{f"ID : <code>{TELEGRAM_GROUP_ID}</code>" if TELEGRAM_GROUP_ID else ""}
+
+⚙️ Configuration :
+• Promo quotidienne : {'✅' if AUTO_MESSAGES_CONFIG.get('daily_promo') else '❌'}
+• Stocks : {'✅' if AUTO_MESSAGES_CONFIG.get('stock_update') else '❌'}
+• Week-end : {'✅' if AUTO_MESSAGES_CONFIG.get('weekend_special') else '❌'}
+• Flash sale : {'✅' if AUTO_MESSAGES_CONFIG.get('flash_sale') else '❌'}
+• Nouveaux produits : {'✅' if AUTO_MESSAGES_CONFIG.get('new_product') else '❌'}
+
+Que voulez-vous faire ?"""
+    
+    keyboard = [
+        [InlineKeyboardButton("📝 Message manuel", callback_data="group_msg_custom")],
+        [InlineKeyboardButton("🎉 Promo quotidienne", callback_data="group_msg_daily")],
+        [InlineKeyboardButton("📦 Mise à jour stocks", callback_data="group_msg_stock")],
+        [InlineKeyboardButton("🎊 Promo week-end", callback_data="group_msg_weekend")],
+        [InlineKeyboardButton("⚡ Vente flash", callback_data="group_msg_flash")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_panel")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='HTML'
+    )
+
+@error_handler
+async def admin_group_msg_custom(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Demande un message personnalisé pour le groupe"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(update.effective_user.id):
+        return
+    
+    message = """📝 <b>MESSAGE PERSONNALISÉ AU GROUPE</b>
+
+Envoyez le message que vous voulez poster dans le groupe.
+
+💡 Conseils :
+• Utilisez <b>gras</b> et <code>code</code>
+• Ajoutez des emojis
+• Soyez clair et concis
+
+Tapez /cancel pour annuler"""
+    
+    context.user_data['awaiting_group_message'] = True
+    
+    await query.edit_message_text(message, parse_mode='HTML')
+
+@error_handler
+async def receive_group_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Reçoit et envoie le message au groupe"""
+    if not is_super_admin(update.effective_user.id):
+        return
+    
+    if not context.user_data.get('awaiting_group_message'):
+        return
+    
+    context.user_data['awaiting_group_message'] = False
+    custom_message = update.message.text
+    
+    success = await send_to_group(context, custom_message)
+    
+    if success:
+        await update.message.reply_text(
+            "✅ Message envoyé au groupe !",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Retour", callback_data="admin_group_messages")
+            ]])
+        )
+    else:
+        await update.message.reply_text(
+            "❌ Erreur lors de l'envoi.\nVérifiez que l'ID du groupe est configuré.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Retour", callback_data="admin_group_messages")
+            ]])
+        )
+
+@error_handler
+async def admin_trigger_daily_promo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Envoie manuellement la promo quotidienne"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(update.effective_user.id):
+        return
+    
+    await query.edit_message_text("📤 Envoi en cours...")
+    
+    await send_daily_promo(context)
+    
+    await query.message.reply_text(
+        "✅ Promo quotidienne envoyée !",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 Retour", callback_data="admin_group_messages")
+        ]])
+    )
+
+@error_handler
+async def admin_trigger_stock_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Envoie manuellement la mise à jour stocks"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(update.effective_user.id):
+        return
+    
+    await query.edit_message_text("📤 Envoi en cours...")
+    
+    await send_stock_update(context)
+    
+    await query.message.reply_text(
+        "✅ Mise à jour stocks envoyée !",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 Retour", callback_data="admin_group_messages")
+        ]])
+    )
+
+@error_handler
+async def admin_trigger_weekend_promo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Envoie manuellement la promo week-end"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(update.effective_user.id):
+        return
+    
+    await query.edit_message_text("📤 Envoi en cours...")
+    
+    await send_weekend_promo(context)
+    
+    await query.message.reply_text(
+        "✅ Promo week-end envoyée !",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 Retour", callback_data="admin_group_messages")
+        ]])
+    )
+
+@error_handler
+async def admin_trigger_flash_sale(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Envoie manuellement une vente flash"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(update.effective_user.id):
+        return
+    
+    await query.edit_message_text("📤 Envoi en cours...")
+    
+    await send_flash_sale(context)
+    
+    await query.message.reply_text(
+        "✅ Vente flash envoyée !",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔙 Retour", callback_data="admin_group_messages")
+        ]])
+    )
+
+# ==================== COMMANDE /optoutpromos ====================
+
+@error_handler
+async def cmd_optout_promos(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Permet à un utilisateur de désactiver les promos"""
+    user_id = update.effective_user.id
+    
+    is_optout = toggle_promo_optout(user_id)
+    
+    if is_optout:
+        message = """🔕 <b>PROMOS DÉSACTIVÉES</b>
+
+Vous ne recevrez plus de messages promotionnels.
+
+Pour réactiver : /optinpromos"""
+    else:
+        message = """🔔 <b>PROMOS ACTIVÉES</b>
+
+Vous recevrez à nouveau nos offres spéciales !
+
+Pour désactiver : /optoutpromos"""
+    
+    await update.message.reply_text(message, parse_mode='HTML')
+
+# ==================== LOGGER ID GROUPE ====================
+
+async def log_group_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Loggue l'ID du groupe quand le bot reçoit un message"""
+    if update.message and update.message.chat.type in ['group', 'supergroup']:
+        group_id = update.message.chat.id
+        group_title = update.message.chat.title
+        logger.info(f"📢 Groupe détecté: '{group_title}' - ID: {group_id}")
+        
+        if is_super_admin(update.effective_user.id):
+            await update.message.reply_text(
+                f"🆔 <b>ID DE CE GROUPE</b>\n\n"
+                f"Nom : {group_title}\n"
+                f"ID : <code>{group_id}</code>\n\n"
+                f"Copiez cet ID et mettez-le dans :\n"
+                f"<code>TELEGRAM_GROUP_ID = {group_id}</code>",
+                parse_mode='HTML'
+            )
+
+# ==================== SCHEDULER ====================
+
+def schedule_group_messages(application):
+    """Programme les messages automatiques au groupe"""
+    scheduler = AsyncIOScheduler()
+    
+    if AUTO_MESSAGES_CONFIG.get('daily_promo', False):
+        scheduler.add_job(
+            send_daily_promo,
+            CronTrigger(hour=10, minute=0),
+            args=[application],
+            id='daily_promo'
+        )
+        logger.info("📅 Promo quotidienne programmée : 10h")
+    
+    if AUTO_MESSAGES_CONFIG.get('stock_update', False):
+        scheduler.add_job(
+            send_stock_update,
+            CronTrigger(hour=18, minute=0),
+            args=[application],
+            id='stock_update'
+        )
+        logger.info("📅 Stocks programmés : 18h")
+    
+    if AUTO_MESSAGES_CONFIG.get('weekend_special', False):
+        scheduler.add_job(
+            send_weekend_promo,
+            CronTrigger(day_of_week='fri', hour=17, minute=0),
+            args=[application],
+            id='weekend_promo'
+        )
+        logger.info("📅 Promo week-end programmée : Vendredi 17h")
+    
+    if AUTO_MESSAGES_CONFIG.get('flash_sale', False):
+        scheduler.add_job(
+            send_flash_sale,
+            CronTrigger(day_of_week='tue,thu', hour=14, minute=0),
+            args=[application],
+            id='flash_sale'
+        )
+        logger.info("📅 Flash sales programmées : Mardi/Jeudi 14h")
+    
+    scheduler.start()
+    logger.info("✅ Scheduler messages groupe démarré")
+    
+    return scheduler
+
+# ==================== FIN DU CODE À AJOUTER ====================
+
+
 async def main():
     """Fonction principale du bot"""
     
@@ -16532,6 +17795,13 @@ async def main():
     
     # Configuration handlers
     setup_handlers(application)
+    
+    # ===== SCHEDULER MESSAGES GROUPE =====
+    try:
+        group_scheduler = schedule_group_messages(application)
+        logger.info("✅ Scheduler messages groupe configuré")
+    except Exception as e:
+        logger.error(f"⚠️ Erreur scheduler groupe: {e}")
     
     # Jobs périodiques
     job_queue = application.job_queue

@@ -6719,6 +6719,19 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await receive_expense_amount(update, context)
         return
     
+    # États: Livre de comptes (super-admin) - AVANT horaires pour éviter conflit
+    if context.user_data.get('awaiting_ledger_description'):
+        await receive_ledger_description(update, context)
+        return
+    
+    if context.user_data.get('awaiting_ledger_amount'):
+        await receive_ledger_amount(update, context)
+        return
+    
+    if context.user_data.get('awaiting_ledger_balance'):
+        await receive_ledger_balance(update, context)
+        return
+    
     # État: En attente d'heure pour horaires de livraison (admin)
     if context.user_data.get('awaiting_hour_start') or context.user_data.get('awaiting_hour_end'):
         await receive_config(update, context)
@@ -6767,19 +6780,6 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     # État: En attente valeur commission (super-admin)
     if context.user_data.get('setting_commission'):
         await receive_commission_value(update, context)
-        return
-    
-    # États: Livre de comptes (super-admin)
-    if context.user_data.get('awaiting_ledger_description'):
-        await receive_ledger_description(update, context)
-        return
-    
-    if context.user_data.get('awaiting_ledger_amount'):
-        await receive_ledger_amount(update, context)
-        return
-    
-    if context.user_data.get('awaiting_ledger_balance'):
-        await receive_ledger_balance(update, context)
         return
     
     # Message par défaut

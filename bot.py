@@ -7574,7 +7574,7 @@ async def send_weekly_report(context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Erreur envoi rapport hebdo: {e}")
 
 async def check_salary_notifications(context: ContextTypes.DEFAULT_TYPE):
-    """Vérifie si aujourd'hui est un jour de paie et envoie les notifications"""
+    """Vérifie si aujourd'hui est un jour de paie et envoie les notifications + PAIEMENT AUTO"""
     try:
         config = load_salary_config()
         now = datetime.now()
@@ -7630,15 +7630,61 @@ async def check_salary_notifications(context: ContextTypes.DEFAULT_TYPE):
                 
                 # Calculer remboursements non payés
                 unreimbursed = 0
+                unreimbursed_count = 0
                 if str(admin_id) in expenses:
                     for expense in expenses[str(admin_id)]:
                         if not expense.get('reimbursed', False):
                             unreimbursed += expense.get('amount', 0)
+                            unreimbursed_count += 1
                 
                 total = fixed_salary + commissions + unreimbursed
                 
+                # ===== PAIEMENT AUTOMATIQUE =====
+                if total > 0:
+                    try:
+                        # 1. Enregistrer dans le ledger (caisse)
+                        description = f"💼 Salaire {admin_name} - {period_label}"
+                        details = []
+                        if fixed_salary > 0:
+                            details.append(f"Fixe: {fixed_salary:.2f}€")
+                        if commissions > 0:
+                            details.append(f"Commissions: {commissions:.2f}€")
+                        if unreimbursed > 0:
+                            details.append(f"Remboursements: {unreimbursed:.2f}€")
+                        
+                        full_description = f"{description} ({', '.join(details)})"
+                        
+                        add_ledger_entry(
+                            entry_type='expense',
+                            amount=total,
+                            description=full_description,
+                            category='Salaire',
+                            reference_id=f"SALARY-{admin_id}-{now.strftime('%Y%m%d')}",
+                            ledger_type='autres'
+                        )
+                        
+                        logger.info(f"💰 Salaire enregistré dans caisse: {total:.2f}€ pour {admin_name}")
+                        
+                        # 2. Réinitialiser les commissions
+                        if commissions > 0:
+                            commissions_data[str(admin_id)] = 0
+                            save_commissions(commissions_data)
+                            logger.info(f"✅ Commissions réinitialisées pour {admin_name}")
+                        
+                        # 3. Marquer les dépenses comme remboursées
+                        if unreimbursed > 0 and str(admin_id) in expenses:
+                            for expense in expenses[str(admin_id)]:
+                                if not expense.get('reimbursed', False):
+                                    expense['reimbursed'] = True
+                                    expense['reimbursed_date'] = now.isoformat()
+                            save_expenses(expenses)
+                            logger.info(f"✅ {unreimbursed_count} dépenses marquées comme remboursées pour {admin_name}")
+                        
+                    except Exception as e:
+                        logger.error(f"❌ Erreur paiement automatique salaire pour {admin_name}: {e}")
+                
                 # Construire le message
-                message = f"""💼 NOTIFICATION SALAIRE
+                message = f"""💼 SALAIRE PAYÉ AUTOMATIQUEMENT
 
 👤 {admin_name}
 
@@ -7653,12 +7699,16 @@ async def check_salary_notifications(context: ContextTypes.DEFAULT_TYPE):
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-💵 TOTAL À PAYER : {total:.2f}€
+💵 TOTAL PAYÉ : {total:.2f}€
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
-📝 Pour enregistrer le paiement:
-/admin → 💼 Gestion Salaires → Payer {admin_name}
+✅ Paiement effectué automatiquement
+✅ Enregistré dans la caisse
+✅ Commissions réinitialisées
+✅ Dépenses remboursées
+
+📊 Vérifiez : /admin → 💰 Comptabilité
 """
                 
                 try:
@@ -7674,7 +7724,7 @@ async def check_salary_notifications(context: ContextTypes.DEFAULT_TYPE):
                             try:
                                 await context.bot.send_message(
                                     chat_id=super_admin_id,
-                                    text=f"🔔 Notification salaire envoyée à {admin_name}\nMontant: {total:.2f}€"
+                                    text=f"🔔 Salaire payé automatiquement à {admin_name}\nMontant: {total:.2f}€\n\n✅ Enregistré dans la caisse"
                                 )
                             except:
                                 pass

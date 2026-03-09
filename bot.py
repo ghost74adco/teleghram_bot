@@ -1867,7 +1867,7 @@ def save_stocks(stocks):
         return False
 
 def save_orders_csv(csv_path, orders):
-    """Sauvegarde le CSV des commandes en filtrant les clés None"""
+    """Sauvegarde le CSV des commandes avec TOUS les champs garantis"""
     try:
         logger.info(f"💾 save_orders_csv appelé: {len(orders)} commandes")
         
@@ -1885,14 +1885,38 @@ def save_orders_csv(csv_path, orders):
             logger.info(f"💾 Aucune commande propre après nettoyage")
             return True
         
+        # ===== GARANTIR TOUS LES CHAMPS IMPORTANTS =====
+        # Liste complète des champs qui doivent TOUJOURS être présents
+        required_fields = [
+            'date', 'order_id', 'user_id', 'username', 'first_name', 'language',
+            'products', 'products_display', 'country', 'address', 'delivery_type',
+            'distance_km', 'payment_method', 'subtotal', 'delivery_fee',
+            'promo_discount', 'vip_discount', 'total', 'promo_code', 'status',
+            'delivered_date', 'price_modified', 'old_total', 'delivery_modified',
+            'old_delivery_fee'
+        ]
+        
         # Collecter toutes les clés uniques de TOUS les orders
         all_keys = set()
         for order in clean_orders:
             all_keys.update(order.keys())
         
-        fieldnames = sorted([k for k in all_keys if k])  # Trier pour cohérence
+        # Ajouter les champs requis s'ils manquent
+        all_keys.update(required_fields)
+        
+        # Trier pour cohérence (mettre les champs importants en premier)
+        fieldnames = []
+        # D'abord les champs requis dans l'ordre
+        for field in required_fields:
+            if field in all_keys:
+                fieldnames.append(field)
+        # Puis les autres champs triés
+        for field in sorted(all_keys):
+            if field not in fieldnames:
+                fieldnames.append(field)
         
         logger.info(f"💾 Écriture de {len(clean_orders)} commandes avec {len(fieldnames)} colonnes")
+        logger.info(f"💾 Champs garantis: {', '.join(required_fields[:5])}... (et {len(required_fields)-5} autres)")
         
         with open(csv_path, 'w', encoding='utf-8', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')

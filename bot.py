@@ -6756,6 +6756,16 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await receive_ledger_balance(update, context)
         return
     
+    # État: En attente nouveau prix commande (admin) - AVANT horaires pour éviter conflit
+    if context.user_data.get('editing_order_total'):
+        await receive_order_total(update, context)
+        return
+    
+    # État: En attente nouveaux frais livraison commande (admin) - AVANT horaires
+    if context.user_data.get('editing_order_delivery'):
+        await receive_order_delivery(update, context)
+        return
+    
     # État: En attente d'heure pour horaires de livraison (admin)
     if context.user_data.get('awaiting_hour_start') or context.user_data.get('awaiting_hour_end'):
         await receive_config(update, context)
@@ -6774,16 +6784,6 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     # État: En attente édition consommable (super-admin)
     if context.user_data.get('editing_expense'):
         await receive_expense_edit(update, context)
-        return
-    
-    # État: En attente nouveau prix commande (admin)
-    if context.user_data.get('editing_order_total'):
-        await receive_order_total(update, context)
-        return
-    
-    # État: En attente nouveaux frais livraison commande (admin)
-    if context.user_data.get('editing_order_delivery'):
-        await receive_order_delivery(update, context)
         return
     
     # État: En attente salaire fixe (super-admin)

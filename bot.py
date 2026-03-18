@@ -3096,12 +3096,15 @@ async def notify_admin_new_order(context, order_data, user_info):
     
     try:
         for admin_id in get_admin_ids():
-            await context.bot.send_message(
+            # Utiliser auto-delete pour les notifications admin
+            await smart_send_message(
+                context=context,
                 chat_id=admin_id,
                 text=notification,
-                reply_markup=InlineKeyboardMarkup(keyboard)
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                is_admin=True  # Auto-supprimé après validation
             )
-        logger.info(f"✅ Admins notifiés - Nouvelle commande: {order_data['order_id']}")
+        logger.info(f"✅ Admins notifiés (AUTO-DELETE) - Nouvelle commande: {order_data['order_id']}")
     except Exception as e:
         logger.error(f"❌ Erreur notification commande: {e}")
 
@@ -3116,11 +3119,14 @@ async def notify_admin_low_stock(context, product_name, quantity):
 """
     try:
         for admin_id in get_admin_ids():
-            await context.bot.send_message(
+            # Auto-delete pour alertes stock (temporaires)
+            await smart_send_message(
+                context=context,
                 chat_id=admin_id,
-                text=notification
+                text=notification,
+                is_admin=True
             )
-        logger.info(f"⚠️ Alerte stock envoyée: {product_name}")
+        logger.info(f"⚠️ Alerte stock envoyée (AUTO-DELETE): {product_name}")
     except Exception as e:
         logger.error(f"❌ Erreur notification stock: {e}")
 
@@ -3135,11 +3141,14 @@ async def notify_admin_out_of_stock(context, product_name):
 """
     try:
         for admin_id in get_admin_ids():
-            await context.bot.send_message(
+            # Auto-delete pour alertes rupture (temporaires)
+            await smart_send_message(
+                context=context,
                 chat_id=admin_id,
-                text=notification
+                text=notification,
+                is_admin=True
             )
-        logger.info(f"🔴 Alerte rupture envoyée: {product_name}")
+        logger.info(f"🔴 Alerte rupture envoyée (AUTO-DELETE): {product_name}")
     except Exception as e:
         logger.error(f"❌ Erreur notification rupture: {e}")
 
@@ -16385,6 +16394,117 @@ Ce message ne sera pas supprimé automatiquement.
     
     return message
 
+
+# ==================== WRAPPERS INTELLIGENTS AUTO-DELETE ====================
+
+async def smart_send_message(context, chat_id: int, text: str, reply_markup=None, 
+                             parse_mode=None, permanent=False, is_admin=False):
+    """
+    Wrapper intelligent qui décide automatiquement de l'auto-suppression
+    
+    Args:
+        permanent: Force le message à être permanent (ne sera jamais supprimé)
+        is_admin: True si le message est pour un admin (sera auto-supprimé)
+    """
+    # Messages permanents : jamais supprimés
+    if permanent:
+        return await context.bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            reply_markup=reply_markup,
+            parse_mode=parse_mode
+        )
+    
+    # Messages admin : auto-supprimés si activé
+    if is_admin and AUTO_DELETE_ENABLED:
+        return await send_auto_delete_message(
+            context=context,
+            chat_id=chat_id,
+            text=text,
+            reply_markup=reply_markup,
+            delay=AUTO_DELETE_DELAY,
+            parse_mode=parse_mode
+        )
+    
+    # Messages client normaux : non supprimés par défaut
+    return await context.bot.send_message(
+        chat_id=chat_id,
+        text=text,
+        reply_markup=reply_markup,
+        parse_mode=parse_mode
+    )
+
+
+async def smart_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
+                     text: str, reply_markup=None, parse_mode=None,
+                     permanent=False, is_admin=False):
+    """
+    Wrapper intelligent pour reply_text avec auto-delete sélectif
+    
+    Args:
+        permanent: Message permanent (confirmations importantes)
+        is_admin: Message pour admin (sera auto-supprimé)
+    """
+    # Messages permanents
+    if permanent:
+        return await update.message.reply_text(
+            text=text,
+            reply_markup=reply_markup,
+            parse_mode=parse_mode
+        )
+    
+    # Messages admin : auto-delete
+    if is_admin and AUTO_DELETE_ENABLED:
+        return await reply_auto_delete(
+            update=update,
+            context=context,
+            text=text,
+            reply_markup=reply_markup,
+            delay=AUTO_DELETE_DELAY,
+            parse_mode=parse_mode
+        )
+    
+    # Messages client normaux
+    return await update.message.reply_text(
+        text=text,
+        reply_markup=reply_markup,
+        parse_mode=parse_mode
+    )
+
+
+async def smart_edit_message(query, text: str, reply_markup=None, 
+                             parse_mode=None, permanent=False, is_admin=False):
+    """
+    Wrapper intelligent pour edit_message_text avec auto-delete sélectif
+    
+    Args:
+        permanent: Message permanent
+        is_admin: Message admin (auto-supprimé)
+    """
+    # Messages permanents
+    if permanent:
+        return await query.edit_message_text(
+            text=text,
+            reply_markup=reply_markup,
+            parse_mode=parse_mode
+        )
+    
+    # Messages admin : auto-delete
+    if is_admin and AUTO_DELETE_ENABLED:
+        return await edit_message_auto_delete(
+            query=query,
+            text=text,
+            reply_markup=reply_markup,
+            delay=AUTO_DELETE_DELAY,
+            parse_mode=parse_mode
+        )
+    
+    # Messages normaux
+    return await query.edit_message_text(
+        text=text,
+        reply_markup=reply_markup,
+        parse_mode=parse_mode
+    )
 
 
 @error_handler

@@ -357,13 +357,12 @@ class JSONDict(dict):
         self._load_from_json()
     
     def _load_from_json(self):
-        """Charge les prix depuis JSON (UNIQUEMENT depuis products.json)"""
-        # Charger UNIQUEMENT depuis products.json (SEULEMENT les produits actifs)
+        """Charge les prix depuis JSON (TOUS les produits pour préserver les données)"""
+        # Charger TOUS les produits depuis products.json
         products = PRODUCTS_DATA.get('products', {})
         for product_id, product_data in products.items():
-            # Vérifier si le produit est actif
-            if not product_data.get('active', True):
-                continue  # Ignorer les produits inactifs
+            # CORRECTION: Charger TOUS les produits, même inactifs
+            # Les prix doivent être préservés même si produit temporairement désactivé
             
             # Nom du produit en français
             name = product_data.get('name', {}).get('fr', product_id)
@@ -372,6 +371,7 @@ class JSONDict(dict):
             # Stocker dans le dict SEULEMENT si prix > 0
             if price > 0:
                 self[name] = price
+            logger.debug(f"💰 Prix chargé: {name} ({self.country}) = {price}€")
     
     def reload(self):
         """Recharge depuis JSON après modification"""
@@ -385,15 +385,14 @@ class QuantitiesDict(dict):
         self._load_from_json()
     
     def _load_from_json(self):
-        """Charge les quantités depuis JSON (seulement produits actifs)"""
+        """Charge les quantités depuis JSON (TOUS les produits, même inactifs)"""
         products = PRODUCTS_DATA.get('products', {})
         for product_id, product_data in products.items():
-            # Ignorer les produits inactifs
-            if not product_data.get('active', True):
-                continue
+            # CORRECTION CRITIQUE: Charger TOUS les produits, même inactifs
             name = product_data.get('name', {}).get('fr', product_id)
             quantities = product_data.get('available_quantities', [1.0])
             self[name] = quantities
+            logger.debug(f"📦 Quantités chargées: {name} = {quantities}")
     
     def reload(self):
         self.clear()
@@ -406,16 +405,16 @@ class StockDict(dict):
         self._load_from_json()
     
     def _load_from_json(self):
-        """Charge les stocks depuis JSON (seulement produits actifs)"""
+        """Charge les stocks depuis JSON (TOUS les produits, même inactifs)"""
         products = PRODUCTS_DATA.get('products', {})
         for product_id, product_data in products.items():
-            # Ignorer les produits inactifs
-            if not product_data.get('active', True):
-                continue
+            # CORRECTION CRITIQUE: Charger TOUS les produits, même inactifs
+            # Sinon les produits désactivés (stock=0) disparaissent au redémarrage
             name = product_data.get('name', {}).get('fr', product_id)
             # CORRECTION: 'quantity' et non 'stock'
             stock = product_data.get('quantity', 0)
             self[name] = stock
+            logger.debug(f"📦 Stock chargé: {name} = {stock}g (active={product_data.get('active', True)})")
     
     def reload(self):
         self.clear()

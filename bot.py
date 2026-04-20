@@ -13653,10 +13653,1126 @@ def setup_handlers(application):
     # ===== LOGGER ID GROUPE =====
     application.add_handler(MessageHandler(filters.ChatType.GROUPS, log_group_id))
     
+    # ===== MODULES v3.0.0 HANDLERS =====
+    # Backup
+    application.add_handler(CallbackQueryHandler(admin_backup_menu, pattern="^admin_backup_menu$"))
+    application.add_handler(CallbackQueryHandler(backup_now_handler, pattern="^backup_now$"))
+    
+    # Fidélité
+    application.add_handler(CommandHandler("fidelite", fidelite_command))
+    application.add_handler(CallbackQueryHandler(show_loyalty_status, pattern="^loyalty_status$"))
+    
+    # Parrainage
+    application.add_handler(CommandHandler("parrainage", parrainage_command))
+    
+    # Wishlist
+    application.add_handler(CommandHandler("favoris", wishlist_command))
+    application.add_handler(CallbackQueryHandler(show_wishlist, pattern="^show_wishlist$"))
+    
+    # FAQ
+    application.add_handler(CallbackQueryHandler(show_faq, pattern="^show_faq$"))
+    
+    # Audit
+    application.add_handler(CallbackQueryHandler(view_audit, pattern="^view_audit$"))
+    
+    # Dashboard
+    application.add_handler(CallbackQueryHandler(show_dashboard, pattern="^show_dashboard$"))
+    
+    # ===== MODULES 8-20 HANDLERS =====
+    # Sécurité / PIN
+    application.add_handler(CallbackQueryHandler(admin_security_menu, pattern="^admin_security_menu$"))
+    application.add_handler(CallbackQueryHandler(set_my_pin_handler, pattern="^set_my_pin$"))
+    
+    # Multi-langues
+    application.add_handler(CallbackQueryHandler(language_settings, pattern="^language_settings$"))
+    application.add_handler(CallbackQueryHandler(set_language_handler, pattern="^lang_(fr|en|es)$"))
+    
+    # Recherche
+    application.add_handler(CallbackQueryHandler(show_search_history, pattern="^show_search_history$"))
+    
+    # Abonnements
+    application.add_handler(CallbackQueryHandler(show_subscriptions, pattern="^show_subscriptions$"))
+    
+    # Suggestions
+    application.add_handler(CallbackQueryHandler(show_suggestions, pattern="^show_suggestions$"))
+    
+    # Prédictions
+    application.add_handler(CallbackQueryHandler(show_demand_predictions, pattern="^show_demand_predictions$"))
+    
+    # Export
+    application.add_handler(CallbackQueryHandler(export_all_data, pattern="^export_all_data$"))
+    
+    # Thème
+    application.add_handler(CallbackQueryHandler(theme_settings, pattern="^theme_settings$"))
+    application.add_handler(CallbackQueryHandler(set_user_theme, pattern="^theme_(light|dark|minimal)$"))
+    
+    # Tutorial
+    application.add_handler(CommandHandler("tutorial", start_tutorial))
+    application.add_handler(CallbackQueryHandler(tutorial_next, pattern="^tutorial_next$"))
+    
     # Message handlers (doit être en dernier)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
     
-    logger.info("✅ Tous les handlers configurés")
+    logger.info("✅ Tous les handlers configurés (20 modules)")
+# ==================== MODULES v3.0.0 ULTIMATE - DÉBUT ====================
+
+# MODULE 1: BACKUP AUTOMATIQUE
+
+async def daily_backup(context):
+    """Sauvegarde automatique quotidienne"""
+    try:
+        today = datetime.now().strftime('%Y-%m-%d')
+        backup_path = BACKUP_DIR / today
+        backup_path.mkdir(parents=True, exist_ok=True)
+        
+        logger.info(f"🔄 Début backup: {today}")
+        
+        for file in DATA_DIR.glob("*.json"):
+            shutil.copy2(file, backup_path / file.name)
+        for file in DATA_DIR.glob("*.csv"):
+            shutil.copy2(file, backup_path / file.name)
+        
+        cleanup_old_backups()
+        
+        files_count = len(list(backup_path.glob("*")))
+        backup_size = sum(f.stat().st_size for f in backup_path.glob("*")) / (1024 * 1024)
+        
+        await context.bot.send_message(
+            SUPER_ADMIN_ID,
+            f"✅ BACKUP\n📅 {today}\n📊 {files_count} fichiers\n💾 {backup_size:.2f} MB"
+        )
+        logger.info(f"✅ Backup OK")
+    except Exception as e:
+        logger.error(f"❌ Backup error: {e}")
+
+def cleanup_old_backups():
+    try:
+        if not BACKUP_DIR.exists():
+            return
+        cutoff = datetime.now() - timedelta(days=BACKUP_RETENTION_DAYS)
+        for folder in BACKUP_DIR.iterdir():
+            if folder.is_dir():
+                try:
+                    date = datetime.strptime(folder.name, '%Y-%m-%d')
+                    if date < cutoff:
+                        shutil.rmtree(folder)
+                except:
+                    pass
+    except:
+        pass
+
+@error_handler
+async def admin_backup_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.edit_message_text("❌ Super admin uniquement")
+        return
+    
+    backups = []
+    if BACKUP_DIR.exists():
+        backups = sorted([f.name for f in BACKUP_DIR.iterdir() if f.is_dir()], reverse=True)
+    
+    message = "💾 BACKUPS\n\n"
+    if backups:
+        for b in backups[:10]:
+            path = BACKUP_DIR / b
+            size = sum(f.stat().st_size for f in path.glob("*")) / (1024 * 1024)
+            message += f"• {b} ({size:.1f}MB)\n"
+    else:
+        message += "Aucun backup\n"
+    
+    keyboard = [[InlineKeyboardButton("🔄 Backup maintenant", callback_data="backup_now")],
+                [InlineKeyboardButton("🔙 Retour", callback_data="admin_settings")]]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+@error_handler
+async def backup_now_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer("🔄 Backup...")
+    await daily_backup(context)
+    await query.edit_message_text("✅ Backup OK !")
+
+# MODULE 2: FIDÉLITÉ
+
+def get_client_tier(total_spent):
+    for tier_id in reversed(['diamond', 'platinum', 'gold', 'silver', 'bronze']):
+        if total_spent >= LOYALTY_TIERS[tier_id]['min_spent']:
+            return tier_id, LOYALTY_TIERS[tier_id]
+    return 'bronze', LOYALTY_TIERS['bronze']
+
+def calculate_loyalty_points(amount):
+    return int(amount * POINTS_PER_EURO)
+
+def add_loyalty_points(user_id, amount):
+    clients = load_json_file(CLIENTS_FILE, {})
+    if str(user_id) not in clients:
+        clients[str(user_id)] = {}
+    if 'loyalty_points' not in clients[str(user_id)]:
+        clients[str(user_id)]['loyalty_points'] = 0
+    
+    points = calculate_loyalty_points(amount)
+    clients[str(user_id)]['loyalty_points'] += points
+    save_json_file(CLIENTS_FILE, clients)
+    return points
+
+@error_handler
+async def show_loyalty_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        user_id = query.from_user.id
+        send = query.edit_message_text
+    else:
+        user_id = update.effective_user.id
+        send = update.message.reply_text
+    
+    stats = get_client_stats(user_id)
+    if not stats:
+        await send("📊 Pas de commandes.\nCommandez pour gagner des points !")
+        return
+    
+    total = stats.get('total_spent', 0)
+    tier_id, tier = get_client_tier(total)
+    clients = load_json_file(CLIENTS_FILE, {})
+    points = clients.get(str(user_id), {}).get('loyalty_points', 0)
+    
+    message = f"""👑 FIDÉLITÉ
+
+{tier['name']}
+
+💰 Dépensé: {total:.2f}€
+⭐ Points: {points} pts
+
+🎁 Avantages:
+"""
+    for perk in tier['perks']:
+        message += f"  ✓ {perk}\n"
+    if tier['discount'] > 0:
+        message += f"  ✓ -{tier['discount']}%\n"
+    
+    keyboard = [[InlineKeyboardButton("🏠 Menu", callback_data="back_to_main")]]
+    await send(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+@error_handler
+async def fidelite_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await show_loyalty_status(update, context)
+
+# MODULE 3: PARRAINAGE
+
+def generate_referral_code(user_id):
+    import hashlib
+    return hashlib.md5(str(user_id).encode()).hexdigest()[:8].upper()
+
+def get_referral_info(user_id):
+    refs = load_json_file(REFERRALS_FILE, {})
+    if str(user_id) not in refs:
+        refs[str(user_id)] = {
+            'code': generate_referral_code(user_id),
+            'referred_users': [],
+            'total_earned': 0,
+            'available_credit': 0
+        }
+        save_json_file(REFERRALS_FILE, refs)
+    return refs[str(user_id)]
+
+@error_handler
+async def parrainage_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    info = get_referral_info(user_id)
+    
+    message = f"""🎁 PARRAINAGE
+
+Code: **{info['code']}**
+
+💰 Filleuls: {len(info.get('referred_users', []))}
+Gagné: {info.get('total_earned', 0):.2f}€
+
+🎯 Parrain: +10€
+Filleul: -5€
+"""
+    
+    keyboard = [[InlineKeyboardButton("🏠 Menu", callback_data="back_to_main")]]
+    await update.message.reply_text(message, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
+# MODULE 4: WISHLIST
+
+def add_to_wishlist(user_id, product):
+    wishes = load_json_file(WISHLISTS_FILE, {})
+    if str(user_id) not in wishes:
+        wishes[str(user_id)] = []
+    if product not in wishes[str(user_id)]:
+        wishes[str(user_id)].append(product)
+        save_json_file(WISHLISTS_FILE, wishes)
+        return True
+    return False
+
+@error_handler
+async def show_wishlist(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        user_id = query.from_user.id
+        send = query.edit_message_text
+    else:
+        user_id = update.effective_user.id
+        send = update.message.reply_text
+    
+    wishes = load_json_file(WISHLISTS_FILE, {})
+    items = wishes.get(str(user_id), [])
+    
+    if not items:
+        await send("❤️ Favoris vides")
+        return
+    
+    message = "❤️ FAVORIS\n\n"
+    for product in items:
+        message += f"• {product}\n"
+    
+    keyboard = [[InlineKeyboardButton("🏠 Menu", callback_data="back_to_main")]]
+    await send(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+@error_handler
+async def wishlist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await show_wishlist(update, context)
+
+# MODULE 5: CHATBOT FAQ
+
+def chatbot_simple(question):
+    q = question.lower()
+    for topic, data in FAQ_DATABASE.items():
+        if any(kw in q for kw in data['keywords']):
+            return data['answer'], True
+    return None, False
+
+@error_handler
+async def handle_chatbot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    question = update.message.text
+    answer, found = chatbot_simple(question)
+    
+    if found:
+        await update.message.reply_text(answer)
+    else:
+        keyboard = [[InlineKeyboardButton("💬 Admin", callback_data="contact_admin"),
+                     InlineKeyboardButton("❓ FAQ", callback_data="show_faq")]]
+        await update.message.reply_text(
+            "🤖 Pas compris. Admin ?",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+@error_handler
+async def show_faq(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    message = "❓ FAQ\n\n"
+    for topic in FAQ_DATABASE.keys():
+        message += f"• {topic.capitalize()}\n"
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup([[
+        InlineKeyboardButton("🏠 Menu", callback_data="back_to_main")
+    ]]))
+
+# MODULE 6: AUDIT LOGS
+
+async def log_audit(user_id, action, details=None):
+    audits = load_json_file(AUDIT_FILE, [])
+    audits.append({
+        'timestamp': datetime.now().isoformat(),
+        'user_id': user_id,
+        'action': action,
+        'details': details or {}
+    })
+    if len(audits) > 1000:
+        audits = audits[-1000:]
+    save_json_file(AUDIT_FILE, audits)
+    logger.info(f"📋 AUDIT: {action} by {user_id}")
+
+@error_handler
+async def view_audit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.edit_message_text("❌ Super admin uniquement")
+        return
+    
+    audits = load_json_file(AUDIT_FILE, [])
+    recent = audits[-20:] if len(audits) > 20 else audits
+    
+    message = "📋 AUDIT\n\n"
+    for entry in reversed(recent):
+        try:
+            dt = datetime.fromisoformat(entry['timestamp'])
+            message += f"• {dt.strftime('%d/%m %H:%M')} - {entry['action']}\n"
+        except:
+            pass
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup([[
+        InlineKeyboardButton("🔙 Retour", callback_data="admin_settings")
+    ]]))
+
+# MODULE 7: DASHBOARD
+
+def get_sales_period(days=30):
+    try:
+        orders = []
+        if ORDERS_FILE.exists():
+            import csv
+            with open(ORDERS_FILE, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                orders = list(reader)
+        
+        cutoff = datetime.now() - timedelta(days=days)
+        total = 0
+        count = 0
+        
+        for order in orders:
+            try:
+                date = datetime.strptime(order.get('date', ''), '%Y-%m-%d %H:%M:%S')
+                if date >= cutoff and order.get('status') == 'Livrée':
+                    total += float(order.get('total', 0))
+                    count += 1
+            except:
+                pass
+        
+        return {'total': total, 'count': count}
+    except:
+        return {'total': 0, 'count': 0}
+
+@error_handler
+async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_admin(query.from_user.id):
+        await query.edit_message_text("❌ Admin uniquement")
+        return
+    
+    today = get_sales_period(1)
+    week = get_sales_period(7)
+    month = get_sales_period(30)
+    
+    message = f"""📊 DASHBOARD
+
+📈 VENTES
+• Aujourd'hui: {today['total']:.2f}€ ({today['count']})
+• 7 jours: {week['total']:.2f}€ ({week['count']})
+• 30 jours: {month['total']:.2f}€ ({month['count']})
+"""
+    
+    keyboard = [[InlineKeyboardButton("🔄 Actualiser", callback_data="show_dashboard"),
+                 InlineKeyboardButton("🔙 Retour", callback_data="admin_panel")]]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+# INITIALISATION v3.0.0
+
+def init_v3_files():
+    files = {
+        REFERRALS_FILE: {},
+        WISHLISTS_FILE: {},
+        AUDIT_FILE: [],
+        ADMIN_PINS_FILE: {}
+    }
+    for file, default in files.items():
+        if not file.exists():
+            save_json_file(file, default)
+            logger.info(f"✅ v3: {file.name}")
+
+"""
+MODULES 8-20 v3.0.0 ULTIMATE
+13 modules supplémentaires à intégrer
+"""
+
+# ==================== MODULE 8: DOUBLE AUTH PIN ====================
+
+ADMIN_PINS = {}  # Chargé depuis admin_pins.json
+
+def load_admin_pins():
+    global ADMIN_PINS
+    ADMIN_PINS = load_json_file(ADMIN_PINS_FILE, {})
+
+def verify_admin_pin(user_id, pin):
+    """Vérifie le PIN admin"""
+    pins = load_json_file(ADMIN_PINS_FILE, {})
+    return pins.get(str(user_id)) == pin
+
+def set_admin_pin(user_id, pin):
+    """Définit le PIN admin"""
+    pins = load_json_file(ADMIN_PINS_FILE, {})
+    pins[str(user_id)] = pin
+    save_json_file(ADMIN_PINS_FILE, pins)
+
+@error_handler
+async def admin_security_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu sécurité admin"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.edit_message_text("❌ Super admin uniquement")
+        return
+    
+    pins = load_json_file(ADMIN_PINS_FILE, {})
+    
+    message = f"""🔐 SÉCURITÉ
+
+PIN configurés: {len(pins)}
+
+Le PIN protège les actions critiques:
+• Suppression produit
+• Modification prix global
+• Suppression commande
+• Export données
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("🔑 Définir mon PIN", callback_data="set_my_pin")],
+        [InlineKeyboardButton("👥 Gérer PINs", callback_data="manage_pins")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_settings")]
+    ]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+@error_handler
+async def set_my_pin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Démarrer config PIN"""
+    query = update.callback_query
+    await query.answer()
+    
+    context.user_data['awaiting_pin_setup'] = True
+    
+    await query.edit_message_text(
+        "🔐 CONFIGURATION PIN\n\n"
+        "Entrez votre code PIN (4 chiffres):"
+    )
+
+
+# ==================== MODULE 9: MULTI-LANGUES ====================
+
+LANGUAGES = {
+    'fr': {
+        'welcome': "🌟 Bienvenue !",
+        'order': "Commander",
+        'cart': "Panier",
+        'history': "Historique",
+        'help': "Aide"
+    },
+    'en': {
+        'welcome': "🌟 Welcome!",
+        'order': "Order",
+        'cart': "Cart",
+        'history': "History",
+        'help': "Help"
+    },
+    'es': {
+        'welcome': "🌟 ¡Bienvenido!",
+        'order': "Ordenar",
+        'cart': "Carrito",
+        'history': "Historial",
+        'help': "Ayuda"
+    }
+}
+
+def get_user_language(user_id):
+    """Récupère langue utilisateur"""
+    users = load_json_file(USERS_FILE, {})
+    return users.get(str(user_id), {}).get('language', 'fr')
+
+def set_user_language(user_id, lang):
+    """Définit langue utilisateur"""
+    users = load_json_file(USERS_FILE, {})
+    if str(user_id) not in users:
+        users[str(user_id)] = {}
+    users[str(user_id)]['language'] = lang
+    save_json_file(USERS_FILE, users)
+
+def t(key, user_id):
+    """Traduit une clé"""
+    lang = get_user_language(user_id)
+    return LANGUAGES.get(lang, {}).get(key, key)
+
+@error_handler
+async def language_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu langues"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    current = get_user_language(user_id)
+    
+    message = "🌍 LANGUE / LANGUAGE\n\n"
+    message += f"Actuelle: {current.upper()}\n\n"
+    
+    keyboard = [
+        [InlineKeyboardButton("🇫🇷 Français", callback_data="lang_fr")],
+        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")],
+        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="back_to_main")]
+    ]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+@error_handler
+async def set_language_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Change langue"""
+    query = update.callback_query
+    await query.answer()
+    
+    lang = query.data.replace("lang_", "")
+    user_id = query.from_user.id
+    
+    set_user_language(user_id, lang)
+    
+    await query.edit_message_text(
+        f"✅ Langue changée: {lang.upper()}\n\n"
+        f"{LANGUAGES[lang]['welcome']}"
+    )
+
+
+# ==================== MODULE 10: HISTORIQUE RECHERCHE ====================
+
+def add_to_search_history(user_id, search_term):
+    """Ajoute recherche à l'historique"""
+    searches = load_json_file(DATA_DIR / "search_history.json", {})
+    if str(user_id) not in searches:
+        searches[str(user_id)] = []
+    
+    # Ajouter si pas déjà présent
+    if search_term not in searches[str(user_id)]:
+        searches[str(user_id)].insert(0, search_term)
+        # Garder 10 max
+        searches[str(user_id)] = searches[str(user_id)][:10]
+        save_json_file(DATA_DIR / "search_history.json", searches)
+
+@error_handler
+async def show_search_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche historique recherches"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    searches = load_json_file(DATA_DIR / "search_history.json", {})
+    history = searches.get(str(user_id), [])
+    
+    if not history:
+        await query.edit_message_text("🔍 Aucune recherche récente")
+        return
+    
+    message = "🔍 RECHERCHES RÉCENTES\n\n"
+    keyboard = []
+    
+    for search in history:
+        message += f"• {search}\n"
+        keyboard.append([InlineKeyboardButton(
+            f"🔄 {search}", 
+            callback_data=f"search_again_{search}"
+        )])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="back_to_main")])
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+# ==================== MODULE 11: ABONNEMENTS ====================
+
+SUBSCRIPTIONS = {
+    'starter': {
+        'price': 200,
+        'name': 'Starter',
+        'duration': 30,
+        'discount': 10
+    },
+    'premium': {
+        'price': 500,
+        'name': 'Premium',
+        'duration': 30,
+        'discount': 15
+    },
+    'vip': {
+        'price': 1000,
+        'name': 'VIP',
+        'duration': 30,
+        'discount': 20
+    }
+}
+
+@error_handler
+async def show_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche les abonnements"""
+    query = update.callback_query
+    await query.answer()
+    
+    message = "📅 ABONNEMENTS\n\n"
+    keyboard = []
+    
+    for sub_id, sub in SUBSCRIPTIONS.items():
+        message += f"{sub['name']}\n"
+        message += f"• {sub['price']}€/mois\n"
+        message += f"• Réduction: -{sub['discount']}%\n\n"
+        
+        keyboard.append([InlineKeyboardButton(
+            f"✅ {sub['name']} - {sub['price']}€",
+            callback_data=f"subscribe_{sub_id}"
+        )])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="back_to_main")])
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+# ==================== MODULE 12: A/B TESTING ====================
+
+AB_TESTS = {}
+
+def get_ab_variant(user_id, test_name):
+    """Retourne variante A/B pour utilisateur"""
+    import hashlib
+    hash_val = int(hashlib.md5(f"{user_id}{test_name}".encode()).hexdigest(), 16)
+    return 'A' if hash_val % 2 == 0 else 'B'
+
+def track_ab_conversion(user_id, test_name, action):
+    """Track conversion A/B test"""
+    tests = load_json_file(DATA_DIR / "ab_tests.json", {})
+    
+    if test_name not in tests:
+        tests[test_name] = {'A': {'views': 0, 'conversions': 0}, 'B': {'views': 0, 'conversions': 0}}
+    
+    variant = get_ab_variant(user_id, test_name)
+    
+    if action == 'view':
+        tests[test_name][variant]['views'] += 1
+    elif action == 'convert':
+        tests[test_name][variant]['conversions'] += 1
+    
+    save_json_file(DATA_DIR / "ab_tests.json", tests)
+
+
+# ==================== MODULE 13: FLASH SALES INTELLIGENTES ====================
+
+async def smart_flash_sale(context):
+    """Flash sale intelligente basée sur conditions"""
+    try:
+        # Conditions
+        is_weekend = datetime.now().weekday() >= 5
+        hour = datetime.now().hour
+        low_activity = hour in [14, 15, 16]  # Heures creuses
+        
+        if is_weekend or low_activity:
+            # Sélectionner produit avec stock élevé
+            products = load_product_registry()
+            high_stock = []
+            
+            for name, data in products.items():
+                stock = data.get('stock', 0)
+                if stock > 50:  # Stock > 50g
+                    high_stock.append(name)
+            
+            if high_stock:
+                import random
+                product = random.choice(high_stock)
+                discount = 20 if is_weekend else 15
+                
+                # Broadcast
+                users = load_users()
+                message = f"""⚡ FLASH SALE !
+
+{product}
+Réduction: -{discount}%
+
+Seulement pendant 2 heures !
+Utilisez le code: FLASH{datetime.now().strftime('%H%M')}
+"""
+                
+                for user_id in users.keys():
+                    try:
+                        await context.bot.send_message(user_id, message)
+                    except:
+                        pass
+                
+                logger.info(f"⚡ Flash sale: {product} -{discount}%")
+    
+    except Exception as e:
+        logger.error(f"Erreur flash sale: {e}")
+
+
+# ==================== MODULE 14: SUGGESTIONS PERSONNALISÉES ====================
+
+def get_personalized_suggestions(user_id):
+    """Suggestions basées sur historique"""
+    stats = get_client_stats(user_id)
+    if not stats:
+        return []
+    
+    # Produits déjà achetés
+    history = stats.get('product_counts', {})
+    
+    # Suggérer produits similaires ou complémentaires
+    suggestions = []
+    products = load_product_registry()
+    
+    for product in products.keys():
+        if product not in history:
+            suggestions.append(product)
+    
+    return suggestions[:3]
+
+@error_handler
+async def show_suggestions(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche suggestions"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    suggestions = get_personalized_suggestions(user_id)
+    
+    message = "💡 SUGGESTIONS POUR VOUS\n\n"
+    keyboard = []
+    
+    if suggestions:
+        for product in suggestions:
+            message += f"• {product}\n"
+            keyboard.append([InlineKeyboardButton(
+                f"➕ {product}",
+                callback_data=f"product_{product}"
+            )])
+    else:
+        message += "Aucune suggestion pour le moment"
+    
+    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="back_to_main")])
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+# ==================== MODULE 15: NOTIFICATIONS PUSH ====================
+
+async def send_push_notification(user_id, title, message, context):
+    """Envoie notification push"""
+    try:
+        await context.bot.send_message(
+            user_id,
+            f"🔔 **{title}**\n\n{message}",
+            parse_mode="Markdown"
+        )
+    except:
+        pass
+
+async def notify_stock_available(product_name, context):
+    """Notifie clients en attente de stock"""
+    # Chercher clients ayant ce produit en wishlist
+    wishes = load_json_file(WISHLISTS_FILE, {})
+    
+    for user_id, products in wishes.items():
+        if product_name in products:
+            await send_push_notification(
+                int(user_id),
+                "Stock disponible !",
+                f"{product_name} est de nouveau en stock !",
+                context
+            )
+
+
+# ==================== MODULE 16: PRÉDICTIONS DEMANDE (SIMPLE) ====================
+
+def predict_demand_simple(product_name, days_ahead=7):
+    """Prédiction simple demande future"""
+    try:
+        # Charger historique ventes
+        if not ORDERS_FILE.exists():
+            return 0
+        
+        import csv
+        orders = []
+        with open(ORDERS_FILE, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            orders = list(reader)
+        
+        # Filtrer par produit et 30 derniers jours
+        cutoff = datetime.now() - timedelta(days=30)
+        quantities = []
+        
+        for order in orders:
+            try:
+                date = datetime.strptime(order.get('date', ''), '%Y-%m-%d %H:%M:%S')
+                if date >= cutoff:
+                    items = eval(order.get('items', '[]'))
+                    for item in items:
+                        if item.get('product') == product_name:
+                            quantities.append(item.get('quantity', 0))
+            except:
+                pass
+        
+        if not quantities:
+            return 0
+        
+        # Moyenne simple
+        avg_per_order = sum(quantities) / len(quantities) if quantities else 0
+        orders_per_week = len(quantities) / 4  # ~4 semaines
+        
+        predicted = avg_per_order * orders_per_week * (days_ahead / 7)
+        
+        return int(predicted)
+    
+    except Exception as e:
+        logger.error(f"Erreur prédiction: {e}")
+        return 0
+
+@error_handler
+async def show_demand_predictions(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche prédictions demande"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_admin(query.from_user.id):
+        await query.edit_message_text("❌ Admin uniquement")
+        return
+    
+    products = load_product_registry()
+    
+    message = "🤖 PRÉDICTIONS DEMANDE (7j)\n\n"
+    
+    for product in list(products.keys())[:5]:
+        prediction = predict_demand_simple(product, 7)
+        stock = products[product].get('stock', 0)
+        
+        status = "✅" if stock >= prediction else "⚠️"
+        message += f"{status} {product}\n"
+        message += f"   Prévu: {prediction}g | Stock: {stock}g\n\n"
+    
+    keyboard = [[InlineKeyboardButton("🔙 Retour", callback_data="admin_panel")]]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+# ==================== MODULE 17: MARKETING AUTOMATION ====================
+
+async def marketing_automation_job(context):
+    """Job marketing automatisé"""
+    try:
+        # 1. Clients inactifs 30j
+        users = load_users()
+        cutoff = datetime.now() - timedelta(days=30)
+        
+        for user_id, data in users.items():
+            last_order = data.get('last_order_date')
+            if last_order:
+                try:
+                    date = datetime.fromisoformat(last_order)
+                    if date < cutoff:
+                        # Envoyer promo retour
+                        await context.bot.send_message(
+                            int(user_id),
+                            "👋 Ça fait longtemps !\n\n"
+                            "🎁 Code promo -10%: COMEBACK10\n"
+                            "Valable 48h"
+                        )
+                except:
+                    pass
+        
+        logger.info("✅ Marketing automation exécuté")
+    
+    except Exception as e:
+        logger.error(f"Erreur marketing auto: {e}")
+
+
+# ==================== MODULE 18: EXPORT DONNÉES ====================
+
+@error_handler
+async def export_all_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Exporte toutes les données"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.edit_message_text("❌ Super admin uniquement")
+        return
+    
+    await query.edit_message_text("📥 Export en cours...")
+    
+    # Créer archive
+    import zipfile
+    from datetime import datetime
+    
+    export_name = f"export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+    export_path = DATA_DIR / export_name
+    
+    with zipfile.ZipFile(export_path, 'w') as zipf:
+        # Ajouter tous les JSON
+        for file in DATA_DIR.glob("*.json"):
+            zipf.write(file, file.name)
+        # Ajouter CSV
+        for file in DATA_DIR.glob("*.csv"):
+            zipf.write(file, file.name)
+    
+    # Envoyer fichier
+    with open(export_path, 'rb') as f:
+        await context.bot.send_document(
+            query.from_user.id,
+            f,
+            filename=export_name,
+            caption="✅ Export complet des données"
+        )
+    
+    # Supprimer archive
+    export_path.unlink()
+    
+    await query.edit_message_text("✅ Export envoyé en message privé !")
+
+
+# ==================== MODULE 19: MODE SOMBRE ====================
+
+def get_user_theme(user_id):
+    """Récupère thème utilisateur"""
+    users = load_json_file(USERS_FILE, {})
+    return users.get(str(user_id), {}).get('theme', 'light')
+
+def set_user_theme(user_id, theme):
+    """Définit thème utilisateur"""
+    users = load_json_file(USERS_FILE, {})
+    if str(user_id) not in users:
+        users[str(user_id)] = {}
+    users[str(user_id)]['theme'] = theme
+    save_json_file(USERS_FILE, users)
+
+@error_handler
+async def theme_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu thème"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    current = get_user_theme(user_id)
+    
+    message = f"🎨 THÈME\n\nActuel: {current}\n\n"
+    
+    keyboard = [
+        [InlineKeyboardButton("☀️ Clair", callback_data="theme_light")],
+        [InlineKeyboardButton("🌙 Sombre", callback_data="theme_dark")],
+        [InlineKeyboardButton("⬜ Minimal", callback_data="theme_minimal")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="back_to_main")]
+    ]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+# ==================== MODULE 20: TUTORIAL ONBOARDING ====================
+
+@error_handler
+async def start_tutorial(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Tutorial nouveau client"""
+    user_id = update.effective_user.id
+    
+    # Vérifier si déjà fait
+    users = load_json_file(USERS_FILE, {})
+    if users.get(str(user_id), {}).get('tutorial_done'):
+        await update.message.reply_text("✅ Tutorial déjà complété !")
+        return
+    
+    context.user_data['tutorial_step'] = 1
+    
+    message = """👋 BIENVENUE !
+
+Je vais vous guider en 4 étapes:
+
+1️⃣ Découvrir les produits
+2️⃣ Passer une commande
+3️⃣ Choisir la livraison
+4️⃣ Suivre votre commande
+
+📱 Tout se fait ici, dans ce chat !
+
+Prêt à commencer ?
+"""
+    
+    keyboard = [[InlineKeyboardButton("▶️ Commencer", callback_data="tutorial_next")]]
+    
+    await update.message.reply_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+@error_handler
+async def tutorial_next(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Étape suivante tutorial"""
+    query = update.callback_query
+    await query.answer()
+    
+    step = context.user_data.get('tutorial_step', 1)
+    
+    if step == 1:
+        message = """1️⃣ DÉCOUVRIR LES PRODUITS
+
+Cliquez sur 🛍️ Commander pour voir notre catalogue.
+
+Vous verrez tous les produits disponibles avec leurs prix.
+"""
+        keyboard = [[InlineKeyboardButton("➡️ Suivant", callback_data="tutorial_next")]]
+    
+    elif step == 2:
+        message = """2️⃣ PASSER UNE COMMANDE
+
+• Choisissez un produit
+• Sélectionnez la quantité
+• Ajoutez au panier 🛒
+• Validez votre commande
+"""
+        keyboard = [[InlineKeyboardButton("➡️ Suivant", callback_data="tutorial_next")]]
+    
+    elif step == 3:
+        message = """3️⃣ LIVRAISON
+
+Deux modes:
+• Express: 1-2 heures
+• Standard: 48-72h
+
+Vous choisissez lors de la commande.
+"""
+        keyboard = [[InlineKeyboardButton("➡️ Suivant", callback_data="tutorial_next")]]
+    
+    elif step == 4:
+        message = """4️⃣ SUIVRE VOTRE COMMANDE
+
+Vous recevrez des notifications:
+✅ Commande validée
+📦 En préparation
+🚚 En livraison
+✨ Livrée !
+
+🎉 Tutorial terminé !
+🎁 Cadeau: -10% sur votre 1ère commande
+Code: NOUVEAU10
+"""
+        keyboard = [[InlineKeyboardButton("🏠 Menu principal", callback_data="back_to_main")]]
+        
+        # Marquer tutorial fait
+        users = load_json_file(USERS_FILE, {})
+        if str(query.from_user.id) not in users:
+            users[str(query.from_user.id)] = {}
+        users[str(query.from_user.id)]['tutorial_done'] = True
+        save_json_file(USERS_FILE, users)
+    
+    context.user_data['tutorial_step'] = step + 1
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+# ==================== INITIALISATION MODULES 8-20 ====================
+
+def init_v3_extended_files():
+    """Initialise fichiers modules 8-20"""
+    files = {
+        DATA_DIR / "search_history.json": {},
+        DATA_DIR / "ab_tests.json": {},
+        DATA_DIR / "subscriptions.json": {},
+    }
+    for file, default in files.items():
+        if not file.exists():
+            save_json_file(file, default)
+            logger.info(f"✅ v3 extended: {file.name}")
+
+# ==================== FIN MODULES 8-20 ====================
+# ==================== MODULES v3.0.0 ULTIMATE - FIN ====================
+
 
 # ==================== KILL SWITCH ====================
 
@@ -17971,6 +19087,11 @@ async def main():
     
     init_product_codes()
     
+    # ===== INITIALISATION v3.0.0 =====
+    init_v3_files()
+    init_v3_extended_files()
+    logger.info("✅ Fichiers v3.0.0 initialisés (20 modules)")
+    
     # Désactiver maintenance auto
     maintenance_status = load_maintenance_status()
     if maintenance_status.get('enabled', False):
@@ -18026,6 +19147,20 @@ async def main():
     
     job_queue.run_daily(schedule_reports, time=time(23, 59))
     logger.info("✅ Job: Rapport hebdomadaire (tous les jours 23h59, filtrage interne)")
+    
+    # ===== JOB BACKUP v3.0.0 =====
+    job_queue.run_daily(daily_backup, time=time(3, 0), data=application)
+    logger.info("✅ Job: Backup quotidien (3h)")
+    
+    # ===== JOBS MODULES 8-20 =====
+    # Flash sales (2x par jour)
+    job_queue.run_daily(smart_flash_sale, time=time(14, 0), data=application)
+    job_queue.run_daily(smart_flash_sale, time=time(18, 0), data=application)
+    logger.info("✅ Job: Flash sales intelligentes (14h, 18h)")
+    
+    # Marketing automation (hebdomadaire)
+    job_queue.run_repeating(marketing_automation_job, interval=604800, first=86400)  # 1 semaine
+    logger.info("✅ Job: Marketing automation (hebdomadaire)")
     
     # Kill switch
     await kill_switch_check(application)

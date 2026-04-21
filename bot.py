@@ -231,6 +231,130 @@ VIP_CONFIG_FILE = DATA_DIR / "vip_config.json"
 STOCK_HISTORY_FILE = DATA_DIR / "stock_history.json"
 PRODUCT_COSTS_FILE = DATA_DIR / "product_costs.json"
 
+# ==================== FICHIERS v3.0.0 MODULES ====================
+REFERRALS_FILE = DATA_DIR / "referrals.json"
+WISHLISTS_FILE = DATA_DIR / "wishlists.json"
+AUDIT_FILE = DATA_DIR / "audit.json"
+ADMIN_PINS_FILE = DATA_DIR / "admin_pins.json"
+CLIENTS_FILE = DATA_DIR / "client_history.json"  # Alias pour compatibilité modules
+BACKUP_DIR = Path("backups")
+BACKUP_RETENTION_DAYS = 30
+
+# ==================== CONFIGURATION FIDÉLITÉ v3.0.0 ====================
+LOYALTY_TIERS = {
+    'bronze': {
+        'name': '🥉 Bronze',
+        'min_spent': 0,
+        'discount': 0,
+        'perks': ['Historique commandes']
+    },
+    'silver': {
+        'name': '🥈 Argent',
+        'min_spent': 500,
+        'discount': 5,
+        'perks': ['Historique', 'Livraison -5€', 'Support prioritaire']
+    },
+    'gold': {
+        'name': '🥇 Or',
+        'min_spent': 1000,
+        'discount': 10,
+        'perks': ['Historique', 'Livraison gratuite >50€', 'Promos exclusives', 'Support prioritaire']
+    },
+    'platinum': {
+        'name': '💎 Platine',
+        'min_spent': 2500,
+        'discount': 15,
+        'perks': ['Historique', 'Livraison toujours gratuite', 'Promos exclusives', 'Support VIP', 'Accès anticipé produits']
+    },
+    'diamond': {
+        'name': '💠 Diamant',
+        'min_spent': 5000,
+        'discount': 20,
+        'perks': ['Tout Platine +', 'Cadeaux mensuels', 'Conseiller dédié', 'Priorité absolue']
+    }
+}
+
+POINTS_PER_EURO = 10  # 1€ = 10 points
+
+POINTS_REWARDS = {
+    100: {'type': 'discount', 'value': 5, 'name': '5€ de réduction'},
+    250: {'type': 'free_delivery', 'value': 1, 'name': 'Livraison gratuite'},
+    500: {'type': 'discount', 'value': 10, 'name': '10€ de réduction'},
+    1000: {'type': 'free_product', 'value': 'small', 'name': 'Produit gratuit (petit)'},
+    2500: {'type': 'discount', 'value': 50, 'name': '50€ de réduction'},
+    5000: {'type': 'free_product', 'value': 'large', 'name': 'Produit gratuit (grand)'}
+}
+
+# ==================== FAQ CHATBOT v3.0.0 ====================
+FAQ_DATABASE = {
+    'commander': {
+        'keywords': ['commander', 'acheter', 'order', 'achat', 'comment'],
+        'answer': """🛍️ COMMENT COMMANDER
+
+1. Cliquez sur 🛍️ Commander
+2. Choisissez vos produits
+3. Ajoutez au panier
+4. Validez votre commande
+5. Choisissez livraison
+6. Confirmez le paiement
+
+C'est simple et rapide !"""
+    },
+    'livraison': {
+        'keywords': ['livraison', 'delivery', 'expédition', 'envoi', 'recevoir'],
+        'answer': """🚚 LIVRAISON
+
+Types disponibles:
+• Express: 1-2 heures
+• Standard: 48-72h
+
+La livraison est assurée et discrète."""
+    },
+    'paiement': {
+        'keywords': ['paiement', 'payer', 'payment', 'crypto', 'bitcoin'],
+        'answer': """💳 PAIEMENT
+
+Nous acceptons:
+• Bitcoin (BTC)
+• Ethereum (ETH)
+• Monero (XMR)
+
+Le paiement est sécurisé et anonyme."""
+    },
+    'produits': {
+        'keywords': ['produits', 'catalogue', 'disponible', 'stock', 'quoi'],
+        'answer': """📦 NOS PRODUITS
+
+Consultez notre catalogue:
+/start → 🛍️ Commander
+
+Tous nos produits sont en stock
+et de qualité premium."""
+    },
+    'suivi': {
+        'keywords': ['suivi', 'commande', 'où est', 'status', 'statut'],
+        'answer': """📊 SUIVI COMMANDE
+
+Pour suivre votre commande:
+/start → 📊 Mon historique
+
+Vous recevrez des notifications
+à chaque étape."""
+    },
+    'aide': {
+        'keywords': ['aide', 'help', 'assistance', 'problème', 'bug'],
+        'answer': """❓ BESOIN D'AIDE ?
+
+Utilisez les commandes:
+/start - Menu principal
+/fidelite - Votre statut fidélité
+/parrainage - Programme parrainage
+
+Pour contacter un admin:
+Menu → 💬 Support"""
+    }
+}
+
 # Créer répertoires
 def ensure_dir(directory: Path) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
@@ -238,6 +362,7 @@ def ensure_dir(directory: Path) -> Path:
 
 ensure_dir(DATA_DIR)
 ensure_dir(MEDIA_DIR)
+ensure_dir(BACKUP_DIR)
 
 logger.info(f"🤖 {BOT_NAME} v{BOT_VERSION}")
 
@@ -15589,6 +15714,356 @@ INSTRUCTIONS D'INTÉGRATION:
    ✅ Vision complète finances
 """
 # ==================== FIN MODULE RÉCAP COMMANDES ====================
+"""
+FONCTIONS MANQUANTES - CORRECTION COMPLÈTE
+Module 2, 3, 4, 6, 12, 14
+"""
+
+# ==================== MODULE 2: FIDÉLITÉ - FONCTIONS MANQUANTES ====================
+
+def add_loyalty_points(user_id, amount):
+    """Ajoute points fidélité automatiquement"""
+    try:
+        users = load_users()
+        if str(user_id) not in users:
+            users[str(user_id)] = {}
+        
+        # Calculer points (1€ = 10 points)
+        points = int(amount * POINTS_PER_EURO)
+        
+        # Ajouter points
+        current_points = users[str(user_id)].get('loyalty_points', 0)
+        users[str(user_id)]['loyalty_points'] = current_points + points
+        
+        # Sauvegarder
+        save_users(users)
+        
+        logger.info(f"✅ Points fidélité: {user_id} +{points} pts (total: {current_points + points})")
+        
+        return points
+    
+    except Exception as e:
+        logger.error(f"Erreur add_loyalty_points: {e}")
+        return 0
+
+
+def get_client_tier(total_spent):
+    """Détermine le niveau fidélité basé sur dépenses totales"""
+    try:
+        for tier_id in ['diamond', 'platinum', 'gold', 'silver', 'bronze']:
+            if total_spent >= LOYALTY_TIERS[tier_id]['min_spent']:
+                return tier_id, LOYALTY_TIERS[tier_id]
+        
+        return 'bronze', LOYALTY_TIERS['bronze']
+    
+    except Exception as e:
+        logger.error(f"Erreur get_client_tier: {e}")
+        return 'bronze', LOYALTY_TIERS['bronze']
+
+
+# ==================== MODULE 3: PARRAINAGE - FONCTIONS MANQUANTES ====================
+
+def generate_referral_code(user_id):
+    """Génère un code parrainage unique"""
+    try:
+        import random
+        import string
+        
+        # Générer code unique
+        code = 'REF_' + ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+        
+        # Charger parrainages
+        referrals = load_json_file(REFERRALS_FILE, {})
+        
+        # Vérifier si déjà existant
+        while code in referrals:
+            code = 'REF_' + ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+        
+        # Enregistrer
+        referrals[code] = {
+            'referrer': user_id,
+            'used': False,
+            'created_at': datetime.now().isoformat()
+        }
+        
+        save_json_file(REFERRALS_FILE, referrals)
+        
+        logger.info(f"✅ Code parrainage généré: {code} pour {user_id}")
+        
+        return code
+    
+    except Exception as e:
+        logger.error(f"Erreur generate_referral_code: {e}")
+        return None
+
+
+def apply_referral(user_id, referral_code):
+    """Applique un code parrainage"""
+    try:
+        referrals = load_json_file(REFERRALS_FILE, {})
+        
+        if referral_code not in referrals:
+            return False, "Code invalide"
+        
+        if referrals[referral_code]['used']:
+            return False, "Code déjà utilisé"
+        
+        referrer_id = referrals[referral_code]['referrer']
+        
+        if referrer_id == user_id:
+            return False, "Impossible d'utiliser votre propre code"
+        
+        # Marquer comme utilisé
+        referrals[referral_code]['used'] = True
+        referrals[referral_code]['used_by'] = user_id
+        referrals[referral_code]['used_at'] = datetime.now().isoformat()
+        
+        save_json_file(REFERRALS_FILE, referrals)
+        
+        # Créditer le parrain (+10€)
+        users = load_users()
+        if str(referrer_id) not in users:
+            users[str(referrer_id)] = {}
+        users[str(referrer_id)]['referral_credit'] = users[str(referrer_id)].get('referral_credit', 0) + 10
+        
+        # Réduction pour le filleul (-5€)
+        if str(user_id) not in users:
+            users[str(user_id)] = {}
+        users[str(user_id)]['referral_discount'] = 5
+        
+        save_users(users)
+        
+        logger.info(f"✅ Parrainage: {referrer_id} +10€, {user_id} -5€")
+        
+        return True, f"✅ Parrainage appliqué ! Vous avez 5€ de réduction"
+    
+    except Exception as e:
+        logger.error(f"Erreur apply_referral: {e}")
+        return False, "Erreur système"
+
+
+# ==================== MODULE 4: WISHLIST - FONCTIONS MANQUANTES ====================
+
+def add_to_wishlist(user_id, product_name):
+    """Ajoute un produit aux favoris"""
+    try:
+        wishlists = load_json_file(WISHLISTS_FILE, {})
+        
+        if str(user_id) not in wishlists:
+            wishlists[str(user_id)] = []
+        
+        # Vérifier si déjà présent
+        if product_name in wishlists[str(user_id)]:
+            return False, "Déjà dans vos favoris"
+        
+        # Ajouter
+        wishlists[str(user_id)].append(product_name)
+        
+        save_json_file(WISHLISTS_FILE, wishlists)
+        
+        logger.info(f"✅ Wishlist: {user_id} ajouté {product_name}")
+        
+        return True, f"✅ {product_name} ajouté aux favoris"
+    
+    except Exception as e:
+        logger.error(f"Erreur add_to_wishlist: {e}")
+        return False, "Erreur système"
+
+
+def remove_from_wishlist(user_id, product_name):
+    """Retire un produit des favoris"""
+    try:
+        wishlists = load_json_file(WISHLISTS_FILE, {})
+        
+        if str(user_id) not in wishlists:
+            return False, "Liste vide"
+        
+        if product_name not in wishlists[str(user_id)]:
+            return False, "Produit non trouvé"
+        
+        wishlists[str(user_id)].remove(product_name)
+        
+        save_json_file(WISHLISTS_FILE, wishlists)
+        
+        logger.info(f"✅ Wishlist: {user_id} retiré {product_name}")
+        
+        return True, f"✅ {product_name} retiré des favoris"
+    
+    except Exception as e:
+        logger.error(f"Erreur remove_from_wishlist: {e}")
+        return False, "Erreur système"
+
+
+def get_wishlist(user_id):
+    """Récupère la wishlist d'un utilisateur"""
+    try:
+        wishlists = load_json_file(WISHLISTS_FILE, {})
+        return wishlists.get(str(user_id), [])
+    
+    except Exception as e:
+        logger.error(f"Erreur get_wishlist: {e}")
+        return []
+
+
+# ==================== MODULE 6: AUDIT - FONCTIONS MANQUANTES ====================
+
+def log_admin_action(admin_id, action, details=''):
+    """Enregistre une action admin dans les logs audit"""
+    try:
+        audit = load_json_file(AUDIT_FILE, [])
+        
+        # Créer entrée
+        entry = {
+            'timestamp': datetime.now().isoformat(),
+            'admin_id': admin_id,
+            'admin_name': get_admin_info(admin_id).get('name', 'Admin'),
+            'action': action,
+            'details': details
+        }
+        
+        # Ajouter
+        audit.append(entry)
+        
+        # Garder seulement les 1000 dernières
+        audit = audit[-1000:]
+        
+        save_json_file(AUDIT_FILE, audit)
+        
+        logger.info(f"📋 Audit: {admin_id} - {action}")
+    
+    except Exception as e:
+        logger.error(f"Erreur log_admin_action: {e}")
+
+
+def get_audit_logs(limit=50):
+    """Récupère les derniers logs audit"""
+    try:
+        audit = load_json_file(AUDIT_FILE, [])
+        return audit[-limit:]
+    
+    except Exception as e:
+        logger.error(f"Erreur get_audit_logs: {e}")
+        return []
+
+
+# ==================== MODULE 12: A/B TESTING - FONCTIONS MANQUANTES ====================
+
+def get_ab_variant(user_id, test_name):
+    """Détermine la variante A/B pour un utilisateur"""
+    try:
+        import hashlib
+        
+        # Hash déterministe basé sur user_id + test_name
+        hash_str = f"{user_id}{test_name}"
+        hash_val = int(hashlib.md5(hash_str.encode()).hexdigest(), 16)
+        
+        # A ou B (50/50)
+        return 'A' if hash_val % 2 == 0 else 'B'
+    
+    except Exception as e:
+        logger.error(f"Erreur get_ab_variant: {e}")
+        return 'A'
+
+
+def track_ab_conversion(user_id, test_name, action):
+    """Enregistre une conversion dans un test A/B"""
+    try:
+        tests = load_json_file(DATA_DIR / "ab_tests.json", {})
+        
+        # Initialiser test si nécessaire
+        if test_name not in tests:
+            tests[test_name] = {
+                'A': {'views': 0, 'conversions': 0},
+                'B': {'views': 0, 'conversions': 0}
+            }
+        
+        # Déterminer variante
+        variant = get_ab_variant(user_id, test_name)
+        
+        # Enregistrer action
+        if action == 'view':
+            tests[test_name][variant]['views'] += 1
+        elif action == 'convert':
+            tests[test_name][variant]['conversions'] += 1
+        
+        save_json_file(DATA_DIR / "ab_tests.json", tests)
+        
+        logger.debug(f"📊 A/B: {test_name} - {variant} - {action}")
+    
+    except Exception as e:
+        logger.error(f"Erreur track_ab_conversion: {e}")
+
+
+def get_ab_test_results(test_name):
+    """Récupère résultats d'un test A/B"""
+    try:
+        tests = load_json_file(DATA_DIR / "ab_tests.json", {})
+        
+        if test_name not in tests:
+            return None
+        
+        results = tests[test_name]
+        
+        # Calculer taux de conversion
+        for variant in ['A', 'B']:
+            views = results[variant]['views']
+            conversions = results[variant]['conversions']
+            results[variant]['conversion_rate'] = (conversions / views * 100) if views > 0 else 0
+        
+        return results
+    
+    except Exception as e:
+        logger.error(f"Erreur get_ab_test_results: {e}")
+        return None
+
+
+# ==================== MODULE 14: SUGGESTIONS - FONCTIONS MANQUANTES ====================
+
+def get_personalized_suggestions(user_id):
+    """Génère suggestions personnalisées basées sur l'historique"""
+    try:
+        # Charger historique client
+        history = load_json_file(CLIENT_HISTORY_FILE, {})
+        
+        if str(user_id) not in history:
+            # Nouveau client -> suggestions génériques
+            products = load_product_registry()
+            return list(products.keys())[:3]
+        
+        # Produits déjà achetés
+        purchased = set(history[str(user_id)].get('product_counts', {}).keys())
+        
+        # Tous les produits disponibles
+        all_products = set(load_product_registry().keys())
+        
+        # Produits non achetés
+        not_purchased = list(all_products - purchased)
+        
+        # Retourner 3 suggestions
+        import random
+        suggestions = random.sample(not_purchased, min(3, len(not_purchased))) if not_purchased else []
+        
+        logger.debug(f"💡 Suggestions pour {user_id}: {suggestions}")
+        
+        return suggestions
+    
+    except Exception as e:
+        logger.error(f"Erreur get_personalized_suggestions: {e}")
+        return []
+
+
+def get_client_stats(user_id):
+    """Récupère statistiques client pour suggestions"""
+    try:
+        history = load_json_file(CLIENT_HISTORY_FILE, {})
+        return history.get(str(user_id), {})
+    
+    except Exception as e:
+        logger.error(f"Erreur get_client_stats: {e}")
+        return {}
+
+
+# ==================== FIN FONCTIONS MANQUANTES ====================
 # ==================== FIN MODULES 8-20 ====================
 # ==================== MODULES v3.0.0 ULTIMATE - FIN ====================
 

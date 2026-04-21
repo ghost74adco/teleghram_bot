@@ -13846,6 +13846,10 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(recap_status, pattern="^recap_status$"))
     application.add_handler(CallbackQueryHandler(recap_product, pattern="^recap_product$"))
     application.add_handler(CallbackQueryHandler(recap_export, pattern="^recap_export$"))
+    application.add_handler(CallbackQueryHandler(recap_year, pattern="^recap_year$"))
+    application.add_handler(CallbackQueryHandler(recap_client, pattern="^recap_client$"))
+    application.add_handler(CallbackQueryHandler(recap_delivery, pattern="^recap_delivery$"))
+    application.add_handler(CallbackQueryHandler(recap_charts, pattern="^recap_charts$"))
     
     # ===== MODULE 22: RÉCONCILIATION CA & CAISSES =====
     application.add_handler(CallbackQueryHandler(show_dashboard_unified, pattern="^show_dashboard_unified$"))
@@ -15713,6 +15717,194 @@ INSTRUCTIONS D'INTÉGRATION:
    ✅ Export rapport
    ✅ Vision complète finances
 """
+"""
+FONCTIONS MANQUANTES - RÉCAP COMMANDES
+recap_year, recap_client, recap_delivery, recap_charts
+"""
+
+# ==================== RÉCAP ANNÉE ====================
+
+@error_handler
+async def recap_year(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commandes de l'année"""
+    query = update.callback_query
+    await query.answer()
+    
+    orders = []
+    if ORDERS_FILE.exists():
+        import csv
+        with open(ORDERS_FILE, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            orders = list(reader)
+    
+    today = datetime.now()
+    year_start = today.replace(month=1, day=1).date()
+    year_orders = []
+    
+    for order in orders:
+        try:
+            date = datetime.strptime(order.get('date', ''), '%Y-%m-%d %H:%M:%S').date()
+            if date >= year_start:
+                year_orders.append(order)
+        except:
+            pass
+    
+    message = f"📅 COMMANDES CETTE ANNÉE\n"
+    message += f"Année {today.year}\n\n"
+    
+    if not year_orders:
+        message += "Aucune commande cette année"
+    else:
+        total = sum(float(o.get('total', 0)) for o in year_orders if o.get('status') == 'Livrée')
+        message += f"📊 Total: {len(year_orders)} commandes\n"
+        message += f"💰 CA: {total:.2f}€\n"
+        message += f"📈 Moyenne: {total/len(year_orders):.2f}€/commande\n\n"
+        
+        # Par mois
+        months = {}
+        for order in year_orders:
+            try:
+                date = datetime.strptime(order.get('date', ''), '%Y-%m-%d %H:%M:%S')
+                month_name = date.strftime('%B')
+                months[month_name] = months.get(month_name, 0) + 1
+            except:
+                pass
+        
+        if months:
+            message += "Par mois:\n"
+            for month, count in sorted(months.items()):
+                message += f"• {month}: {count}\n"
+    
+    keyboard = [[
+        InlineKeyboardButton("🔙 Retour", callback_data="admin_recap_commandes")
+    ]]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+# ==================== RÉCAP PAR CLIENT ====================
+
+@error_handler
+async def recap_client(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Stats par client"""
+    query = update.callback_query
+    await query.answer()
+    
+    orders = []
+    if ORDERS_FILE.exists():
+        import csv
+        with open(ORDERS_FILE, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            orders = list(reader)
+    
+    # Compter par client
+    clients = {}
+    for order in orders:
+        if order.get('status') == 'Livrée':
+            user_id = order.get('user_id', 'Inconnu')
+            total = float(order.get('total', 0))
+            
+            if user_id not in clients:
+                clients[user_id] = {'orders': 0, 'total': 0}
+            
+            clients[user_id]['orders'] += 1
+            clients[user_id]['total'] += total
+    
+    # Trier par CA
+    sorted_clients = sorted(clients.items(), key=lambda x: x[1]['total'], reverse=True)
+    
+    message = "👤 STATS PAR CLIENT\n\n"
+    message += "Top 10 clients:\n\n"
+    
+    for i, (user_id, stats) in enumerate(sorted_clients[:10], 1):
+        message += f"{i}. Client {user_id}\n"
+        message += f"   • Commandes: {stats['orders']}\n"
+        message += f"   • CA: {stats['total']:.2f}€\n"
+        message += f"   • Panier moyen: {stats['total']/stats['orders']:.2f}€\n\n"
+    
+    keyboard = [[
+        InlineKeyboardButton("🔙 Retour", callback_data="admin_recap_commandes")
+    ]]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+# ==================== RÉCAP PAR LIVRAISON ====================
+
+@error_handler
+async def recap_delivery(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Stats par mode de livraison"""
+    query = update.callback_query
+    await query.answer()
+    
+    orders = []
+    if ORDERS_FILE.exists():
+        import csv
+        with open(ORDERS_FILE, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            orders = list(reader)
+    
+    # Compter par mode
+    delivery_modes = {}
+    for order in orders:
+        if order.get('status') == 'Livrée':
+            mode = order.get('delivery_mode', 'Non spécifié')
+            total = float(order.get('total', 0))
+            
+            if mode not in delivery_modes:
+                delivery_modes[mode] = {'count': 0, 'revenue': 0}
+            
+            delivery_modes[mode]['count'] += 1
+            delivery_modes[mode]['revenue'] += total
+    
+    message = "🚚 STATS PAR LIVRAISON\n\n"
+    
+    if not delivery_modes:
+        message += "Aucune donnée disponible"
+    else:
+        for mode, stats in delivery_modes.items():
+            message += f"📦 {mode}\n"
+            message += f"   • Commandes: {stats['count']}\n"
+            message += f"   • CA: {stats['revenue']:.2f}€\n"
+            message += f"   • Moyenne: {stats['revenue']/stats['count']:.2f}€\n\n"
+    
+    keyboard = [[
+        InlineKeyboardButton("🔙 Retour", callback_data="admin_recap_commandes")
+    ]]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+# ==================== GRAPHIQUES (PLACEHOLDER) ====================
+
+@error_handler
+async def recap_charts(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Graphiques (à venir)"""
+    query = update.callback_query
+    await query.answer()
+    
+    message = """📊 GRAPHIQUES
+
+Cette fonctionnalité est en développement.
+
+Pour l'instant, vous pouvez :
+• Exporter les données en Excel
+• Utiliser les filtres de récap
+
+Prochainement :
+• 📈 Graphique évolution CA
+• 📊 Répartition produits
+• 📉 Tendances ventes
+"""
+    
+    keyboard = [[
+        InlineKeyboardButton("🔙 Retour", callback_data="admin_recap_commandes")
+    ]]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+# ==================== FIN FONCTIONS RÉCAP ====================
 # ==================== FIN MODULE RÉCAP COMMANDES ====================
 """
 FONCTIONS MANQUANTES - CORRECTION COMPLÈTE

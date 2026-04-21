@@ -4325,6 +4325,9 @@ Choisissez une section :
     # Commandes (tous niveaux)
     keyboard.append([InlineKeyboardButton("🛒 Commandes", callback_data="admin_orders")])
     
+    # NOUVEAU: Récap Commandes (tous admins)
+    keyboard.append([InlineKeyboardButton("📊 Récap Commandes", callback_data="admin_recap_commandes")])
+    
     # Finances (tous niveaux - accès différent selon niveau)
     keyboard.append([InlineKeyboardButton("💰 Finances", callback_data="admin_finances")])
     
@@ -13710,10 +13713,24 @@ def setup_handlers(application):
     application.add_handler(CommandHandler("tutorial", start_tutorial))
     application.add_handler(CallbackQueryHandler(tutorial_next, pattern="^tutorial_next$"))
     
+    # ===== MODULE 21: RÉCAP COMMANDES =====
+    application.add_handler(CallbackQueryHandler(admin_recap_commandes, pattern="^admin_recap_commandes$"))
+    application.add_handler(CallbackQueryHandler(recap_today, pattern="^recap_today$"))
+    application.add_handler(CallbackQueryHandler(recap_week, pattern="^recap_week$"))
+    application.add_handler(CallbackQueryHandler(recap_month, pattern="^recap_month$"))
+    application.add_handler(CallbackQueryHandler(recap_status, pattern="^recap_status$"))
+    application.add_handler(CallbackQueryHandler(recap_product, pattern="^recap_product$"))
+    application.add_handler(CallbackQueryHandler(recap_export, pattern="^recap_export$"))
+    
+    # ===== MODULE 22: RÉCONCILIATION CA & CAISSES =====
+    application.add_handler(CallbackQueryHandler(show_dashboard_unified, pattern="^show_dashboard_unified$"))
+    application.add_handler(CallbackQueryHandler(show_reconciliation, pattern="^show_reconciliation$"))
+    application.add_handler(CallbackQueryHandler(export_reconciliation, pattern="^export_reconciliation$"))
+    
     # Message handlers (doit être en dernier)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
     
-    logger.info("✅ Tous les handlers configurés (20 modules)")
+    logger.info("✅ Tous les handlers configurés (22 modules)")
 # ==================== MODULES v3.0.0 ULTIMATE - DÉBUT ====================
 
 # MODULE 1: BACKUP AUTOMATIQUE
@@ -14044,29 +14061,9 @@ def get_sales_period(days=30):
 
 @error_handler
 async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    if not is_admin(query.from_user.id):
-        await query.edit_message_text("❌ Admin uniquement")
-        return
-    
-    today = get_sales_period(1)
-    week = get_sales_period(7)
-    month = get_sales_period(30)
-    
-    message = f"""📊 DASHBOARD
-
-📈 VENTES
-• Aujourd'hui: {today['total']:.2f}€ ({today['count']})
-• 7 jours: {week['total']:.2f}€ ({week['count']})
-• 30 jours: {month['total']:.2f}€ ({month['count']})
-"""
-    
-    keyboard = [[InlineKeyboardButton("🔄 Actualiser", callback_data="show_dashboard"),
-                 InlineKeyboardButton("🔙 Retour", callback_data="admin_panel")]]
-    
-    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+    """Redirige vers le dashboard unifié (Module 22)"""
+    # Rediriger vers la version unifiée qui inclut caisses + commandes
+    await show_dashboard_unified(update, context)
 
 # INITIALISATION v3.0.0
 
@@ -14770,6 +14767,828 @@ def init_v3_extended_files():
             save_json_file(file, default)
             logger.info(f"✅ v3 extended: {file.name}")
 
+"""
+MODULE 21: PAGE RÉCAP COMMANDES ADMIN
+Récapitulatif complet avec filtres et stats
+"""
+
+# ==================== RÉCAP COMMANDES ADMIN ====================
+
+@error_handler
+async def admin_recap_commandes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Page récapitulative complète des commandes"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_admin(query.from_user.id):
+        await query.edit_message_text("❌ Admin uniquement")
+        return
+    
+    # Charger toutes les commandes
+    orders = []
+    if ORDERS_FILE.exists():
+        import csv
+        with open(ORDERS_FILE, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            orders = list(reader)
+    
+    # Statistiques globales
+    total_orders = len(orders)
+    
+    # Par statut
+    statuts = {}
+    for order in orders:
+        status = order.get('status', 'Inconnu')
+        statuts[status] = statuts.get(status, 0) + 1
+    
+    # Aujourd'hui
+    today = datetime.now().date()
+    today_orders = []
+    for order in orders:
+        try:
+            date = datetime.strptime(order.get('date', ''), '%Y-%m-%d %H:%M:%S').date()
+            if date == today:
+                today_orders.append(order)
+        except:
+            pass
+    
+    # Cette semaine
+    week_start = today - timedelta(days=today.weekday())
+    week_orders = []
+    for order in orders:
+        try:
+            date = datetime.strptime(order.get('date', ''), '%Y-%m-%d %H:%M:%S').date()
+            if date >= week_start:
+                week_orders.append(order)
+        except:
+            pass
+    
+    # Calcul totaux
+    total_revenue = sum(float(o.get('total', 0)) for o in orders if o.get('status') == 'Livrée')
+    today_revenue = sum(float(o.get('total', 0)) for o in today_orders if o.get('status') == 'Livrée')
+    week_revenue = sum(float(o.get('total', 0)) for o in week_orders if o.get('status') == 'Livrée')
+    
+    message = f"""📊 RÉCAP COMMANDES
+
+📈 STATISTIQUES GLOBALES
+• Total commandes: {total_orders}
+• Chiffre d'affaires total: {total_revenue:.2f}€
+
+📅 AUJOURD'HUI ({today.strftime('%d/%m/%Y')})
+• Commandes: {len(today_orders)}
+• CA: {today_revenue:.2f}€
+
+📅 CETTE SEMAINE
+• Commandes: {len(week_orders)}
+• CA: {week_revenue:.2f}€
+
+📋 PAR STATUT
+"""
+    
+    for status, count in statuts.items():
+        message += f"• {status}: {count}\n"
+    
+    keyboard = [
+        [InlineKeyboardButton("📅 Aujourd'hui", callback_data="recap_today"),
+         InlineKeyboardButton("📅 Semaine", callback_data="recap_week")],
+        [InlineKeyboardButton("📅 Mois", callback_data="recap_month"),
+         InlineKeyboardButton("📅 Année", callback_data="recap_year")],
+        [InlineKeyboardButton("🔍 Par statut", callback_data="recap_status"),
+         InlineKeyboardButton("👤 Par client", callback_data="recap_client")],
+        [InlineKeyboardButton("📦 Par produit", callback_data="recap_product"),
+         InlineKeyboardButton("🚚 Par livraison", callback_data="recap_delivery")],
+        [InlineKeyboardButton("📥 Export Excel", callback_data="recap_export"),
+         InlineKeyboardButton("📊 Graphiques", callback_data="recap_charts")],
+        [InlineKeyboardButton("🔙 Menu Admin", callback_data="admin_panel")]
+    ]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+@error_handler
+async def recap_today(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commandes du jour"""
+    query = update.callback_query
+    await query.answer()
+    
+    orders = []
+    if ORDERS_FILE.exists():
+        import csv
+        with open(ORDERS_FILE, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            orders = list(reader)
+    
+    today = datetime.now().date()
+    today_orders = []
+    
+    for order in orders:
+        try:
+            date = datetime.strptime(order.get('date', ''), '%Y-%m-%d %H:%M:%S').date()
+            if date == today:
+                today_orders.append(order)
+        except:
+            pass
+    
+    message = f"📅 COMMANDES AUJOURD'HUI\n"
+    message += f"Date: {today.strftime('%d/%m/%Y')}\n\n"
+    
+    if not today_orders:
+        message += "Aucune commande aujourd'hui"
+    else:
+        total = sum(float(o.get('total', 0)) for o in today_orders if o.get('status') == 'Livrée')
+        message += f"📊 Total: {len(today_orders)} commandes\n"
+        message += f"💰 CA: {total:.2f}€\n\n"
+        
+        # Dernières 10
+        for order in today_orders[-10:]:
+            order_id = order.get('order_id', 'N/A')
+            status = order.get('status', 'Inconnu')
+            total_order = order.get('total', '0')
+            time_str = order.get('date', '').split(' ')[1] if ' ' in order.get('date', '') else ''
+            
+            message += f"🔹 #{order_id}\n"
+            message += f"   {time_str} | {status} | {total_order}€\n"
+    
+    keyboard = [[
+        InlineKeyboardButton("🔙 Retour", callback_data="admin_recap_commandes")
+    ]]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+@error_handler
+async def recap_week(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commandes de la semaine"""
+    query = update.callback_query
+    await query.answer()
+    
+    orders = []
+    if ORDERS_FILE.exists():
+        import csv
+        with open(ORDERS_FILE, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            orders = list(reader)
+    
+    today = datetime.now().date()
+    week_start = today - timedelta(days=today.weekday())
+    week_orders = []
+    
+    for order in orders:
+        try:
+            date = datetime.strptime(order.get('date', ''), '%Y-%m-%d %H:%M:%S').date()
+            if date >= week_start:
+                week_orders.append(order)
+        except:
+            pass
+    
+    message = f"📅 COMMANDES CETTE SEMAINE\n"
+    message += f"Du {week_start.strftime('%d/%m')} au {today.strftime('%d/%m/%Y')}\n\n"
+    
+    if not week_orders:
+        message += "Aucune commande cette semaine"
+    else:
+        total = sum(float(o.get('total', 0)) for o in week_orders if o.get('status') == 'Livrée')
+        message += f"📊 Total: {len(week_orders)} commandes\n"
+        message += f"💰 CA: {total:.2f}€\n"
+        message += f"📈 Moyenne: {total/len(week_orders):.2f}€/commande\n\n"
+        
+        # Par jour
+        days = {}
+        for order in week_orders:
+            try:
+                date = datetime.strptime(order.get('date', ''), '%Y-%m-%d %H:%M:%S').date()
+                day_name = date.strftime('%A %d/%m')
+                days[day_name] = days.get(day_name, 0) + 1
+            except:
+                pass
+        
+        message += "Par jour:\n"
+        for day, count in days.items():
+            message += f"• {day}: {count}\n"
+    
+    keyboard = [[
+        InlineKeyboardButton("🔙 Retour", callback_data="admin_recap_commandes")
+    ]]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+@error_handler
+async def recap_month(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commandes du mois"""
+    query = update.callback_query
+    await query.answer()
+    
+    orders = []
+    if ORDERS_FILE.exists():
+        import csv
+        with open(ORDERS_FILE, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            orders = list(reader)
+    
+    today = datetime.now()
+    month_start = today.replace(day=1).date()
+    month_orders = []
+    
+    for order in orders:
+        try:
+            date = datetime.strptime(order.get('date', ''), '%Y-%m-%d %H:%M:%S').date()
+            if date >= month_start:
+                month_orders.append(order)
+        except:
+            pass
+    
+    message = f"📅 COMMANDES CE MOIS\n"
+    message += f"{today.strftime('%B %Y')}\n\n"
+    
+    if not month_orders:
+        message += "Aucune commande ce mois"
+    else:
+        total = sum(float(o.get('total', 0)) for o in month_orders if o.get('status') == 'Livrée')
+        message += f"📊 Total: {len(month_orders)} commandes\n"
+        message += f"💰 CA: {total:.2f}€\n"
+        message += f"📈 Moyenne: {total/len(month_orders):.2f}€/commande\n\n"
+        
+        # Par statut
+        statuts = {}
+        for order in month_orders:
+            status = order.get('status', 'Inconnu')
+            statuts[status] = statuts.get(status, 0) + 1
+        
+        message += "Par statut:\n"
+        for status, count in statuts.items():
+            message += f"• {status}: {count}\n"
+    
+    keyboard = [[
+        InlineKeyboardButton("🔙 Retour", callback_data="admin_recap_commandes")
+    ]]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+@error_handler
+async def recap_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Filtrer par statut"""
+    query = update.callback_query
+    await query.answer()
+    
+    orders = []
+    if ORDERS_FILE.exists():
+        import csv
+        with open(ORDERS_FILE, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            orders = list(reader)
+    
+    # Compter par statut
+    statuts = {}
+    for order in orders:
+        status = order.get('status', 'Inconnu')
+        if status not in statuts:
+            statuts[status] = []
+        statuts[status].append(order)
+    
+    message = "🔍 FILTRER PAR STATUT\n\n"
+    
+    keyboard = []
+    for status, orders_list in statuts.items():
+        total = sum(float(o.get('total', 0)) for o in orders_list)
+        message += f"• {status}: {len(orders_list)} ({total:.2f}€)\n"
+        keyboard.append([InlineKeyboardButton(
+            f"{status} ({len(orders_list)})",
+            callback_data=f"recap_status_{status}"
+        )])
+    
+    keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="admin_recap_commandes")])
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+@error_handler
+async def recap_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Stats par produit"""
+    query = update.callback_query
+    await query.answer()
+    
+    orders = []
+    if ORDERS_FILE.exists():
+        import csv
+        with open(ORDERS_FILE, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            orders = list(reader)
+    
+    # Compter par produit
+    products = {}
+    for order in orders:
+        if order.get('status') == 'Livrée':
+            try:
+                items = eval(order.get('items', '[]'))
+                for item in items:
+                    product = item.get('product', 'Inconnu')
+                    qty = item.get('quantity', 0)
+                    price = item.get('price', 0)
+                    
+                    if product not in products:
+                        products[product] = {'qty': 0, 'revenue': 0, 'count': 0}
+                    
+                    products[product]['qty'] += qty
+                    products[product]['revenue'] += price * qty
+                    products[product]['count'] += 1
+            except:
+                pass
+    
+    # Trier par CA
+    sorted_products = sorted(products.items(), key=lambda x: x[1]['revenue'], reverse=True)
+    
+    message = "📦 STATS PAR PRODUIT\n\n"
+    
+    for i, (product, stats) in enumerate(sorted_products[:10], 1):
+        message += f"{i}. {product}\n"
+        message += f"   • Quantité: {stats['qty']}g\n"
+        message += f"   • CA: {stats['revenue']:.2f}€\n"
+        message += f"   • Commandes: {stats['count']}\n\n"
+    
+    keyboard = [[
+        InlineKeyboardButton("🔙 Retour", callback_data="admin_recap_commandes")
+    ]]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+@error_handler
+async def recap_export(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Exporter recap en Excel"""
+    query = update.callback_query
+    await query.answer("📥 Génération Excel...")
+    
+    if not is_admin(query.from_user.id):
+        await query.edit_message_text("❌ Admin uniquement")
+        return
+    
+    try:
+        import csv
+        from io import StringIO
+        
+        # Lire commandes
+        orders = []
+        if ORDERS_FILE.exists():
+            with open(ORDERS_FILE, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                orders = list(reader)
+        
+        # Créer CSV récap
+        output = StringIO()
+        writer = csv.writer(output)
+        
+        # En-têtes
+        writer.writerow(['ID', 'Date', 'Client', 'Total', 'Statut', 'Livraison', 'Produits'])
+        
+        # Données
+        for order in orders:
+            writer.writerow([
+                order.get('order_id', ''),
+                order.get('date', ''),
+                order.get('user_id', ''),
+                order.get('total', ''),
+                order.get('status', ''),
+                order.get('delivery_mode', ''),
+                order.get('items', '')
+            ])
+        
+        # Envoyer fichier
+        filename = f"recap_commandes_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
+        
+        await context.bot.send_document(
+            query.from_user.id,
+            document=output.getvalue().encode('utf-8'),
+            filename=filename,
+            caption="✅ Export commandes complet"
+        )
+        
+        await query.edit_message_text(
+            "✅ Export envoyé en message privé !",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Retour", callback_data="admin_recap_commandes")
+            ]])
+        )
+    
+    except Exception as e:
+        logger.error(f"Erreur export: {e}")
+        await query.edit_message_text(f"❌ Erreur export: {e}")
+
+
+"""
+MODULE 22: RÉCONCILIATION CA & CAISSES
+Unifie le calcul du CA entre commandes et caisses
+"""
+
+# ==================== RÉCONCILIATION CA & CAISSES ====================
+
+def get_sales_period_unified(days=30):
+    """
+    Calcul CA unifié : Commandes + Rentrées manuelles caisses
+    
+    Sources :
+    1. orders.csv - Commandes livrées
+    2. ledger.json - Rentrées manuelles dans les caisses
+    """
+    try:
+        cutoff = datetime.now() - timedelta(days=days)
+        
+        # SOURCE 1: Commandes (comme avant)
+        orders_total = 0
+        orders_count = 0
+        
+        if ORDERS_FILE.exists():
+            import csv
+            with open(ORDERS_FILE, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                orders = list(reader)
+            
+            for order in orders:
+                try:
+                    date = datetime.strptime(order.get('date', ''), '%Y-%m-%d %H:%M:%S')
+                    if date >= cutoff and order.get('status') == 'Livrée':
+                        orders_total += float(order.get('total', 0))
+                        orders_count += 1
+                except:
+                    pass
+        
+        # SOURCE 2: Rentrées manuelles caisses
+        ledger_total = 0
+        ledger_count = 0
+        
+        ledger = load_json_file(LEDGER_FILE, {})
+        
+        for caisse_name, caisse_data in ledger.items():
+            entries = caisse_data.get('entries', [])
+            
+            for entry in entries:
+                try:
+                    # Seulement les REVENUS (type: income)
+                    if entry.get('type') == 'income':
+                        entry_date = datetime.fromisoformat(entry.get('date', ''))
+                        
+                        if entry_date >= cutoff:
+                            amount = float(entry.get('amount', 0))
+                            
+                            # Ignorer les transferts entre caisses
+                            category = entry.get('category', '')
+                            if category not in ['Transfert', 'Transfer', 'Virement interne']:
+                                ledger_total += amount
+                                ledger_count += 1
+                except:
+                    pass
+        
+        return {
+            'total': orders_total + ledger_total,
+            'count': orders_count + ledger_count,
+            'orders_total': orders_total,
+            'orders_count': orders_count,
+            'ledger_total': ledger_total,
+            'ledger_count': ledger_count
+        }
+    
+    except Exception as e:
+        logger.error(f"Erreur get_sales_period_unified: {e}")
+        return {
+            'total': 0, 
+            'count': 0,
+            'orders_total': 0,
+            'orders_count': 0,
+            'ledger_total': 0,
+            'ledger_count': 0
+        }
+
+
+@error_handler
+async def show_dashboard_unified(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Dashboard avec CA unifié (commandes + caisses)"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_admin(query.from_user.id):
+        await query.edit_message_text("❌ Admin uniquement")
+        return
+    
+    # Calculs unifiés
+    today = get_sales_period_unified(1)
+    week = get_sales_period_unified(7)
+    month = get_sales_period_unified(30)
+    
+    message = f"""📊 DASHBOARD UNIFIÉ
+
+📈 AUJOURD'HUI
+• CA Total: {today['total']:.2f}€
+  └ Commandes: {today['orders_total']:.2f}€ ({today['orders_count']})
+  └ Rentrées caisses: {today['ledger_total']:.2f}€ ({today['ledger_count']})
+
+📈 7 JOURS
+• CA Total: {week['total']:.2f}€
+  └ Commandes: {week['orders_total']:.2f}€ ({week['orders_count']})
+  └ Rentrées caisses: {week['ledger_total']:.2f}€ ({week['ledger_count']})
+
+📈 30 JOURS
+• CA Total: {month['total']:.2f}€
+  └ Commandes: {month['orders_total']:.2f}€ ({month['orders_count']})
+  └ Rentrées caisses: {month['ledger_total']:.2f}€ ({month['ledger_count']})
+
+💰 CAISSES
+"""
+    
+    try:
+        ledger = load_json_file(LEDGER_FILE, {})
+        for name, data in ledger.items():
+            balance = data.get('balance', 0)
+            message += f"• {name.capitalize()}: {balance:.2f}€\n"
+    except:
+        pass
+    
+    keyboard = [
+        [InlineKeyboardButton("🔄 Actualiser", callback_data="show_dashboard_unified"),
+         InlineKeyboardButton("📊 Réconciliation", callback_data="show_reconciliation")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_panel")]
+    ]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+@error_handler
+async def show_reconciliation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Affiche réconciliation détaillée CA vs Caisses"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not is_super_admin(query.from_user.id):
+        await query.edit_message_text("❌ Super admin uniquement")
+        return
+    
+    # CA total (commandes livrées)
+    stats = get_sales_period_unified(9999)  # Tout l'historique
+    
+    # Balance totale des caisses
+    ledger = load_json_file(LEDGER_FILE, {})
+    total_caisses = sum(data.get('balance', 0) for data in ledger.values())
+    
+    # Dépenses totales
+    total_depenses = 0
+    for caisse_data in ledger.values():
+        entries = caisse_data.get('entries', [])
+        for entry in entries:
+            if entry.get('type') == 'expense':
+                total_depenses += float(entry.get('amount', 0))
+    
+    # Calcul théorique
+    ca_theorique = stats['orders_total'] + stats['ledger_total']
+    balance_attendue = ca_theorique - total_depenses
+    
+    ecart = total_caisses - balance_attendue
+    
+    message = f"""🔍 RÉCONCILIATION COMPLÈTE
+
+📊 CHIFFRE D'AFFAIRES TOTAL
+• Commandes livrées: {stats['orders_total']:.2f}€
+• Rentrées manuelles: {stats['ledger_total']:.2f}€
+• TOTAL CA: {ca_theorique:.2f}€
+
+💰 CAISSES ACTUELLES
+• Balance totale: {total_caisses:.2f}€
+
+💸 DÉPENSES TOTALES
+• Total sorti: {total_depenses:.2f}€
+
+🧮 VÉRIFICATION
+• Balance attendue: {balance_attendue:.2f}€
+  (CA - Dépenses)
+• Balance réelle: {total_caisses:.2f}€
+• Écart: {ecart:.2f}€
+
+"""
+    
+    if abs(ecart) < 1:
+        message += "✅ Comptes équilibrés !\n"
+    elif ecart > 0:
+        message += f"⚠️ Surplus de {ecart:.2f}€\n"
+        message += "→ Vérifier rentrées non enregistrées\n"
+    else:
+        message += f"⚠️ Manque {abs(ecart):.2f}€\n"
+        message += "→ Vérifier dépenses non enregistrées\n"
+    
+    message += f"\n📋 DÉTAIL PAR CAISSE\n"
+    
+    for name, data in ledger.items():
+        balance = data.get('balance', 0)
+        message += f"• {name.capitalize()}: {balance:.2f}€\n"
+    
+    keyboard = [
+        [InlineKeyboardButton("📥 Export réconciliation", callback_data="export_reconciliation")],
+        [InlineKeyboardButton("🔙 Dashboard", callback_data="show_dashboard_unified")]
+    ]
+    
+    await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+@error_handler
+async def export_reconciliation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Exporte rapport de réconciliation"""
+    query = update.callback_query
+    await query.answer("📥 Génération rapport...")
+    
+    if not is_super_admin(query.from_user.id):
+        await query.edit_message_text("❌ Super admin uniquement")
+        return
+    
+    try:
+        stats = get_sales_period_unified(9999)
+        ledger = load_json_file(LEDGER_FILE, {})
+        
+        # Créer rapport texte
+        report = f"""RAPPORT DE RÉCONCILIATION
+Date: {datetime.now().strftime('%d/%m/%Y %H:%M')}
+
+=== CHIFFRE D'AFFAIRES ===
+Commandes livrées: {stats['orders_total']:.2f}€ ({stats['orders_count']})
+Rentrées manuelles: {stats['ledger_total']:.2f}€ ({stats['ledger_count']})
+TOTAL CA: {stats['total']:.2f}€
+
+=== CAISSES ===
+"""
+        
+        total_caisses = 0
+        for name, data in ledger.items():
+            balance = data.get('balance', 0)
+            total_caisses += balance
+            report += f"{name.capitalize()}: {balance:.2f}€\n"
+        
+        report += f"\nTOTAL CAISSES: {total_caisses:.2f}€\n"
+        
+        # Dépenses
+        total_depenses = 0
+        for caisse_data in ledger.values():
+            entries = caisse_data.get('entries', [])
+            for entry in entries:
+                if entry.get('type') == 'expense':
+                    total_depenses += float(entry.get('amount', 0))
+        
+        report += f"\nDÉPENSES TOTALES: {total_depenses:.2f}€\n"
+        
+        # Calculs
+        balance_attendue = stats['total'] - total_depenses
+        ecart = total_caisses - balance_attendue
+        
+        report += f"""
+=== VÉRIFICATION ===
+Balance attendue: {balance_attendue:.2f}€
+Balance réelle: {total_caisses:.2f}€
+Écart: {ecart:.2f}€
+
+"""
+        
+        if abs(ecart) < 1:
+            report += "✅ COMPTES ÉQUILIBRÉS\n"
+        elif ecart > 0:
+            report += f"⚠️ SURPLUS: {ecart:.2f}€\n"
+        else:
+            report += f"⚠️ DÉFICIT: {abs(ecart):.2f}€\n"
+        
+        # Envoyer fichier
+        filename = f"reconciliation_{datetime.now().strftime('%Y%m%d_%H%M')}.txt"
+        
+        await context.bot.send_document(
+            query.from_user.id,
+            document=report.encode('utf-8'),
+            filename=filename,
+            caption="✅ Rapport de réconciliation"
+        )
+        
+        await query.edit_message_text(
+            "✅ Rapport envoyé en message privé !",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Retour", callback_data="show_reconciliation")
+            ]])
+        )
+    
+    except Exception as e:
+        logger.error(f"Erreur export réconciliation: {e}")
+        await query.edit_message_text(f"❌ Erreur: {e}")
+
+
+# ==================== MISE À JOUR RÉCAP COMMANDES ====================
+
+def get_sales_recap_unified(days=None, start_date=None, end_date=None):
+    """
+    Version unifiée pour le récap commandes
+    Inclut commandes + rentrées caisses
+    """
+    try:
+        # Déterminer période
+        if days:
+            cutoff = datetime.now() - timedelta(days=days)
+            end = datetime.now()
+        elif start_date and end_date:
+            cutoff = start_date
+            end = end_date
+        else:
+            cutoff = datetime.min
+            end = datetime.now()
+        
+        # Commandes
+        orders_total = 0
+        orders_list = []
+        
+        if ORDERS_FILE.exists():
+            import csv
+            with open(ORDERS_FILE, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                orders = list(reader)
+            
+            for order in orders:
+                try:
+                    date = datetime.strptime(order.get('date', ''), '%Y-%m-%d %H:%M:%S')
+                    if cutoff <= date <= end:
+                        if order.get('status') == 'Livrée':
+                            orders_total += float(order.get('total', 0))
+                        orders_list.append(order)
+                except:
+                    pass
+        
+        # Rentrées caisses
+        ledger_total = 0
+        ledger_entries = []
+        
+        ledger = load_json_file(LEDGER_FILE, {})
+        
+        for caisse_name, caisse_data in ledger.items():
+            entries = caisse_data.get('entries', [])
+            
+            for entry in entries:
+                try:
+                    if entry.get('type') == 'income':
+                        entry_date = datetime.fromisoformat(entry.get('date', ''))
+                        
+                        if cutoff <= entry_date <= end:
+                            category = entry.get('category', '')
+                            if category not in ['Transfert', 'Transfer', 'Virement interne']:
+                                amount = float(entry.get('amount', 0))
+                                ledger_total += amount
+                                ledger_entries.append({
+                                    'date': entry_date,
+                                    'amount': amount,
+                                    'category': category,
+                                    'caisse': caisse_name,
+                                    'description': entry.get('description', '')
+                                })
+                except:
+                    pass
+        
+        return {
+            'total': orders_total + ledger_total,
+            'orders_total': orders_total,
+            'orders_count': len(orders_list),
+            'orders_list': orders_list,
+            'ledger_total': ledger_total,
+            'ledger_count': len(ledger_entries),
+            'ledger_entries': ledger_entries
+        }
+    
+    except Exception as e:
+        logger.error(f"Erreur get_sales_recap_unified: {e}")
+        return {
+            'total': 0,
+            'orders_total': 0,
+            'orders_count': 0,
+            'orders_list': [],
+            'ledger_total': 0,
+            'ledger_count': 0,
+            'ledger_entries': []
+        }
+
+
+# ==================== FIN MODULE RÉCONCILIATION ====================
+
+"""
+INSTRUCTIONS D'INTÉGRATION:
+
+1. REMPLACER get_sales_period par get_sales_period_unified dans:
+   - show_dashboard
+   - admin_recap_commandes
+   - Toutes les stats
+
+2. AJOUTER HANDLERS:
+   application.add_handler(CallbackQueryHandler(show_dashboard_unified, pattern="^show_dashboard_unified$"))
+   application.add_handler(CallbackQueryHandler(show_reconciliation, pattern="^show_reconciliation$"))
+   application.add_handler(CallbackQueryHandler(export_reconciliation, pattern="^export_reconciliation$"))
+
+3. MODIFIER MENU ADMIN:
+   Remplacer "Dashboard" par "Dashboard Unifié"
+   
+4. AVANTAGES:
+   ✅ CA = Commandes + Rentrées manuelles
+   ✅ Réconciliation automatique
+   ✅ Détection écarts
+   ✅ Export rapport
+   ✅ Vision complète finances
+"""
+# ==================== FIN MODULE RÉCAP COMMANDES ====================
 # ==================== FIN MODULES 8-20 ====================
 # ==================== MODULES v3.0.0 ULTIMATE - FIN ====================
 

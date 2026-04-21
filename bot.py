@@ -15875,31 +15875,92 @@ async def recap_delivery(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
 
 
-# ==================== GRAPHIQUES (PLACEHOLDER) ====================
+# ==================== GRAPHIQUES STATISTIQUES ====================
 
 @error_handler
 async def recap_charts(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Graphiques (à venir)"""
+    """Graphiques et visualisations statistiques"""
     query = update.callback_query
     await query.answer()
     
-    message = """📊 GRAPHIQUES
-
-Cette fonctionnalité est en développement.
-
-Pour l'instant, vous pouvez :
-• Exporter les données en Excel
-• Utiliser les filtres de récap
-
-Prochainement :
-• 📈 Graphique évolution CA
-• 📊 Répartition produits
-• 📉 Tendances ventes
-"""
+    # Charger commandes
+    orders = []
+    if ORDERS_FILE.exists():
+        import csv
+        with open(ORDERS_FILE, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            orders = list(reader)
     
-    keyboard = [[
-        InlineKeyboardButton("🔙 Retour", callback_data="admin_recap_commandes")
-    ]]
+    if not orders:
+        await query.edit_message_text(
+            "❌ Aucune donnée disponible",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Retour", callback_data="admin_recap_commandes")
+            ]])
+        )
+        return
+    
+    # Stats des 7 derniers jours
+    today = datetime.now().date()
+    days_data = {}
+    
+    for i in range(7):
+        day = today - timedelta(days=6-i)
+        days_data[day] = {'count': 0, 'revenue': 0}
+    
+    for order in orders:
+        try:
+            date = datetime.strptime(order.get('date', ''), '%Y-%m-%d %H:%M:%S').date()
+            if date in days_data and order.get('status') == 'Livrée':
+                days_data[date]['count'] += 1
+                days_data[date]['revenue'] += float(order.get('total', 0))
+        except:
+            pass
+    
+    # Graphique ASCII
+    max_count = max([d['count'] for d in days_data.values()]) or 1
+    max_revenue = max([d['revenue'] for d in days_data.values()]) or 1
+    
+    message = "📊 STATISTIQUES 7 DERNIERS JOURS\n\n"
+    
+    # Graphique commandes
+    message += "📦 COMMANDES\n"
+    for day, data in sorted(days_data.items()):
+        bars = '█' * int((data['count'] / max_count) * 20)
+        message += f"{day.strftime('%d/%m')}: {bars} {data['count']}\n"
+    
+    message += f"\n💰 CHIFFRE D'AFFAIRES\n"
+    for day, data in sorted(days_data.items()):
+        bars = '█' * int((data['revenue'] / max_revenue) * 20)
+        message += f"{day.strftime('%d/%m')}: {bars} {data['revenue']:.0f}€\n"
+    
+    # Stats globales
+    total_orders = sum(d['count'] for d in days_data.values())
+    total_revenue = sum(d['revenue'] for d in days_data.values())
+    avg_per_day = total_orders / 7
+    avg_revenue_per_day = total_revenue / 7
+    
+    message += f"\n📊 MOYENNES\n"
+    message += f"• Commandes/jour: {avg_per_day:.1f}\n"
+    message += f"• CA/jour: {avg_revenue_per_day:.2f}€\n"
+    
+    # Tendance
+    first_half = sum(list(days_data.values())[i]['revenue'] for i in range(3))
+    second_half = sum(list(days_data.values())[i]['revenue'] for i in range(4, 7))
+    
+    if second_half > first_half * 1.1:
+        trend = "📈 Tendance à la hausse"
+    elif second_half < first_half * 0.9:
+        trend = "📉 Tendance à la baisse"
+    else:
+        trend = "➡️ Tendance stable"
+    
+    message += f"\n{trend}\n"
+    
+    keyboard = [
+        [InlineKeyboardButton("🔄 Actualiser", callback_data="recap_charts")],
+        [InlineKeyboardButton("🔙 Retour", callback_data="admin_recap_commandes")]
+    ]
     
     await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
 

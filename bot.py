@@ -1135,26 +1135,11 @@ TRANSLATIONS = {
 }
 
 def load_translations():
-    """Charge les traductions depuis languages.json"""
-    try:
-        lang_file = DATA_DIR / "languages.json"
-        if lang_file.exists():
-            with open(lang_file, 'r', encoding='utf-8') as f:
-                import json
-                data = json.load(f)
-                translations = data.get('translations', {})
-                languages = data.get('languages', {})
-                
-                # Si les données sont chargées correctement
-                if translations and languages:
-                    return translations, languages
-        
-        # Fallback: retourner les données en dur si le fichier n'existe pas ou est vide
-        print("⚠️ languages.json non trouvé ou vide - utilisation du fallback")
-    except Exception as e:
-        print(f"❌ Erreur chargement languages.json: {e}")
+    """Charge les traductions - FORCÉ EN DUR POUR ÉVITER BUGS"""
+    # FORCÉ: Ne pas charger languages.json pour éviter langues non désirées
+    # Les utilisateurs choisissent parm FR, EN, DE, ES, IT seulement
     
-    # FALLBACK: Configuration en dur
+    # Configuration langues supportées
     fallback_languages = {
         'fr': {'name': 'Français', 'flag': '🇫🇷', 'active': True},
         'en': {'name': 'English', 'flag': '🇬🇧', 'active': True},
@@ -1200,6 +1185,8 @@ def load_translations():
             'it': 'Aiuto'
         }
     }
+    
+    logger.info("✅ Traductions forcées en dur: FR, EN, DE, ES, IT uniquement")
     
     return fallback_translations, fallback_languages
 
@@ -5060,13 +5047,15 @@ Total: {len(orders)} commandes
                 client = order.get('first_name', 'N/A')
                 total = order.get('total', '0')
                 status = order.get('status', 'N/A')
+                user_id = order.get('user_id', '0')
                 
-                status_icon = "⏳" if status == "En attente" else "✅"
+                status_icon = "⏳" if status == "En attente" else "✅" if status == "Livrée" else "📦"
                 
                 message += f"""{status_icon} {order_id}
 📅 {date}
 👤 {client}
 💰 {total}€
+📊 {status}
 ━━━━━━━━━━━━━━━━━━━━━━
 
 """
@@ -5074,10 +5063,18 @@ Total: {len(orders)} commandes
             if len(orders) > 10:
                 message += f"\n... et {len(orders) - 10} autres commandes"
         
-        keyboard = [
-            [InlineKeyboardButton("⏳ En attente", callback_data="admin_orders_pending")],
-            [InlineKeyboardButton("🔙 Retour", callback_data="admin_orders")]
-        ]
+        # Créer boutons pour les 5 dernières commandes
+        keyboard = []
+        for order in recent_orders[:5]:
+            order_id = order.get('order_id', 'N/A')
+            status_emoji = "⏳" if order.get('status') == "En attente" else "✅" if order.get('status') == "Livrée" else "📦"
+            keyboard.append([InlineKeyboardButton(
+                f"{status_emoji} Voir {order_id}",
+                callback_data=f"view_order_{order_id}"
+            )])
+        
+        keyboard.append([InlineKeyboardButton("⏳ En attente", callback_data="admin_orders_pending")])
+        keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="admin_orders")])
         
         await query.edit_message_text(
             message,
@@ -5142,20 +5139,29 @@ Aucune commande en attente actuellement.
                 username = order.get('username', 'N/A')
                 total = order.get('total', '0')
                 delivery = order.get('delivery_type', 'N/A')
+                address = order.get('address', 'N/A')[:30] + '...' if len(order.get('address', '')) > 30 else order.get('address', 'N/A')
                 
                 message += f"""📋 {order_id}
 📅 {date}
 👤 {client} (@{username})
+📍 {address}
 🚚 {delivery}
 💰 {total}€
 ━━━━━━━━━━━━━━━━━━━━━━
 
 """
         
-        keyboard = [
-            [InlineKeyboardButton("📋 Toutes", callback_data="admin_orders_all")],
-            [InlineKeyboardButton("🔙 Retour", callback_data="admin_orders")]
-        ]
+        # Créer boutons pour voir chaque commande en attente
+        keyboard = []
+        for order in pending[-10:]:  # Max 10 boutons
+            order_id = order.get('order_id', 'N/A')
+            keyboard.append([InlineKeyboardButton(
+                f"📋 Traiter {order_id}",
+                callback_data=f"view_order_{order_id}"
+            )])
+        
+        keyboard.append([InlineKeyboardButton("📋 Toutes", callback_data="admin_orders_all")])
+        keyboard.append([InlineKeyboardButton("🔙 Retour", callback_data="admin_orders")])
         
         await query.edit_message_text(
             message,
@@ -11759,18 +11765,24 @@ async def view_order_notification(update: Update, context: ContextTypes.DEFAULT_
                 [InlineKeyboardButton("✅ Valider", callback_data=f"admin_confirm_order_{order_id}_{user_id}"),
                  InlineKeyboardButton("❌ Refuser", callback_data=f"admin_reject_order_{order_id}_{user_id}")],
                 [InlineKeyboardButton("✏️ Modifier prix", callback_data=f"edit_order_total_{order_id}"),
-                 InlineKeyboardButton("✏️ Modifier livraison", callback_data=f"edit_order_delivery_{order_id}")]
+                 InlineKeyboardButton("✏️ Modifier livraison", callback_data=f"edit_order_delivery_{order_id}")],
+                [InlineKeyboardButton("💬 Contacter client", callback_data=f"contact_client_{user_id}_{order_id}")]
             ]
         elif status == "Validée":
             keyboard = [
-                [InlineKeyboardButton("📦 Marquer prête", callback_data=f"mark_ready_{order_id}_{user_id}")]
+                [InlineKeyboardButton("📦 Marquer prête", callback_data=f"mark_ready_{order_id}_{user_id}")],
+                [InlineKeyboardButton("💬 Contacter client", callback_data=f"contact_client_{user_id}_{order_id}")]
             ]
         elif status == "Prête":
             keyboard = [
-                [InlineKeyboardButton("✅ Marquer livrée", callback_data=f"mark_delivered_{order_id}_{user_id}")]
+                [InlineKeyboardButton("✅ Marquer livrée", callback_data=f"mark_delivered_{order_id}_{user_id}")],
+                [InlineKeyboardButton("💬 Contacter client", callback_data=f"contact_client_{user_id}_{order_id}")]
             ]
         else:
-            keyboard = []
+            # Commande livrée ou annulée - permettre quand même le contact
+            keyboard = [
+                [InlineKeyboardButton("💬 Contacter client", callback_data=f"contact_client_{user_id}_{order_id}")]
+            ]
         
         await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard) if keyboard else None)
         logger.info(f"✅ Notification réaffichée: {order_id}")
@@ -13850,6 +13862,23 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(recap_client, pattern="^recap_client$"))
     application.add_handler(CallbackQueryHandler(recap_delivery, pattern="^recap_delivery$"))
     application.add_handler(CallbackQueryHandler(recap_charts, pattern="^recap_charts$"))
+    
+    # Handler contact client (ConversationHandler)
+    contact_client_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(contact_client, pattern="^contact_client_")],
+        states={
+            CONTACT_WAITING_MESSAGE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, contact_client_send_message)
+            ]
+        },
+        fallbacks=[
+            CommandHandler('cancel', contact_client_cancel),
+            CommandHandler('annuler', contact_client_cancel)
+        ],
+        name="contact_client_conversation",
+        persistent=False
+    )
+    application.add_handler(contact_client_handler)
     
     # ===== MODULE 22: RÉCONCILIATION CA & CAISSES =====
     application.add_handler(CallbackQueryHandler(show_dashboard_unified, pattern="^show_dashboard_unified$"))
@@ -15966,6 +15995,169 @@ async def recap_charts(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ==================== FIN FONCTIONS RÉCAP ====================
+"""
+FONCTION CONTACT CLIENT
+Permet à l'admin de démarrer une conversation avec un client
+"""
+
+# ==================== CONTACT CLIENT ====================
+
+# États conversation
+CONTACT_WAITING_MESSAGE = 1
+
+@error_handler
+async def contact_client(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Démarrer une conversation avec un client"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Extraire user_id et order_id
+    data_parts = query.data.replace("contact_client_", "").split("_")
+    client_user_id = int(data_parts[0])
+    order_id = "_".join(data_parts[1:]) if len(data_parts) > 1 else "N/A"
+    
+    # Stocker dans context pour la suite
+    context.user_data['contact_client_id'] = client_user_id
+    context.user_data['contact_order_id'] = order_id
+    
+    # Charger info client
+    try:
+        users = load_users()
+        client_info = users.get(str(client_user_id), {})
+        client_name = client_info.get('first_name', 'Client')
+    except:
+        client_name = 'Client'
+    
+    message = f"""💬 CONTACTER LE CLIENT
+
+👤 Client: {client_name}
+🆔 ID: {client_user_id}
+📋 Commande: {order_id}
+
+✍️ Tapez votre message ci-dessous.
+Le message sera envoyé directement au client.
+
+Commandes:
+• /cancel - Annuler
+• /retour - Revenir à la commande
+"""
+    
+    keyboard = [
+        [InlineKeyboardButton("❌ Annuler", callback_data=f"view_order_{order_id}")]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    # Passer en mode attente message
+    return CONTACT_WAITING_MESSAGE
+
+
+@error_handler
+async def contact_client_send_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Envoyer le message au client"""
+    
+    # Récupérer les infos
+    client_user_id = context.user_data.get('contact_client_id')
+    order_id = context.user_data.get('contact_order_id', 'N/A')
+    admin_message = update.message.text
+    
+    if not client_user_id:
+        await update.message.reply_text("❌ Erreur: Client non trouvé")
+        return ConversationHandler.END
+    
+    # Commandes spéciales
+    if admin_message in ['/cancel', '/annuler']:
+        await update.message.reply_text("❌ Message annulé")
+        return ConversationHandler.END
+    
+    if admin_message in ['/retour', '/back']:
+        # Retourner à la commande
+        await update.message.reply_text("🔙 Retour à la commande...")
+        return ConversationHandler.END
+    
+    # Charger info admin
+    admin_user_id = update.effective_user.id
+    admins = load_admins()
+    admin_info = admins.get(str(admin_user_id), {})
+    admin_name = admin_info.get('name', 'Admin')
+    
+    # Préparer message pour le client
+    client_message = f"""💬 MESSAGE DE L'ÉQUIPE
+
+👤 De: {admin_name}
+📋 Concernant: Commande {order_id}
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+{admin_message}
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+Pour répondre, utilisez /start puis contactez le support.
+"""
+    
+    # Envoyer au client
+    try:
+        await context.bot.send_message(
+            chat_id=client_user_id,
+            text=client_message
+        )
+        
+        # Confirmation à l'admin
+        confirmation = f"""✅ MESSAGE ENVOYÉ
+
+👤 À: Client {client_user_id}
+📋 Commande: {order_id}
+
+Votre message:
+"{admin_message}"
+
+Le client a reçu votre message.
+"""
+        
+        keyboard = [
+            [InlineKeyboardButton("💬 Envoyer un autre message", callback_data=f"contact_client_{client_user_id}_{order_id}")],
+            [InlineKeyboardButton("🔙 Retour à la commande", callback_data=f"view_order_{order_id}")]
+        ]
+        
+        await update.message.reply_text(
+            confirmation,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+        logger.info(f"✅ Message envoyé de {admin_user_id} à {client_user_id} (commande {order_id})")
+        
+        # Nettoyer context
+        context.user_data.pop('contact_client_id', None)
+        context.user_data.pop('contact_order_id', None)
+        
+        return ConversationHandler.END
+    
+    except Exception as e:
+        logger.error(f"❌ Erreur envoi message client: {e}")
+        await update.message.reply_text(
+            f"❌ Erreur lors de l'envoi du message: {e}\n\n"
+            f"Vérifiez que le client a déjà interagi avec le bot."
+        )
+        return ConversationHandler.END
+
+
+@error_handler
+async def contact_client_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Annuler le contact client"""
+    await update.message.reply_text("❌ Contact client annulé")
+    
+    # Nettoyer context
+    context.user_data.pop('contact_client_id', None)
+    context.user_data.pop('contact_order_id', None)
+    
+    return ConversationHandler.END
+
+
+# ==================== FIN CONTACT CLIENT ====================
 # ==================== FIN MODULE RÉCAP COMMANDES ====================
 """
 FONCTIONS MANQUANTES - CORRECTION COMPLÈTE
